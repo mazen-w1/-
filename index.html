@@ -1820,6 +1820,83 @@ function _buildPage(p){
   else if(p === 'clients')  buildClientsPage();
   else if(p === 'timeline') buildTimelinePage();
 }
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+    <title>روائع الأفكار الإعلانية — النظام الداخلي</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css"/>
+    <style>
+        /* (احتفظ بنفس الـ CSS الموجود لديك) */
+        /* التنسيقات المضافة لعرض السعر */
+        .quote-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px; margin: 10px 20px; }
+        .quote-box-title { font-size: 12px; font-weight: 700; color: #4A0E17; margin-bottom: 10px; }
+        .quote-line { display: flex; gap: 8px; margin-bottom: 8px; }
+        .quote-line input { padding: 6px; font-size: 12px; }
+        .quote-total-row { display: flex; justify-content: space-between; margin-top: 10px; font-weight: 700; color: #4A0E17; padding-top: 10px; border-top: 1px solid #e2e8f0; }
+    </style>
+</head>
+<body>
+
+<div id="ma" style="display:none;"><div class="app">...</div></div>
+
+<script>
+// ... (كل الدوال السابقة لديك) ...
+
+// ====== دالة تحديث الفورم المدمجة ======
+function buildAddForm(isUrgentQuick=false){  
+  const dw=getDeptWorkers('design'),pw=getDeptWorkers('print'),ww=getDeptWorkers('workshop'),ew=getDeptWorkers('external');  
+  const mkOpts=arr=>arr.map(w=>`<option value="${w.uname}">${w.name}</option>`).join('');  
+  const cArr=Object.values(clients);  
+  const isDesigner=cu.type==='designer';  
+  const defaultDesigner=isDesigner||isUrgentQuick?`<option value="${cu._uname}" selected>${cu.name}</option>`:'';  
+  const urgentNote=isUrgentQuick?'<div class="ro-notice" style="background:#FFF5F5;border-color:#FCA5A5;color:#991B1B"><i class="ti ti-bolt"></i> طلب مستعجل — سيتم تعيينك تلقائياً كمسؤول التصميم</div>':'';  
+  
+  document.getElementById('add-content').innerHTML=`    ${urgentNote}    <datalist id="cl-list">${cArr.map(c=>`<option value="${c.name}">`).join('')}</datalist>    <div class="card"><div class="form-grid">      <div class="fg"><label>اسم العميل / الجهة *</label><input id="fc" list="cl-list" oninput="onClientInput(this.value)" autocomplete="off" placeholder="اسم الشركة أو العميل بالكامل"/></div>      <div class="fg"><label>رقم الجوال * <span style="color:#EF4444">(إلزامي)</span></label>        <div style="display:flex;gap:6px"><input id="fp" placeholder="05XXXXXXXX" style="flex:1" required/><button type="button" class="btn btn-whatsapp btn-sm" onclick="openWhatsapp(document.getElementById('fp').value)"><i class="ti ti-brand-whatsapp"></i></button></div>      </div>      <div class="fg"><label>نوع الخدمة *</label><input id="fs" placeholder="مثال: لوحة، فلكس، بنر..."/></div>      <div class="fg"><label>الأولوية</label><select id="fpr"><option value="عادية">عادية</option><option value="متوسطة">متوسطة</option><option value="عاجلة"${isUrgentQuick?' selected':''}>عاجلة</option></select></div>      <div class="fg"><label>حالة الدفع * <span style="color:#EF4444">(إلزامي)</span></label>        <select id="fpay" onchange="onPaymentChange(this.value)">          <option value="">— اختر حالة الدفع —</option>          <option value="تم الدفع">تم الدفع</option>          <option value="دفع جزئي">دفع جزئي</option>          <option value="عند التسليم">عند التسليم</option>        </select>      </div>      <div class="fg" id="amount-field" style="display:none"><label>المبلغ المدفوع مقدمًا (ر.س)</label><input type="number" id="fb2" placeholder="0" min="0"/></div>      <div class="fg"><label>تاريخ التسليم المتوقع</label><input type="date" id="fd"/></div>      <div class="fg ff"><label>ملاحظات وتفاصيل المواصفات</label><textarea id="fn" placeholder="اكتب الملاحظات والمقاسات هنا..."></textarea></div>    </div>    
+    
+    <div class="ff" style="padding:0 20px 6px;">      <button type="button" class="btn btn-out btn-sm" onclick="toggleQuoteBox()"><i class="ti ti-receipt-2"></i> إضافة عرض سعر للطلب (اختياري)</button>    </div>    
+    <div class="ff" id="quote-box-wrap" style="display:none;">      
+        <div class="quote-box">        
+            <div class="quote-box-title"><i class="ti ti-file-invoice"></i> عرض السعر</div>        
+            <div id="quote-lines-wrap"></div>        
+            <button type="button" class="btn btn-out btn-sm" onclick="addQuoteLine()"><i class="ti ti-plus"></i> إضافة بند</button>        
+            <div class="quote-total-row"><span>الإجمالي التقديري:</span><span id="quote-total-display">0 ر.س</span></div>        
+            <div class="fg" style="margin-top:10px;"><label>ملاحظات عرض السعر</label><textarea id="quote-notes" placeholder="ملاحظات تظهر للعميل..."></textarea></div>      
+        </div>    
+    </div>    
+
+    <div style="font-size:13px;font-weight:700;color:#4A0E17;margin:20px 20px 10px;"><i class="ti ti-sitemap"></i> خطوط الإنتاج والتوكيل</div>    
+    <div class="dept-grid-layout"> ... </div> </div>`;  
+    
+  window.globalAttachedFiles=[]; window._quoteLines=[];
+}
+
+/* ====== دوال عرض السعر ====== */
+function toggleQuoteBox(){ const wrap=document.getElementById('quote-box-wrap'); wrap.style.display = (wrap.style.display==='none'?'block':'none'); if(wrap.style.display==='block' && window._quoteLines.length===0) addQuoteLine(); }
+function addQuoteLine(){ const id='ql'+Date.now(); window._quoteLines.push({id,label:'',qty:1,price:0}); renderQuoteLines(); }
+function removeQuoteLine(id){ window._quoteLines=window._quoteLines.filter(l=>l.id!==id); renderQuoteLines(); }
+function updateQuoteLine(id,field,val){ const l=window._quoteLines.find(x=>x.id===id); if(l) { l[field] = field==='label'?val:parseFloat(val)||0; renderQuoteTotalOnly(); } }
+function renderQuoteLines(){ const wrap=document.getElementById('quote-lines-wrap'); wrap.innerHTML=window._quoteLines.map(l=>`<div class="quote-line"><input value="${l.label}" oninput="updateQuoteLine('${l.id}','label',this.value)"/><input type="number" style="width:60px" value="${l.qty}" oninput="updateQuoteLine('${l.id}','qty',this.value)"/><input type="number" style="width:80px" value="${l.price}" oninput="updateQuoteLine('${l.id}','price',this.value)"/><button class="btn btn-red btn-sm" onclick="removeQuoteLine('${l.id}')"><i class="ti ti-trash"></i></button></div>`).join(''); renderQuoteTotalOnly(); }
+function renderQuoteTotalOnly(){ const total=window._quoteLines.reduce((s,l)=>s+(l.qty*l.price),0); document.getElementById('quote-total-display').textContent=total.toLocaleString()+' ر.س'; }
+
+// ====== تعديل دالة الإرسال submitOrder ======
+async function submitOrder(isUrgentQuick=false){
+  // ... (نفس كود التحقق) ...
+  
+  // إضافة بيانات عرض السعر للكائن المرسل
+  const quoteData = document.getElementById('quote-box-wrap').style.display !== 'none' ? {
+      lines: window._quoteLines,
+      total: window._quoteLines.reduce((s,l)=>s+(l.qty*l.price),0),
+      notes: document.getElementById('quote-notes').value
+  } : null;
+
+  const ord={
+    // ... (باقي حقول الطلب) ...
+    quote: quoteData
+  };
+  
+  // ... (باقي كود الإرسال للـ Firebase) ...
+}
 </script>
 </body>
 </html>
