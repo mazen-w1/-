@@ -1,115 +1,11 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-<meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
-<title>روائع الأفكار الإعلانية — النظام الداخلي</title>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css"/>
-<style>
-* {box-sizing:border-box;margin:0;padding:0;}
-:root { --beige:#E8D5BE; --beige-dark:#D4AF37; --maroon:#4A0E17; }
-body {font-family:'Segoe UI',Tahoma,Arial,sans-serif;background:#F9F6F5;min-height:100vh;color:#333;}
-/* [جميع التنسيقات السابقة محفوظة] */
-.a4-wrapper { width:100%; background:#fff; color:#000; padding:40px; font-family:'Arial', sans-serif; display:none; }
-@media print { .a4-wrapper { display:block !important; } body * { visibility:hidden; } #print-area, #print-area * { visibility:visible; } #print-area { position:absolute; left:0; top:0; width:100%; } }
-.chat-box { height: 180px; overflow-y: auto; background: #f8f9fa; padding: 10px; border: 1px solid #ddd; margin: 10px 0; border-radius: 8px; }
-</style>
+    <meta charset="UTF-8">
+    <title>روائع الأفكار الإعلانية</title>
 </head>
 <body>
-
-<div id="ma" style="display:block;"> <!-- تم تعديل العرض ليظهر مباشرة -->
-  <div class="app">
-    <div class="header">
-      <div class="brand"><div class="logo-box"><svg viewBox="0 0 120 120" width="40" height="40"><path d="M 18 48 Q 45 38 78 52 Q 95 58 102 72" fill="none" stroke="var(--beige-dark)" stroke-width="5"/></svg></div>
-      <div><div class="brand-ar">روائع الأفكار الإعلانية</div></div></div>
-      <div class="user-chip" onclick="logout()"><div class="u-dot" id="hd"></div><div id="hn"></div></div>
-    </div>
-    <div class="body">
-      <div class="sidebar" id="sidebar"></div>
-      <div class="main">
-        <div class="page active" id="page-dash"><div id="dash-content"></div></div>
-        <div class="page" id="page-add"><div id="add-content"></div></div>
-        <div class="page" id="page-quote"><div id="quote-content"></div></div>
-        <div class="page" id="page-wf"><div id="wf-content"></div></div>
-        <div class="page" id="page-my"><div id="my-content"></div></div>
-      </div>
-    </div>
-  </div>
-</div>
-
-<div class="modal-overlay" id="order-modal"><div class="modal-box" dir="rtl" id="order-modal-body"></div></div>
-<div class="saving-overlay" id="saving-overlay"><div class="spinner"></div><span id="saving-msg">جاري المعالجة...</span></div>
-
-<script>
-/* ====== الدوال المحدثة ====== */
-
-// 1. نظام التكليف السريع المطور
-async function submitQuickTask(type){
-  const c = document.getElementById('qt-client').value.trim();
-  const assignTo = document.getElementById('qt-assignee').value;
-  const n = document.getElementById('qt-notes').value;
-  const file = document.getElementById('qt-file').files[0];
-  
-  let fileB64 = '';
-  if(file) fileB64 = await convertFileToBase64(file);
-
-  const ord = {
-    client: c, 
-    service: type==='proof' ? 'بروفة تصميم' : 'أخذ قياسات',
-    notes: n,
-    files: fileB64 ? [{name: file.name, data: fileB64}] : [],
-    currentDept: type==='proof' ? 'design' : 'workshop',
-    designTo: type==='proof' ? assignTo : 'none',
-    workshopTo: type==='measure' ? assignTo : 'none',
-    status: 'مهمة سريعة',
-    date: new Date().toISOString().split('T')[0],
-    createdBy: cu.name
-  };
-  await fbPush('orders', ord);
-  toast('تم التكليف بنجاح');
-  closeModal('order-modal');
-  refreshCurrentPage();
-}
-
-// 2. المحادثة المباشرة
-async function addOrderComment(key){
-  const input = document.getElementById('chat-input-'+key);
-  if(!input.value) return;
-  const comments = (orders[key].comments || []);
-  comments.push({ name: cu.name, text: input.value, date: new Date().toLocaleTimeString() });
-  await fbPatch(`orders/${key}`, { comments });
-  openOrderModal(key);
-}
-
-// 3. بناء صفحة عرض السعر (التصميم الرسمي)
-function buildQuotePage(){
-  window._quoteLines=[];
-  document.getElementById('quote-content').innerHTML = `
-    <div class="ptitle">إصدار عرض سعر رسمي</div>
-    <div class="card p-20">
-       <input id="q-client" placeholder="اسم العميل..."/>
-       <div id="quote-lines-wrap"></div>
-       <button class="btn btn-brand" onclick="saveAndPrintQuote()">حفظ وطباعة العرض</button>
-    </div>
-  `;
-}
-
-function saveAndPrintQuote(){
-    // هنا منطق حفظ عرض السعر وفتح نافذة الطباعة A4
-    // CSS الخاص بـ .a4-wrapper المضاف في الأعلى سيقوم بتنسيق الطباعة
-    window.print();
-}
-
-// 4. تحديث Order Modal لإظهار المحادثة
-function openOrderModal(key){
-  // ... (نفس كود فتح الطلب) ...
-  const chatHtml = `<div class="chat-box" id="chat-box-${key}">${(o.comments||[]).map(c=>`<div><b>${c.name}:</b> ${c.text}</div>`).join('')}</div>
-                    <input id="chat-input-${key}" placeholder="اكتب ملاحظة..." /><button onclick="addOrderComment('${key}')">إرسال</button>`;
-  document.getElementById('order-modal-body').innerHTML += chatHtml;
-  openModal('order-modal');
-}
-
-// ... (بقية دوال fbPush, convertFileToBase64, buildSidebar المعتادة) ...
-</script>
+    <h1>مرحباً بك في موقع روائع الأفكار الإعلانية</h1>
+    <p>الموقع يعمل الآن بنجاح.</p>
 </body>
 </html>
