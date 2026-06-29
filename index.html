@@ -437,6 +437,33 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--gold);bo
   .stats-row{grid-template-columns:1fr 1fr;}
   .partial-fields{grid-template-columns:1fr;}
 }
+
+/* ══ LUXURY PAGE TRANSITIONS ══════════════════════════════════════ */
+.page.active{animation:lxIn .52s cubic-bezier(.22,1,.36,1) both;}
+@keyframes lxIn{
+  from{opacity:0;transform:translateY(30px) scale(.982);filter:blur(7px);}
+  to  {opacity:1;transform:translateY(0)    scale(1);   filter:blur(0);}}
+.page-out{animation:lxOut .26s ease forwards!important;display:block!important;}
+@keyframes lxOut{
+  to{opacity:0;transform:translateY(-20px) scale(.97);filter:blur(4px);}}
+
+/* ══ EMPLOYEE ANALYTICS ═══════════════════════════════════════════ */
+.emp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(308px,1fr));gap:18px;}
+.emp-card{background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;transition:.22s cubic-bezier(.22,1,.36,1);}
+.emp-card:hover{box-shadow:0 8px 32px rgba(74,14,23,.13);border-color:var(--gold);transform:translateY(-4px);}
+.emp-card-top{padding:18px 18px 14px;}
+.emp-kpi-row{display:flex;gap:8px;margin:10px 0;}
+.emp-kpi{flex:1;background:var(--surface-2);border-radius:var(--radius-sm);border:1px solid var(--border-soft);padding:10px 4px;text-align:center;}
+.emp-kpi-val{font-size:20px;font-weight:900;color:var(--maroon);}
+.emp-kpi-lbl{font-size:8px;color:var(--text-3);font-weight:800;letter-spacing:.3px;margin-top:2px;}
+.emp-perf-bar{height:7px;background:var(--border);border-radius:6px;overflow:hidden;margin:6px 0 0;}
+.emp-perf-fill{height:7px;border-radius:6px;transition:width .7s cubic-bezier(.22,1,.36,1);}
+.tc{display:inline-flex;align-items:center;gap:3px;padding:3px 9px;border-radius:12px;font-size:10px;font-weight:800;}
+.tc-fast{background:#D1FAE5;color:#065F46;}
+.tc-med {background:#FEF3C7;color:#92400E;}
+.tc-slow{background:#FEE2E2;color:#991B1B;}
+.tc-none{background:var(--border);color:var(--text-3);}
+
 </style>
 </head>
 <body>
@@ -574,6 +601,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--gold);bo
         <div class="page" id="page-timeline"><div id="timeline-content"></div></div>
         <div class="page" id="page-request"><div id="request-content"></div></div>
         <div class="page" id="page-requests"><div id="requests-content"></div></div>
+        <div class="page" id="page-emp"><div id="emp-content"></div></div>
       </div>
     </div>
   </div>
@@ -902,6 +930,7 @@ function buildSidebar(){
       ni('clients','ti-address-book','العملاء'),
       ni('users','ti-users','الموظفين'),
       ni('timeline','ti-clock','إحصائيات المراحل'),
+      ni('emp','ti-chart-bar','أداء الموظفين'),
       ni('export','ti-table-export','تصدير Excel'),
     ]);
   }else if(t==='accountant'){
@@ -934,7 +963,14 @@ async function nav(p,skipHistory=false){
   if(p==='export'){exportExcel();return;}
   if(!skipHistory&&_curPage&&_curPage!==p)_navHistory.push(_curPage);
   _curPage=p;
-  document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));
+  // ── luxury exit animation ──
+  const prev=document.querySelector('.page.active');
+  if(prev&&!prev.classList.contains('page-out')){
+    prev.classList.add('page-out');
+    await new Promise(r=>setTimeout(r,230));
+    prev.classList.remove('active','page-out');
+  }
+  document.querySelectorAll('.page').forEach(x=>x.classList.remove('active','page-out'));
   document.querySelectorAll('.ni').forEach(x=>x.classList.remove('active'));
   const pg=document.getElementById('page-'+p);const nb=document.getElementById('n-'+p);
   if(pg)pg.classList.add('active');if(nb)nb.classList.add('active');
@@ -1178,12 +1214,22 @@ function buildDash(){
         <div style="text-align:right;"><div style="font-size:13px;font-weight:700;color:var(--maroon)">عرض سعر جديد</div><div style="font-size:11px;color:var(--text-3)">إصدار عرض احترافي</div></div>
       </button>
     </div>`:'';
+  // ── time-based statistics ────────────────────────────────────────
+  const _now=new Date();
+  const _done=arr.filter(o=>o.currentDept==='done');
+  const _last24h=_done.filter(o=>o.workshopDoneAt&&(_now-new Date(o.workshopDoneAt))<86400000).length;
+  const _last7d =_done.filter(o=>o.workshopDoneAt&&(_now-new Date(o.workshopDoneAt))<604800000).length;
+  const _avgH=function(){const c=_done.filter(o=>o.workshopDoneAt&&o.date);if(!c.length)return 0;return Math.round(c.reduce((s,o)=>{const h=(new Date(o.workshopDoneAt)-new Date(o.date))/3600000;return s+(h>0?h:0);},0)/c.length);}();
+  const _fH=h=>h===0?'—':h<24?h+'س':Math.round(h/24)+' يوم';
+  const _dsAvg=function(){const c=arr.filter(o=>o.designDoneAt&&o.date&&getActiveDepts(o).includes('design'));if(!c.length)return 0;return Math.round(c.reduce((s,o)=>{const h=(new Date(o.designDoneAt)-new Date(o.date))/3600000;return s+(h>0?h:0);},0)/c.length);}();
+  const _prAvg=function(){const c=arr.filter(o=>o.printDoneAt&&o.date&&getActiveDepts(o).includes('print'));if(!c.length)return 0;return Math.round(c.reduce((s,o)=>{const h=(new Date(o.printDoneAt)-new Date(o.date))/3600000;return s+(h>0?h:0);},0)/c.length);}();
+  const _ovr=running.filter(o=>o.deadline&&o.deadline!=='—'&&new Date(o.deadline)<_now).length;
   const stats=`<div class="stats-row">
-    <div class="stat-card c-gold"><div class="stat-icon i-gold"><i class="ti ti-list-check"></i></div><div class="stat-label">إجمالي الجارية</div><div class="stat-value">${total}</div></div>
-    <div class="stat-card c-purple"><div class="stat-icon i-purple"><i class="ti ti-brush"></i></div><div class="stat-label">في التصميم</div><div class="stat-value">${inDesign}</div></div>
-    <div class="stat-card c-orange"><div class="stat-icon i-orange"><i class="ti ti-printer"></i></div><div class="stat-label">في الإنتاج</div><div class="stat-value">${inProd}</div></div>
-    <div class="stat-card c-green"><div class="stat-icon i-green"><i class="ti ti-circle-check"></i></div><div class="stat-label">مكتملة</div><div class="stat-value">${dn}</div></div>
-    <div class="stat-card c-red"><div class="stat-icon i-red"><i class="ti ti-bolt"></i></div><div class="stat-label">طلبات عاجلة</div><div class="stat-value">${ug}</div></div>
+    <div class="stat-card c-gold"><div class="stat-icon i-gold"><i class="ti ti-loader-2"></i></div><div class="stat-label">جارية الآن</div><div class="stat-value">${total}</div><div class="stat-trend"><span style="background:rgba(212,175,55,.15);color:#92400E;border-radius:8px;padding:1px 6px;font-size:9px;font-weight:800;"><i class="ti ti-bolt"></i>${ug} عاجل</span></div></div>
+    <div class="stat-card c-green"><div class="stat-icon i-green"><i class="ti ti-circle-check"></i></div><div class="stat-label">مكتملة</div><div class="stat-value">${dn}</div><div class="stat-trend"><i class="ti ti-calendar" style="color:var(--text-3)"></i>&nbsp;<span style="color:var(--text-2)">7 أيام: ${_last7d} &nbsp;·&nbsp; اليوم: ${_last24h}</span></div></div>
+    <div class="stat-card c-blue"><div class="stat-icon i-blue"><i class="ti ti-hourglass"></i></div><div class="stat-label">متوسط الإنجاز</div><div class="stat-value" style="font-size:19px">${_fH(_avgH)}</div><div class="stat-trend"><i class="ti ti-clock" style="color:var(--text-3)"></i>&nbsp;<span style="color:var(--text-2)">تصميم: ${_fH(_dsAvg)}</span></div></div>
+    <div class="stat-card c-purple"><div class="stat-icon i-purple"><i class="ti ti-printer"></i></div><div class="stat-label">متوسط الطباعة</div><div class="stat-value" style="font-size:19px">${_fH(_prAvg)}</div><div class="stat-trend"><i class="ti ti-layers" style="color:var(--text-3)"></i>&nbsp;<span style="color:var(--text-2)">${inProd} جارية</span></div></div>
+    <div class="stat-card c-red"><div class="stat-icon i-red"><i class="ti ti-alarm-minus"></i></div><div class="stat-label">تجاوزت الميعاد</div><div class="stat-value" style="color:#EF4444">${_ovr}</div><div class="stat-trend"><i class="ti ti-brush" style="color:var(--text-3)"></i>&nbsp;<span style="color:var(--text-2)">تصميم: ${inDesign} جارية</span></div></div>
   </div>`;
   // Alerts
   const now=new Date();
@@ -2347,6 +2393,123 @@ async function deleteRequest(key){if(!confirm('شطب هذا الطلب؟'))retu
 // ============================================================
 // PAGE ROUTER
 // ============================================================
+
+// ════════════════════════════════════════════════════════════════
+// EMPLOYEE PERFORMANCE ANALYTICS
+// ════════════════════════════════════════════════════════════════
+function buildEmpPage(){
+  const arr=ordersArr();const now=new Date();
+  const fH=h=>(!h||h===0)?'—':h<24?h+'س':Math.round(h/24)+' يوم';
+  const tcChip=h=>{if(!h||h===0)return'<span class="tc tc-none">—</span>';
+    if(h<24)return`<span class="tc tc-fast"><i class="ti ti-rocket"></i>${h}س</span>`;
+    if(h<72)return`<span class="tc tc-med"><i class="ti ti-clock"></i>${Math.round(h/24)}ي</span>`;
+    return`<span class="tc tc-slow"><i class="ti ti-alert-circle"></i>${Math.round(h/24)}ي</span>`;};
+  const doneKey={designer:'designDoneAt',printer:'printDoneAt',workshop:'workshopDoneAt',external:'externalDoneAt'};
+  const getEmpOrders=(uname,type)=>{
+    if(type==='designer')return arr.filter(o=>o.designTo===uname||o.designTo==='all');
+    if(type==='printer') return arr.filter(o=>o.printTo===uname);
+    if(type==='workshop')return arr.filter(o=>o.workshopTo===uname||o.workshopTo==='all');
+    if(type==='external')return arr.filter(o=>o.externalTo===uname);
+    return arr.filter(o=>o.createdByUname===uname);};
+  const getAvgH=(orders,type)=>{const k=doneKey[type];if(!k)return 0;
+    const c=orders.filter(o=>o[k]&&o.date);if(!c.length)return 0;
+    return Math.round(c.reduce((s,o)=>{const h=(new Date(o[k])-new Date(o.date))/3600000;return s+(h>0?h:0);},0)/c.length);};
+  const empList=Object.entries(USERS).map(([uname,u])=>({uname,...u}));
+  document.getElementById('emp-content').innerHTML=`
+    <div class="page-header"><div class="ptitle"><i class="ti ti-chart-bar"></i> تحليل أداء الموظفين</div></div>
+    <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:20px;">
+      <div class="search-bar" style="max-width:380px;flex:1;">
+        <i class="ti ti-search" style="color:var(--gold)"></i>
+        <input id="emp-srch" placeholder="ابحث باسم الموظف..." oninput="filterEmpCards(this.value)"
+               style="border:none;outline:none;width:100%;font-size:13px;background:transparent;font-family:inherit;"/>
+      </div>
+      <select id="emp-role-sel" onchange="filterEmpByRole(this.value)"
+              style="border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:9px 14px;font-size:12px;font-weight:700;color:var(--maroon);background:var(--surface);font-family:inherit;">
+        <option value="">كل الأدوار</option>
+        <option value="designer">المصممون</option>
+        <option value="printer">الطباعة</option>
+        <option value="workshop">الورشة</option>
+        <option value="external">الخارجي</option>
+        <option value="receiver">الاستقبال</option>
+        <option value="admin">الإدارة</option>
+      </select>
+    </div>
+    <div class="emp-grid" id="emp-cards-container">
+      ${empList.map(e=>{
+        const eOrds=getEmpOrders(e.uname,e.type);
+        const active=eOrds.filter(o=>o.currentDept!=='done');
+        const done=eOrds.filter(o=>o.currentDept==='done');
+        const urgent=active.filter(o=>o.priority==='عاجلة').length;
+        const ovr=active.filter(o=>o.deadline&&o.deadline!=='—'&&new Date(o.deadline)<now).length;
+        const pct=eOrds.length?Math.round(done.length/eOrds.length*100):0;
+        const avgH=getAvgH(eOrds,e.type);
+        const barCol=pct>=70?'#10B981':pct>=40?'#F59E0B':'#EF4444';
+        const today24=done.filter(o=>{const k=doneKey[e.type];return k&&o[k]&&(now-new Date(o[k]))<86400000;}).length;
+        const recent=eOrds.slice().sort((a,b)=>new Date(b.date)-new Date(a.date)).slice(0,3);
+        const av=e.photo?`<img src="${e.photo}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`
+          :`<span style="font-size:18px;font-weight:900;color:#fff">${(e.name||e.uname||'?').charAt(0)}</span>`;
+        return `<div class="emp-card" data-ename="${(e.name||'').toLowerCase()}" data-euname="${e.uname}" data-erole="${e.type||''}">
+          <div class="emp-card-top">
+            <!-- Header row -->
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">
+              <div style="position:relative;flex-shrink:0;">
+                <div style="width:52px;height:52px;border-radius:50%;background:${e.color||'var(--maroon)'};display:flex;align-items:center;justify-content:center;border:2px solid var(--border);">${av}</div>
+                <div style="position:absolute;bottom:0;left:0;width:13px;height:13px;border-radius:50%;background:${active.length>0?'#10B981':'#94A3B8'};border:2px solid var(--surface);"></div>
+              </div>
+              <div style="flex:1;min-width:0;">
+                <div style="font-size:14px;font-weight:800;color:var(--maroon);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${e.name||e.uname}</div>
+                <div style="font-size:11px;color:var(--text-3);font-weight:600;">${e.role||ROLE_LABELS[e.type]||e.type}</div>
+              </div>
+              <div style="text-align:center;flex-shrink:0;">
+                <div style="font-size:24px;font-weight:900;color:${barCol};line-height:1;">${pct}%</div>
+                <div style="font-size:8px;color:var(--text-3);font-weight:700;">نسبة الإنجاز</div>
+              </div>
+            </div>
+            <!-- KPI chips -->
+            <div class="emp-kpi-row">
+              <div class="emp-kpi"><div class="emp-kpi-val">${eOrds.length}</div><div class="emp-kpi-lbl">إجمالي</div></div>
+              <div class="emp-kpi"><div class="emp-kpi-val" style="color:#10B981">${done.length}</div><div class="emp-kpi-lbl">مكتمل</div></div>
+              <div class="emp-kpi"><div class="emp-kpi-val" style="color:#F59E0B">${active.length}</div><div class="emp-kpi-lbl">جارية</div></div>
+              <div class="emp-kpi"><div class="emp-kpi-val" style="color:#EF4444">${urgent}</div><div class="emp-kpi-lbl">عاجلة</div></div>
+            </div>
+            <!-- Progress bar -->
+            <div class="emp-perf-bar"><div class="emp-perf-fill" style="width:${pct}%;background:${barCol}"></div></div>
+            <!-- Avg time row -->
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-top:11px;padding:8px 12px;background:var(--surface-2);border-radius:8px;border:1px solid var(--border-soft);">
+              <span style="font-size:10px;color:var(--text-2);font-weight:700;"><i class="ti ti-clock" style="color:var(--gold)"></i>&nbsp;متوسط وقت الإنجاز</span>
+              ${tcChip(avgH)}
+            </div>
+            <!-- Tags row -->
+            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;min-height:20px;">
+              ${ovr>0?`<span style="background:#FEE2E2;color:#991B1B;border-radius:8px;padding:3px 8px;font-size:9px;font-weight:800"><i class="ti ti-alert-triangle"></i> ${ovr} تجاوز الميعاد</span>`:''}
+              ${today24>0?`<span style="background:#D1FAE5;color:#065F46;border-radius:8px;padding:3px 8px;font-size:9px;font-weight:800"><i class="ti ti-rocket"></i> ${today24} أُنجز اليوم</span>`:''}
+              ${eOrds.length===0?`<span style="background:var(--border);color:var(--text-3);border-radius:8px;padding:3px 8px;font-size:9px;font-weight:800">لا توجد طلبات</span>`:''}
+            </div>
+          </div>
+          ${recent.length?`<div style="border-top:1px solid var(--border-soft);padding:10px 18px 14px;">
+            <div style="font-size:9px;color:var(--text-3);font-weight:800;letter-spacing:.7px;margin-bottom:7px;text-transform:uppercase;">آخر الطلبات</div>
+            ${recent.map(o=>`<div onclick="openOrderModal('${o._key}')" style="display:flex;align-items:center;justify-content:space-between;padding:6px 8px;border-radius:7px;cursor:pointer;margin-bottom:3px;transition:.12s;" onmouseover="this.style.background='var(--gold-soft)'" onmouseout="this.style.background=''">
+              <div style="min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><span style="font-size:11px;font-weight:800;color:var(--maroon)">${o.id||o._key}</span>&nbsp;<span style="font-size:10px;color:var(--text-2)">${o.client}</span></div>
+              <div style="display:flex;gap:4px;align-items:center;flex-shrink:0;margin-right:8px;">${deptBadge(o.currentDept)}&nbsp;${timeBadge(hoursAgo(o.stageStartDate||o.date))}</div>
+            </div>`).join('')}
+          </div>`:''}
+        </div>`;
+      }).join('')}
+    </div>`;
+}
+function filterEmpCards(q){
+  const ql=(q||'').toLowerCase();
+  document.querySelectorAll('#emp-cards-container .emp-card').forEach(c=>{
+    const nm=c.dataset.ename||'';const un=c.dataset.euname||'';
+    c.style.display=(!ql||nm.includes(ql)||un.includes(ql))?'':'none';
+  });
+}
+function filterEmpByRole(role){
+  document.querySelectorAll('#emp-cards-container .emp-card').forEach(c=>{
+    c.style.display=(!role||c.dataset.erole===role)?'':'none';
+  });
+}
+
 function _buildPage(p){
   if(p==='dash')       buildDash();
   else if(p==='wf')    buildWfGrid(_currentWfTab||'active');
@@ -2358,6 +2521,7 @@ function _buildPage(p){
   else if(p==='users')    buildUsersPage();
   else if(p==='clients')  buildClientsPage();
   else if(p==='timeline') buildTimelinePage();
+  else if(p==='emp')      buildEmpPage();
 }
 </script>
 </body>
