@@ -1236,25 +1236,77 @@ function buildDash(){
   const urgentOrders=myArr.filter(o=>o.priority==='عاجلة'&&o.currentDept!=='done');
   const overdueOrders=myArr.filter(o=>{if(!o.deadline||o.deadline==='—'||o.currentDept==='done')return false;return new Date(o.deadline)<now;});
   const deadlineOrders=myArr.filter(o=>{if(!o.deadline||o.deadline==='—'||o.currentDept==='done')return false;const dl=new Date(o.deadline);const h=Math.round((dl-now)/3600000);return h>=0&&h<=72;});
-  const urgentHtml=urgentOrders.length?`<div class="alert-card a-red flex-1" style="min-width:260px;">
-    <div class="alert-card-header"><i class="ti ti-bolt"></i> طلبات عاجلة (${urgentOrders.length})</div>
-    ${urgentOrders.slice(0,4).map(o=>`<div class="alert-item" onclick="openOrderModal('${o._key}')">
-      <div><span class="urgent-tag"><i class="ti ti-bolt"></i>عاجل</span> <strong style="margin-right:4px;color:var(--maroon)">${o.id||o._key}</strong> — ${o.client}</div>
-      <div style="display:flex;gap:5px;">${deptBadge(o.currentDept)}</div>
-    </div>`).join('')}
+  const urgentHtml=urgentOrders.length?`
+  <div style="flex:1;min-width:270px;background:var(--surface);border-radius:var(--radius-lg);overflow:hidden;box-shadow:0 8px 32px rgba(127,29,29,.2);border:2px solid #FECACA;">
+    <div style="background:linear-gradient(135deg,#7F1D1D 0%,#B91C1C 100%);padding:14px 18px;display:flex;align-items:center;justify-content:space-between;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div style="width:40px;height:40px;border-radius:12px;background:rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+          <i class="ti ti-bolt" style="font-size:20px;color:#FCA5A5;"></i>
+        </div>
+        <div>
+          <div style="font-size:13px;font-weight:900;color:#fff;letter-spacing:.3px;">طلبات عاجلة</div>
+          <div style="font-size:10px;color:rgba(255,255,255,.5);margin-top:2px;">تحتاج إجراءً فورياً</div>
+        </div>
+      </div>
+      <div style="background:rgba(255,255,255,.18);border:1.5px solid rgba(255,255,255,.35);color:#fff;font-size:20px;font-weight:900;width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;">${urgentOrders.length}</div>
+    </div>
+    <div>
+      ${urgentOrders.slice(0,4).map(o=>`
+      <div onclick="openOrderModal('${o._key}')" style="display:flex;align-items:center;justify-content:space-between;padding:11px 18px;border-bottom:1px solid #FEE2E2;cursor:pointer;transition:background .12s;gap:10px;" onmouseover="this.style.background='#FFF5F5'" onmouseout="this.style.background=''">
+        <div style="min-width:0;flex:1;">
+          <div style="display:flex;align-items:center;gap:5px;margin-bottom:3px;flex-wrap:wrap;">
+            <span style="background:#DC2626;color:#fff;padding:2px 8px;border-radius:8px;font-size:9px;font-weight:800;letter-spacing:.2px;display:inline-flex;align-items:center;gap:2px;white-space:nowrap;"><i class="ti ti-bolt" style="font-size:10px;"></i> عاجل</span>
+            <strong style="font-size:12px;color:var(--maroon);white-space:nowrap;">${o.id||o._key}</strong>
+          </div>
+          <div style="font-size:11px;color:var(--text-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${o.client}</div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0;">
+          ${deptBadge(o.currentDept)}
+          ${timeBadge(hoursAgo(o.stageStartDate||o.date))}
+        </div>
+      </div>`).join('')}
+    </div>
   </div>`:'';
-  const deadlineHtml=(overdueOrders.length||deadlineOrders.length)?`<div class="alert-card a-yellow flex-1" style="min-width:260px;">
-    <div class="alert-card-header"><i class="ti ti-clock-exclamation"></i> تنبيهات مواعيد التسليم</div>
-    ${overdueOrders.slice(0,3).map(o=>`<div class="alert-item" onclick="openOrderModal('${o._key}')" style="background:#FFF5F5;">
-      <div><span class="badge b-urg">تجاوز الموعد</span> <strong style="margin-right:4px;">${o.id||o._key}</strong> — ${o.client}</div>
-      <div style="font-size:10px;color:#EF4444;font-weight:700;">${o.deadline}</div>
-    </div>`).join('')}
-    ${deadlineOrders.slice(0,3).map(o=>{const h=Math.round((new Date(o.deadline)-now)/3600000);return`<div class="alert-item" onclick="openOrderModal('${o._key}')">
-      <div><strong>${o.id||o._key}</strong> — ${o.client}</div>
-      <div style="font-size:10px;color:#92400E;font-weight:700;">${h<24?h+' ساعة':Math.round(h/24)+' يوم'}</div>
-    </div>`;}).join('')}
+  const deadlineHtml=(overdueOrders.length||deadlineOrders.length)?`
+  <div style="flex:1;min-width:270px;background:var(--surface);border-radius:var(--radius-lg);overflow:hidden;box-shadow:0 8px 32px rgba(120,53,15,.18);border:2px solid #FDE68A;">
+    <div style="background:linear-gradient(135deg,#78350F 0%,#B45309 100%);padding:14px 18px;display:flex;align-items:center;justify-content:space-between;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div style="width:40px;height:40px;border-radius:12px;background:rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+          <i class="ti ti-clock-exclamation" style="font-size:20px;color:#FDE68A;"></i>
+        </div>
+        <div>
+          <div style="font-size:13px;font-weight:900;color:#fff;letter-spacing:.3px;">تنبيهات التسليم</div>
+          <div style="font-size:10px;color:rgba(255,255,255,.5);margin-top:2px;">مراقبة مواعيد الاستحقاق</div>
+        </div>
+      </div>
+      <div style="background:rgba(255,255,255,.18);border:1.5px solid rgba(255,255,255,.35);color:#fff;font-size:20px;font-weight:900;width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;">${overdueOrders.length+deadlineOrders.length}</div>
+    </div>
+    <div>
+      ${overdueOrders.slice(0,3).map(o=>`
+      <div onclick="openOrderModal('${o._key}')" style="display:flex;align-items:center;justify-content:space-between;padding:10px 18px;border-bottom:1px solid #FEE2E2;background:#FFF8F8;cursor:pointer;transition:background .12s;gap:10px;" onmouseover="this.style.background='#FEE2E2'" onmouseout="this.style.background='#FFF8F8'">
+        <div style="min-width:0;flex:1;">
+          <div style="display:flex;align-items:center;gap:5px;margin-bottom:3px;flex-wrap:wrap;">
+            <span style="background:#DC2626;color:#fff;padding:2px 8px;border-radius:8px;font-size:9px;font-weight:800;white-space:nowrap;">⚠ تجاوز الموعد</span>
+            <strong style="font-size:12px;color:var(--maroon);white-space:nowrap;">${o.id||o._key}</strong>
+          </div>
+          <div style="font-size:11px;color:var(--text-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${o.client} · الموعد: ${o.deadline}</div>
+        </div>
+        <i class="ti ti-alert-triangle" style="color:#EF4444;font-size:20px;flex-shrink:0;"></i>
+      </div>`).join('')}
+      ${deadlineOrders.slice(0,3).map(o=>{const h=Math.round((new Date(o.deadline)-now)/3600000);return`
+      <div onclick="openOrderModal('${o._key}')" style="display:flex;align-items:center;justify-content:space-between;padding:10px 18px;border-bottom:1px solid #FEF3C7;cursor:pointer;transition:background .12s;gap:10px;" onmouseover="this.style.background='#FFFBEB'" onmouseout="this.style.background=''">
+        <div style="min-width:0;flex:1;">
+          <div style="display:flex;align-items:center;gap:5px;margin-bottom:3px;flex-wrap:wrap;">
+            <span style="background:#D97706;color:#fff;padding:2px 8px;border-radius:8px;font-size:9px;font-weight:800;white-space:nowrap;">⏰ ${h<24?h+' ساعة':Math.round(h/24)+' يوم'}</span>
+            <strong style="font-size:12px;color:var(--maroon);white-space:nowrap;">${o.id||o._key}</strong>
+          </div>
+          <div style="font-size:11px;color:var(--text-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${o.client}</div>
+        </div>
+        ${deptBadge(o.currentDept)}
+      </div>`;}).join('')}
+    </div>
   </div>`:'';
-  const alertsWrap=(urgentHtml||deadlineHtml)?`<div class="alert-strip">${urgentHtml}${deadlineHtml}</div>`:'';
+  const alertsWrap=(urgentHtml||deadlineHtml)?`<div style="display:flex;gap:18px;flex-wrap:wrap;margin-bottom:18px;">${urgentHtml}${deadlineHtml}</div>`:'';
   const tableRows=myArr.slice(0,8).map(o=>`<tr onclick="openOrderModal('${o._key}')" style="cursor:pointer">
     <td><strong style="color:var(--maroon)">${o.id||o._key}</strong>${o.priority==='عاجلة'?`<span class="urgent-tag" style="margin-right:5px;font-size:9px;"><i class="ti ti-bolt"></i></span>`:''}</td>
     <td><strong>${o.client}</strong></td>
