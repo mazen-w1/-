@@ -351,7 +351,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--gold);bo
   body>*:not(#print-area){display:none !important;}
   #print-area{display:block !important;}
   .no-print{display:none !important;}
-  @page{size:A4;margin:12mm;}
+  @page{size:A4;margin:6mm;}
 }
 #print-area{display:none;}
 .quote-a4{width:100%;max-width:794px;margin:0 auto;background:#fff;font-family:'Cairo','Segoe UI',Tahoma,sans-serif;direction:rtl;}
@@ -1278,52 +1278,46 @@ function buildDash(){
   const overdueOrders=myArr.filter(o=>{if(!o.deadline||o.deadline==='—'||o.currentDept==='done')return false;return new Date(o.deadline)<now;});
   const deadlineOrders=myArr.filter(o=>{if(!o.deadline||o.deadline==='—'||o.currentDept==='done')return false;const dl=new Date(o.deadline);const h=Math.round((dl-now)/3600000);return h>=0&&h<=72;});
   /* ── Reception inbox alerts ── */
-  const _allAlerts=[
-    ...urgentOrders.map(o=>({type:'urgent',o})),
-    ...overdueOrders.map(o=>({type:'overdue',o})),
-    ...deadlineOrders.filter(o=>!overdueOrders.includes(o)).map(o=>({type:'deadline',o}))
-  ];
-  const urgentHtml=''; const deadlineHtml='';
-  const alertsWrap=_allAlerts.length?`
-  <div style="background:var(--surface);border-radius:var(--radius-lg);border:1px solid var(--border);box-shadow:0 4px 20px rgba(0,0,0,.06);margin-bottom:18px;overflow:hidden;">
-    <!-- inbox header -->
-    <div style="padding:13px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:linear-gradient(135deg,var(--maroon) 0%,#6B1520 100%);">
+  /* ── Row renderer (reusable helper) ── */
+  const renderAlertRow=(type,o)=>{
+    const isUrgent=type==='urgent',isOverdue=type==='overdue';
+    const accent=isUrgent?'#DC2626':isOverdue?'#B91C1C':'#D97706';
+    const bgRow=isOverdue?'#FFF8F8':'';
+    const icon=isUrgent?'ti-bolt':isOverdue?'ti-alert-triangle':'ti-clock-exclamation';
+    const tag=isUrgent?'عاجل':isOverdue?'تجاوز الموعد':(()=>{const h=Math.round((new Date(o.deadline)-now)/3600000);return h<24?h+' ساعة':Math.round(h/24)+' يوم';})();
+    const avatarLetter=(o.client||'؟').charAt(0);
+    return`<div onclick="openOrderModal('${o._key}')" style="display:flex;align-items:center;gap:12px;padding:11px 18px;border-bottom:1px solid var(--border-soft);cursor:pointer;transition:background .12s;${bgRow?'background:'+bgRow+';':''}" onmouseover="this.style.background='#F9F5F0'" onmouseout="this.style.background='${bgRow}'">
+      <div style="width:38px;height:38px;border-radius:50%;background:${accent}18;border:2px solid ${accent}40;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px;font-weight:800;color:${accent};">${avatarLetter}</div>
+      <div style="flex:1;min-width:0;"><div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;flex-wrap:wrap;"><span style="background:${accent};color:#fff;padding:1px 7px;border-radius:6px;font-size:9px;font-weight:800;display:inline-flex;align-items:center;gap:2px;white-space:nowrap;"><i class="ti ${icon}" style="font-size:9px;"></i> ${tag}</span><strong style="font-size:12px;color:var(--maroon);">${o.id||o._key}</strong></div><div style="font-size:11px;color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${o.client} ${o.service?'· '+o.service:''}</div></div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0;">${deptBadge(o.currentDept)}${timeBadge(hoursAgo(o.stageStartDate||o.date))}</div>
+    </div>`;
+  };
+  /* ── Section 1: urgent orders ── */
+  const urgentWrap=urgentOrders.length?`
+  <div style="background:var(--surface);border-radius:var(--radius-lg);border:1px solid var(--border);box-shadow:0 4px 20px rgba(0,0,0,.06);margin-bottom:12px;overflow:hidden;">
+    <div style="padding:13px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:linear-gradient(135deg,#7F1D1D 0%,#991B1B 100%);">
       <div style="display:flex;align-items:center;gap:10px;">
-        <div style="width:36px;height:36px;border-radius:10px;background:rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;"><i class="ti ti-inbox" style="font-size:18px;color:#fff;"></i></div>
-        <div><div style="font-size:13px;font-weight:900;color:#fff;">مستقبل الإشعارات</div><div style="font-size:10px;color:rgba(255,255,255,.6);margin-top:1px;">تنبيهات تحتاج متابعة</div></div>
+        <div style="width:36px;height:36px;border-radius:10px;background:rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;"><i class="ti ti-bolt" style="font-size:18px;color:#fff;"></i></div>
+        <div><div style="font-size:13px;font-weight:900;color:#fff;">الطلبات العاجلة</div><div style="font-size:10px;color:rgba(255,255,255,.6);margin-top:1px;">تحتاج تدخل فوري</div></div>
       </div>
-      <div style="background:rgba(255,255,255,.18);border:1.5px solid rgba(255,255,255,.35);color:#fff;font-size:15px;font-weight:900;min-width:34px;height:34px;padding:0 8px;border-radius:20px;display:flex;align-items:center;justify-content:center;gap:4px;"><i class="ti ti-bell-ringing" style="font-size:14px;"></i>${_allAlerts.length}</div>
+      <div style="background:rgba(255,255,255,.18);border:1.5px solid rgba(255,255,255,.35);color:#fff;font-size:15px;font-weight:900;min-width:34px;height:34px;padding:0 8px;border-radius:20px;display:flex;align-items:center;justify-content:center;gap:4px;"><i class="ti ti-bolt" style="font-size:14px;"></i>${urgentOrders.length}</div>
     </div>
-    <!-- inbox rows -->
-    <div>
-      ${_allAlerts.slice(0,6).map(({type,o})=>{
-        const isUrgent=type==='urgent',isOverdue=type==='overdue';
-        const accent=isUrgent?'#DC2626':isOverdue?'#B91C1C':'#D97706';
-        const bgRow=isOverdue?'#FFF8F8':'';
-        const icon=isUrgent?'ti-bolt':isOverdue?'ti-alert-triangle':'ti-clock-exclamation';
-        const tag=isUrgent?'عاجل':isOverdue?'تجاوز الموعد':(()=>{const h=Math.round((new Date(o.deadline)-now)/3600000);return h<24?h+' ساعة':Math.round(h/24)+' يوم';})();
-        const avatarLetter=(o.client||'؟').charAt(0);
-        return`<div onclick="openOrderModal('${o._key}')" style="display:flex;align-items:center;gap:12px;padding:11px 18px;border-bottom:1px solid var(--border-soft);cursor:pointer;transition:background .12s;${bgRow?'background:'+bgRow+';':''}" onmouseover="this.style.background='#F9F5F0'" onmouseout="this.style.background='${bgRow}'">
-          <!-- avatar -->
-          <div style="width:38px;height:38px;border-radius:50%;background:${accent}18;border:2px solid ${accent}40;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px;font-weight:800;color:${accent};">${avatarLetter}</div>
-          <!-- content -->
-          <div style="flex:1;min-width:0;">
-            <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;flex-wrap:wrap;">
-              <span style="background:${accent};color:#fff;padding:1px 7px;border-radius:6px;font-size:9px;font-weight:800;display:inline-flex;align-items:center;gap:2px;white-space:nowrap;"><i class="ti ${icon}" style="font-size:9px;"></i> ${tag}</span>
-              <strong style="font-size:12px;color:var(--maroon);">${o.id||o._key}</strong>
-            </div>
-            <div style="font-size:11px;color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${o.client} ${o.service?'· '+o.service:''}</div>
-          </div>
-          <!-- meta -->
-          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0;">
-            ${deptBadge(o.currentDept)}
-            ${timeBadge(hoursAgo(o.stageStartDate||o.date))}
-          </div>
-        </div>`;
-      }).join('')}
-    </div>
+    <div>${urgentOrders.slice(0,6).map(o=>renderAlertRow('urgent',o)).join('')}</div>
   </div>`:'';
-  const tableRows=myArr.slice(0,8).map(o=>`<tr onclick="openOrderModal('${o._key}')" style="cursor:pointer">
+  /* ── Section 2: deadline / overdue ── */
+  const _deadlineAll=[...overdueOrders,...deadlineOrders.filter(o=>!overdueOrders.includes(o))];
+  const deadlineWrap=_deadlineAll.length?`
+  <div style="background:var(--surface);border-radius:var(--radius-lg);border:1px solid var(--border);box-shadow:0 4px 20px rgba(0,0,0,.06);margin-bottom:18px;overflow:hidden;">
+    <div style="padding:13px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:linear-gradient(135deg,#78350F 0%,#92400E 100%);">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div style="width:36px;height:36px;border-radius:10px;background:rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;"><i class="ti ti-clock-exclamation" style="font-size:18px;color:#fff;"></i></div>
+        <div><div style="font-size:13px;font-weight:900;color:#fff;">تنبيهات التسليم</div><div style="font-size:10px;color:rgba(255,255,255,.6);margin-top:1px;">مواعيد تسليم قريبة أو متجاوزة</div></div>
+      </div>
+      <div style="background:rgba(255,255,255,.18);border:1.5px solid rgba(255,255,255,.35);color:#fff;font-size:15px;font-weight:900;min-width:34px;height:34px;padding:0 8px;border-radius:20px;display:flex;align-items:center;justify-content:center;gap:4px;"><i class="ti ti-clock-exclamation" style="font-size:14px;"></i>${_deadlineAll.length}</div>
+    </div>
+    <div>${_deadlineAll.slice(0,6).map(o=>{const type=overdueOrders.includes(o)?'overdue':'deadline';return renderAlertRow(type,o);}).join('')}</div>
+  </div>`:'';
+  const tableRows=myArr.filter(o=>hoursAgo(o.stageStartDate||o.date)<=24).slice(0,8).map(o=>`<tr onclick="openOrderModal('${o._key}')" style="cursor:pointer">
     <td><strong style="color:var(--maroon)">${o.id||o._key}</strong>${o.priority==='عاجلة'?`<span class="urgent-tag" style="margin-right:5px;font-size:9px;"><i class="ti ti-bolt"></i></span>`:''}</td>
     <td><strong>${o.client}</strong></td>
     <td style="font-size:11px;color:var(--text-2);">${o.service}</td>
@@ -1333,7 +1327,7 @@ function buildDash(){
   </tr>`).join('');
   document.getElementById('page-dash').innerHTML=`
     <div class="page-header"><div><div class="ptitle"><i class="ti ti-layout-dashboard"></i> لوحة التحكم</div><div class="breadcrumb">مرحباً، ${cu.name}</div></div></div>
-    ${roNote}${myNote}${qtBtns}${stats}${alertsWrap}
+    ${roNote}${myNote}${qtBtns}${stats}${urgentWrap}${deadlineWrap}
     ${controlsRow(false)}
     <div class="card">
       <div class="card-header">
@@ -1777,13 +1771,7 @@ function renderA4Quote(data,key=''){
       </div>
 
       <!-- Terms card -->
-      <div style="background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 10px rgba(90,15,24,0.1);border:1px solid #EAE3DB;flex:1;">
-        <div style="background:linear-gradient(135deg,#5A0F18,#7A1A24);padding:8px 13px;display:flex;align-items:center;gap:8px;">
-          <div style="width:22px;height:22px;border-radius:50%;background:rgba(212,175,55,0.2);border:1px solid rgba(212,175,55,0.5);display:flex;align-items:center;justify-content:center;font-size:11px;flex-shrink:0;">&#128220;</div>
-          <span style="color:#D4AF37;font-size:10px;font-weight:700;letter-spacing:0.5px;">الشروط والأحكام</span>
-        </div>
-        <div style="padding:10px 13px;font-size:9.5px;color:#4A3728;line-height:1.9;white-space:pre-line;">${data.terms||'—'}</div>
-      </div>
+      ${data.terms?'<div style="background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 10px rgba(90,15,24,0.1);border:1px solid #EAE3DB;flex:1;"><div style="background:linear-gradient(135deg,#5A0F18,#7A1A24);padding:8px 13px;display:flex;align-items:center;gap:8px;"><div style="width:22px;height:22px;border-radius:50%;background:rgba(212,175,55,0.2);border:1px solid rgba(212,175,55,0.5);display:flex;align-items:center;justify-content:center;font-size:11px;flex-shrink:0;">&#128220;</div><span style="color:#D4AF37;font-size:10px;font-weight:700;letter-spacing:0.5px;">الشروط والأحكام</span></div><div style="padding:10px 13px;font-size:9.5px;color:#4A3728;line-height:1.9;white-space:pre-line;">'+data.terms+'</div></div>':''}
 
     </div>
 
@@ -1828,19 +1816,6 @@ function renderA4Quote(data,key=''){
     </div>
   </div>
 
-  <!-- ═══════════════ SIGNATURE ═══════════════ -->
-  <div style="display:flex;gap:16px;padding:0 20px 12px;">
-    <div style="flex:1;border:2px dashed #C89A4A;border-radius:12px;padding:13px;text-align:center;background:linear-gradient(135deg,#FFFDF8,#FFF9EE);">
-      <div style="font-size:10.5px;font-weight:800;color:#5A0F18;margin-bottom:4px;">&#10003; ختم وتوقيع المورد</div>
-      <div style="height:48px;border-bottom:1px dashed #E2D4C0;margin:6px 0;"></div>
-      <div style="font-size:8.5px;color:#9B8878;">روائع الأفكار الإعلانية</div>
-    </div>
-    <div style="flex:1;border:2px dashed #C89A4A;border-radius:12px;padding:13px;text-align:center;background:linear-gradient(135deg,#FFFDF8,#FFF9EE);">
-      <div style="font-size:10.5px;font-weight:800;color:#5A0F18;margin-bottom:4px;">&#10003; ختم وتوقيع العميل</div>
-      <div style="height:48px;border-bottom:1px dashed #E2D4C0;margin:6px 0;"></div>
-      <div style="font-size:8.5px;color:#9B8878;">الموافقة على عرض السعر</div>
-    </div>
-  </div>
 
   <!-- Gold divider -->
   <div style="height:3px;background:linear-gradient(90deg,#5A0F18,#D4AF37 30%,#C89A4A 50%,#D4AF37 70%,#5A0F18);margin:0 20px;border-radius:2px;"></div>
