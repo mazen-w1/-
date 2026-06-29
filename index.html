@@ -105,24 +105,18 @@ body{font-family:'Cairo','Segoe UI',Tahoma,Arial,sans-serif;background:var(--bg)
 .sidebar-body{flex:1;padding:10px 0;}
 .nav-group{padding:6px 0;}
 .nav-group-label{font-size:9px;color:var(--text-3);padding:8px 14px 4px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;}
-/* Canva-style nav tiles */
-.nav-tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:4px 10px;}
-.ni{
-  display:flex;flex-direction:column;align-items:center;justify-content:center;
-  gap:5px;padding:10px 4px;font-size:10px;color:var(--text-2);
-  cursor:pointer;transition:.15s;border:1.5px solid transparent;
-  border-radius:10px;background:transparent;font-weight:600;text-align:center;
-  min-height:62px;position:relative;
-}
+/* Vertical list nav */
+.nav-tiles{display:flex;flex-direction:column;gap:2px;padding:2px 10px;}
+.ni{display:flex;flex-direction:row;align-items:center;gap:10px;padding:10px 8px;font-size:13px;color:var(--text-2);cursor:pointer;transition:.15s;border:1.5px solid transparent;border-radius:10px;background:transparent;font-weight:600;text-align:right;min-height:auto;position:relative;}
 .ni:hover{background:var(--gold-soft);color:var(--maroon);border-color:rgba(212,175,55,.3);}
 .ni.active{background:rgba(74,14,23,.09);font-weight:700;color:var(--maroon);border-color:var(--maroon);}
-.ni .ni-icon{width:34px;height:34px;border-radius:9px;background:var(--bg);border:1px solid var(--border-soft);display:flex;align-items:center;justify-content:center;transition:.15s;}
+.ni .ni-icon{width:32px;height:32px;border-radius:8px;background:var(--bg);border:1px solid var(--border-soft);display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:.15s;}
 .ni:hover .ni-icon{background:rgba(212,175,55,.15);border-color:rgba(212,175,55,.4);}
 .ni.active .ni-icon{background:rgba(74,14,23,.12);border-color:var(--maroon);}
-.ni i{font-size:17px;color:var(--text-3);}
+.ni i{font-size:16px;color:var(--text-3);}
 .ni:hover i,.ni.active i{color:var(--maroon);}
-.ni .ni-lbl{font-size:9.5px;line-height:1.2;max-width:58px;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;}
-.ni .badge-pill{position:absolute;top:4px;left:4px;background:#EF4444;color:#fff;font-size:8px;font-weight:800;border-radius:8px;padding:1px 5px;}
+.ni .ni-lbl{font-size:12.5px;line-height:1.3;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.ni .badge-pill{margin-right:auto;background:#EF4444;color:#fff;font-size:8px;font-weight:800;border-radius:8px;padding:1px 5px;flex-shrink:0;}
 .sep{height:1px;background:var(--border-soft);margin:6px 16px;}
 .sidebar-footer{padding:16px;border-top:1px solid var(--border-soft);}
 .sidebar-cta{
@@ -607,6 +601,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--gold);bo
         <div class="page" id="page-request"><div id="request-content"></div></div>
         <div class="page" id="page-requests"><div id="requests-content"></div></div>
         <div class="page" id="page-emp"><div id="emp-content"></div></div>
+        <div class="page" id="page-incomplete"><div id="incomplete-content"></div></div>
       </div>
     </div>
   </div>
@@ -914,6 +909,7 @@ function buildSidebar(){
     h+=navGroup('الخدمات',[
       ni('clients','ti-address-book','العملاء'),
       ni('timeline','ti-clock','توقيت المراحل'),
+      ni('incomplete','ti-list-check','غير مكتملة'),
       ni('request','ti-send','رفع طلب'),
     ]);
   }else if(t==='external'){
@@ -936,6 +932,7 @@ function buildSidebar(){
       ni('users','ti-users','الموظفين'),
       ni('timeline','ti-clock','إحصائيات المراحل'),
       ni('emp','ti-chart-bar','أداء الموظفين'),
+      ni('incomplete','ti-list-check','غير مكتملة'),
       ni('export','ti-table-export','تصدير Excel'),
     ]);
   }else if(t==='accountant'){
@@ -1129,6 +1126,8 @@ function openQuickTask(type){
         <div class="fg"><label>الموقع الميداني *</label><input id="qt-location" placeholder="اسم المنطقة والموقع..."/></div>
         <div class="fg"><label>تفاصيل إضافية</label><textarea id="qt-notes" placeholder="تفاصيل المهمة..."></textarea></div>`}
       <button class="btn btn-brand" style="width:100%;justify-content:center;" onclick="submitQuickTask('${type}')"><i class="ti ti-send"></i> إرسال وتكليف القسم</button>
+      <div style="text-align:center;margin:8px 0;font-size:11px;color:var(--text-3);">— أو —</div>
+      <button class="btn btn-out" style="width:100%;justify-content:center;" onclick="closeModal('quick-task-modal');nav('add')"><i class="ti ti-transfer"></i> تسجيل كأمر تشغيل كامل</button>
     </div>`;
   window._qtFileB64='';window._qtFileName='';
   openModal('quick-task-modal');
@@ -1171,6 +1170,7 @@ async function submitQuickTask(type){
 // Workshop Feedback
 function openWorkshopFeedback(key){
   const o=orders[key];if(!o)return;
+  window._wfSitePhotoB64='';window._wfSitePhotoName='';
   document.getElementById('wf-feedback-body').innerHTML=`
     <div style="margin-bottom:14px;font-size:12px;color:var(--text-2);">الطلب: <strong>${o.id||key}</strong> — ${o.client}</div>
     <div style="display:flex;flex-direction:column;gap:12px;">
@@ -1179,17 +1179,46 @@ function openWorkshopFeedback(key){
         <select id="fb-site-status"><option>جاهز للتركيب</option><option>يحتاج تحضيرات</option><option>مشكلة في الموقع</option></select>
       </div>
       <div class="fg"><label>ملاحظات ميدانية</label><textarea id="fb-notes" placeholder="ملاحظات مهمة..."></textarea></div>
-      <button class="btn btn-brand" style="width:100%;justify-content:center;" onclick="submitWorkshopFeedback('${key}')"><i class="ti ti-check"></i> حفظ البيانات</button>
+      <div class="fg">
+        <label style="color:#EF4444;font-weight:800;"><i class="ti ti-camera"></i> صورة الموقع الميداني * (إلزامية)</label>
+        <div class="dept-upload-box" id="fb-photo-box" onclick="document.getElementById('fb-site-photo-inp').click()" style="cursor:pointer;">
+          <i class="ti ti-camera" style="font-size:26px;color:var(--gold);display:block;margin-bottom:6px;"></i>
+          اضغط لالتقاط صورة الموقع أو رفعها
+        </div>
+        <input type="file" id="fb-site-photo-inp" accept="image/*" capture="environment" style="display:none" onchange="handleWfSitePhoto(this.files)"/>
+        <div id="fb-photo-note" style="font-size:12px;margin-top:6px;font-weight:700;color:#EF4444;">⚠ لم يتم إرفاق صورة الموقع بعد</div>
+      </div>
+      <button class="btn btn-brand" style="width:100%;justify-content:center;" onclick="submitWorkshopFeedback('${key}')"><i class="ti ti-check"></i> حفظ البيانات وإرسال</button>
     </div>`;
   openModal('workshop-feedback-modal');
 }
 async function submitWorkshopFeedback(key){
+  if(!window._wfSitePhotoB64){toast('⚠️ يرجى إرفاق صورة الموقع أولاً');return;}
   const dims=document.getElementById('fb-dimensions').value.trim();
   const siteStatus=document.getElementById('fb-site-status').value;
   const notes=document.getElementById('fb-notes').value.trim();
   showSaving('جاري الحفظ...');
-  await fbPatch(`orders/${key}`,{workshopFeedback:`${dims} | ${siteStatus} | ${notes}`,workshopFeedbackDate:new Date().toISOString()});
-  await loadData();hideSaving();closeModal('workshop-feedback-modal');toast('✓ تم حفظ البيانات');
+  await fbPatch(`orders/${key}`,{
+    workshopFeedback:`${dims} | ${siteStatus} | ${notes}`,
+    workshopFeedbackDate:new Date().toISOString(),
+    workshopSitePhoto:window._wfSitePhotoB64,
+    workshopSitePhotoName:window._wfSitePhotoName||'',
+    workshopFeedbackDone:true
+  });
+  await loadData();hideSaving();closeModal('workshop-feedback-modal');toast('✓ تم حفظ البيانات وإرسال التقرير');
+}
+async function handleWfSitePhoto(files){
+  if(!files||!files.length)return;
+  showSaving('جاري تحميل الصورة...');
+  try{
+    window._wfSitePhotoB64=await convertFileToBase64(files[0]);
+    window._wfSitePhotoName=files[0].name;
+    const note=document.getElementById('fb-photo-note');
+    if(note){note.textContent='✓ تم: '+files[0].name;note.style.color='#10B981';}
+    const box=document.getElementById('fb-photo-box');
+    if(box)box.innerHTML=`<img src="${window._wfSitePhotoB64}" style="width:100%;max-height:150px;object-fit:cover;border-radius:8px;"/>`;
+  }catch(e){toast('⚠️ فشل تحميل الصورة');}
+  hideSaving();
 }
 // ============================================================
 // DASHBOARD
@@ -1374,8 +1403,8 @@ function buildMyWork(){
       <div style="display:flex;gap:5px;flex-wrap:wrap;">${deptBadge(o.currentDept)} ${gpbadge(o.priority)} ${timeBadge(hoursAgo(o.stageStartDate||o.date))}</div>
       ${deadlineBadge(o.deadline)}
       ${o.quickTaskLocation?`<div style="font-size:11px;color:#9A3412;margin-top:6px;"><i class="ti ti-map-pin"></i> ${o.quickTaskLocation}</div>`:''}
-      ${isWorkshop&&o.isQuickTask&&!o.workshopFeedback?`<div style="margin-top:8px;"><button class="btn btn-orange btn-sm" onclick="event.stopPropagation();openWorkshopFeedback('${o._key}')"><i class="ti ti-clipboard-check"></i> إدخال القياسات</button></div>`:''}
-      ${o.workshopFeedback?`<div style="margin-top:6px;background:#F0FDF4;border:1px solid #BBF7D0;border-radius:6px;padding:6px 10px;font-size:11px;"><i class="ti ti-check" style="color:#10B981"></i> تم إدخال البيانات</div>`:''}
+      ${isWorkshop&&o.isQuickTask&&!o.workshopFeedbackDone?`<div style="margin-top:8px;"><button class="btn btn-orange btn-sm" onclick="event.stopPropagation();openWorkshopFeedback('${o._key}')"><i class="ti ti-clipboard-check"></i> إدخال القياسات</button></div>`:''}
+      ${o.workshopFeedbackDone?`<div style="margin-top:6px;background:#F0FDF4;border:1px solid #BBF7D0;border-radius:6px;padding:6px 10px;font-size:11px;"><i class="ti ti-check" style="color:#10B981"></i> تم رفع التقرير — بانتظار الإجراء</div>`:''}
       ${o.phone&&o.phone!=='—'?`<div style="margin-top:8px"><button class="btn btn-whatsapp btn-sm" onclick="event.stopPropagation();openWhatsapp('${o.phone}')"><i class="ti ti-brand-whatsapp"></i> واتساب</button></div>`:''}
     </div><div class="wf-card-prog"><div class="wf-card-fill" style="width:${orderProgress(o)}%;background:${progressColor(o)}"></div></div></div>`).join('')}</div>`;
   document.getElementById('my-content').innerHTML=`
@@ -1976,6 +2005,15 @@ function openOrderModal(key){
   </div>`;
   const fromQuoteHtml=o.fromQuoteRef?`<div style="background:#F0FDF4;border:1px solid #BBF7D0;border-radius:var(--radius-sm);padding:8px 14px;font-size:12px;color:#166534;margin-bottom:14px;"><i class="ti ti-receipt-2"></i> تحويل من عرض السعر: <strong>${o.fromQuoteRef}</strong></div>`:'';
   const archiveBtn=cu.type==='admin'?`<button class="btn btn-red btn-sm" onclick="archiveOrder('${key}')"><i class="ti ti-archive"></i> إنهاء الطلب وأرشفته</button>`:'';
+  const measureActions=(o.isQuickTask&&o.workshopFeedbackDone&&o.currentDept!=='done'&&(cu.type==='admin'||cu.type==='receiver'))?`
+    <div style="background:#F0FDF4;border:1px solid #BBF7D0;border-radius:10px;padding:12px 16px;margin-bottom:12px;">
+      <div style="font-size:12px;font-weight:800;color:#166534;margin-bottom:10px;"><i class="ti ti-clipboard-check"></i> القياسات مكتملة — اتخذ إجراءً</div>
+      ${o.workshopSitePhoto?`<div style="margin-bottom:10px;"><img src="${o.workshopSitePhoto}" style="width:100%;max-height:180px;object-fit:cover;border-radius:8px;"/><div style="font-size:10px;color:var(--text-3);margin-top:4px;"><i class="ti ti-camera"></i> صورة الموقع الميداني</div></div>`:''}
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn btn-brand btn-sm" onclick="closeModal('order-modal');window._prefillClient='${o.client}';window._prefillPhone='${o.phone||''}';nav('add')"><i class="ti ti-transfer"></i> تحويل لأمر تشغيل</button>
+        <button class="btn btn-red btn-sm" onclick="archiveOrder('${key}')"><i class="ti ti-x"></i> إنهاء الطلب</button>
+      </div>
+    </div>`:'';
   document.getElementById('order-modal-body').innerHTML=`
     <div class="modal-header">
       <div><div class="modal-title"><i class="ti ti-file-text"></i> ${o.id||key} — ${o.client}${o.isQuickTask?'<span class="urgent-tag" style="margin-right:8px;font-size:9px;"><i class="ti ti-bolt"></i>مهمة سريعة</span>':''}</div><div style="font-size:11px;color:var(--text-3);margin-top:2px;">${o.service}</div></div>
@@ -1995,7 +2033,7 @@ function openOrderModal(key){
       <div class="di" style="grid-column:1/-1;border-top:1px solid var(--border-soft);padding-top:10px;"><span class="dk" style="color:#6B21A8">🎨 ملف التصميم المعتمد للطباعة</span><span class="dv">${pLink}</span></div>
       <div class="di" style="grid-column:1/-1"><span class="dk" style="color:#3730A3">📦 مخطط قياسات الورشة</span><span class="dv">${wLink}</span></div>
       <div class="di" style="grid-column:1/-1"><span class="dk" style="color:#9A3412">📷 توثيق التركيب النهائي</span><span class="dv">${dLink}</span></div>
-      ${o.workshopFeedback?`<div class="di" style="grid-column:1/-1;border-top:1px solid var(--border-soft);padding-top:10px;"><span class="dk" style="color:#9A3412">📐 بيانات القياسات الميدانية</span><span class="dv" style="font-weight:400;background:#FFEDD5;padding:8px;border-radius:6px;display:block;margin-top:4px;">${o.workshopFeedback}</span></div>`:''}
+      ${o.workshopFeedback?`<div class="di" style="grid-column:1/-1;border-top:1px solid var(--border-soft);padding-top:10px;"><span class="dk" style="color:#9A3412">📐 بيانات القياسات الميدانية</span><span class="dv" style="font-weight:400;background:#FFEDD5;padding:8px;border-radius:6px;display:block;margin-top:4px;">${o.workshopFeedback}</span>${o.workshopSitePhoto?`<a href="${o.workshopSitePhoto}" download class="file-download-link" style="margin-top:6px;display:inline-flex;"><i class="ti ti-photo"></i> صورة الموقع</a>`:''}</div>`:''}
       ${paymentRow}
       <div class="di" style="grid-column:1/-1;background:var(--surface-2);border-radius:var(--radius-sm);padding:10px;border:1px solid var(--border);border-top:none;">
         <span class="dk" style="color:var(--maroon);"><i class="ti ti-clock"></i> النافذة الزمنية</span>
@@ -2010,6 +2048,7 @@ function openOrderModal(key){
     ${o.currentDept!=='done'?`<div class="contact-box"><div class="contact-box-title"><i class="ti ti-messages"></i> التواصل بين الأقسام</div><div style="display:flex;gap:14px;flex-wrap:wrap;font-size:12px;"><div><span style="color:var(--text-3)">المسؤول الحالي:</span> <strong style="color:#166534">${currentPersonName(o)}</strong></div>${o.phone&&o.phone!=='—'?`<button class="btn btn-whatsapp btn-sm" onclick="openWhatsapp('${o.phone}')"><i class="ti ti-brand-whatsapp"></i> واتساب العميل</button>`:''}</div></div>`:''}
     ${uploadArea}
     ${renderChatSection(key,o.currentDept==='done')}
+    ${measureActions}
     <div class="arow">${nextBtn} ${o.phone&&o.phone!=='—'?`<button class="btn btn-whatsapp btn-sm" onclick="openWhatsapp('${o.phone}')"><i class="ti ti-brand-whatsapp"></i></button>`:''} ${archiveBtn}</div>`;
   openModal('order-modal');
   setTimeout(()=>{generateQR(`order-qr-${key}`,trackingUrl,80);loadAndRenderChat(key);},200);
@@ -2051,6 +2090,8 @@ async function archiveOrder(key){
 // ============================================================
 function buildAddForm(isUrgentQuick=false){
   const dw=getDeptWorkers('design'),pw=getDeptWorkers('print'),ww=getDeptWorkers('workshop'),ew=getDeptWorkers('external');
+  const _prefillCl=window._prefillClient||'';const _prefillPh=window._prefillPhone||'';
+  window._prefillClient='';window._prefillPhone='';
   const mkOpts=arr=>arr.map(w=>`<option value="${w.uname}">${w.name}</option>`).join('');
   const cArr=Object.values(clients);
   const isDesigner=cu.type==='designer';
@@ -2064,7 +2105,7 @@ function buildAddForm(isUrgentQuick=false){
         <div class="fg"><label>رقم الجوال * <span style="color:#EF4444">(إلزامي)</span></label>
           <div style="display:flex;gap:6px;"><input id="fp" placeholder="05XXXXXXXX" style="flex:1;" required/><button type="button" class="btn btn-whatsapp btn-sm" onclick="openWhatsapp(document.getElementById('fp').value)"><i class="ti ti-brand-whatsapp"></i></button></div>
         </div>
-        <div class="fg"><label>نوع الخدمة *</label><input id="fs" placeholder="مثال: لوحة، فلكس، بنر..."/></div>
+
         <div class="fg"><label>الأولوية</label>
           <select id="fpr"><option value="عادية">عادية</option><option value="متوسطة">متوسطة</option><option value="عاجلة"${isUrgentQuick?' selected':''}>عاجلة</option></select>
         </div>
@@ -2101,6 +2142,14 @@ function buildAddForm(isUrgentQuick=false){
       </div>
       <div style="padding:0 20px 16px;">
         <div class="fg"><label>ملاحظات وتفاصيل المواصفات</label><textarea id="fn" placeholder="اكتب الملاحظات والمقاسات هنا..."></textarea></div>
+      </div>
+    </div>
+    <!-- ORDER ITEMS CARD -->
+    <div class="card">
+      <div class="card-header"><span class="card-title"><i class="ti ti-list-details"></i> بنود الطلب والخدمات</span><button class="btn btn-out btn-sm" type="button" onclick="addOrderLine()"><i class="ti ti-plus"></i> إضافة بند</button></div>
+      <div style="padding:16px;">
+        <div id="order-lines-wrap"><div style="text-align:center;color:var(--text-3);padding:20px;font-size:12px;"><i class="ti ti-list" style="font-size:28px;display:block;margin-bottom:8px;color:var(--border)"></i>اضغط "إضافة بند" لإضافة خدمات الطلب</div></div>
+        <div style="font-size:11px;color:var(--text-3);margin-top:8px;">يُستخدم اسم أول بند كاسم الخدمة الرئيسي في السجلات</div>
       </div>
     </div>
     <div class="card">
@@ -2143,6 +2192,12 @@ function buildAddForm(isUrgentQuick=false){
       </div>
     </div>`;
   window.globalAttachedFiles=[];window.externalFileB64='';window.externalFileName='';
+  window._orderLines=[];
+  setTimeout(()=>{
+    addOrderLine();
+    if(_prefillCl){const fc=document.getElementById('fc');if(fc)fc.value=_prefillCl;}
+    if(_prefillPh){const fp=document.getElementById('fp');if(fp)fp.value=_prefillPh;}
+  },80);
 }
 function calcRemaining(){
   const total=parseFloat(document.getElementById('f-total-amount')?.value)||0;
@@ -2169,10 +2224,56 @@ function onClientInput(val){
   }
 }
 function openWhatsapp(phone){if(!phone){toast('⚠️ يرجى إدخال رقم جوال');return;}const n=phone.replace(/[^0-9]/g,'');window.open(`https://wa.me/${n.startsWith('0')?'966'+n.substring(1):n}`,'_blank');}
+// ── Order Line Items ──────────────────────────────────────────────────────────
+function addOrderLine(){
+  if(!window._orderLines)window._orderLines=[];
+  const id='ol'+Date.now();
+  window._orderLines.push({id,name:'',details:'',fileData:'',fileName:''});
+  renderOrderLines();
+}
+function removeOrderLine(id){window._orderLines=(window._orderLines||[]).filter(x=>x.id!==id);renderOrderLines();}
+function updateOrderLine(id,f,v){const l=(window._orderLines||[]).find(x=>x.id===id);if(l)l[f]=v;}
+function renderOrderLines(){
+  const wrap=document.getElementById('order-lines-wrap');if(!wrap)return;
+  if(!window._orderLines||!window._orderLines.length){
+    wrap.innerHTML='<div style="text-align:center;color:var(--text-3);padding:20px;font-size:12px;"><i class="ti ti-list" style="font-size:28px;display:block;margin-bottom:8px;color:var(--border)"></i>لم يتم إضافة بنود — اضغط "إضافة بند"</div>';
+    return;
+  }
+  wrap.innerHTML=window._orderLines.map((l,i)=>`
+    <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:10px;">
+      <div style="font-size:11px;font-weight:800;color:var(--maroon);margin-bottom:8px;">بند #${i+1}${i===0?' <span style="font-size:9px;color:var(--gold);font-weight:700">(الخدمة الرئيسية)</span>':''}</div>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <div class="fg"><label>اسم البند *</label><input placeholder="مثال: لوحة إعلانية" value="${l.name.replace(/"/g,'&quot;')}" oninput="updateOrderLine('${l.id}','name',this.value)"/></div>
+        <div class="fg"><label>التفاصيل والمواصفات</label><textarea placeholder="المقاسات، المواد، عدد النسخ..." style="min-height:55px;" oninput="updateOrderLine('${l.id}','details',this.value)">${l.details}</textarea></div>
+        <div class="fg"><label>مرفق البند (اختياري)</label>
+          <label style="cursor:pointer;border:1.5px dashed var(--border);border-radius:8px;padding:7px 14px;font-size:11px;display:inline-flex;align-items:center;gap:6px;">
+            <i class="ti ti-paperclip" style="color:var(--gold)"></i>${l.fileName||'إرفاق صورة أو ملف'}
+            <input type="file" accept="image/*,.pdf" style="display:none" onchange="attachOrderLineFile('${l.id}',this.files)"/>
+          </label>
+          ${l.fileData?`<a href="${l.fileData}" download="${l.fileName}" class="file-download-link" style="margin-right:8px;"><i class="ti ti-download"></i></a>`:''}
+        </div>
+        ${window._orderLines.length>1?`<div style="text-align:left;"><button class="btn btn-red btn-xs" type="button" onclick="removeOrderLine('${l.id}')"><i class="ti ti-trash"></i> حذف</button></div>`:''}
+      </div>
+    </div>`).join('');
+}
+async function attachOrderLineFile(id,files){
+  if(!files||!files.length)return;
+  showSaving('جاري تحميل الملف...');
+  try{
+    const b64=await convertFileToBase64(files[0]);
+    const l=(window._orderLines||[]).find(x=>x.id===id);
+    if(l){l.fileData=b64;l.fileName=files[0].name;}
+    renderOrderLines();
+  }catch(e){toast('⚠️ فشل تحميل الملف');}
+  hideSaving();
+}
 async function submitOrder(isUrgentQuick=false){
-  const c=document.getElementById('fc').value.trim(),s=document.getElementById('fs').value.trim();
+  const c=document.getElementById('fc').value.trim();
   const phone=document.getElementById('fp').value.trim(),payStatus=document.getElementById('fpay').value;
-  if(!c||!s){toast('⚠️ يجب تعبئة حقل العميل والخدمة');return;}
+  if(!c){toast('⚠️ يجب تعبئة حقل العميل');return;}
+  const _lines=(window._orderLines||[]).filter(l=>l.name.trim());
+  if(!_lines.length){toast('⚠️ يجب إضافة بند واحد على الأقل');return;}
+  const s=_lines[0].name.trim()||'خدمة إعلانية';
   if(!phone){toast('⚠️ رقم الجوال إلزامي');return;}
   if(!payStatus){toast('⚠️ يرجى تحديد وضع السداد');return;}
   const dU=document.getElementById('fw-design').value,extU=document.getElementById('fw-external').value,pU=document.getElementById('fw-print').value,wU=document.getElementById('fw-workshop').value;
@@ -2192,7 +2293,7 @@ async function submitOrder(isUrgentQuick=false){
   }
   if(!Object.values(clients).find(c2=>c2.name===c))await fbPush('clients',{name:c,phone,date:today});
   const ord={
-    client:c,service:s,date:today,stageStartDate:new Date().toISOString(),
+    client:c,service:s,orderItems:(window._orderLines||[]).map(l=>({name:l.name,details:l.details,fileData:l.fileData||'',fileName:l.fileName||''})),date:today,stageStartDate:new Date().toISOString(),
     priority:document.getElementById('fpr').value,phone,
     paymentStatus:payStatus,paidAmount:paidAmt,
     totalAmount:totalAmt,remainingAmount:remainingAmt,
@@ -2347,8 +2448,8 @@ async function exportExcel(){
   showSaving('جاري التصدير...');
   try{
     await loadData();const arr=ordersArr();
-    const headers=['رقم الطلب','اسم العميل','رقم الجوال','الخدمة','الأولوية','حالة الدفع','المبلغ المدفوع','المبلغ الإجمالي','المتبقي','المرحلة الحالية','تاريخ الاستلام','تاريخ التسليم','منشئ الطلب'];
-    const rows=arr.map(o=>[o.id||o._key,o.client||'—',o.phone||'—',o.service||'—',o.priority||'—',o.paymentStatus||'—',o.paidAmount||0,o.totalAmount||0,o.remainingAmount||0,o.currentDept||'—',o.date||'—',o.deadline||'—',o.createdBy||'—']);
+    const headers=['منشئ الطلب','تاريخ الاستلام','تاريخ التسليم','رقم الطلب','اسم العميل','رقم الجوال','المبلغ الإجمالي','المبلغ المدفوع','المبلغ المتبقي','اسم الخدمة'];
+    const rows=arr.map(o=>[o.createdBy||'—',o.date||'—',o.deadline||'—',o.id||o._key,o.client||'—',o.phone||'—',o.totalAmount||0,o.paidAmount||0,o.remainingAmount||0,(o.orderItems&&o.orderItems.length?o.orderItems[0].name:o.service)||'—']);
     let csv='\uFEFF'+headers.join(',')+'\n'+rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
     const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});const url=URL.createObjectURL(blob);
     const a=document.createElement('a');a.href=url;a.download=`تقرير_روائع_${new Date().toISOString().split('T')[0]}.csv`;
@@ -2609,6 +2710,30 @@ function filterEmpByRole(role){
   });
 }
 
+function buildIncompletePage(){
+  const arr=ordersArr().filter(o=>o.currentDept!=='done');
+  let cards;
+  if(arr.length===0){
+    cards='<div style="text-align:center;color:var(--text-3);padding:48px 20px;"><i class="ti ti-check-circle" style="font-size:52px;display:block;margin-bottom:12px;color:#10B981;"></i><div style="font-size:16px;font-weight:700;">لا توجد طلبات جارية</div><div style="font-size:13px;margin-top:6px;">جميع الطلبات مكتملة أو مؤرشفة</div></div>';
+  }else{
+    cards=`<div class="wf-grid">${arr.map(o=>`<div class="wf-card" onclick="openOrderModal('${o._key}')"><div class="wf-card-top">
+      <div class="wf-card-id">${o.id||o._key} · ${o.date}${o.isQuickTask?'<span class="urgent-tag" style="margin-right:6px;font-size:9px;"><i class="ti ti-bolt"></i>سريع</span>':''}</div>
+      <div class="wf-card-name">${o.client}</div>
+      <div class="wf-card-svc">${o.service}</div>
+      <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;margin-bottom:4px;">${deptBadge(o.currentDept)} ${gpbadge(o.priority)} ${timeBadge(hoursAgo(o.stageStartDate||o.date))}</div>
+      <div style="font-size:11px;color:var(--text-3);">المسؤول: ${currentPersonName(o)}</div>
+      ${deadlineBadge(o.deadline)}
+      ${o.workshopFeedbackDone&&o.currentDept!=='done'?'<div style="font-size:11px;color:#166534;margin-top:4px;font-weight:700;"><i class="ti ti-clipboard-check"></i> قياسات مكتملة</div>':''}
+    </div><div class="wf-card-prog"><div class="wf-card-fill" style="width:${orderProgress(o)}%;background:${progressColor(o)}"></div></div></div>`).join('')}</div>`;
+  }
+  document.getElementById('incomplete-content').innerHTML=`
+    <div class="page-header">
+      <div class="ptitle"><i class="ti ti-list-check"></i> الطلبات غير المكتملة</div>
+      <div style="font-size:14px;color:var(--text-3);font-weight:600;">${arr.length} طلب جارٍ</div>
+    </div>
+    ${controlsRow(false)}
+    ${cards}`;
+}
 function _buildPage(p){
   if(p==='dash')       buildDash();
   else if(p==='wf')    buildWfGrid(_currentWfTab||'active');
@@ -2621,6 +2746,7 @@ function _buildPage(p){
   else if(p==='clients')  buildClientsPage();
   else if(p==='timeline') buildTimelinePage();
   else if(p==='emp')      buildEmpPage();
+  else if(p==='incomplete') buildIncompletePage();
 }
 </script>
 </body>
