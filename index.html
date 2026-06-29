@@ -37,19 +37,15 @@
   --sidebar-w:    240px;
   --header-h:     64px;
 }
-
 *{box-sizing:border-box;margin:0;padding:0;}
 body{font-family:'Cairo','Segoe UI',Tahoma,Arial,sans-serif;background:var(--bg);min-height:100vh;color:var(--text-1);line-height:1.5;}
-
 /* ============================================================ SCROLLBAR */
 ::-webkit-scrollbar{width:5px;height:5px;}
 ::-webkit-scrollbar-track{background:transparent;}
 ::-webkit-scrollbar-thumb{background:var(--border);border-radius:10px;}
 ::-webkit-scrollbar-thumb:hover{background:var(--gold);}
-
 /* ============================================================ LAYOUT */
 .app{display:flex;flex-direction:column;min-height:100vh;}
-
 /* ============================================================ HEADER */
 .header{
   background:var(--maroon);
@@ -83,10 +79,8 @@ body{font-family:'Cairo','Segoe UI',Tahoma,Arial,sans-serif;background:var(--bg)
 .u-name{font-size:12px;font-weight:700;}
 .u-role{font-size:10px;color:var(--gold);}
 .menu-toggle{display:none;background:none;border:none;color:var(--gold);font-size:22px;cursor:pointer;}
-
 /* ============================================================ BODY */
 .body-wrap{display:flex;flex:1;}
-
 /* ============================================================ SIDEBAR */
 .sidebar{
   width:var(--sidebar-w);
@@ -138,17 +132,14 @@ body{font-family:'Cairo','Segoe UI',Tahoma,Arial,sans-serif;background:var(--bg)
 .sidebar-cta-gold:hover{background:var(--gold-light);color:var(--maroon-dark);}
 .sidebar-overlay{display:none;position:fixed;top:var(--header-h);left:0;right:0;bottom:0;background:rgba(0,0,0,.45);z-index:89;}
 .sidebar-overlay.show{display:block;}
-
 /* ============================================================ MAIN */
 .main{flex:1;padding:24px;overflow:auto;min-width:0;}
 .page{display:none;}.page.active{display:block;}
-
 /* ============================================================ PAGE HEADER */
 .page-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;flex-wrap:wrap;gap:12px;}
 .ptitle{font-size:22px;font-weight:800;color:var(--maroon);display:flex;align-items:center;gap:10px;}
 .ptitle i{font-size:22px;color:var(--gold);}
 .breadcrumb{font-size:12px;color:var(--text-3);font-weight:600;margin-top:2px;}
-
 /* ============================================================ STATS CARDS */
 .stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin-bottom:24px;}
 .stat-card{
@@ -176,14 +167,12 @@ body{font-family:'Cairo','Segoe UI',Tahoma,Arial,sans-serif;background:var(--bg)
 .stat-value{font-size:26px;font-weight:900;color:var(--maroon);line-height:1;}
 .stat-trend{font-size:10px;margin-top:6px;display:flex;align-items:center;gap:3px;font-weight:700;}
 .trend-up{color:#10B981;}.trend-dn{color:#EF4444;}
-
 /* ============================================================ CARDS */
 .card{background:var(--surface);border-radius:var(--radius-lg);overflow:hidden;margin-bottom:16px;box-shadow:var(--shadow-sm);border:1px solid var(--border);}
 .card-header{padding:14px 20px;border-bottom:1px solid var(--border-soft);background:var(--surface-2);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;}
 .card-title{font-size:14px;font-weight:700;color:var(--maroon);display:flex;align-items:center;gap:7px;}
 .card-title i{color:var(--gold);}
 .card-body{padding:0;}
-
 /* ============================================================ BUTTONS */
 .btn{display:inline-flex;align-items:center;gap:6px;padding:9px 16px;border-radius:var(--radius-sm);font-size:12px;font-weight:700;cursor:pointer;border:1.5px solid transparent;transition:.15s;font-family:inherit;white-space:nowrap;}
 .btn-brand{background:var(--maroon);color:#fff;border-color:var(--maroon);} .btn-brand:hover{background:var(--maroon-mid);}
@@ -199,7 +188,6 @@ body{font-family:'Cairo','Segoe UI',Tahoma,Arial,sans-serif;background:var(--bg)
 .btn-sm{padding:6px 11px;font-size:11px;border-radius:6px;}
 .btn-xs{padding:4px 8px;font-size:10px;border-radius:5px;}
 .btn-icon{padding:8px;border-radius:var(--radius-sm);width:36px;height:36px;display:inline-flex;align-items:center;justify-content:center;}
-
 /* ============================================================ TABLE */
 table{width:100%;border-collapse:collapse;table-layout:fixed;}
 th{background:var(--surface-2);font-size:11px;font-weight:800;color:var(--text-2);padding:12px 14px;text-align:right;border-bottom:1px solid var(--border);letter-spacing:.3px;text-transform:uppercase;}
@@ -207,7 +195,6 @@ td{font-size:12px;padding:13px 14px;text-align:right;border-bottom:1px solid var
 tr:last-child td{border-bottom:none;}
 tbody tr:hover td{background:var(--surface-2);}
 .tbl-wrap{overflow-x:auto;}
-
 /* ============================================================ BADGES */
 .badge{display:inline-flex;align-items:center;gap:3px;padding:3px 10px;border-radius:20px;font-size:10px;font-weight:700;white-space:nowrap;}
 .b-new{background:#DBEAFE;color:#1E40AF;}
@@ -222,7 +209,6 @@ tbody tr:hover td{background:var(--surface-2);}
 .b-partial{background:#FEF3C7;color:#92400E;}
 .b-delivery{background:#E0E7FF;color:#3730A3;}
 .urgent-tag{background:#EF4444;color:#fff;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;display:inline-flex;align-items:center;gap:3px;}
-
 /* ============================================================ FORMS */
 .fg{display:flex;flex-direction:column;gap:5px;}
 label{font-size:12px;color:var(--text-2);font-weight:700;}
@@ -235,7 +221,6 @@ textarea{min-height:80px;resize:vertical;}
 input:focus,select:focus,textarea:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 3px rgba(212,175,55,.15);}
 .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:20px;}
 .ff{grid-column:1/-1;}
-
 /* ============================================================ DEPT SECTIONS */
 .dept-grid-layout{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;padding:0 20px 16px;}
 .dept-section{background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius-md);overflow:hidden;}
@@ -244,7 +229,6 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--gold);bo
 .dept-workshop{background:#FFEDD5;color:#9A3412;}.dept-ext{background:#FEF9C3;color:#713F12;}
 .dept-body{padding:10px 12px;}
 .dept-body select{padding:6px 10px;font-size:12px;border-radius:6px;}
-
 /* ============================================================ STAGE BAR */
 .stage-bar{display:flex;gap:0;margin-bottom:20px;border-radius:var(--radius-md);overflow:hidden;border:1px solid var(--border);flex-wrap:nowrap;overflow-x:auto;}
 .stage-item{flex:1;min-width:70px;padding:10px 4px;text-align:center;font-size:10px;border-left:1px solid var(--border);color:var(--text-3);background:var(--surface);}
@@ -254,7 +238,6 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--gold);bo
 .stage-item.active .stage-person{color:var(--gold);}
 .stage-item i{display:block;font-size:16px;margin-bottom:3px;}
 .stage-label{font-size:10px;}.stage-person{font-size:9px;margin-top:2px;}
-
 /* ============================================================ WF CARDS */
 .wf-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px;margin-bottom:20px;}
 .wf-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;cursor:pointer;transition:.2s;}
@@ -265,7 +248,6 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--gold);bo
 .wf-card-svc{font-size:12px;color:var(--text-2);margin-bottom:10px;}
 .wf-card-prog{height:4px;background:var(--border);}
 .wf-card-fill{height:4px;transition:width .4s;}
-
 /* ============================================================ TIME BADGES */
 .time-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:12px;font-size:10px;font-weight:700;}
 .time-ok{background:#D1FAE5;color:#065F46;}
@@ -273,7 +255,6 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--gold);bo
 .time-over{background:#FEE2E2;color:#991B1B;}
 .deadline-warn{background:#FEF3C7;color:#92400E;border:1px solid #FDE68A;border-radius:8px;padding:4px 8px;font-size:10px;font-weight:700;display:inline-flex;align-items:center;gap:4px;margin-top:6px;}
 .deadline-over{background:#FEE2E2;color:#991B1B;border-color:#FCA5A5;}
-
 /* ============================================================ CONTROLS */
 .controls-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:16px;}
 .search-bar{display:flex;align-items:center;gap:8px;background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:8px 13px;min-width:220px;flex:1;max-width:320px;}
@@ -282,7 +263,6 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--gold);bo
 .sort-wrap{display:flex;align-items:center;gap:6px;background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:7px 13px;}
 .sort-wrap label{color:var(--text-3);font-size:11px;font-weight:700;white-space:nowrap;}
 .sort-wrap select{border:none;padding:0 4px;font-size:12px;font-weight:700;color:var(--maroon);background:transparent;min-width:130px;}
-
 /* ============================================================ QUOTE BOX */
 .quote-box{background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-md);padding:18px;margin-bottom:12px;}
 .quote-box-title{font-size:13px;font-weight:700;color:var(--maroon);margin-bottom:14px;display:flex;align-items:center;gap:7px;}
@@ -291,13 +271,11 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--gold);bo
 .quote-total-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);padding:16px 20px;margin-top:16px;}
 .qt-row{display:flex;justify-content:space-between;font-size:13px;font-weight:600;color:var(--text-2);margin-bottom:8px;}
 .qt-row.grand{font-size:16px;font-weight:900;color:var(--maroon);border-top:2px solid var(--gold);padding-top:12px;margin-top:4px;}
-
 /* ============================================================ TABS */
 .tab-bar{display:flex;border-bottom:2px solid var(--border-soft);margin-bottom:18px;overflow-x:auto;gap:4px;}
 .tab-btn{padding:10px 18px;font-size:13px;cursor:pointer;border-bottom:3px solid transparent;color:var(--text-3);font-family:inherit;background:none;border-top:none;border-left:none;border-right:none;font-weight:700;transition:.15s;white-space:nowrap;margin-bottom:-2px;}
 .tab-btn.active{color:var(--maroon);border-bottom-color:var(--gold);}
 .tab-btn:hover{color:var(--maroon);}
-
 /* ============================================================ MODALS */
 .modal-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(15,5,5,.65);z-index:200;align-items:center;justify-content:center;backdrop-filter:blur(6px);}
 .modal-overlay.open{display:flex;}
@@ -312,7 +290,6 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--gold);bo
 .dk{font-size:10px;color:var(--text-3);font-weight:800;letter-spacing:.5px;text-transform:uppercase;}
 .dv{font-size:13px;font-weight:600;color:var(--text-1);}
 .arow{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px;border-top:1px solid var(--border-soft);padding-top:16px;}
-
 /* ============================================================ CHAT */
 .chat-container{background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-md);overflow:hidden;margin-top:16px;}
 .chat-header{background:var(--maroon);color:#fff;padding:10px 16px;font-size:13px;font-weight:700;display:flex;align-items:center;gap:8px;}
@@ -326,28 +303,23 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--gold);bo
 .chat-input-row{display:flex;gap:8px;padding:10px 12px;border-top:1px solid var(--border-soft);background:var(--surface);}
 .chat-input-row input{flex:1;border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:8px 12px;font-size:12px;font-family:inherit;}
 .chat-input-row input:focus{outline:none;border-color:var(--gold);}
-
 /* ============================================================ QR */
 .qr-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);padding:12px;text-align:center;display:inline-block;}
 .qr-box p{font-size:9px;color:var(--text-3);margin-top:5px;font-weight:700;}
-
 /* ============================================================ MINI STAT */
 .mini-stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);padding:14px 16px;}
 .mini-stat-bar-track{background:var(--border);border-radius:6px;height:6px;overflow:hidden;margin-top:8px;}
 .mini-stat-bar-fill{height:6px;border-radius:6px;}
-
 /* ============================================================ UPLOAD */
 .dept-upload-box{background:var(--surface-2);border:2px dashed var(--border);border-radius:var(--radius-md);padding:16px;margin-top:10px;cursor:pointer;text-align:center;transition:.15s;}
 .dept-upload-box:hover{border-color:var(--gold);background:var(--gold-soft);}
 .dept-upload-title{font-size:12px;font-weight:700;color:var(--maroon);margin-bottom:10px;display:flex;align-items:center;gap:6px;}
 .file-download-link{display:inline-flex;align-items:center;gap:5px;color:#2563EB;font-weight:700;text-decoration:none;background:#EFF6FF;padding:5px 12px;border-radius:6px;border:1px solid #BFDBFE;transition:.15s;font-size:11px;}
 .file-download-link:hover{background:#DBEAFE;}
-
 /* ============================================================ NOTICES */
 .ro-notice{background:#FFFBEB;border:1px solid #FEF3C7;border-radius:var(--radius-md);padding:12px 16px;font-size:12px;color:#B45309;display:flex;align-items:center;gap:8px;margin-bottom:16px;font-weight:600;}
 .contact-box{background:#F0FDF4;border:1px solid #BBF7D0;border-radius:var(--radius-md);padding:12px 14px;margin-top:10px;}
 .contact-box-title{font-size:12px;font-weight:700;color:#166534;margin-bottom:8px;display:flex;align-items:center;gap:6px;}
-
 /* ============================================================ QUICK ACTIONS */
 .quick-actions{display:flex;gap:10px;margin-bottom:22px;flex-wrap:wrap;}
 .quick-action-btn{
@@ -359,7 +331,6 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--gold);bo
 }
 .quick-action-btn:hover{border-color:var(--gold);box-shadow:var(--shadow-md);transform:translateY(-1px);}
 .quick-action-btn .qa-icon{width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;}
-
 /* ============================================================ DASHBOARD GRID */
 .dash-main-grid{display:grid;grid-template-columns:1fr 340px;gap:16px;margin-bottom:16px;}
 @media(max-width:1100px){.dash-main-grid{grid-template-columns:1fr;}}
@@ -373,11 +344,9 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--gold);bo
 .alert-item{padding:8px 14px;border-bottom:1px solid var(--border-soft);display:flex;align-items:center;justify-content:space-between;gap:10px;cursor:pointer;flex-wrap:wrap;font-size:11px;}
 .alert-item:last-child{border-bottom:none;}
 .alert-item:hover{background:var(--surface-2);}
-
 /* ============================================================ PAYMENT PARTIAL FIELDS */
 .partial-fields{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;padding:12px 16px;background:var(--surface-2);border-radius:var(--radius-md);border:1px solid var(--border);margin-top:6px;}
 .partial-field-ro input{background:var(--border-soft);color:var(--text-2);font-weight:700;}
-
 /* ============================================================ QUOTE A4 PRINT */
 @media print{
   body>*:not(#print-area){display:none !important;}
@@ -387,7 +356,6 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--gold);bo
 }
 #print-area{display:none;}
 .quote-a4{width:100%;max-width:794px;margin:0 auto;background:#fff;font-family:'Cairo','Segoe UI',Tahoma,sans-serif;direction:rtl;}
-
 /* ============================================================ LOGIN PORTAL */
 .portal-bg{position:fixed;top:0;left:0;width:100%;height:100%;background:radial-gradient(ellipse at 30% 40%,#3a1016 0%,#1a0a0c 60%,#0d0507 100%);z-index:0;}
 .portal-bg::after{content:'';position:absolute;inset:0;background:url('data:image/svg+xml;utf8,<svg opacity="0.04" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200"><path d="M0,100 Q50,60 100,100 T200,100" fill="none" stroke="%23fff" stroke-width="1.5"/><path d="M0,140 Q50,100 100,140 T200,140" fill="none" stroke="%23D4AF37" stroke-width="1"/></svg>') repeat;background-size:300px;}
@@ -431,14 +399,12 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--gold);bo
 .password-box-card{background:var(--surface);border-radius:var(--radius-xl);padding:32px;width:100%;max-width:400px;margin:0 auto;box-shadow:0 16px 50px rgba(0,0,0,.5);border:2px solid var(--gold);text-align:right;display:none;position:relative;z-index:2;}
 .login-btn-main{width:100%;padding:14px;background:var(--maroon);color:#fff;border:none;border-radius:var(--radius-md);font-size:15px;font-weight:800;cursor:pointer;font-family:inherit;transition:.15s;margin-top:10px;}
 .login-btn-main:hover{background:var(--maroon-mid);}
-
 /* ============================================================ USER MANAGEMENT */
 .user-avatar-lg{width:52px;height:52px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;color:#fff;overflow:hidden;flex-shrink:0;}
 .user-avatar-lg img{width:100%;height:100%;object-fit:cover;}
 .color-swatch{width:24px;height:24px;border-radius:50%;border:2px solid var(--border);cursor:pointer;transition:.1s;}
 .color-swatch:hover,.color-swatch.selected{border-color:var(--gold);transform:scale(1.25);}
 .color-picker-row{display:flex;gap:7px;flex-wrap:wrap;align-items:center;margin-top:6px;}
-
 /* ============================================================ SAVING + TOAST */
 .saving-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(15,5,5,.8);z-index:500;align-items:center;justify-content:center;flex-direction:column;gap:12px;color:var(--gold);font-size:14px;font-weight:700;backdrop-filter:blur(4px);}
 .saving-overlay.show{display:flex;}
@@ -446,7 +412,6 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--gold);bo
 @keyframes spin{to{transform:rotate(360deg);}}
 .toast-el{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--maroon);color:var(--gold);padding:12px 24px;border-radius:var(--radius-md);font-size:13px;font-weight:700;border:1px solid var(--gold);transition:transform .28s;z-index:9999;pointer-events:none;white-space:nowrap;}
 .toast-el.show{transform:translateX(-50%) translateY(0);}
-
 /* ============================================================ MOBILE */
 @media(max-width:768px){
   :root{--sidebar-w:220px;}
@@ -475,7 +440,6 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--gold);bo
 </style>
 </head>
 <body>
-
 <!-- ====== LOGIN SCREEN ====== -->
 <div id="ls" style="display:block;">
   <div class="portal-bg"></div>
@@ -534,7 +498,6 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--gold);bo
       </div>
       <div class="f-copy" style="justify-content:center;"><i class="ti ti-shield-lock"></i> جميع الحقوق محفوظة | 2026 © روائع الأفكار الإعلانية</div>
     </div>
-
     <div class="password-box-card" id="portal-password-card">
       <div style="text-align:center;margin-bottom:22px;">
         <div class="p-logo" style="width:62px;height:62px;margin:0 auto 12px;">
@@ -552,7 +515,6 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--gold);bo
     </div>
   </div>
 </div>
-
 <!-- ====== MAIN APP ====== -->
 <div id="ma" style="display:none;">
   <div class="app">
@@ -583,9 +545,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--gold);bo
         </div>
       </div>
     </div>
-
     <div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebar()"></div>
-
     <div class="body-wrap">
       <!-- SIDEBAR -->
       <div class="sidebar" id="sidebar-wrap">
@@ -602,7 +562,6 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--gold);bo
         <div class="sidebar-body" id="sidebar"></div>
         <div class="sidebar-footer" id="sidebar-footer"></div>
       </div>
-
       <!-- MAIN CONTENT -->
       <div class="main">
         <div class="page active" id="page-dash"><div id="dash-content"></div></div>
@@ -619,10 +578,8 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--gold);bo
     </div>
   </div>
 </div>
-
 <!-- PRINT AREA -->
 <div id="print-area"></div>
-
 <!-- MODALS -->
 <div class="modal-overlay" id="tracking-modal">
   <div class="modal-box" dir="rtl" style="max-width:460px;text-align:center;">
@@ -635,16 +592,13 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--gold);bo
     <div id="track-result" style="margin-top:20px;text-align:right;min-height:50px;"></div>
   </div>
 </div>
-
 <div class="modal-overlay" id="order-modal"><div class="modal-box" dir="rtl" id="order-modal-body" style="max-width:740px;"></div></div>
-
 <div class="modal-overlay" id="notif-modal">
   <div class="modal-box" dir="rtl" style="max-width:480px;">
     <div class="modal-header"><span class="modal-title"><i class="ti ti-bell"></i> التنبيهات</span><button class="btn-close" onclick="closeModal('notif-modal')">×</button></div>
     <div id="notif-panel-body"></div>
   </div>
 </div>
-
 <div class="modal-overlay" id="edit-user-modal">
   <div class="modal-box" dir="rtl">
     <div class="modal-header"><span class="modal-title"><i class="ti ti-edit"></i> تعديل حساب موظف</span><button class="btn-close" onclick="closeModal('edit-user-modal')">×</button></div>
@@ -670,7 +624,6 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--gold);bo
     </div>
   </div>
 </div>
-
 <div class="modal-overlay" id="add-user-modal">
   <div class="modal-box" dir="rtl">
     <div class="modal-header"><span class="modal-title"><i class="ti ti-user-plus"></i> إضافة موظف جديد</span><button class="btn-close" onclick="closeModal('add-user-modal')">×</button></div>
@@ -696,24 +649,20 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--gold);bo
     </div>
   </div>
 </div>
-
 <div class="modal-overlay" id="quick-task-modal">
   <div class="modal-box" dir="rtl">
     <div class="modal-header"><span class="modal-title" id="qt-modal-title">مهمة سريعة</span><button class="btn-close" onclick="closeModal('quick-task-modal')">×</button></div>
     <div id="qt-modal-body"></div>
   </div>
 </div>
-
 <div class="modal-overlay" id="workshop-feedback-modal">
   <div class="modal-box" dir="rtl">
     <div class="modal-header"><span class="modal-title"><i class="ti ti-clipboard-check"></i> بيانات القياسات الميدانية</span><button class="btn-close" onclick="closeModal('workshop-feedback-modal')">×</button></div>
     <div id="wf-feedback-body"></div>
   </div>
 </div>
-
 <div class="saving-overlay" id="saving-overlay"><div class="spinner"></div><span id="saving-msg">جاري التحديث...</span></div>
 <div class="toast-el" id="toast"></div>
-
 <script>
 // ============================================================
 // CORE CONFIG & STATE
@@ -752,18 +701,15 @@ let _navHistory=[];
 let _nuPhotoB64='',_euPhotoB64='',_euSelectedColor='',_nuSelectedColor='';
 let _curPage=null,_navBusy=false;
 let _currentWfTab='active';
-
 // ============================================================
 // MOBILE SIDEBAR
 // ============================================================
 function toggleSidebar(){document.getElementById('sidebar-wrap').classList.toggle('open');document.getElementById('sidebar-overlay').classList.toggle('show');}
 function closeSidebar(){document.getElementById('sidebar-wrap').classList.remove('open');document.getElementById('sidebar-overlay').classList.remove('show');}
-
 // ============================================================
 // CLOCK
 // ============================================================
 function startClock(){const el=document.getElementById('header-clock');if(!el)return;function tick(){el.textContent=new Date().toLocaleTimeString('ar-SA',{hour:'2-digit',minute:'2-digit',second:'2-digit'});}tick();setInterval(tick,1000);}
-
 // ============================================================
 // PORTAL / AUTH
 // ============================================================
@@ -778,7 +724,6 @@ function openLoginBox(portalKey){
 }
 function backToPortalGrid(){document.getElementById('portal-main-view').style.display='block';document.getElementById('portal-password-card').style.display='none';}
 function openTrackingModal(){document.getElementById('track-input').value='';document.getElementById('track-result').innerHTML='';openModal('tracking-modal');}
-
 async function doLogin(){
   await syncUsers();
   const u=document.getElementById('lu').value.trim().toLowerCase();
@@ -794,7 +739,6 @@ async function doLogin(){
   }else{e.textContent='بيانات الدخول غير صحيحة';e.style.display='block';}
 }
 document.addEventListener('keydown',e=>{if(e.key==='Enter'&&document.getElementById('portal-password-card').style.display==='block')doLogin();});
-
 function enterApp(u){
   _navHistory=[];
   cu=USERS[u];cu._uname=u;
@@ -818,7 +762,6 @@ function enterApp(u){
   setInterval(async()=>{await loadData();refreshCurrentPage();},60000);
 }
 function logout(){localStorage.removeItem(SESSION_KEY);location.reload();}
-
 // ============================================================
 // FIREBASE
 // ============================================================
@@ -832,7 +775,6 @@ const fbSet=(p,d)=>fbReq(p,'PUT',d);
 const fbPush=(p,d)=>fbReq(p,'POST',d);
 const fbPatch=(p,d)=>fbReq(p,'PATCH',d);
 const fbDelete=p=>fbReq(p,'DELETE');
-
 async function syncUsers(){
   try{const r=await fbGet('users');if(!r||Object.keys(r).length===0){await fbSet('users',INITIAL_USERS);USERS={...INITIAL_USERS};}else USERS=r;}
   catch(e){USERS={...INITIAL_USERS};}
@@ -854,7 +796,6 @@ async function loadData(){
     updateNotifBell();updateRequestsBadgeSidebar();
   }catch(e){orders={};clients={};submittedRequests={};chats={};standaloneQuotes={};}
 }
-
 // ============================================================
 // STARTUP
 // ============================================================
@@ -869,7 +810,6 @@ window.addEventListener('load',async()=>{
   hideSaving();
   document.getElementById('ls').style.display='block';
 });
-
 // ============================================================
 // NOTIFICATIONS
 // ============================================================
@@ -895,7 +835,6 @@ function openNotifPanel(){
   else{body.innerHTML=notifs.map(n=>`<div style="display:flex;align-items:center;gap:10px;padding:13px 4px;border-bottom:1px solid var(--border-soft);cursor:pointer;" onclick="closeModal('notif-modal');openOrderModal('${n.key}')"><div style="width:10px;height:10px;border-radius:50%;background:${n.color};flex-shrink:0;"></div><div style="font-size:13px;font-weight:600;color:var(--text-1)">${n.msg}</div></div>`).join('');}
   openModal('notif-modal');
 }
-
 // ============================================================
 // UTILS
 // ============================================================
@@ -905,7 +844,6 @@ function openModal(id){document.getElementById(id).classList.add('open');}
 function showSaving(msg='جاري...'){document.getElementById('saving-msg').textContent=msg;document.getElementById('saving-overlay').classList.add('show');}
 function hideSaving(){document.getElementById('saving-overlay').classList.remove('show');}
 function convertFileToBase64(file){return new Promise((res,rej)=>{const r=new FileReader();r.readAsDataURL(file);r.onload=()=>res(r.result);r.onerror=rej;});}
-
 // ============================================================
 // SIDEBAR BUILDER
 // ============================================================
@@ -962,7 +900,6 @@ function buildSidebar(){
   }
   updateRequestsBadgeSidebar();
 }
-
 function navGroup(label, items){
   return`<div class="nav-group"><div class="nav-group-label">${label}</div>${items.join('')}</div>`;
 }
@@ -970,7 +907,6 @@ function ni(p,ic,lbl,extra='',badgeId=''){
   const badgeHtml=badgeId?`<span id="${badgeId}" class="badge-pill" style="display:none;"></span>`:'';
   return`<div class="ni ${extra}" id="n-${p}" onclick="nav('${p}');closeSidebar()"><i class="ti ${ic}"></i><span>${lbl}</span>${badgeHtml}</div>`;
 }
-
 // ============================================================
 // NAV
 // ============================================================
@@ -994,7 +930,6 @@ function updateRequestsBadgeSidebar(){
   if(pending.length>0){badge.style.display='inline-block';badge.textContent=pending.length;}
   else{badge.style.display='none';}
 }
-
 // ============================================================
 // HELPERS / BADGES
 // ============================================================
@@ -1041,7 +976,6 @@ function hoursAgo(dateStr){if(!dateStr)return 0;return Math.round((new Date()-ne
 function timeBadge(hours){if(hours<24)return`<span class="time-badge time-ok"><i class="ti ti-clock"></i>${hours}س</span>`;const days=Math.round(hours/24);if(days<=3)return`<span class="time-badge time-warn"><i class="ti ti-clock"></i>${days}ي</span>`;return`<span class="time-badge time-over"><i class="ti ti-alarm"></i>${days}ي</span>`;}
 function deadlineBadge(deadline){if(!deadline||deadline==='—')return'';const now=new Date();const dl=new Date(deadline);const hours=Math.round((dl-now)/3600000);if(hours<0)return`<div class="deadline-warn deadline-over"><i class="ti ti-alert-triangle"></i>تجاوز موعد التسليم!</div>`;if(hours<=24)return`<div class="deadline-warn"><i class="ti ti-clock"></i>التسليم خلال ${hours} ساعة</div>`;if(hours<=72)return`<div class="deadline-warn"><i class="ti ti-clock"></i>التسليم خلال ${Math.round(hours/24)} أيام</div>`;return'';}
 function formatDate(iso){if(!iso)return'—';try{return new Date(iso).toLocaleDateString('ar-SA');}catch{return iso;}}
-
 function stageBar(o){
   const activeDepts=getActiveDepts(o);const stages=[];
   if(activeDepts.includes('design'))stages.push({key:'design',label:'تصميم',icon:'ti-brush',person:o.designName||'—'});
@@ -1052,7 +986,6 @@ function stageBar(o){
   const cur=o.currentDept||'design';const curIdx=stages.findIndex(s=>s.key===cur);
   return`<div class="stage-bar">${stages.map((s,i)=>{let cls='';if(cur==='done'){cls='done';}else{if(i<curIdx)cls='done';else if(s.key===cur)cls='active';}return`<div class="stage-item ${cls}"><i class="ti ${s.icon}"></i><div class="stage-label">${s.label}</div>${s.person?`<div class="stage-person">${s.person}</div>`:''}</div>`}).join('')}</div>`;
 }
-
 function controlsRow(showSearch=false,searchId='',searchPlaceholder='بحث...'){
   const searchHtml=showSearch?`<div class="search-bar"><i class="ti ti-search"></i><input id="${searchId}" placeholder="${searchPlaceholder}" oninput="filterWf(this.value)"/></div>`:'';
   return`<div class="controls-row">
@@ -1070,7 +1003,6 @@ function controlsRow(showSearch=false,searchId='',searchPlaceholder='بحث...')
   </div>`;
 }
 function changeSortMode(v){currentSortMode=v;refreshCurrentPage();}
-
 // ============================================================
 // TRACKING
 // ============================================================
@@ -1098,7 +1030,6 @@ async function doTrack(){
     }).join('');
   }catch(e){res.innerHTML='خطأ في الاتصال';}
 }
-
 // ============================================================
 // QR CODE
 // ============================================================
@@ -1107,12 +1038,10 @@ function generateQR(containerId,text,size=100){
   try{new QRCode(el,{text,width:size,height:size,colorDark:'#4A0E17',colorLight:'#ffffff',correctLevel:QRCode.CorrectLevel.M});}
   catch(e){el.innerHTML=`<div style="width:${size}px;height:${size}px;background:var(--surface-2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--text-3);">QR</div>`;}
 }
-
 // ============================================================
 // SMS SIMULATION
 // ============================================================
 async function sendSmsNotification(phone,message){console.log(`📱 SMS to ${phone}: ${message}`);return true;}
-
 // ============================================================
 // QUICK TASKS
 // ============================================================
@@ -1143,7 +1072,6 @@ function openQuickTask(type){
   window._qtFileB64='';window._qtFileName='';
   openModal('quick-task-modal');
 }
-
 async function handleQtFile(files){
   if(!files||!files.length)return;
   showSaving('جاري معالجة الملف...');
@@ -1151,7 +1079,6 @@ async function handleQtFile(files){
   catch(e){toast('فشل قراءة الملف');}
   hideSaving();
 }
-
 async function submitQuickTask(type){
   const c=document.getElementById('qt-client').value.trim();
   const p=document.getElementById('qt-phone')?.value.trim()||'—';
@@ -1180,7 +1107,6 @@ async function submitQuickTask(type){
   await loadData();hideSaving();closeModal('quick-task-modal');
   toast('✓ تم إرسال المهمة');refreshCurrentPage();
 }
-
 // Workshop Feedback
 function openWorkshopFeedback(key){
   const o=orders[key];if(!o)return;
@@ -1196,7 +1122,6 @@ function openWorkshopFeedback(key){
     </div>`;
   openModal('workshop-feedback-modal');
 }
-
 async function submitWorkshopFeedback(key){
   const dims=document.getElementById('fb-dimensions').value.trim();
   const siteStatus=document.getElementById('fb-site-status').value;
@@ -1205,7 +1130,6 @@ async function submitWorkshopFeedback(key){
   await fbPatch(`orders/${key}`,{workshopFeedback:`${dims} | ${siteStatus} | ${notes}`,workshopFeedbackDate:new Date().toISOString()});
   await loadData();hideSaving();closeModal('workshop-feedback-modal');toast('✓ تم حفظ البيانات');
 }
-
 // ============================================================
 // DASHBOARD
 // ============================================================
@@ -1217,10 +1141,8 @@ function buildDash(){
   const total=running.length,dn=arr.filter(o=>o.currentDept==='done').length,ug=running.filter(o=>o.priority==='عاجلة').length;
   const inDesign=running.filter(o=>o.currentDept==='design'||!o.currentDept).length;
   const inProd=running.filter(o=>['print','workshop','external'].includes(o.currentDept)).length;
-
   const roNote=t==='follower'?'<div class="ro-notice"><i class="ti ti-info-circle"></i>وضع المشاهدة فقط — لا يمكنك تعديل البيانات</div>':'';
   const myNote=['designer','printer','workshop','external'].includes(t)?`<div class="ro-notice" style="background:#EFF6FF;border-color:#BFDBFE;color:#1E40AF"><i class="ti ti-user-check"></i>أعمالك الجارية حالياً: <strong>${myArr.length}</strong></div>`:'';
-
   const qtBtns=(t==='admin'||t==='receiver')?`
     <div class="quick-actions">
       <button class="quick-action-btn" onclick="openQuickTask('proof')">
@@ -1236,7 +1158,6 @@ function buildDash(){
         <div style="text-align:right;"><div style="font-size:13px;font-weight:700;color:var(--maroon)">عرض سعر جديد</div><div style="font-size:11px;color:var(--text-3)">إصدار عرض احترافي</div></div>
       </button>
     </div>`:'';
-
   const stats=`<div class="stats-row">
     <div class="stat-card c-gold"><div class="stat-icon i-gold"><i class="ti ti-list-check"></i></div><div class="stat-label">إجمالي الجارية</div><div class="stat-value">${total}</div></div>
     <div class="stat-card c-purple"><div class="stat-icon i-purple"><i class="ti ti-brush"></i></div><div class="stat-label">في التصميم</div><div class="stat-value">${inDesign}</div></div>
@@ -1244,13 +1165,11 @@ function buildDash(){
     <div class="stat-card c-green"><div class="stat-icon i-green"><i class="ti ti-circle-check"></i></div><div class="stat-label">مكتملة</div><div class="stat-value">${dn}</div></div>
     <div class="stat-card c-red"><div class="stat-icon i-red"><i class="ti ti-bolt"></i></div><div class="stat-label">طلبات عاجلة</div><div class="stat-value">${ug}</div></div>
   </div>`;
-
   // Alerts
   const now=new Date();
   const urgentOrders=myArr.filter(o=>o.priority==='عاجلة'&&o.currentDept!=='done');
   const overdueOrders=myArr.filter(o=>{if(!o.deadline||o.deadline==='—'||o.currentDept==='done')return false;return new Date(o.deadline)<now;});
   const deadlineOrders=myArr.filter(o=>{if(!o.deadline||o.deadline==='—'||o.currentDept==='done')return false;const dl=new Date(o.deadline);const h=Math.round((dl-now)/3600000);return h>=0&&h<=72;});
-
   const urgentHtml=urgentOrders.length?`<div class="alert-card a-red flex-1" style="min-width:260px;">
     <div class="alert-card-header"><i class="ti ti-bolt"></i> طلبات عاجلة (${urgentOrders.length})</div>
     ${urgentOrders.slice(0,4).map(o=>`<div class="alert-item" onclick="openOrderModal('${o._key}')">
@@ -1258,7 +1177,6 @@ function buildDash(){
       <div style="display:flex;gap:5px;">${deptBadge(o.currentDept)}</div>
     </div>`).join('')}
   </div>`:'';
-
   const deadlineHtml=(overdueOrders.length||deadlineOrders.length)?`<div class="alert-card a-yellow flex-1" style="min-width:260px;">
     <div class="alert-card-header"><i class="ti ti-clock-exclamation"></i> تنبيهات مواعيد التسليم</div>
     ${overdueOrders.slice(0,3).map(o=>`<div class="alert-item" onclick="openOrderModal('${o._key}')" style="background:#FFF5F5;">
@@ -1270,9 +1188,7 @@ function buildDash(){
       <div style="font-size:10px;color:#92400E;font-weight:700;">${h<24?h+' ساعة':Math.round(h/24)+' يوم'}</div>
     </div>`;}).join('')}
   </div>`:'';
-
   const alertsWrap=(urgentHtml||deadlineHtml)?`<div class="alert-strip">${urgentHtml}${deadlineHtml}</div>`:'';
-
   const tableRows=myArr.slice(0,8).map(o=>`<tr onclick="openOrderModal('${o._key}')" style="cursor:pointer">
     <td><strong style="color:var(--maroon)">${o.id||o._key}</strong>${o.priority==='عاجلة'?`<span class="urgent-tag" style="margin-right:5px;font-size:9px;"><i class="ti ti-bolt"></i></span>`:''}</td>
     <td><strong>${o.client}</strong></td>
@@ -1281,7 +1197,6 @@ function buildDash(){
     <td>${deptBadge(o.currentDept)}</td>
     <td>${timeBadge(hoursAgo(o.stageStartDate||o.date))}</td>
   </tr>`).join('');
-
   document.getElementById('page-dash').innerHTML=`
     <div class="page-header"><div><div class="ptitle"><i class="ti ti-layout-dashboard"></i> لوحة التحكم</div><div class="breadcrumb">مرحباً، ${cu.name}</div></div></div>
     ${roNote}${myNote}${qtBtns}${stats}${alertsWrap}
@@ -1297,7 +1212,6 @@ function buildDash(){
       </table></div>
     </div>`;
 }
-
 // ============================================================
 // WF GRID
 // ============================================================
@@ -1341,7 +1255,6 @@ function buildWfGrid(tab){
 }
 function filterWf(q){document.querySelectorAll('.wf-card').forEach(c=>{c.style.display=c.textContent.toLowerCase().includes(q.toLowerCase())?'':'none';});}
 function filterWfDept(dept){document.querySelectorAll('.wf-card').forEach(c=>{c.style.display=(dept==='all'||c.getAttribute('data-dept')===dept)?'':'none';});}
-
 // ============================================================
 // MY WORK
 // ============================================================
@@ -1364,7 +1277,6 @@ function buildMyWork(){
     <div class="page-header"><div class="ptitle"><i class="ti ti-user-check"></i> أعمالي — ${cu.name}</div></div>
     ${controlsRow(false)}<div>${cards}</div>`;
 }
-
 // ============================================================
 // QUOTE PAGE
 // ============================================================
@@ -1373,7 +1285,6 @@ function buildQuotePage(){
   const cArr=Object.values(clients);
   // Auto-generate quote number
   const autoRef='QT-'+new Date().getFullYear()+'-'+(Object.keys(standaloneQuotes).length+1).toString().padStart(5,'0');
-
   document.getElementById('page-quote').innerHTML=`
     <div class="page-header"><div class="ptitle"><i class="ti ti-receipt-2"></i> إصدار عرض سعر رسمي</div></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
@@ -1400,7 +1311,6 @@ function buildQuotePage(){
         </div>
       </div>
     </div>
-
     <!-- Products Table -->
     <div class="card">
       <div class="card-header"><span class="card-title"><i class="ti ti-table"></i> تفاصيل المنتجات والخدمات</span></div>
@@ -1413,7 +1323,6 @@ function buildQuotePage(){
         </div>
         <div id="quote-lines-wrap"></div>
         <button class="btn btn-out btn-sm" onclick="addQuoteLine()" style="margin-top:8px;"><i class="ti ti-plus"></i> إضافة بند</button>
-
         <!-- Grand Total Only (simplified) -->
         <div style="margin-top:20px;text-align:center;">
           <div style="background:var(--maroon);color:#fff;border-radius:var(--radius-lg);padding:20px 30px;display:inline-block;min-width:280px;">
@@ -1422,7 +1331,6 @@ function buildQuotePage(){
             <div id="q-vat-note" style="font-size:11px;color:rgba(255,255,255,.7);margin-top:4px;"></div>
           </div>
         </div>
-
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:16px;">
           <div class="fg"><label>شروط وأحكام</label><textarea id="q-terms" placeholder="الدفع 50% مقدماً | التسليم خلال 5 أيام عمل..."></textarea></div>
           <div class="fg"><label>بيانات البنك</label><textarea id="q-bank" placeholder="اسم البنك | رقم IBAN..."></textarea></div>
@@ -1435,7 +1343,6 @@ function buildQuotePage(){
             <option value="دفعة واحدة">دفعة واحدة</option>
           </select>
         </div>
-
         <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:16px;">
           <button class="btn btn-brand" onclick="saveAndPreviewQuote()"><i class="ti ti-eye"></i> معاينة وطباعة A4</button>
           <button class="btn btn-gold" onclick="saveQuoteToDb()"><i class="ti ti-device-floppy"></i> حفظ في السجلات</button>
@@ -1443,7 +1350,6 @@ function buildQuotePage(){
         </div>
       </div>
     </div>
-
     <!-- Archive -->
     <div class="page-header" style="margin-top:24px;"><div class="ptitle"><i class="ti ti-archive"></i> أرشيف عروض الأسعار</div></div>
     <div class="card"><div class="tbl-wrap"><table id="quotes-archive-table">
@@ -1452,14 +1358,11 @@ function buildQuotePage(){
     </table></div></div>`;
   addQuoteLine();
 }
-
 function onClientInputQuote(val){
   const ex=Object.values(clients).find(c=>c.name===val);
   if(ex&&ex.phone)document.getElementById('q-phone').value=ex.phone;
 }
-
 function onQuotePaymentChange(v){}
-
 function buildQuoteArchiveRows(){
   const arr=Object.entries(standaloneQuotes).map(([k,v])=>({...v,_key:k})).sort((a,b)=>new Date(b.date)-new Date(a.date));
   if(!arr.length)return'<tr><td colspan="5" style="text-align:center;color:var(--text-3);padding:24px">لا يوجد عروض أسعار محفوظة</td></tr>';
@@ -1474,7 +1377,6 @@ function buildQuoteArchiveRows(){
     </div></td>
   </tr>`).join('');
 }
-
 function addQuoteLine(){
   const id='q'+Date.now();
   window._quoteLines.push({id,lbl:'',q:1,p:0});
@@ -1516,7 +1418,6 @@ function getQuoteData(){
   const vat=subtotal*0.15;const totalWithVat=subtotal+vat;
   return{client,ref,phone,validity,sales,delivery,paymentTerms,terms,bank,lines,subtotal,vat,totalWithVat,date:new Date().toISOString().split('T')[0],createdBy:cu.name};
 }
-
 async function saveQuoteToDb(){
   const data=getQuoteData();
   if(!data.client){toast('يرجى تحديد العميل');return;}
@@ -1540,105 +1441,175 @@ async function previewSavedQuote(key){
 }
 function renderA4Quote(data,key=''){
   const fmt=n=>Number(n||0).toLocaleString('ar-SA',{minimumFractionDigits:2});
-  const linesHtml=(data.lines||[]).map((l,i)=>`<tr style="${i%2===1?'background:#FDFBF7;':''}">
-    <td style="text-align:center;font-weight:700;">${i+1}</td>
-    <td>${l.lbl}</td>
-    <td style="text-align:center;">${l.q}</td>
-    <td style="text-align:center;">${fmt(l.p)}</td>
-    <td style="text-align:center;font-weight:700;">${fmt(l.q*l.p)}</td>
-  </tr>`).join('');
-  const trackingUrl=`${location.origin}${location.pathname}#track=${key||data.ref}`;
-  const printHtml=`
-    <div style="font-family:'Cairo','Segoe UI',Tahoma,sans-serif;direction:rtl;background:#fff;">
-      <!-- Header -->
-      <div style="background:#4A0E17;color:#fff;padding:20px 28px;display:flex;align-items:center;justify-content:space-between;">
-        <div style="display:flex;align-items:center;gap:14px;">
-          <div style="width:65px;height:65px;background:radial-gradient(circle,#D4AF37,#8A5A2B);border-radius:50%;display:flex;align-items:center;justify-content:center;border:2px solid rgba(255,255,255,.3);">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="38" height="38"><path d="M 18 48 Q 45 38 78 52 Q 95 58 102 72" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round"/></svg>
-          </div>
-          <div>
-            <div style="font-size:20px;font-weight:900;">روائع الأفكار الإعلانية</div>
-            <div style="font-size:10px;color:#D4AF37;letter-spacing:1px;">Rawaee Al-Afkar For Advertising</div>
-          </div>
-        </div>
-        <div style="text-align:left;">
-          <div style="font-size:24px;font-weight:900;color:#D4AF37;">عـرض سعـر</div>
-          <div style="font-size:11px;margin-top:3px;">رقم العرض: <strong>${data.ref}</strong></div>
-          <div style="font-size:10px;color:rgba(255,255,255,.7);">التاريخ: ${data.date}</div>
-        </div>
-      </div>
-      <!-- Gold ribbon -->
-      <div style="background:#D4AF37;color:#4A0E17;text-align:center;padding:5px;font-size:10px;font-weight:800;letter-spacing:2px;">
-        QUOTATION · خدمات اللوحات الإعلانية · الطباعة الرقمية · التصميم · التركيب الميداني
-      </div>
-      <!-- Status bar -->
-      <div style="background:#FDFBF7;border-bottom:2px solid #E8E2D9;padding:8px 28px;text-align:center;">
-        <span style="background:#FEF3C7;color:#92400E;padding:4px 16px;border-radius:20px;font-size:11px;font-weight:700;">الحالة: بانتظار اعتماد العميل</span>
-      </div>
-      <!-- Client + Quote info -->
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0;border-bottom:2px solid #E8E2D9;">
-        <div style="padding:18px 28px;border-left:1px solid #E8E2D9;">
-          <div style="font-size:12px;font-weight:800;color:#4A0E17;margin-bottom:10px;display:flex;align-items:center;gap:6px;"><span>👤</span> بيانات العميل</div>
-          <table style="width:100%;font-size:12px;border-collapse:collapse;">
-            <tr><td style="padding:4px 0;color:#64748B;width:90px;">اسم العميل</td><td style="font-weight:700;color:#1A0F0A;">${data.client}</td></tr>
-            ${data.phone?`<tr><td style="padding:4px 0;color:#64748B;">رقم الجوال</td><td style="font-weight:600;">${data.phone}</td></tr>`:''}
-          </table>
-        </div>
-        <div style="padding:18px 28px;">
-          <div style="font-size:12px;font-weight:800;color:#4A0E17;margin-bottom:10px;display:flex;align-items:center;gap:6px;"><span>📋</span> بيانات العرض</div>
-          <table style="width:100%;font-size:12px;border-collapse:collapse;">
-            <tr><td style="padding:4px 0;color:#64748B;width:100px;">مسؤول المبيعات</td><td style="font-weight:700;">${data.sales||cu.name}</td></tr>
-            <tr><td style="padding:4px 0;color:#64748B;">طريقة الدفع</td><td style="font-weight:600;">${data.paymentTerms||'—'}</td></tr>
-            ${data.delivery?`<tr><td style="padding:4px 0;color:#64748B;">مدة التنفيذ</td><td style="font-weight:600;">${data.delivery}</td></tr>`:''}
-            ${data.validity?`<tr><td style="padding:4px 0;color:#64748B;">صلاحية العرض</td><td style="font-weight:600;color:#92400E;">${data.validity}</td></tr>`:''}
-          </table>
-        </div>
-      </div>
-      <!-- Products table -->
-      <div style="padding:18px 28px;">
-        <div style="font-size:13px;font-weight:800;color:#4A0E17;margin-bottom:10px;padding-bottom:6px;border-bottom:2px solid #D4AF37;">📦 تفاصيل المنتجات والخدمات</div>
-        <table style="width:100%;border-collapse:collapse;font-size:12px;">
-          <thead>
-            <tr style="background:#4A0E17;color:#fff;">
-              <th style="padding:9px 12px;text-align:center;width:36px;">#</th>
-              <th style="padding:9px 12px;text-align:right;">البيان والمواصفات</th>
-              <th style="padding:9px 12px;text-align:center;width:60px;">الكمية</th>
-              <th style="padding:9px 12px;text-align:center;width:90px;">سعر الوحدة</th>
-              <th style="padding:9px 12px;text-align:center;width:100px;">الإجمالي</th>
-            </tr>
-          </thead>
-          <tbody>${linesHtml}</tbody>
-        </table>
-      </div>
-      <!-- Grand Total -->
-      <div style="padding:0 28px 18px;">
-        <div style="display:flex;justify-content:flex-end;">
-          <div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:10px;padding:16px 22px;min-width:300px;">
-            <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:6px;color:#64748B;"><span>الإجمالي قبل الضريبة:</span><span style="font-weight:700;color:#1A0F0A;">${fmt(data.subtotal)} ر.س</span></div>
-            <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:6px;color:#92400E;"><span>ضريبة القيمة المضافة (15%):</span><span style="font-weight:700;">${fmt(data.vat)} ر.س</span></div>
-            <div style="display:flex;justify-content:space-between;font-size:18px;font-weight:900;color:#4A0E17;border-top:2px solid #D4AF37;padding-top:10px;margin-top:4px;"><span>الإجمالي شامل الضريبة:</span><span>${fmt(data.totalWithVat)} ر.س</span></div>
-          </div>
-        </div>
-        ${data.bank?`<div style="background:#EFF6FF;border:1px solid #BFDBFE;border-radius:8px;padding:12px 16px;margin-top:12px;font-size:11px;color:#1E40AF;"><strong>🏦 بيانات التحويل البنكي:</strong> ${data.bank}</div>`:''}
-        ${data.terms?`<div style="background:#FFFBEB;border:1px solid #FEF3C7;border-radius:8px;padding:12px 16px;margin-top:10px;font-size:11px;color:#92400E;"><strong>📌 الشروط والأحكام:</strong> ${data.terms}</div>`:''}
-        <div style="text-align:center;margin-top:16px;">
-          <div style="display:inline-block;background:#fff;border:1px solid #E2E8F0;border-radius:10px;padding:10px;">
-            <div style="font-size:9px;color:#64748B;margin-bottom:5px;">امسح لتتبع حالة الطلب</div>
-            <div id="print-qr-${key||'new'}" style="width:70px;height:70px;"></div>
-          </div>
-        </div>
-      </div>
-      <!-- Footer -->
-      <div style="background:#4A0E17;color:#fff;padding:12px 28px;display:flex;justify-content:space-between;font-size:10px;flex-wrap:wrap;gap:8px;margin-top:8px;">
-        <span>📞 0553306961</span>
-        <span>📧 rawaee_alafkar@hotmail.com</span>
-        <span>شكراً لثقتكم بروائع الأفكار الإعلانية © ${new Date().getFullYear()}</span>
-      </div>
-    </div>`;
-  document.getElementById('print-area').innerHTML=printHtml;
-  setTimeout(()=>{generateQR(`print-qr-${key||'new'}`,trackingUrl,70);},100);
-}
 
+  /* Hijri date */
+  let hijriDate='';
+  try{hijriDate=new Date().toLocaleDateString('ar-SA-u-ca-islamic',{year:'numeric',month:'2-digit',day:'2-digit'});}catch(e){}
+
+  const issueDate=data.date||new Date().toISOString().split('T')[0];
+
+  /* Table rows with per-line VAT */
+  const linesHtml=(data.lines||[]).map((l,i)=>{
+    const qty=Number(l.q||0),price=Number(l.p||0);
+    const lineSub=qty*price,lineVat=lineSub*0.15,lineTotal=lineSub+lineVat;
+    return`<tr style="background:${i%2===0?'#fff':'#FDFBF7'};">
+      <td style="text-align:center;border:1px solid #E2D9CC;padding:8px 5px;font-weight:800;color:#4A0E17;">${i+1}</td>
+      <td style="border:1px solid #E2D9CC;padding:8px 10px;font-weight:600;">${l.lbl||''}</td>
+      <td style="text-align:center;border:1px solid #E2D9CC;padding:8px 5px;">${qty}</td>
+      <td style="text-align:center;border:1px solid #E2D9CC;padding:8px 5px;">قطعة</td>
+      <td style="text-align:center;border:1px solid #E2D9CC;padding:8px 6px;">${fmt(price)}</td>
+      <td style="text-align:center;border:1px solid #E2D9CC;padding:8px 6px;">${fmt(lineSub)}</td>
+      <td style="text-align:center;border:1px solid #E2D9CC;padding:8px 6px;">${fmt(lineVat)}</td>
+      <td style="text-align:center;border:1px solid #E2D9CC;padding:8px 6px;font-weight:700;">${fmt(lineTotal)}</td>
+    </tr>`;
+  }).join('');
+
+  const subtotal=Number(data.subtotal||0),vat=Number(data.vat||0),totalWithVat=Number(data.totalWithVat||0);
+  const trackingUrl=`${location.origin}${location.pathname}#track=${key||data.ref}`;
+
+  const printHtml=`
+<div style="font-family:'Cairo','Segoe UI',Tahoma,sans-serif;direction:rtl;background:#fff;max-width:794px;margin:0 auto;color:#1A0F0A;">
+
+  <!-- ═══ HEADER ═══ -->
+  <div style="background:#4A0E17;padding:16px 24px;display:flex;align-items:center;justify-content:space-between;gap:10px;">
+    <!-- Logo + Company (RIGHT side in RTL) -->
+    <div style="display:flex;align-items:center;gap:12px;">
+      <div style="width:62px;height:62px;background:radial-gradient(circle,#D4AF37,#8A5A2B);border-radius:50%;border:2px solid rgba(255,255,255,.3);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="34" height="34"><path d="M 18 48 Q 45 38 78 52 Q 95 58 102 72" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round"/></svg>
+      </div>
+      <div>
+        <div style="font-size:17px;font-weight:900;color:#fff;line-height:1.2;">روائع الأفكار الإعلانية</div>
+        <div style="font-size:9px;color:#D4AF37;letter-spacing:1px;margin-top:3px;">Rawaee Al-Afkar Advertising</div>
+      </div>
+    </div>
+    <!-- Center title -->
+    <div style="text-align:center;flex:1;">
+      <div style="font-size:26px;font-weight:900;color:#D4AF37;line-height:1;">عـرض سعـر</div>
+      <div style="font-size:10px;color:rgba(255,255,255,.6);letter-spacing:3px;margin-top:3px;">QUOTATION</div>
+    </div>
+    <!-- Quote number box (LEFT side in RTL) -->
+    <div style="background:rgba(255,255,255,.07);border:1px solid rgba(212,175,55,.4);border-radius:10px;padding:10px 14px;text-align:center;min-width:128px;flex-shrink:0;">
+      <div style="font-size:9px;color:rgba(255,255,255,.55);font-weight:700;letter-spacing:.5px;margin-bottom:2px;">رقم العرض</div>
+      <div style="font-size:13px;font-weight:900;color:#D4AF37;margin-bottom:4px;">${data.ref}</div>
+      <div style="font-size:9px;color:rgba(255,255,255,.6);">تاريخ الإصدار</div>
+      <div style="font-size:9px;color:#fff;font-weight:700;">${issueDate}</div>
+      ${hijriDate?`<div style="font-size:8px;color:rgba(212,175,55,.7);margin-top:2px;">الموافق ${hijriDate}</div>`:''}
+    </div>
+  </div>
+
+  <!-- Gold ribbon -->
+  <div style="background:#D4AF37;color:#4A0E17;text-align:center;padding:4px 8px;font-size:9px;font-weight:800;letter-spacing:2px;">
+    QUOTATION · خدمات اللوحات الإعلانية · الطباعة الرقمية · التصميم الإبداعي · التركيب الميداني
+  </div>
+
+  <!-- Status bar -->
+  <div style="background:#FDFBF7;border-bottom:1px solid #E8E2D9;padding:7px 24px;display:flex;align-items:center;justify-content:center;gap:8px;">
+    <span style="font-size:11px;font-weight:700;color:#5C4A3A;">الحالة :</span>
+    <span style="background:#FEF3C7;color:#92400E;padding:3px 16px;border-radius:20px;font-size:10px;font-weight:700;border:1px solid #FDE68A;">⏳ بانتظار اعتماد العميل</span>
+  </div>
+
+  <!-- Client + Quote info grid -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;border-bottom:2px solid #E8E2D9;">
+    <!-- Client info -->
+    <div style="padding:13px 22px;border-left:1px solid #E8E2D9;">
+      <div style="font-size:11px;font-weight:800;color:#4A0E17;margin-bottom:7px;padding-bottom:5px;border-bottom:1px solid #E8E2D9;">👤 بيانات العميل</div>
+      <table style="width:100%;font-size:11px;border-collapse:collapse;">
+        <tr><td style="padding:4px 0;color:#9B8878;font-weight:700;width:80px;">اسم العميل</td><td style="font-weight:700;color:#1A0F0A;">${data.client||'—'}</td></tr>
+        ${data.phone?`<tr><td style="padding:4px 0;color:#9B8878;font-weight:700;">رقم الجوال</td><td style="font-weight:600;">${data.phone}</td></tr>`:''}
+      </table>
+    </div>
+    <!-- Quote details -->
+    <div style="padding:13px 22px;">
+      <div style="font-size:11px;font-weight:800;color:#4A0E17;margin-bottom:7px;padding-bottom:5px;border-bottom:1px solid #E8E2D9;">📋 بيانات العرض</div>
+      <table style="width:100%;font-size:11px;border-collapse:collapse;">
+        <tr><td style="padding:4px 0;color:#9B8878;font-weight:700;width:100px;">مسؤول المبيعات</td><td style="font-weight:700;">${data.sales||'إدارة المبيعات'}</td></tr>
+        <tr><td style="padding:4px 0;color:#9B8878;font-weight:700;">طريقة الدفع</td><td style="font-weight:600;">${data.paymentTerms||'—'}</td></tr>
+        ${data.delivery?`<tr><td style="padding:4px 0;color:#9B8878;font-weight:700;">مدة التنفيذ</td><td style="font-weight:600;">${data.delivery}</td></tr>`:''}
+        ${data.validity?`<tr><td style="padding:4px 0;color:#9B8878;font-weight:700;">صلاحية العرض</td><td style="font-weight:600;color:#92400E;">${data.validity}</td></tr>`:`<tr><td style="padding:4px 0;color:#9B8878;font-weight:700;">صلاحية العرض</td><td style="font-weight:600;color:#92400E;">15 يوم من تاريخ الإصدار</td></tr>`}
+      </table>
+    </div>
+  </div>
+
+  <!-- Products table -->
+  <div style="padding:12px 22px 6px;">
+    <div style="font-size:11px;font-weight:800;color:#4A0E17;margin-bottom:8px;padding-bottom:5px;border-bottom:2px solid #D4AF37;">📦 تفاصيل المنتجات والخدمات</div>
+    <table style="width:100%;border-collapse:collapse;font-size:10px;">
+      <thead>
+        <tr style="background:#4A0E17;color:#fff;">
+          <th style="padding:8px 5px;text-align:center;border:1px solid #631420;width:26px;">#</th>
+          <th style="padding:8px 10px;text-align:right;border:1px solid #631420;">البيان والمواصفات</th>
+          <th style="padding:8px 5px;text-align:center;border:1px solid #631420;width:46px;">الكمية</th>
+          <th style="padding:8px 5px;text-align:center;border:1px solid #631420;width:40px;">وحدة</th>
+          <th style="padding:8px 5px;text-align:center;border:1px solid #631420;width:68px;">سعر الوحدة</th>
+          <th style="padding:8px 5px;text-align:center;border:1px solid #631420;width:74px;">الإجمالي قبل الضريبة</th>
+          <th style="padding:8px 5px;text-align:center;border:1px solid #631420;width:66px;">ضريبة القيمة المضافة (15%)</th>
+          <th style="padding:8px 5px;text-align:center;border:1px solid #631420;width:74px;">الإجمالي شامل الضريبة</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${linesHtml||'<tr><td colspan="8" style="text-align:center;padding:14px;color:#9B8878;border:1px solid #E2D9CC;">لا توجد بنود</td></tr>'}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Summary + Bank / Notes -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:10px 22px 14px;align-items:start;">
+    <!-- Bank / Terms (right side in RTL) -->
+    <div>
+      ${data.bank?`<div style="border:1px solid #BFDBFE;border-radius:8px;overflow:hidden;margin-bottom:8px;">
+        <div style="background:#1E40AF;color:#fff;padding:6px 12px;font-size:10px;font-weight:700;">🏦 بيانات الحساب البنكي</div>
+        <div style="padding:10px 12px;font-size:10px;color:#1E40AF;background:#EFF6FF;line-height:1.9;white-space:pre-wrap;">${data.bank}</div>
+      </div>`:''}
+      ${data.terms?`<div style="background:#FFFBEB;border:1px solid #FEF3C7;border-radius:8px;padding:10px 12px;font-size:10px;color:#92400E;line-height:1.6;">
+        <strong>📌 ملاحظة:</strong> ${data.terms}
+      </div>`:''}
+    </div>
+    <!-- Totals box (left side in RTL) -->
+    <div>
+      <div style="border:1px solid #E2E8F0;border-radius:10px;overflow:hidden;">
+        <div style="padding:9px 14px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #E2E8F0;font-size:11px;background:#F8FAFC;">
+          <span style="color:#64748B;font-weight:700;">الإجمالي قبل الضريبة</span>
+          <span style="font-weight:700;">${fmt(subtotal)} ر.س</span>
+        </div>
+        <div style="padding:9px 14px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #E2E8F0;font-size:11px;background:#FFF8EE;">
+          <span style="color:#92400E;font-weight:700;">ضريبة القيمة المضافة (15%)</span>
+          <span style="font-weight:700;color:#92400E;">${fmt(vat)} ر.س</span>
+        </div>
+        <div style="background:#4A0E17;padding:12px 14px;display:flex;justify-content:space-between;align-items:center;font-size:13px;font-weight:900;">
+          <span style="color:#D4AF37;">الإجمالي شامل الضريبة</span>
+          <span style="color:#fff;">${fmt(totalWithVat)} ر.س</span>
+        </div>
+      </div>
+      <div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:7px;padding:8px 12px;margin-top:8px;font-size:9px;color:#64748B;text-align:center;font-weight:600;line-height:1.5;">
+        فقط <strong style="color:#4A0E17;">${fmt(totalWithVat)}</strong> ريال سعودي لا غير
+      </div>
+    </div>
+  </div>
+
+  <!-- QR + closing note -->
+  <div style="padding:2px 22px 10px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;border-top:1px solid #F0EBE3;">
+    <div style="font-size:10px;color:#9B8878;max-width:320px;line-height:1.5;">
+      ♦ نأمل أن يحوز عرضنا على رضاكم واستحسانكم<br>
+      <span style="color:#EF4444;font-size:9px;">يُعدّ هذا العرض ملزماً بعد التوقيع والختم.</span>
+    </div>
+    <div style="background:#fff;border:1px solid #E2E8F0;border-radius:8px;padding:7px;text-align:center;">
+      <div style="font-size:8px;color:#9B8878;margin-bottom:3px;">امسح لتتبع الطلب</div>
+      <div id="print-qr-${key||'new'}" style="width:60px;height:60px;"></div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div style="background:#4A0E17;color:#fff;padding:10px 24px;display:flex;justify-content:space-between;align-items:center;font-size:10px;flex-wrap:wrap;gap:6px;border-top:3px solid #D4AF37;">
+    <span>📞 0553306961</span>
+    <span>📧 rawaee_alafkar@hotmail.com</span>
+    <span>📱 @rawaee_alafkar</span>
+    <span style="color:#D4AF37;font-weight:700;">شكراً لثقتكم © ${new Date().getFullYear()}</span>
+  </div>
+
+</div>`;
+  document.getElementById('print-area').innerHTML=printHtml;
+  setTimeout(()=>{generateQR(`print-qr-${key||'new'}`,trackingUrl,60);},100);
+}
 async function convertQuoteToOrder(){
   const data=getQuoteData();
   if(!data.client){toast('يرجى تحديد العميل أولاً');return;}
@@ -1672,7 +1643,6 @@ async function convertSavedQuoteToOrder(key,preloadedData=null){
     </div>`;
   openModal('order-modal');
 }
-
 async function finalizeConvertToOrder(quoteKey){
   const phone=document.getElementById('co-phone').value.trim();
   const service=document.getElementById('co-service').value.trim();
@@ -1710,7 +1680,6 @@ async function finalizeConvertToOrder(quoteKey){
   await loadData();hideSaving();closeModal('order-modal');
   toast('✓ تم إنشاء أمر التشغيل: '+newId);nav('wf');
 }
-
 // ============================================================
 // INTERNAL CHAT
 // ============================================================
@@ -1747,7 +1716,6 @@ async function sendChatMsg(orderKey){
   await fbPush(`chats/${orderKey}`,msg);
   await loadAndRenderChat(orderKey);
 }
-
 // ============================================================
 // ORDER MODAL
 // ============================================================
@@ -1771,13 +1739,11 @@ function openOrderModal(key){
         :`<button class="btn btn-brand btn-sm" onclick="sendToNextDept('${key}','${nd}')"><i class="ti ti-arrow-left"></i> ${nextLabels[o.currentDept]||'إرسال للمرحلة التالية'}</button>`;
     }
   }
-
   const canSeePayment=['admin','follower','receiver'].includes(t);
   const fileChips=(o.files&&Array.isArray(o.files)&&o.files.length>0)?o.files.map(f=>f&&f.data&&f.name?`<a href="${f.data}" download="${f.name}" class="file-download-link"><i class="ti ti-download"></i>${f.name}</a>`:'').join(' '):'— لا توجد ملفات';
   const pLink=o.approvedPrintFile?.startsWith('data:')?`<a href="${o.approvedPrintFile}" download class="file-download-link"><i class="ti ti-printer"></i> ملف الطباعة</a>`:o.printTo==='none'?'—':'— بانتظار الاعتماد';
   const wLink=o.approvedWorkshopFile?.startsWith('data:')?`<a href="${o.approvedWorkshopFile}" download class="file-download-link"><i class="ti ti-box"></i> مخطط الورشة</a>`:o.workshopTo==='none'?'—':'— بانتظار الاعتماد';
   const dLink=o.finalWorkshopDoneFile?.startsWith('data:')?`<a href="${o.finalWorkshopDoneFile}" download class="file-download-link"><i class="ti ti-photo"></i> صورة المنجز</a>`:o.workshopTo==='none'?'—':'— بانتظار التوثيق';
-
   let uploadArea='';
   if(isMine||t==='admin'){
     if(o.currentDept==='design')uploadArea=`<div class="dept-upload-box"><div class="dept-upload-title" style="color:#6B21A8"><i class="ti ti-brush"></i> رفع ملفات التصميم المعتمدة</div>
@@ -1789,12 +1755,10 @@ function openOrderModal(key){
     else if(o.currentDept==='external')uploadArea=`<div class="dept-upload-box"><div class="dept-upload-title" style="color:#713F12"><i class="ti ti-world"></i> تحديث ملفات التوريد</div>
       <div class="fg"><input type="file" id="f-ext-input" accept="image/*,.pdf" onchange="uploadFileDirect('${key}','externalFile','externalFileName','f-ext-input')"/></div></div>`;
   }
-
   const paymentRow=canSeePayment?`<div class="di" style="grid-column:1/-1;border-top:1px solid var(--border-soft);padding-top:10px;">
     <span class="dk">💳 الموقف المالي</span>
     <span class="dv">${paymentBadge(o.paymentStatus)||'—'} ${(o.paymentStatus==='تم الدفع'||o.paymentStatus==='دفع جزئي')?`<span style="font-size:12px;color:#065F46">(${Number(o.paidAmount||0).toLocaleString()} ر.س)</span>`:''}</span>
   </div>`:'';
-
   const trackingUrl=`${location.origin}${location.pathname}#track=${o.id||key}`;
   const qrBoxHtml=`<div class="di" style="grid-column:1/-1;border-top:1px solid var(--border-soft);padding-top:12px;">
     <span class="dk">📱 رمز QR للتتبع</span>
@@ -1803,10 +1767,8 @@ function openOrderModal(key){
       <div style="font-size:11px;color:var(--text-3);max-width:180px;">يمكن طباعته مع وثيقة الطلب لتتبع العميل</div>
     </div>
   </div>`;
-
   const fromQuoteHtml=o.fromQuoteRef?`<div style="background:#F0FDF4;border:1px solid #BBF7D0;border-radius:var(--radius-sm);padding:8px 14px;font-size:12px;color:#166534;margin-bottom:14px;"><i class="ti ti-receipt-2"></i> تحويل من عرض السعر: <strong>${o.fromQuoteRef}</strong></div>`:'';
   const archiveBtn=cu.type==='admin'?`<button class="btn btn-red btn-sm" onclick="archiveOrder('${key}')"><i class="ti ti-archive"></i> إنهاء الطلب وأرشفته</button>`:'';
-
   document.getElementById('order-modal-body').innerHTML=`
     <div class="modal-header">
       <div><div class="modal-title"><i class="ti ti-file-text"></i> ${o.id||key} — ${o.client}${o.isQuickTask?'<span class="urgent-tag" style="margin-right:8px;font-size:9px;"><i class="ti ti-bolt"></i>مهمة سريعة</span>':''}</div><div style="font-size:11px;color:var(--text-3);margin-top:2px;">${o.service}</div></div>
@@ -1845,7 +1807,6 @@ function openOrderModal(key){
   openModal('order-modal');
   setTimeout(()=>{generateQR(`order-qr-${key}`,trackingUrl,80);loadAndRenderChat(key);},200);
 }
-
 async function uploadFileDirect(key,ff,fn2,inputId){
   const el=document.getElementById(inputId);if(!el||!el.files||!el.files.length)return;
   showSaving('جاري حفظ الملف...');
@@ -1878,7 +1839,6 @@ async function archiveOrder(key){
   await loadData();hideSaving();closeModal('order-modal');
   toast('✓ تم إنهاء الطلب وأرشفته');refreshCurrentPage();
 }
-
 // ============================================================
 // ADD ORDER FORM
 // ============================================================
@@ -1936,7 +1896,6 @@ function buildAddForm(isUrgentQuick=false){
         <div class="fg"><label>ملاحظات وتفاصيل المواصفات</label><textarea id="fn" placeholder="اكتب الملاحظات والمقاسات هنا..."></textarea></div>
       </div>
     </div>
-
     <div class="card">
       <div class="card-header"><span class="card-title"><i class="ti ti-sitemap"></i> خطوط الإنتاج والتوكيل</span></div>
       <div class="dept-grid-layout">
@@ -1957,7 +1916,6 @@ function buildAddForm(isUrgentQuick=false){
         </div></div>
       </div>
     </div>
-
     <div class="card">
       <div class="card-header"><span class="card-title"><i class="ti ti-paperclip"></i> المرفقات والبروفات</span></div>
       <div style="padding:16px;">
@@ -1974,14 +1932,12 @@ function buildAddForm(isUrgentQuick=false){
     </div>`;
   window.globalAttachedFiles=[];window.externalFileB64='';window.externalFileName='';
 }
-
 function calcRemaining(){
   const total=parseFloat(document.getElementById('f-total-amount')?.value)||0;
   const paid=parseFloat(document.getElementById('f-paid-amount')?.value)||0;
   const rem=document.getElementById('f-remaining-amount');
   if(rem)rem.value=Math.max(0,total-paid).toFixed(2);
 }
-
 function onPaymentChange(v){
   const partial=document.getElementById('partial-payment-section');
   const simple=document.getElementById('simple-amount-field');
@@ -1994,7 +1950,6 @@ async function handleMainFiles(files){
 }
 function onClientInput(val){const ex=Object.values(clients).find(c=>c.name===val);if(ex&&ex.phone)document.getElementById('fp').value=ex.phone;}
 function openWhatsapp(phone){if(!phone){toast('⚠️ يرجى إدخال رقم جوال');return;}const n=phone.replace(/[^0-9]/g,'');window.open(`https://wa.me/${n.startsWith('0')?'966'+n.substring(1):n}`,'_blank');}
-
 async function submitOrder(isUrgentQuick=false){
   const c=document.getElementById('fc').value.trim(),s=document.getElementById('fs').value.trim();
   const phone=document.getElementById('fp').value.trim(),payStatus=document.getElementById('fpay').value;
@@ -2006,7 +1961,6 @@ async function submitOrder(isUrgentQuick=false){
   let startDept='design';
   if(dU==='none'){if(extU!=='none')startDept='external';else if(pU!=='none')startDept='print';else startDept='workshop';}
   const today=new Date().toISOString().split('T')[0];
-
   let paidAmt=0;
   let totalAmt=0;
   let remainingAmt=0;
@@ -2017,7 +1971,6 @@ async function submitOrder(isUrgentQuick=false){
   }else if(payStatus==='تم الدفع'){
     paidAmt=parseInt(document.getElementById('fb2')?.value)||0;
   }
-
   if(!Object.values(clients).find(c2=>c2.name===c))await fbPush('clients',{name:c,phone,date:today});
   const ord={
     client:c,service:s,date:today,stageStartDate:new Date().toISOString(),
@@ -2046,7 +1999,6 @@ async function submitOrder(isUrgentQuick=false){
     toast('✓ تم إنشاء الطلب: '+newId);nav('wf');
   }catch(e){hideSaving();toast('❌ فشل الاتصال');}
 }
-
 // ============================================================
 // CLIENTS
 // ============================================================
@@ -2069,7 +2021,6 @@ async function buildClientsPage(){
 }
 function filterClients(q){document.querySelectorAll('#clients-tbody tr').forEach(r=>{r.style.display=r.textContent.toLowerCase().includes(q.toLowerCase())?'':'none';});}
 async function deleteClient(key){if(!confirm('حذف هذا العميل؟'))return;await fbDelete(`clients/${key}`);await loadData();buildClientsPage();}
-
 // ============================================================
 // TIMELINE
 // ============================================================
@@ -2110,7 +2061,6 @@ function buildTimelinePage(){
     <div class="ro-notice" style="background:#EFF6FF;border-color:#BFDBFE;color:#1E40AF"><i class="ti ti-clock"></i> أخضر &lt;24س · أصفر 1-3 أيام · أحمر &gt;3 أيام</div>
     <div class="card"><div class="tbl-wrap"><table><thead><tr><th style="width:70px">الطلب</th><th style="width:110px">العميل</th><th style="width:90px">المرحلة</th>${headerCols}<th style="width:90px">الحالي</th><th style="width:90px">الإنجاز</th></tr></thead><tbody>${rows||'<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--text-3)">لا توجد سجلات</td></tr>'}</tbody></table></div></div>`;
 }
-
 // ============================================================
 // USERS PAGE
 // ============================================================
@@ -2171,7 +2121,6 @@ async function saveNewUser(){
   const newUser={name,pass,type:role,role:ROLE_LABELS[role]||role,color:_nuSelectedColor||PRESET_COLORS[0],photo:_nuPhotoB64};
   showSaving('جاري إنشاء الحساب...');await fbPatch(`users/${uname}`,newUser);await syncUsers();hideSaving();closeModal('add-user-modal');toast('✓ تم إنشاء الحساب');buildUsersPage();
 }
-
 // ============================================================
 // EXCEL EXPORT
 // ============================================================
@@ -2188,7 +2137,6 @@ async function exportExcel(){
     hideSaving();toast('✓ تم التصدير');
   }catch(e){hideSaving();toast('❌ فشل التصدير');}
 }
-
 // ============================================================
 // REQUEST PAGE
 // ============================================================
@@ -2235,7 +2183,6 @@ async function submitRequest(){
     await loadData();hideSaving();toast('✓ تم الإرسال');buildRequestPage();
   }catch(e){hideSaving();toast('❌ فشل الإرسال');}
 }
-
 // ============================================================
 // REQUESTS PAGE (Accountant)
 // ============================================================
@@ -2280,7 +2227,6 @@ async function processAndArchiveRequest(key){
   }catch(e){hideSaving();toast('❌ خطأ');}
 }
 async function deleteRequest(key){if(!confirm('شطب هذا الطلب؟'))return;showSaving('جاري الحذف...');await fbDelete(`requests/${key}`);await loadData();hideSaving();toast('تم الحذف');buildRequestsPage();}
-
 // ============================================================
 // PAGE ROUTER
 // ============================================================
