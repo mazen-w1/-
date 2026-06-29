@@ -1128,6 +1128,7 @@ function openQuickTask(type){
       <button class="btn btn-brand" style="width:100%;justify-content:center;" onclick="submitQuickTask('${type}')"><i class="ti ti-send"></i> إرسال وتكليف القسم</button>
       <div style="text-align:center;margin:8px 0;font-size:11px;color:var(--text-3);">— أو —</div>
       <button class="btn btn-out" style="width:100%;justify-content:center;" onclick="closeModal('quick-task-modal');nav('add')"><i class="ti ti-transfer"></i> تسجيل كأمر تشغيل كامل</button>
+      <button class="btn" style="width:100%;justify-content:center;background:linear-gradient(135deg,#78350F,#C89A4A);color:#fff;" onclick="closeModal('quick-task-modal');nav('quote')"><i class="ti ti-receipt-2"></i> إنشاء عرض سعر</button>
     </div>`;
   window._qtFileB64='';window._qtFileName='';
   openModal('quick-task-modal');
@@ -1286,8 +1287,8 @@ function buildDash(){
     const icon=isUrgent?'ti-bolt':isOverdue?'ti-alert-triangle':'ti-clock-exclamation';
     const tag=isUrgent?'عاجل':isOverdue?'تجاوز الموعد':(()=>{const h=Math.round((new Date(o.deadline)-now)/3600000);return h<24?h+' ساعة':Math.round(h/24)+' يوم';})();
     const avatarLetter=(o.client||'؟').charAt(0);
-    return`<div onclick="openOrderModal('${o._key}')" style="display:flex;align-items:center;gap:12px;padding:11px 18px;border-bottom:1px solid var(--border-soft);cursor:pointer;transition:background .12s;${bgRow?'background:'+bgRow+';':''}" onmouseover="this.style.background='#F9F5F0'" onmouseout="this.style.background='${bgRow}'">
-      <div style="width:38px;height:38px;border-radius:50%;background:${accent}18;border:2px solid ${accent}40;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px;font-weight:800;color:${accent};">${avatarLetter}</div>
+    return`<div onclick="openOrderModal('${o._key}')" style="display:flex;align-items:center;gap:12px;padding:8px 14px;border-bottom:1px solid var(--border-soft);cursor:pointer;transition:background .12s;${bgRow?'background:'+bgRow+';':''}" onmouseover="this.style.background='#F9F5F0'" onmouseout="this.style.background='${bgRow}'">
+      <div style="width:32px;height:32px;border-radius:50%;background:${accent}18;border:2px solid ${accent}40;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px;font-weight:800;color:${accent};">${avatarLetter}</div>
       <div style="flex:1;min-width:0;"><div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;flex-wrap:wrap;"><span style="background:${accent};color:#fff;padding:1px 7px;border-radius:6px;font-size:9px;font-weight:800;display:inline-flex;align-items:center;gap:2px;white-space:nowrap;"><i class="ti ${icon}" style="font-size:9px;"></i> ${tag}</span><strong style="font-size:12px;color:var(--maroon);">${o.id||o._key}</strong></div><div style="font-size:11px;color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${o.client} ${o.service?'· '+o.service:''}</div></div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0;">${deptBadge(o.currentDept)}${timeBadge(hoursAgo(o.stageStartDate||o.date))}</div>
     </div>`;
@@ -1295,12 +1296,12 @@ function buildDash(){
   /* ── Section 1: urgent orders ── */
   const urgentWrap=urgentOrders.length?`
   <div style="background:var(--surface);border-radius:var(--radius-lg);border:1px solid var(--border);box-shadow:0 4px 20px rgba(0,0,0,.06);margin-bottom:12px;overflow:hidden;">
-    <div style="padding:13px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:linear-gradient(135deg,#7F1D1D 0%,#991B1B 100%);">
+    <div style="padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:linear-gradient(135deg,#7F1D1D 0%,#991B1B 100%);">
       <div style="display:flex;align-items:center;gap:10px;">
-        <div style="width:36px;height:36px;border-radius:10px;background:rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;"><i class="ti ti-bolt" style="font-size:18px;color:#fff;"></i></div>
-        <div><div style="font-size:13px;font-weight:900;color:#fff;">الطلبات العاجلة</div><div style="font-size:10px;color:rgba(255,255,255,.6);margin-top:1px;">تحتاج تدخل فوري</div></div>
+        <div style="width:30px;height:30px;border-radius:8px;background:rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;"><i class="ti ti-bolt" style="font-size:16px;color:#fff;"></i></div>
+        <div><div style="font-size:12px;font-weight:900;color:#fff;">الطلبات العاجلة</div><div style="font-size:9px;color:rgba(255,255,255,.6);margin-top:1px;">تحتاج تدخل فوري</div></div>
       </div>
-      <div style="background:rgba(255,255,255,.18);border:1.5px solid rgba(255,255,255,.35);color:#fff;font-size:15px;font-weight:900;min-width:34px;height:34px;padding:0 8px;border-radius:20px;display:flex;align-items:center;justify-content:center;gap:4px;"><i class="ti ti-bolt" style="font-size:14px;"></i>${urgentOrders.length}</div>
+      <div style="background:rgba(255,255,255,.18);border:1.5px solid rgba(255,255,255,.35);color:#fff;font-size:13px;font-weight:900;min-width:28px;height:28px;padding:0 6px;border-radius:20px;display:flex;align-items:center;justify-content:center;gap:3px;"><i class="ti ti-bolt" style="font-size:12px;"></i>${urgentOrders.length}</div>
     </div>
     <div>${urgentOrders.slice(0,6).map(o=>renderAlertRow('urgent',o)).join('')}</div>
   </div>`:'';
@@ -1308,12 +1309,12 @@ function buildDash(){
   const _deadlineAll=[...overdueOrders,...deadlineOrders.filter(o=>!overdueOrders.includes(o))];
   const deadlineWrap=_deadlineAll.length?`
   <div style="background:var(--surface);border-radius:var(--radius-lg);border:1px solid var(--border);box-shadow:0 4px 20px rgba(0,0,0,.06);margin-bottom:18px;overflow:hidden;">
-    <div style="padding:13px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:linear-gradient(135deg,#78350F 0%,#92400E 100%);">
+    <div style="padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:linear-gradient(135deg,#78350F 0%,#92400E 100%);">
       <div style="display:flex;align-items:center;gap:10px;">
-        <div style="width:36px;height:36px;border-radius:10px;background:rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;"><i class="ti ti-clock-exclamation" style="font-size:18px;color:#fff;"></i></div>
-        <div><div style="font-size:13px;font-weight:900;color:#fff;">تنبيهات التسليم</div><div style="font-size:10px;color:rgba(255,255,255,.6);margin-top:1px;">مواعيد تسليم قريبة أو متجاوزة</div></div>
+        <div style="width:30px;height:30px;border-radius:8px;background:rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;"><i class="ti ti-clock-exclamation" style="font-size:16px;color:#fff;"></i></div>
+        <div><div style="font-size:12px;font-weight:900;color:#fff;">تنبيهات التسليم</div><div style="font-size:9px;color:rgba(255,255,255,.6);margin-top:1px;">مواعيد تسليم قريبة أو متجاوزة</div></div>
       </div>
-      <div style="background:rgba(255,255,255,.18);border:1.5px solid rgba(255,255,255,.35);color:#fff;font-size:15px;font-weight:900;min-width:34px;height:34px;padding:0 8px;border-radius:20px;display:flex;align-items:center;justify-content:center;gap:4px;"><i class="ti ti-clock-exclamation" style="font-size:14px;"></i>${_deadlineAll.length}</div>
+      <div style="background:rgba(255,255,255,.18);border:1.5px solid rgba(255,255,255,.35);color:#fff;font-size:13px;font-weight:900;min-width:28px;height:28px;padding:0 6px;border-radius:20px;display:flex;align-items:center;justify-content:center;gap:3px;"><i class="ti ti-clock-exclamation" style="font-size:12px;"></i>${_deadlineAll.length}</div>
     </div>
     <div>${_deadlineAll.slice(0,6).map(o=>{const type=overdueOrders.includes(o)?'overdue':'deadline';return renderAlertRow(type,o);}).join('')}</div>
   </div>`:'';
@@ -1390,8 +1391,8 @@ function buildMyWork(){
   const myOrders=ordersArr().filter(o=>isMyOrder(o));
   const isWorkshop=cu.type==='workshop';
   const cards=myOrders.length===0?'<div style="color:var(--text-3);padding:30px;text-align:center;"><i class="ti ti-check-circle" style="font-size:36px;display:block;margin-bottom:10px;color:#10B981;"></i>لا توجد أعمال موكلة إليك حالياً</div>'
-    :`<div class="wf-grid">${myOrders.map(o=>`<div class="wf-card" onclick="openOrderModal('${o._key}')"><div class="wf-card-top">
-      <div class="wf-card-id">${o.id||o._key} · ${o.date}${o.isQuickTask?'<span class="urgent-tag" style="margin-right:6px;font-size:9px;"><i class="ti ti-bolt"></i>سريع</span>':''}</div>
+    :`<div class="wf-grid">${myOrders.map(o=>`<div class="wf-card" style="${o.isQuickTask?'border:2px solid #C89A4A;background:linear-gradient(135deg,#FFFDF8,#FFF5E0);':''}" onclick="openOrderModal('${o._key}')"><div class="wf-card-top">
+      <div class="wf-card-id">${o.id||o._key} · ${o.date}${o.isQuickTask?'<span class="urgent-tag" style="margin-right:6px;font-size:9px;background:linear-gradient(135deg,#78350F,#C89A4A);"><i class="ti ti-bolt"></i>مهمة سريعة</span>':''}</div>
       <div class="wf-card-name">${o.client}</div>
       <div class="wf-card-svc">${o.service}</div>
       <div style="display:flex;gap:5px;flex-wrap:wrap;">${deptBadge(o.currentDept)} ${gpbadge(o.priority)} ${timeBadge(hoursAgo(o.stageStartDate||o.date))}</div>
@@ -1627,7 +1628,7 @@ function renderA4Quote(data,key=''){
 <div style="width:210mm;min-height:297mm;background:#fff;font-family:'Tajawal',sans-serif;direction:rtl;position:relative;box-sizing:border-box;">
 
   <!-- Top gold gradient stripe -->
-  <div style="height:7px;background:linear-gradient(90deg,#3D0A10,#C89A4A,#D4AF37,#C89A4A,#3D0A10);"></div>
+  <div style="height:5px;background:linear-gradient(90deg,#3D0A10,#5A0F18,#7A1A24,#5A0F18,#3D0A10);"></div><div style="height:4px;background:linear-gradient(90deg,#78350F,#C89A4A,#D4AF37,#C89A4A,#78350F);"></div>
 
   <!-- ═══════════════ HEADER ═══════════════ -->
   <div style="background:linear-gradient(135deg,#5A0F18 0%,#7A1A24 55%,#5A0F18 100%);padding:18px 24px 16px;position:relative;overflow:hidden;">
@@ -1854,7 +1855,7 @@ function renderA4Quote(data,key=''){
   </div>
 
   <!-- Bottom gold stripe -->
-  <div style="height:7px;background:linear-gradient(90deg,#3D0A10,#C89A4A,#D4AF37,#C89A4A,#3D0A10);"></div>
+  <div style="height:5px;background:linear-gradient(90deg,#3D0A10,#5A0F18,#7A1A24,#5A0F18,#3D0A10);"></div><div style="height:4px;background:linear-gradient(90deg,#78350F,#C89A4A,#D4AF37,#C89A4A,#78350F);"></div>
 
 </div>`;
   document.getElementById('print-area').innerHTML=printHtml;
@@ -2035,15 +2036,29 @@ function openOrderModal(key){
   </div>`;
   const fromQuoteHtml=o.fromQuoteRef?`<div style="background:#F0FDF4;border:1px solid #BBF7D0;border-radius:var(--radius-sm);padding:8px 14px;font-size:12px;color:#166534;margin-bottom:14px;"><i class="ti ti-receipt-2"></i> تحويل من عرض السعر: <strong>${o.fromQuoteRef}</strong></div>`:'';
   const archiveBtn=cu.type==='admin'?`<button class="btn btn-red btn-sm" onclick="archiveOrder('${key}')"><i class="ti ti-archive"></i> إنهاء الطلب وأرشفته</button>`:'';
-  const measureActions=(o.isQuickTask&&o.workshopFeedbackDone&&o.currentDept!=='done'&&(cu.type==='admin'||cu.type==='receiver'))?`
+  const _measureBtns=(k,cl,ph)=>`
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
+      <button class="btn btn-brand btn-sm" onclick="closeModal('order-modal');window._prefillClient='${cl}';window._prefillPhone='${ph||''}';nav('add')"><i class="ti ti-transfer"></i> تحويل لأمر تشغيل</button>
+      <button class="btn btn-sm" style="background:linear-gradient(135deg,#78350F,#C89A4A);color:#fff;" onclick="closeModal('order-modal');nav('quote')"><i class="ti ti-receipt-2"></i> إنشاء عرض سعر</button>
+      <button class="btn btn-out btn-sm" onclick="markAsIncomplete('${k}')"><i class="ti ti-user-off"></i> العميل لم يرغب</button>
+    </div>`;
+  const _measureDone=o.isQuickTask&&o.workshopFeedbackDone&&o.currentDept!=='done'&&!o.incompleteClient&&(cu.type==='admin'||cu.type==='receiver');
+  const _proofDone=o.isQuickTask&&o.approvedPrintFile&&o.currentDept!=='done'&&!o.workshopFeedbackDone&&!o.incompleteClient&&(cu.type==='admin'||cu.type==='receiver');
+  const measureActions=
+    _measureDone?`
     <div style="background:#F0FDF4;border:1px solid #BBF7D0;border-radius:10px;padding:12px 16px;margin-bottom:12px;">
-      <div style="font-size:12px;font-weight:800;color:#166534;margin-bottom:10px;"><i class="ti ti-clipboard-check"></i> القياسات مكتملة — اتخذ إجراءً</div>
-      ${o.workshopSitePhoto?`<div style="margin-bottom:10px;"><img src="${o.workshopSitePhoto}" style="width:100%;max-height:180px;object-fit:cover;border-radius:8px;"/><div style="font-size:10px;color:var(--text-3);margin-top:4px;"><i class="ti ti-camera"></i> صورة الموقع الميداني</div></div>`:''}
-      <div style="display:flex;gap:8px;flex-wrap:wrap;">
-        <button class="btn btn-brand btn-sm" onclick="closeModal('order-modal');window._prefillClient='${o.client}';window._prefillPhone='${o.phone||''}';nav('add')"><i class="ti ti-transfer"></i> تحويل لأمر تشغيل</button>
-        <button class="btn btn-red btn-sm" onclick="archiveOrder('${key}')"><i class="ti ti-x"></i> إنهاء الطلب</button>
-      </div>
-    </div>`:'';
+      <div style="font-size:12px;font-weight:800;color:#166534;margin-bottom:6px;"><i class="ti ti-clipboard-check"></i> القياسات مكتملة — اتخذ إجراءً</div>
+      ${o.workshopSitePhoto?`<div style="margin-bottom:8px;"><img src="${o.workshopSitePhoto}" style="width:100%;max-height:160px;object-fit:cover;border-radius:8px;"/></div>`:''}
+      ${_measureBtns(key,o.client,o.phone)}
+    </div>`:
+    _proofDone?`
+    <div style="background:#FFF9EE;border:1px solid #FDE68A;border-radius:10px;padding:12px 16px;margin-bottom:12px;">
+      <div style="font-size:12px;font-weight:800;color:#92400E;margin-bottom:6px;"><i class="ti ti-brush"></i> تم إرسال البروفة للعميل — اتخذ إجراءً</div>
+      ${_measureBtns(key,o.client,o.phone)}
+    </div>`:
+    o.isQuickTask&&o.incompleteClient?`
+    <div style="background:#FFF8F8;border:1px solid #FECACA;border-radius:10px;padding:10px 14px;margin-bottom:12px;"><div style="font-size:12px;font-weight:800;color:#991B1B;"><i class="ti ti-user-off"></i> العميل لم يرغب بالاستمرار</div></div>`
+    :''
   document.getElementById('order-modal-body').innerHTML=`
     <div class="modal-header">
       <div><div class="modal-title"><i class="ti ti-file-text"></i> ${o.id||key} — ${o.client}${o.isQuickTask?'<span class="urgent-tag" style="margin-right:8px;font-size:9px;"><i class="ti ti-bolt"></i>مهمة سريعة</span>':''}</div><div style="font-size:11px;color:var(--text-3);margin-top:2px;">${o.service}</div></div>
@@ -2092,9 +2107,11 @@ async function uploadFileDirect(key,ff,fn2,inputId){
 async function sendToNextDept(key,next){
   showSaving('جاري التحويل...');
   const timeField={design:'designDoneAt',external:'externalDoneAt',print:'printDoneAt',workshop:'workshopDoneAt'};
+  const startField={design:'designStartAt',external:'externalStartAt',print:'printStartAt',workshop:'workshopStartAt'};
   const o=orders[key];const curDept=o.currentDept;
   const upd={currentDept:next,stageStartDate:new Date().toISOString()};
   if(timeField[curDept])upd[timeField[curDept]]=new Date().toISOString();
+  if(startField[next])upd[startField[next]]=new Date().toISOString();
   await fbPatch(`orders/${key}`,upd);await loadData();hideSaving();closeModal('order-modal');
   toast('✓ تم النقل للمرحلة التالية');refreshCurrentPage();
 }
@@ -2114,6 +2131,14 @@ async function archiveOrder(key){
   if(o?.phone&&o.phone!=='—')await sendSmsNotification(o.phone,`مرحباً ${o.client}، طلبكم ${o.id||key} تم إغلاقه. روائع الأفكار الإعلانية.`);
   await loadData();hideSaving();closeModal('order-modal');
   toast('✓ تم إنهاء الطلب وأرشفته');refreshCurrentPage();
+}
+async function markAsIncomplete(key){
+  const o=orders[key];if(!o)return;
+  if(!confirm('تأكيد: العميل لم يرغب بالاستمرار في الطلب؟'))return;
+  showSaving('جاري التحديث...');
+  await fbPatch(`orders/${key}`,{incompleteClient:true,incompleteAt:new Date().toISOString(),currentDept:'done',status:'غير مكتمل'});
+  await loadData();hideSaving();closeModal('order-modal');
+  toast('✓ تم نقل الطلب لقائمة غير المكتملة');refreshCurrentPage();
 }
 // ============================================================
 // ADD ORDER FORM
@@ -2207,19 +2232,8 @@ function buildAddForm(isUrgentQuick=false){
         </div></div>
       </div>
     </div>
-    <div class="card">
-      <div class="card-header"><span class="card-title"><i class="ti ti-paperclip"></i> المرفقات والبروفات</span></div>
-      <div style="padding:16px;">
-        <div class="dept-upload-box" onclick="document.getElementById('file-input').click()">
-          <i class="ti ti-upload" style="font-size:24px;display:block;margin-bottom:6px;color:var(--gold);"></i>
-          اضغط هنا لرفع الملفات (صور، PDF)
-        </div>
-        <input type="file" id="file-input" multiple accept="image/*,.pdf" style="display:none" onchange="handleMainFiles(this.files)"/>
-        <div id="file-preview" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;"></div>
-        <div style="margin-top:16px;">
-          <button class="btn btn-brand" onclick="submitOrder(${isUrgentQuick})"><i class="ti ti-check"></i> حفظ الطلب وإطلاق المهام</button>
-        </div>
-      </div>
+    <div style="padding:10px 0 4px;">
+      <button class="btn btn-brand" onclick="submitOrder(${isUrgentQuick})"><i class="ti ti-check"></i> حفظ الطلب وإطلاق المهام</button>
     </div>`;
   window.globalAttachedFiles=[];window.externalFileB64='';window.externalFileName='';
   window._orderLines=[];
@@ -2397,8 +2411,9 @@ function buildTimelinePage(){
     const stageHours=hoursAgo(o.stageStartDate||o.date);const pct=orderProgress(o);const col=progressColor(o);
     const stagesCells=usedDepts.map(dk=>{
       const doneAtMap={design:o.designDoneAt,external:o.externalDoneAt,print:o.printDoneAt,workshop:o.workshopDoneAt};
-      const doneAt=doneAtMap[dk];
-      if(doneAt)return`<td style="font-size:11px">${Math.round((new Date(doneAt)-new Date(o.date))/3600000)<24?Math.round((new Date(doneAt)-new Date(o.date))/3600000)+'س':Math.round((new Date(doneAt)-new Date(o.date))/86400000)+'ي'}</td>`;
+      const startAtMap={design:o.designStartAt||o.date,external:o.externalStartAt||o.designDoneAt||o.date,print:o.printStartAt||o.designDoneAt||o.externalDoneAt||o.date,workshop:o.workshopStartAt||o.printDoneAt||o.externalDoneAt||o.designDoneAt||o.date};
+      const doneAt=doneAtMap[dk];const startAt=startAtMap[dk]||o.date;
+      if(doneAt){const h=Math.max(0,Math.round((new Date(doneAt)-new Date(startAt))/3600000));return`<td>${timeBadge(h)}</td>`;}
       if(o.currentDept===dk)return`<td>${timeBadge(stageHours)}</td>`;
       if(o.currentDept==='done')return`<td><span class="badge b-done" style="font-size:9px">✓</span></td>`;
       return`<td style="color:var(--text-3);font-size:10px">—</td>`;
@@ -2741,25 +2756,23 @@ function filterEmpByRole(role){
 }
 
 function buildIncompletePage(){
-  const arr=ordersArr().filter(o=>o.currentDept!=='done');
+  const arr=ordersArr().filter(o=>o.isQuickTask&&o.incompleteClient);
   let cards;
   if(arr.length===0){
-    cards='<div style="text-align:center;color:var(--text-3);padding:48px 20px;"><i class="ti ti-check-circle" style="font-size:52px;display:block;margin-bottom:12px;color:#10B981;"></i><div style="font-size:16px;font-weight:700;">لا توجد طلبات جارية</div><div style="font-size:13px;margin-top:6px;">جميع الطلبات مكتملة أو مؤرشفة</div></div>';
+    cards='<div style="text-align:center;color:var(--text-3);padding:48px 20px;"><i class="ti ti-user-check" style="font-size:52px;display:block;margin-bottom:12px;color:#10B981;"></i><div style="font-size:16px;font-weight:700;">لا توجد مهام غير مكتملة</div><div style="font-size:13px;margin-top:6px;">المهام السريعة التي لم يرغب العميل بإكمالها ستظهر هنا</div></div>';
   }else{
-    cards=`<div class="wf-grid">${arr.map(o=>`<div class="wf-card" onclick="openOrderModal('${o._key}')"><div class="wf-card-top">
-      <div class="wf-card-id">${o.id||o._key} · ${o.date}${o.isQuickTask?'<span class="urgent-tag" style="margin-right:6px;font-size:9px;"><i class="ti ti-bolt"></i>سريع</span>':''}</div>
+    cards=`<div class="wf-grid">${arr.map(o=>`<div class="wf-card" style="border:2px solid #FECACA;background:linear-gradient(135deg,#FFF8F8,#FEF2F2);" onclick="openOrderModal('${o._key}')"><div class="wf-card-top">
+      <div class="wf-card-id">${o.id||o._key} · ${o.date}<span class="urgent-tag" style="margin-right:6px;font-size:9px;background:#991B1B;"><i class="ti ti-user-off"></i>غير مكتمل</span></div>
       <div class="wf-card-name">${o.client}</div>
       <div class="wf-card-svc">${o.service}</div>
-      <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;margin-bottom:4px;">${deptBadge(o.currentDept)} ${gpbadge(o.priority)} ${timeBadge(hoursAgo(o.stageStartDate||o.date))}</div>
-      <div style="font-size:11px;color:var(--text-3);">المسؤول: ${currentPersonName(o)}</div>
-      ${deadlineBadge(o.deadline)}
-      ${o.workshopFeedbackDone&&o.currentDept!=='done'?'<div style="font-size:11px;color:#166534;margin-top:4px;font-weight:700;"><i class="ti ti-clipboard-check"></i> قياسات مكتملة</div>':''}
-    </div><div class="wf-card-prog"><div class="wf-card-fill" style="width:${orderProgress(o)}%;background:${progressColor(o)}"></div></div></div>`).join('')}</div>`;
+      <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;margin-bottom:4px;">${gpbadge(o.priority)} ${timeBadge(hoursAgo(o.stageStartDate||o.date))}</div>
+      <div style="font-size:11px;color:#991B1B;margin-top:4px;font-weight:700;"><i class="ti ti-user-off"></i> العميل لم يرغب بالاستمرار ${o.incompleteAt?'· '+new Date(o.incompleteAt).toLocaleDateString('ar-SA'):''}</div>
+    </div><div class="wf-card-prog"><div class="wf-card-fill" style="width:100%;background:#FECACA"></div></div></div>`).join('')}</div>`;
   }
   document.getElementById('incomplete-content').innerHTML=`
     <div class="page-header">
-      <div class="ptitle"><i class="ti ti-list-check"></i> الطلبات غير المكتملة</div>
-      <div style="font-size:14px;color:var(--text-3);font-weight:600;">${arr.length} طلب جارٍ</div>
+      <div class="ptitle"><i class="ti ti-user-off"></i> الطلبات غير المكتملة</div>
+      <div style="font-size:14px;color:#991B1B;font-weight:600;">${arr.length} مهمة</div>
     </div>
     ${controlsRow(false)}
     ${cards}`;
