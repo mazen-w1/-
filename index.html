@@ -103,21 +103,26 @@ body{font-family:'Cairo','Segoe UI',Tahoma,Arial,sans-serif;background:var(--bg)
 .sb-info .sb-role{font-size:10px;color:var(--text-3);font-weight:600;}
 .sb-status{width:8px;height:8px;background:#10B981;border-radius:50%;border:2px solid #fff;position:absolute;bottom:1px;left:1px;}
 .sidebar-body{flex:1;padding:10px 0;}
-.nav-group{padding:4px 0;}
-.nav-group-label{font-size:9px;color:var(--text-3);padding:10px 18px 4px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;}
+.nav-group{padding:6px 0;}
+.nav-group-label{font-size:9px;color:var(--text-3);padding:8px 14px 4px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;}
+/* Canva-style nav tiles */
+.nav-tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:4px 10px;}
 .ni{
-  display:flex;align-items:center;gap:10px;
-  padding:10px 16px;font-size:13px;color:var(--text-2);
-  cursor:pointer;transition:.15s;
-  border-right:3px solid transparent;
-  margin:1px 8px;border-radius:var(--radius-sm);
-  font-weight:600;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:5px;padding:10px 4px;font-size:10px;color:var(--text-2);
+  cursor:pointer;transition:.15s;border:1.5px solid transparent;
+  border-radius:10px;background:transparent;font-weight:600;text-align:center;
+  min-height:62px;position:relative;
 }
-.ni:hover{background:var(--gold-soft);color:var(--maroon);}
-.ni.active{background:rgba(74,14,23,.08);font-weight:700;color:var(--maroon);border-right-color:var(--maroon);}
-.ni i{font-size:18px;color:var(--text-3);flex-shrink:0;}
+.ni:hover{background:var(--gold-soft);color:var(--maroon);border-color:rgba(212,175,55,.3);}
+.ni.active{background:rgba(74,14,23,.09);font-weight:700;color:var(--maroon);border-color:var(--maroon);}
+.ni .ni-icon{width:34px;height:34px;border-radius:9px;background:var(--bg);border:1px solid var(--border-soft);display:flex;align-items:center;justify-content:center;transition:.15s;}
+.ni:hover .ni-icon{background:rgba(212,175,55,.15);border-color:rgba(212,175,55,.4);}
+.ni.active .ni-icon{background:rgba(74,14,23,.12);border-color:var(--maroon);}
+.ni i{font-size:17px;color:var(--text-3);}
 .ni:hover i,.ni.active i{color:var(--maroon);}
-.ni .badge-pill{margin-right:auto;background:#EF4444;color:#fff;font-size:9px;font-weight:800;border-radius:10px;padding:1px 7px;}
+.ni .ni-lbl{font-size:9.5px;line-height:1.2;max-width:58px;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;}
+.ni .badge-pill{position:absolute;top:4px;left:4px;background:#EF4444;color:#fff;font-size:8px;font-weight:800;border-radius:8px;padding:1px 5px;}
 .sep{height:1px;background:var(--border-soft);margin:6px 16px;}
 .sidebar-footer{padding:16px;border-top:1px solid var(--border-soft);}
 .sidebar-cta{
@@ -909,13 +914,13 @@ function buildSidebar(){
     h+=navGroup('الخدمات',[
       ni('clients','ti-address-book','العملاء'),
       ni('timeline','ti-clock','توقيت المراحل'),
-      ni('request','ti-send','رفع طلب للمحاسب'),
+      ni('request','ti-send','رفع طلب'),
     ]);
   }else if(t==='external'){
     h+=navGroup('أعمالي',[ni('my','ti-user-check','أعمالي الحالية')]);
   }else if(['designer','printer','workshop'].includes(t)){
     h+=navGroup('الأعمال',[ni('my','ti-user-check','أعمالي الحالية')]);
-    if(t==='designer'){h+=navGroup('إضافي',[ni('add','ti-bolt','طلب مستعجل'),ni('request','ti-send','رفع طلب للمحاسب')]);}
+    if(t==='designer'){h+=navGroup('إضافي',[ni('add','ti-bolt','طلب مستعجل'),ni('request','ti-send','رفع طلب')]);}
   }else if(t==='follower'){
     h+=navGroup('المتابعة',[ni('wf','ti-grid-dots','متابعة الأعمال')]);
   }else if(t==='admin'){
@@ -944,17 +949,17 @@ function buildSidebar(){
   const footer=document.getElementById('sidebar-footer');
   if(footer){
     if(['admin','receiver'].includes(t)){
-      footer.innerHTML=`<button class="sidebar-cta" onclick="nav('add');closeSidebar()"><i class="ti ti-plus"></i> تسجيل طلب جديد</button><button class="sidebar-cta sidebar-cta-gold" onclick="nav('quote');closeSidebar()"><i class="ti ti-receipt-2"></i> إصدار عرض سعر</button>`;
+      footer.innerHTML='';
     }else{footer.innerHTML='';}
   }
   updateRequestsBadgeSidebar();
 }
 function navGroup(label, items){
-  return`<div class="nav-group"><div class="nav-group-label">${label}</div>${items.join('')}</div>`;
+  return`<div class="nav-group"><div class="nav-group-label">${label}</div><div class="nav-tiles">${items.join('')}</div></div>`;
 }
 function ni(p,ic,lbl,extra='',badgeId=''){
-  const badgeHtml=badgeId?`<span id="${badgeId}" class="badge-pill" style="display:none;"></span>`:'';
-  return`<div class="ni ${extra}" id="n-${p}" onclick="nav('${p}');closeSidebar()"><i class="ti ${ic}"></i><span>${lbl}</span>${badgeHtml}</div>`;
+  const badgeHtml=badgeId?`<span id="${badgeId}" class="badge-pill"></span>`:'';
+  return`<div class="ni ${extra}" id="n-${p}" onclick="nav('${p}');closeSidebar()"><div class="ni-icon"><i class="ti ${ic}"></i></div><span class="ni-lbl">${lbl}</span>${badgeHtml}</div>`;
 }
 // ============================================================
 // NAV
@@ -1200,6 +1205,17 @@ function buildDash(){
   const roNote=t==='follower'?'<div class="ro-notice"><i class="ti ti-info-circle"></i>وضع المشاهدة فقط — لا يمكنك تعديل البيانات</div>':'';
   const myNote=['designer','printer','workshop','external'].includes(t)?`<div class="ro-notice" style="background:#EFF6FF;border-color:#BFDBFE;color:#1E40AF"><i class="ti ti-user-check"></i>أعمالك الجارية حالياً: <strong>${myArr.length}</strong></div>`:'';
   const qtBtns=(t==='admin'||t==='receiver')?`
+    <!-- Primary CTA hero row -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px;">
+      <button onclick="nav('add')" style="background:linear-gradient(135deg,var(--maroon) 0%,#6B1520 100%);color:#fff;border:none;border-radius:14px;padding:20px 22px;cursor:pointer;display:flex;align-items:center;gap:14px;font-family:inherit;transition:.15s;box-shadow:0 6px 24px rgba(74,14,23,.3);" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">
+        <div style="width:46px;height:46px;border-radius:12px;background:rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;flex-shrink:0;"><i class="ti ti-plus" style="font-size:22px;color:#fff;"></i></div>
+        <div style="text-align:right;"><div style="font-size:15px;font-weight:900;color:#fff;">تسجيل طلب جديد</div><div style="font-size:11px;color:rgba(255,255,255,.7);margin-top:2px;">إنشاء أمر تشغيل جديد</div></div>
+      </button>
+      <button onclick="nav('quote')" style="background:linear-gradient(135deg,#78350F 0%,#C89A4A 100%);color:#fff;border:none;border-radius:14px;padding:20px 22px;cursor:pointer;display:flex;align-items:center;gap:14px;font-family:inherit;transition:.15s;box-shadow:0 6px 24px rgba(120,53,15,.25);" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">
+        <div style="width:46px;height:46px;border-radius:12px;background:rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;flex-shrink:0;"><i class="ti ti-receipt-2" style="font-size:22px;color:#fff;"></i></div>
+        <div style="text-align:right;"><div style="font-size:15px;font-weight:900;color:#fff;">إصدار عرض سعر</div><div style="font-size:11px;color:rgba(255,255,255,.7);margin-top:2px;">عرض احترافي للعميل</div></div>
+      </button>
+    </div>
     <div class="quick-actions">
       <button class="quick-action-btn" onclick="openQuickTask('proof')">
         <div class="qa-icon" style="background:#F3E8FF;color:#6B21A8;"><i class="ti ti-brush"></i></div>
@@ -1208,10 +1224,6 @@ function buildDash(){
       <button class="quick-action-btn" onclick="openQuickTask('measure')">
         <div class="qa-icon" style="background:#FFEDD5;color:#9A3412;"><i class="ti ti-ruler"></i></div>
         <div style="text-align:right;"><div style="font-size:13px;font-weight:700;color:var(--maroon)">قياسات ميدانية</div><div style="font-size:11px;color:var(--text-3)">تكليف الورشة بالزيارة</div></div>
-      </button>
-      <button class="quick-action-btn" onclick="nav('quote')">
-        <div class="qa-icon" style="background:rgba(212,175,55,.15);color:#B8962E;"><i class="ti ti-receipt-2"></i></div>
-        <div style="text-align:right;"><div style="font-size:13px;font-weight:700;color:var(--maroon)">عرض سعر جديد</div><div style="font-size:11px;color:var(--text-3)">إصدار عرض احترافي</div></div>
       </button>
     </div>`:'';
   // ── time-based statistics ────────────────────────────────────────
@@ -1236,77 +1248,52 @@ function buildDash(){
   const urgentOrders=myArr.filter(o=>o.priority==='عاجلة'&&o.currentDept!=='done');
   const overdueOrders=myArr.filter(o=>{if(!o.deadline||o.deadline==='—'||o.currentDept==='done')return false;return new Date(o.deadline)<now;});
   const deadlineOrders=myArr.filter(o=>{if(!o.deadline||o.deadline==='—'||o.currentDept==='done')return false;const dl=new Date(o.deadline);const h=Math.round((dl-now)/3600000);return h>=0&&h<=72;});
-  const urgentHtml=urgentOrders.length?`
-  <div style="flex:1;min-width:270px;background:var(--surface);border-radius:var(--radius-lg);overflow:hidden;box-shadow:0 8px 32px rgba(127,29,29,.2);border:2px solid #FECACA;">
-    <div style="background:linear-gradient(135deg,#7F1D1D 0%,#B91C1C 100%);padding:14px 18px;display:flex;align-items:center;justify-content:space-between;">
+  /* ── Reception inbox alerts ── */
+  const _allAlerts=[
+    ...urgentOrders.map(o=>({type:'urgent',o})),
+    ...overdueOrders.map(o=>({type:'overdue',o})),
+    ...deadlineOrders.filter(o=>!overdueOrders.includes(o)).map(o=>({type:'deadline',o}))
+  ];
+  const urgentHtml=''; const deadlineHtml='';
+  const alertsWrap=_allAlerts.length?`
+  <div style="background:var(--surface);border-radius:var(--radius-lg);border:1px solid var(--border);box-shadow:0 4px 20px rgba(0,0,0,.06);margin-bottom:18px;overflow:hidden;">
+    <!-- inbox header -->
+    <div style="padding:13px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:linear-gradient(135deg,var(--maroon) 0%,#6B1520 100%);">
       <div style="display:flex;align-items:center;gap:10px;">
-        <div style="width:40px;height:40px;border-radius:12px;background:rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-          <i class="ti ti-bolt" style="font-size:20px;color:#FCA5A5;"></i>
-        </div>
-        <div>
-          <div style="font-size:13px;font-weight:900;color:#fff;letter-spacing:.3px;">طلبات عاجلة</div>
-          <div style="font-size:10px;color:rgba(255,255,255,.5);margin-top:2px;">تحتاج إجراءً فورياً</div>
-        </div>
+        <div style="width:36px;height:36px;border-radius:10px;background:rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;"><i class="ti ti-inbox" style="font-size:18px;color:#fff;"></i></div>
+        <div><div style="font-size:13px;font-weight:900;color:#fff;">مستقبل الإشعارات</div><div style="font-size:10px;color:rgba(255,255,255,.6);margin-top:1px;">تنبيهات تحتاج متابعة</div></div>
       </div>
-      <div style="background:rgba(255,255,255,.18);border:1.5px solid rgba(255,255,255,.35);color:#fff;font-size:20px;font-weight:900;width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;">${urgentOrders.length}</div>
+      <div style="background:rgba(255,255,255,.18);border:1.5px solid rgba(255,255,255,.35);color:#fff;font-size:15px;font-weight:900;min-width:34px;height:34px;padding:0 8px;border-radius:20px;display:flex;align-items:center;justify-content:center;gap:4px;"><i class="ti ti-bell-ringing" style="font-size:14px;"></i>${_allAlerts.length}</div>
     </div>
+    <!-- inbox rows -->
     <div>
-      ${urgentOrders.slice(0,4).map(o=>`
-      <div onclick="openOrderModal('${o._key}')" style="display:flex;align-items:center;justify-content:space-between;padding:11px 18px;border-bottom:1px solid #FEE2E2;cursor:pointer;transition:background .12s;gap:10px;" onmouseover="this.style.background='#FFF5F5'" onmouseout="this.style.background=''">
-        <div style="min-width:0;flex:1;">
-          <div style="display:flex;align-items:center;gap:5px;margin-bottom:3px;flex-wrap:wrap;">
-            <span style="background:#DC2626;color:#fff;padding:2px 8px;border-radius:8px;font-size:9px;font-weight:800;letter-spacing:.2px;display:inline-flex;align-items:center;gap:2px;white-space:nowrap;"><i class="ti ti-bolt" style="font-size:10px;"></i> عاجل</span>
-            <strong style="font-size:12px;color:var(--maroon);white-space:nowrap;">${o.id||o._key}</strong>
+      ${_allAlerts.slice(0,6).map(({type,o})=>{
+        const isUrgent=type==='urgent',isOverdue=type==='overdue';
+        const accent=isUrgent?'#DC2626':isOverdue?'#B91C1C':'#D97706';
+        const bgRow=isOverdue?'#FFF8F8':'';
+        const icon=isUrgent?'ti-bolt':isOverdue?'ti-alert-triangle':'ti-clock-exclamation';
+        const tag=isUrgent?'عاجل':isOverdue?'تجاوز الموعد':(()=>{const h=Math.round((new Date(o.deadline)-now)/3600000);return h<24?h+' ساعة':Math.round(h/24)+' يوم';})();
+        const avatarLetter=(o.client||'؟').charAt(0);
+        return`<div onclick="openOrderModal('${o._key}')" style="display:flex;align-items:center;gap:12px;padding:11px 18px;border-bottom:1px solid var(--border-soft);cursor:pointer;transition:background .12s;${bgRow?'background:'+bgRow+';':''}" onmouseover="this.style.background='#F9F5F0'" onmouseout="this.style.background='${bgRow}'">
+          <!-- avatar -->
+          <div style="width:38px;height:38px;border-radius:50%;background:${accent}18;border:2px solid ${accent}40;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px;font-weight:800;color:${accent};">${avatarLetter}</div>
+          <!-- content -->
+          <div style="flex:1;min-width:0;">
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;flex-wrap:wrap;">
+              <span style="background:${accent};color:#fff;padding:1px 7px;border-radius:6px;font-size:9px;font-weight:800;display:inline-flex;align-items:center;gap:2px;white-space:nowrap;"><i class="ti ${icon}" style="font-size:9px;"></i> ${tag}</span>
+              <strong style="font-size:12px;color:var(--maroon);">${o.id||o._key}</strong>
+            </div>
+            <div style="font-size:11px;color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${o.client} ${o.service?'· '+o.service:''}</div>
           </div>
-          <div style="font-size:11px;color:var(--text-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${o.client}</div>
-        </div>
-        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0;">
-          ${deptBadge(o.currentDept)}
-          ${timeBadge(hoursAgo(o.stageStartDate||o.date))}
-        </div>
-      </div>`).join('')}
+          <!-- meta -->
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0;">
+            ${deptBadge(o.currentDept)}
+            ${timeBadge(hoursAgo(o.stageStartDate||o.date))}
+          </div>
+        </div>`;
+      }).join('')}
     </div>
   </div>`:'';
-  const deadlineHtml=(overdueOrders.length||deadlineOrders.length)?`
-  <div style="flex:1;min-width:270px;background:var(--surface);border-radius:var(--radius-lg);overflow:hidden;box-shadow:0 8px 32px rgba(120,53,15,.18);border:2px solid #FDE68A;">
-    <div style="background:linear-gradient(135deg,#78350F 0%,#B45309 100%);padding:14px 18px;display:flex;align-items:center;justify-content:space-between;">
-      <div style="display:flex;align-items:center;gap:10px;">
-        <div style="width:40px;height:40px;border-radius:12px;background:rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-          <i class="ti ti-clock-exclamation" style="font-size:20px;color:#FDE68A;"></i>
-        </div>
-        <div>
-          <div style="font-size:13px;font-weight:900;color:#fff;letter-spacing:.3px;">تنبيهات التسليم</div>
-          <div style="font-size:10px;color:rgba(255,255,255,.5);margin-top:2px;">مراقبة مواعيد الاستحقاق</div>
-        </div>
-      </div>
-      <div style="background:rgba(255,255,255,.18);border:1.5px solid rgba(255,255,255,.35);color:#fff;font-size:20px;font-weight:900;width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;">${overdueOrders.length+deadlineOrders.length}</div>
-    </div>
-    <div>
-      ${overdueOrders.slice(0,3).map(o=>`
-      <div onclick="openOrderModal('${o._key}')" style="display:flex;align-items:center;justify-content:space-between;padding:10px 18px;border-bottom:1px solid #FEE2E2;background:#FFF8F8;cursor:pointer;transition:background .12s;gap:10px;" onmouseover="this.style.background='#FEE2E2'" onmouseout="this.style.background='#FFF8F8'">
-        <div style="min-width:0;flex:1;">
-          <div style="display:flex;align-items:center;gap:5px;margin-bottom:3px;flex-wrap:wrap;">
-            <span style="background:#DC2626;color:#fff;padding:2px 8px;border-radius:8px;font-size:9px;font-weight:800;white-space:nowrap;">⚠ تجاوز الموعد</span>
-            <strong style="font-size:12px;color:var(--maroon);white-space:nowrap;">${o.id||o._key}</strong>
-          </div>
-          <div style="font-size:11px;color:var(--text-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${o.client} · الموعد: ${o.deadline}</div>
-        </div>
-        <i class="ti ti-alert-triangle" style="color:#EF4444;font-size:20px;flex-shrink:0;"></i>
-      </div>`).join('')}
-      ${deadlineOrders.slice(0,3).map(o=>{const h=Math.round((new Date(o.deadline)-now)/3600000);return`
-      <div onclick="openOrderModal('${o._key}')" style="display:flex;align-items:center;justify-content:space-between;padding:10px 18px;border-bottom:1px solid #FEF3C7;cursor:pointer;transition:background .12s;gap:10px;" onmouseover="this.style.background='#FFFBEB'" onmouseout="this.style.background=''">
-        <div style="min-width:0;flex:1;">
-          <div style="display:flex;align-items:center;gap:5px;margin-bottom:3px;flex-wrap:wrap;">
-            <span style="background:#D97706;color:#fff;padding:2px 8px;border-radius:8px;font-size:9px;font-weight:800;white-space:nowrap;">⏰ ${h<24?h+' ساعة':Math.round(h/24)+' يوم'}</span>
-            <strong style="font-size:12px;color:var(--maroon);white-space:nowrap;">${o.id||o._key}</strong>
-          </div>
-          <div style="font-size:11px;color:var(--text-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${o.client}</div>
-        </div>
-        ${deptBadge(o.currentDept)}
-      </div>`;}).join('')}
-    </div>
-  </div>`:'';
-  const alertsWrap=(urgentHtml||deadlineHtml)?`<div style="display:flex;gap:18px;flex-wrap:wrap;margin-bottom:18px;">${urgentHtml}${deadlineHtml}</div>`:'';
   const tableRows=myArr.slice(0,8).map(o=>`<tr onclick="openOrderModal('${o._key}')" style="cursor:pointer">
     <td><strong style="color:var(--maroon)">${o.id||o._key}</strong>${o.priority==='عاجلة'?`<span class="urgent-tag" style="margin-right:5px;font-size:9px;"><i class="ti ti-bolt"></i></span>`:''}</td>
     <td><strong>${o.client}</strong></td>
@@ -1508,13 +1495,28 @@ function removeQuoteLine(id){window._quoteLines=window._quoteLines.filter(x=>x.i
 function updateQuoteLine(id,f,v){const l=window._quoteLines.find(x=>x.id===id);if(l){l[f]=f==='lbl'?v:parseFloat(v)||0;renderQuoteTotals();}}
 function renderQuoteLines(){
   const wrap=document.getElementById('quote-lines-wrap');if(!wrap)return;
-  wrap.innerHTML=window._quoteLines.map(l=>`<div class="quote-line">
+  wrap.innerHTML=window._quoteLines.map(l=>`<div class="quote-line" style="grid-template-columns:2fr 1fr 1fr auto auto;gap:6px;">
     <input placeholder="وصف البند" value="${l.lbl}" oninput="updateQuoteLine('${l.id}','lbl',this.value)"/>
     <input type="number" placeholder="الكمية" value="${l.q}" oninput="updateQuoteLine('${l.id}','q',this.value)" min="1"/>
     <input type="number" placeholder="السعر" value="${l.p}" oninput="updateQuoteLine('${l.id}','p',this.value)" min="0"/>
+    <label title="إرفاق صورة للبند" style="cursor:pointer;display:flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:8px;border:1px dashed var(--border);background:var(--bg);flex-shrink:0;transition:.12s;" onmouseover="this.style.borderColor='var(--gold)'" onmouseout="this.style.borderColor='var(--border)'">
+      ${l.img?`<img src="${l.img}" style="width:28px;height:28px;object-fit:cover;border-radius:6px;"/>`:
+      `<i class="ti ti-photo" style="font-size:14px;color:var(--text-3);"></i>`}
+      <input type="file" accept="image/*" style="display:none" onchange="attachLineImage('${l.id}',this.files)"/>
+    </label>
     <button class="btn btn-red btn-sm btn-icon" onclick="removeQuoteLine('${l.id}')"><i class="ti ti-trash"></i></button>
   </div>`).join('');
   renderQuoteTotals();
+}
+async function attachLineImage(id,files){
+  if(!files||!files.length)return;
+  showSaving('جاري تجهيز الصورة...');
+  try{
+    const b64=await convertFileToBase64(files[0]);
+    const l=window._quoteLines.find(x=>x.id===id);if(l)l.img=b64;
+    renderQuoteLines();
+  }catch(e){toast('⚠️ فشل تحميل الصورة');}
+  hideSaving();
 }
 function renderQuoteTotals(){
   const subtotal=window._quoteLines.reduce((s,l)=>s+(l.q*l.p),0);
@@ -1535,7 +1537,7 @@ function getQuoteData(){
   const paymentTerms=document.getElementById('q-payment-terms')?.value||'';
   const terms=document.getElementById('q-terms')?.value||'';
   const bank=document.getElementById('q-bank')?.value||'';
-  const lines=window._quoteLines.filter(l=>l.lbl.trim()!=='');
+  const lines=window._quoteLines.filter(l=>l.lbl.trim()!=='').map(l=>({...l}));
   const subtotal=lines.reduce((s,l)=>s+(l.q*l.p),0);
   const vat=subtotal*0.15;const totalWithVat=subtotal+vat;
   return{client,ref,phone,validity,sales,delivery,paymentTerms,terms,bank,lines,subtotal,vat,totalWithVat,date:new Date().toISOString().split('T')[0],createdBy:cu.name};
@@ -1552,8 +1554,11 @@ function saveAndPreviewQuote(){
   const data=getQuoteData();
   if(!data.client){toast('يرجى تحديد العميل');return;}
   if(!data.lines.length){toast('يرجى إضافة بند واحد على الأقل');return;}
+  // Set document title to client name so browser saves PDF with client name
+  const origTitle=document.title;
+  document.title='عرض_سعر_'+data.client+'_'+data.ref;
   renderA4Quote(data);
-  setTimeout(()=>window.print(),400);
+  setTimeout(()=>{window.print();setTimeout(()=>document.title=origTitle,2000);},400);
 }
 async function previewSavedQuote(key){
   const q=standaloneQuotes[key]||await fbGet(`standalone_quotes/${key}`);
@@ -1612,7 +1617,6 @@ function renderA4Quote(data,key=''){
       <div style="border-top:1px solid rgba(255,255,255,.15);padding-top:8px;display:flex;flex-direction:column;gap:3px;">
         <div style="font-size:9px;color:rgba(255,255,255,.5);">📅 تاريخ الإصدار</div>
         <div style="font-size:9px;color:#fff;font-weight:700;">${issueDate}</div>
-        ${hijriDate?`<div style="font-size:8px;color:rgba(200,154,74,.8);margin-top:2px;">الموافق ${hijriDate}</div>`:''}
         ${expiryDate?`<div style="font-size:8px;color:#FDE68A;margin-top:4px;">⏳ صالح حتى: ${expiryDate}</div>`:''}
       </div>
     </div>
@@ -2360,7 +2364,7 @@ function buildRequestPage(){
   const unpaidOrders=ordersArr().filter(o=>o.paymentStatus!=='تم الدفع');
   const orderOptions=unpaidOrders.map(o=>`<option value="${o._key}">${o.id||o._key} — ${o.client} (${o.paymentStatus||'بدون حالة'})</option>`).join('');
   document.getElementById('request-content').innerHTML=`
-    <div class="page-header"><div class="ptitle"><i class="ti ti-send"></i> رفع طلب للمحاسب</div></div>
+    <div class="page-header"><div class="ptitle"><i class="ti ti-send"></i> رفع طلب مالي</div></div>
     <div class="card">
       <div class="form-grid">
         <div class="fg ff"><label>اختيار الطلب *</label><select id="req-order"><option value="">— اختر الطلب —</option>${orderOptions||'<option disabled>لا توجد طلبات</option>'}</select></div>
@@ -2371,7 +2375,7 @@ function buildRequestPage(){
           <input type="file" id="req-file-input" style="display:none" onchange="handleReqFile(this.files)"/>
           <div id="req-file-note" style="font-size:12px;color:#10B981;margin-top:8px;font-weight:700;"></div>
         </div>
-        <div class="fg"><label>درجة الأهمية</label><select id="req-priority"><option>عادية</option><option>متوسطة</option><option>عاجلة</option></select></div>
+
       </div>
       <div style="padding:0 20px 20px"><button class="btn btn-brand" onclick="submitRequest()"><i class="ti ti-send"></i> إرسال للمراجعة</button></div>
     </div>
@@ -2387,15 +2391,18 @@ function buildMyRequestsRows(){
 function onReqPayTypeChange(v){const w=document.getElementById('req-file-wrap');if(w)w.style.display=(v==='تحويل بنكي')?'block':'none';}
 async function handleReqFile(files){if(!files||!files.length)return;showSaving('جاري تجهيز الملف...');try{window.reqFileB64=await convertFileToBase64(files[0]);window.reqFileName=files[0].name;document.getElementById('req-file-note').textContent='✓ تم: '+files[0].name;}catch(e){toast('⚠️ فشل');}hideSaving();}
 async function submitRequest(){
-  const orderKey=document.getElementById('req-order')?.value,payMethod=document.getElementById('req-pay-method')?.value,priority=document.getElementById('req-priority')?.value||'عادية';
+  const orderKey=document.getElementById('req-order')?.value,payMethod=document.getElementById('req-pay-method')?.value,priority='عادية';
   if(!orderKey){toast('⚠️ يرجى اختيار الطلب');return;}
   if(!payMethod){toast('⚠️ يرجى اختيار طريقة السداد');return;}
   if(payMethod==='تحويل بنكي'&&!window.reqFileB64){toast('⚠️ يرجى إرفاق إثبات التحويل');return;}
+  // ── prevent duplicate submissions ──
+  const dup=Object.values(submittedRequests).find(r=>r.orderKey===orderKey&&(r.status==='pending'||r.status==='accountant_approved'));
+  if(dup){toast('⚠️ هذا الطلب مرفوع مسبقاً وبانتظار المراجعة');return;}
   const relatedOrder=orders[orderKey],clientName=relatedOrder?relatedOrder.client:'—';
   showSaving('جاري الإرسال...');
   try{
     await fbPush('requests',{orderKey,client:clientName,payMethod,priority,status:'pending',fileData:window.reqFileB64||'',fileName:window.reqFileName||'',createdBy:cu.name,createdByUname:cu._uname,createdByRole:cu.role||cu.type,date:new Date().toISOString().split('T')[0],createdAt:new Date().toISOString()});
-    await loadData();hideSaving();toast('✓ تم الإرسال');buildRequestPage();
+    await loadData();hideSaving();toast('✓ تم إرسال الطلب للمحاسب');buildRequestPage();
   }catch(e){hideSaving();toast('❌ فشل الإرسال');}
 }
 // ============================================================
@@ -2403,44 +2410,84 @@ async function submitRequest(){
 // ============================================================
 function buildRequestsPage(){
   const arr=Object.entries(submittedRequests).map(([k,v])=>({...v,_key:k})).sort((a,b)=>new Date(b.createdAt||b.date)-new Date(a.createdAt||a.date));
-  const pending=arr.filter(r=>r.status!=='done'),done=arr.filter(r=>r.status==='done');
-  const makeRows=(list,isPending)=>list.length===0?'<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text-3)">لا توجد طلبات</td></tr>'
+  const isAdmin=cu.type==='admin';
+  const pending=arr.filter(r=>r.status==='pending');
+  const accApproved=arr.filter(r=>r.status==='accountant_approved');
+  const done=arr.filter(r=>r.status==='done');
+  // Unpaid / partial orders from firebase
+  const unpaidOrds=ordersArr().filter(o=>o.paymentStatus&&o.paymentStatus!=='تم الدفع'&&o.paymentStatus!=='');
+  const partialOrds=ordersArr().filter(o=>o.paymentStatus==='دفع جزئي');
+
+  const statusLabel=s=>s==='pending'?'<span class="badge b-proc">بانتظار المحاسب</span>':s==='accountant_approved'?'<span class="badge b-new" style="background:#7C3AED20;color:#7C3AED">موافقة مبدئية</span>':'<span class="badge b-done">تمت</span>';
+  const makeRows=(list,mode)=>list.length===0?`<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text-3)">لا توجد طلبات</td></tr>`
     :list.map(r=>`<tr>
       <td><strong>${r.client||'—'}</strong>${r.orderKey&&orders[r.orderKey]?`<div style="font-size:10px;color:var(--text-3)">${orders[r.orderKey].id||r.orderKey}</div>`:''}</td>
       <td><strong>${r.payMethod||'—'}</strong>${r.fileData?`<div style="margin-top:4px;"><a href="${r.fileData}" download class="file-download-link"><i class="ti ti-download"></i> تنزيل</a></div>`:''}</td>
       <td>${r.createdBy||'—'}<div style="font-size:10px;color:var(--text-3)">${r.createdByRole||''}</div></td>
-      <td>${gpbadge(r.priority)}</td>
       <td style="font-size:11px">${r.date||'—'}</td>
-      <td>${isPending?`<div style="display:flex;flex-direction:column;gap:5px;"><select id="us-${r._key}" style="font-size:11px;padding:4px;border-radius:5px;border:1px solid var(--border);"><option value="تم الدفع">تم الدفع</option><option value="دفع جزئي">دفع جزئي</option><option value="عند التسليم">عند التسليم</option></select><button class="btn btn-green btn-xs" onclick="processAndArchiveRequest('${r._key}')"><i class="ti ti-check"></i> اعتماد</button></div>`:'<span class="badge b-done">تمت</span>'}<button class="btn btn-red btn-xs" style="margin-top:4px" onclick="deleteRequest('${r._key}')"><i class="ti ti-trash"></i></button></td>
+      <td>${statusLabel(r.status)}</td>
+      <td>
+        ${mode==='pending'?`<button class="btn btn-green btn-xs" onclick="accountantApproveRequest('${r._key}')"><i class="ti ti-check"></i> موافقة مبدئية</button>`:
+          mode==='accApproved'&&isAdmin?`<div style="display:flex;flex-direction:column;gap:5px;"><select id="us-${r._key}" style="font-size:11px;padding:4px;border-radius:5px;border:1px solid var(--border);"><option value="تم الدفع">تم الدفع</option><option value="دفع جزئي">دفع جزئي</option></select><button class="btn btn-brand btn-xs" onclick="managerApproveRequest('${r._key}')"><i class="ti ti-circle-check"></i> موافقة نهائية</button></div>`:
+          mode==='accApproved'?`<span style="font-size:11px;color:var(--text-3)">بانتظار مدير</span>`:''}
+        <button class="btn btn-red btn-xs" style="margin-top:4px" onclick="deleteRequest('${r._key}')"><i class="ti ti-trash"></i></button>
+      </td>
     </tr>`).join('');
+
+  const makeUnpaidRows=(list)=>list.length===0?`<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--text-3)">لا توجد طلبات غير مسددة</td></tr>`
+    :list.map(o=>`<tr onclick="openOrderModal('${o._key}')" style="cursor:pointer">
+      <td><strong style="color:var(--maroon)">${o.id||o._key}</strong></td>
+      <td><strong>${o.client}</strong></td>
+      <td>${o.service||'—'}</td>
+      <td><span class="badge ${o.paymentStatus==='دفع جزئي'?'b-proc':'b-new'}">${o.paymentStatus||'—'}</span></td>
+      <td>${o.totalAmount?Number(o.totalAmount).toLocaleString()+' ر.س':'—'}</td>
+    </tr>`).join('');
+
   document.getElementById('requests-content').innerHTML=`
     <div class="page-header"><div class="ptitle"><i class="ti ti-inbox"></i> صندوق طلبات المحاسبة</div></div>
     <div class="tab-bar">
-      <button class="tab-btn active" id="req-tab-pending" onclick="showReqTab('pending')"><i class="ti ti-clock"></i> قيد المراجعة (${pending.length})</button>
-      <button class="tab-btn" id="req-tab-done" onclick="showReqTab('done')"><i class="ti ti-circle-check"></i> مؤرشفة (${done.length})</button>
+      <button class="tab-btn active" id="req-tab-pending" onclick="showReqTab('pending')"><i class="ti ti-clock"></i> بانتظار المحاسب (${pending.length})</button>
+      <button class="tab-btn" id="req-tab-accApproved" onclick="showReqTab('accApproved')"><i class="ti ti-hourglass"></i> بانتظار المدير (${accApproved.length})</button>
+      <button class="tab-btn" id="req-tab-done" onclick="showReqTab('done')"><i class="ti ti-circle-check"></i> مكتملة (${done.length})</button>
+      <button class="tab-btn" id="req-tab-unpaid" onclick="showReqTab('unpaid')"><i class="ti ti-coin-off"></i> غير مسددة (${unpaidOrds.length})</button>
     </div>
-    <div class="card"><div class="tbl-wrap"><table><thead><tr><th style="width:120px">العميل</th><th>طريقة الدفع</th><th style="width:100px">الموظف</th><th style="width:80px">الأولوية</th><th style="width:80px">التاريخ</th><th style="width:140px">الإجراء</th></tr></thead>
-    <tbody id="req-tbody-pending">${makeRows(pending,true)}</tbody>
-    <tbody id="req-tbody-done" style="display:none">${makeRows(done,false)}</tbody>
-    </table></div></div>`;
+    <div class="card"><div class="tbl-wrap"><table><thead><tr><th style="width:120px">العميل</th><th>طريقة الدفع</th><th style="width:100px">الموظف</th><th style="width:80px">التاريخ</th><th style="width:110px">الحالة</th><th style="width:150px">الإجراء</th></tr></thead>
+    <tbody id="req-tbody-pending">${makeRows(pending,'pending')}</tbody>
+    <tbody id="req-tbody-accApproved" style="display:none">${makeRows(accApproved,'accApproved')}</tbody>
+    <tbody id="req-tbody-done" style="display:none">${makeRows(done,'done')}</tbody>
+    </table></div></div>
+    <!-- unpaid tab uses different columns -->
+    <div id="req-pane-unpaid" style="display:none">
+      <div class="card"><div class="tbl-wrap"><table><thead><tr><th>رقم الطلب</th><th>العميل</th><th>الخدمة</th><th style="width:100px">حالة الدفع</th><th style="width:110px">الإجمالي</th></tr></thead>
+      <tbody>${makeUnpaidRows(unpaidOrds)}</tbody></table></div></div>
+    </div>`;
   updateRequestsBadgeSidebar();
 }
 function showReqTab(tab){
-  document.getElementById('req-tbody-pending').style.display=tab==='pending'?'':'none';
-  document.getElementById('req-tbody-done').style.display=tab==='done'?'':'none';
-  document.getElementById('req-tab-pending').classList.toggle('active',tab==='pending');
-  document.getElementById('req-tab-done').classList.toggle('active',tab==='done');
+  ['pending','accApproved','done'].forEach(t=>{
+    const tb=document.getElementById('req-tbody-'+t);if(tb)tb.style.display=t===tab?'':'none';
+    const btn=document.getElementById('req-tab-'+t);if(btn)btn.classList.toggle('active',t===tab);
+  });
+  const upPane=document.getElementById('req-pane-unpaid');if(upPane)upPane.style.display=tab==='unpaid'?'block':'none';
+  const card=document.querySelector('#requests-content .card');if(card)card.style.display=tab==='unpaid'?'none':'';
+  const tb2=document.getElementById('req-tab-unpaid');if(tb2)tb2.classList.toggle('active',tab==='unpaid');
 }
-async function processAndArchiveRequest(key){
-  const selectEl=document.getElementById(`us-${key}`);if(!selectEl)return;
-  const chosenStatus=selectEl.value;showSaving('جاري الاعتماد...');
+async function accountantApproveRequest(key){
+  showSaving('جاري الموافقة المبدئية...');
+  try{await fbPatch('requests/'+key,{status:'accountant_approved',accountantApprovedAt:new Date().toISOString(),accountantName:cu.name});await loadData();hideSaving();toast('✓ تمت الموافقة المبدئية');buildRequestsPage();}
+  catch(e){hideSaving();toast('❌ خطأ');}
+}
+async function managerApproveRequest(key){
+  const selectEl=document.getElementById('us-'+key);if(!selectEl)return;
+  const chosenStatus=selectEl.value;showSaving('جاري الموافقة النهائية...');
   try{
-    await fbPatch(`requests/${key}`,{status:'done',paymentStatusResult:chosenStatus,doneAt:new Date().toISOString()});
+    await fbPatch('requests/'+key,{status:'done',paymentStatusResult:chosenStatus,managerApprovedAt:new Date().toISOString(),managerName:cu.name});
     const reqData=submittedRequests[key];
-    if(reqData&&reqData.orderKey&&orders[reqData.orderKey])await fbPatch(`orders/${reqData.orderKey}`,{paymentStatus:chosenStatus});
-    await loadData();hideSaving();toast('✓ تم الاعتماد');buildRequestsPage();
+    if(reqData&&reqData.orderKey&&orders[reqData.orderKey])await fbPatch('orders/'+reqData.orderKey,{paymentStatus:chosenStatus});
+    await loadData();hideSaving();toast('✓ تمت الموافقة النهائية — الحالة: '+chosenStatus);buildRequestsPage();
   }catch(e){hideSaving();toast('❌ خطأ');}
 }
+
 async function deleteRequest(key){if(!confirm('شطب هذا الطلب؟'))return;showSaving('جاري الحذف...');await fbDelete(`requests/${key}`);await loadData();hideSaving();toast('تم الحذف');buildRequestsPage();}
 // ============================================================
 // PAGE ROUTER
