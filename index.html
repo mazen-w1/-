@@ -1126,12 +1126,17 @@ function openQuickTask(type){
         <div class="fg"><label>الموقع الميداني *</label><input id="qt-location" placeholder="اسم المنطقة والموقع..."/></div>
         <div class="fg"><label>تفاصيل إضافية</label><textarea id="qt-notes" placeholder="تفاصيل المهمة..."></textarea></div>`}
       <button class="btn btn-brand" style="width:100%;justify-content:center;" onclick="submitQuickTask('${type}')"><i class="ti ti-send"></i> إرسال وتكليف القسم</button>
+      <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:4px;">
+        <label style="color:var(--maroon);font-weight:800;font-size:12px;display:block;margin-bottom:7px;"><i class="ti ti-link"></i> ربط بأمر تشغيل موجود (اختياري)</label>
+        <select id="qt-link-order-sel"><option value="">— بدون ربط —</option></select>
+      </div>
       <div style="text-align:center;margin:8px 0;font-size:11px;color:var(--text-3);">— أو —</div>
       <button class="btn btn-out" style="width:100%;justify-content:center;" onclick="closeModal('quick-task-modal');nav('add')"><i class="ti ti-transfer"></i> تسجيل كأمر تشغيل كامل</button>
       <button class="btn" style="width:100%;justify-content:center;background:linear-gradient(135deg,#78350F,#C89A4A);color:#fff;" onclick="closeModal('quick-task-modal');nav('quote')"><i class="ti ti-receipt-2"></i> إنشاء عرض سعر</button>
     </div>`;
-  window._qtFileB64='';window._qtFileName='';
+  window._qtFileB64='';window._qtFileName='';window._qtLinkedOrderKey='';
   openModal('quick-task-modal');
+  setTimeout(fillQtOrderSelect,40);
 }
 async function handleQtFile(files){
   if(!files||!files.length)return;
@@ -1159,6 +1164,7 @@ async function submitQuickTask(type){
     printTo:'none',externalTo:'none',
     quickTaskFile:window._qtFileB64||'',quickTaskFileName:window._qtFileName||'',
     quickTaskLocation:location,status:'قيد التنفيذ',isQuickTask:true,
+    relatedOrderKey:document.getElementById('qt-link-order-sel')?.value||window._qtLinkedOrderKey||'',
     workshopFeedback:'',workshopFeedbackDate:''
   };
   showSaving('جاري التكليف...');
@@ -1643,7 +1649,7 @@ function renderA4Quote(data,key=''){
 
     <!-- RIGHT: Logo + Company Name (RTL first child = right side) -->
     <div style="display:flex;align-items:center;gap:14px;justify-content:flex-start;">
-      <img src="${LOGO}" style="width:70px;height:70px;object-fit:contain;mix-blend-mode:multiply;"/>
+      <img src="${LOGO}" style="width:70px;height:70px;object-fit:contain;filter:brightness(0) invert(1);"/>
       <div>
         <div style="color:#C89B3C;font-size:20px;font-weight:900;letter-spacing:.5px;line-height:1.2;">روائع الأفكار الإعلانية</div>
         <div style="color:rgba(255,255,255,.7);font-size:11px;font-weight:400;margin-top:2px;letter-spacing:1px;">RAWAEE AL-AFKAR</div>
@@ -2088,7 +2094,7 @@ function openOrderModal(key){
     ${uploadArea}
     ${renderChatSection(key,o.currentDept==='done')}
     ${measureActions}
-    <div class="arow">${nextBtn} ${o.phone&&o.phone!=='—'?`<button class="btn btn-whatsapp btn-sm" onclick="openWhatsapp('${o.phone}')"><i class="ti ti-brand-whatsapp"></i></button>`:''} ${archiveBtn}</div>`;
+    <div class="arow">${nextBtn} <button class="btn btn-gold btn-sm" onclick="openQuickTaskForOrder('${key}')"><i class="ti ti-bolt"></i> مهمة سريعة</button> ${o.phone&&o.phone!=='—'?`<button class="btn btn-whatsapp btn-sm" onclick="openWhatsapp('${o.phone}')"><i class="ti ti-brand-whatsapp"></i></button>`:''} ${archiveBtn}</div>`;
   openModal('order-modal');
   setTimeout(()=>{generateQR(`order-qr-${key}`,trackingUrl,80);loadAndRenderChat(key);},200);
 }
@@ -2420,6 +2426,57 @@ function buildTimelinePage(){
     <div class="ro-notice" style="background:#EFF6FF;border-color:#BFDBFE;color:#1E40AF"><i class="ti ti-clock"></i> أخضر &lt;24س · أصفر 1-3 أيام · أحمر &gt;3 أيام</div>
     <div class="card"><div class="tbl-wrap"><table><thead><tr><th style="width:70px">الطلب</th><th style="width:110px">العميل</th><th style="width:90px">المرحلة</th>${headerCols}<th style="width:90px">الحالي</th><th style="width:90px">الإنجاز</th></tr></thead><tbody>${rows||'<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--text-3)">لا توجد سجلات</td></tr>'}</tbody></table></div></div>`;
 }
+// ============================================================
+// QUICK TASK ↔ ORDER HELPERS
+// ============================================================
+function fillQtOrderSelect(){
+  const sel=document.getElementById('qt-link-order-sel');if(!sel)return;
+  const running=ordersArr().filter(o=>!o.isQuickTask&&o.currentDept!=='done')
+    .sort((a,b)=>new Date(b.date)-new Date(a.date));
+  sel.innerHTML='<option value="">— بدون ربط —</option>'+
+    running.map(o=>'<option value="'+o._key+'">'+(o.id||o._key)+' — '+o.client+'</option>').join('');
+  if(window._qtLinkedOrderKey)sel.value=window._qtLinkedOrderKey;
+}
+function openQuickTaskForOrder(orderKey){
+  const o=orders[orderKey];if(!o)return;
+  const client=o.client||'';const phone=o.phone||'';
+  window._qtLinkedOrderKey=orderKey;
+  const relTasks=ordersArr().filter(t=>t.isQuickTask&&t.relatedOrderKey===orderKey&&t.currentDept!=='done');
+  document.getElementById('qt-modal-title').innerHTML='<i class="ti ti-bolt"></i> مهمة سريعة للطلب';
+  document.getElementById('qt-modal-body').innerHTML=
+    '<div style="background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:11px 14px;margin-bottom:14px;">'
+    +'<strong style="color:var(--maroon)">'+client+'</strong>'
+    +'<span style="color:var(--text-3);font-size:11px;margin-right:8px;">('+orderKey+')</span></div>'
+    +'<div style="display:flex;flex-direction:column;gap:10px;">'
+    +'<button class="btn btn-purple" style="justify-content:center;" onclick="openQuickTaskLinked('proof',''+orderKey+'')">'
+    +'<i class="ti ti-brush"></i> بروفة عاجلة للمصممين</button>'
+    +'<button class="btn btn-orange" style="justify-content:center;" onclick="openQuickTaskLinked('measure',''+orderKey+'')">'
+    +'<i class="ti ti-ruler"></i> قياسات ميدانية للورشة</button>'
+    +(relTasks.length
+      ?'<div style="border-top:1px solid var(--border-soft);padding-top:10px;margin-top:4px;">'
+        +'<div style="font-size:11px;font-weight:800;color:var(--text-2);margin-bottom:8px;">مهام سريعة جارية ('+relTasks.length+')</div>'
+        +relTasks.map(t=>'<div onclick="closeModal('quick-task-modal');openOrderModal(''+t._key+'')" '
+          +'style="display:flex;align-items:center;justify-content:space-between;padding:7px 10px;'
+          +'background:var(--bg);border-radius:7px;margin-bottom:4px;cursor:pointer;font-size:12px;">'
+          +'<span><i class="ti ti-bolt" style="color:var(--gold);margin-left:5px;"></i>'+t.service+'</span>'
+          +deptBadge(t.currentDept)+'</div>').join('')+'</div>'
+      :'')
+    +'</div>';
+  openModal('quick-task-modal');
+}
+function openQuickTaskLinked(type,orderKey){
+  const o=orders[orderKey];if(!o)return;
+  openQuickTask(type);
+  setTimeout(()=>{
+    const cEl=document.getElementById('qt-client');
+    const pEl=document.getElementById('qt-phone');
+    if(cEl)cEl.value=o.client||'';
+    if(pEl)pEl.value=o.phone||'';
+    window._qtLinkedOrderKey=orderKey;
+    fillQtOrderSelect();
+  },60);
+}
+
 // ============================================================
 // USERS PAGE
 // ============================================================
