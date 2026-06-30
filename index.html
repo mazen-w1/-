@@ -2439,29 +2439,18 @@ function fillQtOrderSelect(){
 }
 function openQuickTaskForOrder(orderKey){
   const o=orders[orderKey];if(!o)return;
-  const client=o.client||'';const phone=o.phone||'';
+  const client=o.client||'';
   window._qtLinkedOrderKey=orderKey;
   const relTasks=ordersArr().filter(t=>t.isQuickTask&&t.relatedOrderKey===orderKey&&t.currentDept!=='done');
   document.getElementById('qt-modal-title').innerHTML='<i class="ti ti-bolt"></i> مهمة سريعة للطلب';
-  document.getElementById('qt-modal-body').innerHTML=
-    '<div style="background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:11px 14px;margin-bottom:14px;">'
-    +'<strong style="color:var(--maroon)">'+client+'</strong>'
-    +'<span style="color:var(--text-3);font-size:11px;margin-right:8px;">('+orderKey+')</span></div>'
-    +'<div style="display:flex;flex-direction:column;gap:10px;">'
-    +'<button class="btn btn-purple" style="justify-content:center;" onclick="openQuickTaskLinked('proof',''+orderKey+'')">'
-    +'<i class="ti ti-brush"></i> بروفة عاجلة للمصممين</button>'
-    +'<button class="btn btn-orange" style="justify-content:center;" onclick="openQuickTaskLinked('measure',''+orderKey+'')">'
-    +'<i class="ti ti-ruler"></i> قياسات ميدانية للورشة</button>'
-    +(relTasks.length
-      ?'<div style="border-top:1px solid var(--border-soft);padding-top:10px;margin-top:4px;">'
-        +'<div style="font-size:11px;font-weight:800;color:var(--text-2);margin-bottom:8px;">مهام سريعة جارية ('+relTasks.length+')</div>'
-        +relTasks.map(t=>'<div onclick="closeModal('quick-task-modal');openOrderModal(''+t._key+'')" '
-          +'style="display:flex;align-items:center;justify-content:space-between;padding:7px 10px;'
-          +'background:var(--bg);border-radius:7px;margin-bottom:4px;cursor:pointer;font-size:12px;">'
-          +'<span><i class="ti ti-bolt" style="color:var(--gold);margin-left:5px;"></i>'+t.service+'</span>'
-          +deptBadge(t.currentDept)+'</div>').join('')+'</div>'
-      :'')
-    +'</div>';
+  let relHtml='';
+  if(relTasks.length){
+    relHtml='<div style="border-top:1px solid var(--border-soft);padding-top:10px;margin-top:4px;">'
+      +'<div style="font-size:11px;font-weight:800;color:var(--text-2);margin-bottom:8px;">مهام سريعة جارية ('+relTasks.length+')</div>'
+      +relTasks.map(t=>`<div onclick="closeModal('quick-task-modal');openOrderModal('${t._key}')" style="display:flex;align-items:center;justify-content:space-between;padding:7px 10px;background:var(--bg);border-radius:7px;margin-bottom:4px;cursor:pointer;font-size:12px;"><span><i class="ti ti-bolt" style="color:var(--gold);margin-left:5px;"></i>${t.service}</span>${deptBadge(t.currentDept)}</div>`).join('')
+      +'</div>';
+  }
+  document.getElementById('qt-modal-body').innerHTML=`<div style="background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:11px 14px;margin-bottom:14px;"><strong style="color:var(--maroon)">${client}</strong><span style="color:var(--text-3);font-size:11px;margin-right:8px;">(${orderKey})</span></div><div style="display:flex;flex-direction:column;gap:10px;"><button class="btn btn-purple" style="justify-content:center;" onclick="openQuickTaskLinked('proof','${orderKey}')"><i class="ti ti-brush"></i> بروفة عاجلة للمصممين</button><button class="btn btn-orange" style="justify-content:center;" onclick="openQuickTaskLinked('measure','${orderKey}')"><i class="ti ti-ruler"></i> قياسات ميدانية للورشة</button>${relHtml}</div>`;
   openModal('quick-task-modal');
 }
 function openQuickTaskLinked(type,orderKey){
