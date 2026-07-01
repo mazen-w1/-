@@ -239,7 +239,9 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--gold);bo
 .stage-label{font-size:10px;}.stage-person{font-size:9px;margin-top:2px;}
 /* ============================================================ WF CARDS */
 .wf-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px;margin-bottom:20px;}
-.wf-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;cursor:pointer;transition:.2s;}
+.wf-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;cursor:pointer;transition:.2s;position:relative;}
+.chat-unread-dot{position:absolute;top:9px;left:9px;width:10px;height:10px;border-radius:50%;background:#EF4444;box-shadow:0 0 0 2px #fff,0 0 0 3px #EF444455;z-index:2;animation:chatPulse 1.6s infinite;}
+@keyframes chatPulse{0%{transform:scale(1);opacity:1;}50%{transform:scale(1.3);opacity:.7;}100%{transform:scale(1);opacity:1;}}
 .wf-card:hover{box-shadow:var(--shadow-lg);transform:translateY(-3px);border-color:var(--gold);}
 .wf-card-top{padding:16px 16px 12px;}
 .wf-card-id{font-size:10px;color:var(--text-3);margin-bottom:4px;font-weight:700;letter-spacing:.5px;}
@@ -946,6 +948,37 @@ function openModal(id){document.getElementById(id).classList.add('open');}
 function showSaving(msg='جاري...'){document.getElementById('saving-msg').textContent=msg;document.getElementById('saving-overlay').classList.add('show');}
 function hideSaving(){document.getElementById('saving-overlay').classList.remove('show');}
 function convertFileToBase64(file){return new Promise((res,rej)=>{const r=new FileReader();r.readAsDataURL(file);r.onload=()=>res(r.result);r.onerror=rej;});}
+function normalizeSaudiPhone(v){
+  let s=String(v||'').trim().replace(/[\s\-()]/g,'');
+  if(s.startsWith('+966'))s='0'+s.slice(4);
+  else if(s.startsWith('00966'))s='0'+s.slice(5);
+  else if(s.startsWith('966'))s='0'+s.slice(3);
+  return s;
+}
+function isValidSaudiPhone(v){return /^05\d{8}$/.test(normalizeSaudiPhone(v));}
+function orderDateTime(o){
+  if(!o)return'—';
+  const t=o.createdAt?new Date(o.createdAt).toLocaleTimeString('ar-SA',{hour:'2-digit',minute:'2-digit'}):'';
+  return`${o.date||'—'}${t?' · '+t:''}`;
+}
+function downloadAllFiles(files,baseName){
+  if(!files||!files.length){toast('⚠️ لا توجد مرفقات');return;}
+  files.forEach((f,i)=>{setTimeout(()=>{const a=document.createElement('a');a.href=f.data;a.download=f.name||`${baseName||'ملف'}_${i+1}`;document.body.appendChild(a);a.click();document.body.removeChild(a);},i*350);});
+}
+function transferQuickTaskToOrder(key){
+  const o=orders[key];if(!o)return;
+  window._prefillClient=o.client||'';
+  window._prefillPhone=o.phone||'';
+  window._prefillFiles=o.quickTaskFile?[{data:o.quickTaskFile,name:o.quickTaskFileName||'ملف_المهمة_السريعة'}]:[];
+  closeModal('order-modal');
+  nav('add');
+}
+function downloadAllItemFiles(key,idx){
+  const o=orders[key];if(!o)return;
+  const it=(o.orderItems||[])[idx];if(!it)return;
+  const files=(it.files&&it.files.length)?it.files:(it.fileData&&it.fileName?[{data:it.fileData,name:it.fileName}]:[]);
+  downloadAllFiles(files,it.name||('بند'+(idx+1)));
+}
 // ============================================================
 // SIDEBAR BUILDER
 // ============================================================
@@ -1075,6 +1108,19 @@ function getActiveDepts(o){
   return seq;
 }
 function getNextDept(o){const seq=getActiveDepts(o);const idx=seq.indexOf(o.currentDept);if(idx===-1||idx===seq.length-1)return'done';return seq[idx+1];}
+function getPrevDept(o){const seq=getActiveDepts(o);if(o.currentDept==='done')return seq[seq.length-1]||null;const idx=seq.indexOf(o.currentDept);if(idx<=0)return null;return seq[idx-1];}
+async function revertOrderToPrevDept(key){
+  const o=orders[key];if(!o)return;
+  const prev=getPrevDept(o);
+  if(!prev){toast('⚠️ لا توجد مرحلة سابقة للرجوع إليها');return;}
+  const deptLbl={design:'التصميم',external:'التنفيذ الخارجي',print:'الطباعة',workshop:'الورشة'};
+  if(!confirm(`هل تريد إرجاع الطلب لمرحلة: ${deptLbl[prev]||prev}؟`))return;
+  showSaving('جاري الإرجاع...');
+  const upd={currentDept:prev,stageStartDate:new Date().toISOString(),status:'قيد المتابعة'};
+  if(o.currentDept==='done'){upd.archivedAt=null;upd.workshopFeedbackDone=null;}
+  try{await fbPatch(`orders/${key}`,upd);await loadData();hideSaving();closeModal('order-modal');toast('✓ تم إرجاع الطلب للمرحلة السابقة');refreshCurrentPage();}
+  catch(e){hideSaving();toast('❌ فشل الإرجاع');}
+}
 function getDeptWorkers(deptKey){const dept=DEPTS.find(d=>d.key===deptKey);if(!dept||!dept.roles.length)return[];return Object.entries(USERS).filter(([,v])=>dept.roles.includes(v.type)).map(([uname,v])=>({uname,name:v.name}));}
 function isMyOrder(o){
   const t=cu.type;
@@ -1166,7 +1212,7 @@ function openQuickTask(type){
   document.getElementById('qt-modal-body').innerHTML=`
     <div style="display:flex;flex-direction:column;gap:14px;padding:4px 0;">
       <div class="fg"><label>اسم العميل / الجهة *</label><input id="qt-client" placeholder="اسم العميل"/></div>
-      <div class="fg"><label>رقم الجوال</label><input id="qt-phone" placeholder="05..."/></div>
+      <div class="fg"><label>رقم الجوال * <span style="color:#EF4444">(إلزامي)</span></label><input id="qt-phone" placeholder="05XXXXXXXX"/></div>
       ${isProof?`
         <div class="fg"><label>المصمم المكلف *</label>
           <select id="qt-assignee"><option value="all">📢 جميع المصممين</option>${dw.map(w=>`<option value="${w.uname}">${w.name}</option>`).join('')}</select>
@@ -1209,17 +1255,19 @@ async function handleQtFile(files){
 }
 async function submitQuickTask(type){
   const c=document.getElementById('qt-client').value.trim();
-  const p=document.getElementById('qt-phone')?.value.trim()||'—';
+  const p=document.getElementById('qt-phone')?.value.trim()||'';
   const n=document.getElementById('qt-notes').value.trim();
   const assignee=document.getElementById('qt-assignee').value;
   if(!c){toast('⚠️ يرجى كتابة اسم العميل');return;}
+  if(!p){toast('⚠️ رقم الجوال إلزامي');return;}
+  if(!isValidSaudiPhone(p)){toast('⚠️ رقم الجوال يجب أن يكون رقم سعودي صحيح (05XXXXXXXX)');return;}
   const isProof=type==='proof';
   const location=!isProof?(document.getElementById('qt-location')?.value.trim()||''):'';
   const ord={
-    client:c,phone:p,notes:n||'—',
+    client:c,phone:normalizeSaudiPhone(p),notes:n||'—',
     service:isProof?'تجهيز بروفة عاجلة':`أخذ قياسات ميدانية${location?' - '+location:''}`,
     priority:'عاجلة',paymentStatus:'مهمة داخلية',
-    date:new Date().toISOString().split('T')[0],stageStartDate:new Date().toISOString(),
+    date:new Date().toISOString().split('T')[0],createdAt:new Date().toISOString(),stageStartDate:new Date().toISOString(),
     currentDept:isProof?'design':'workshop',
     createdBy:cu.name,createdByUname:cu._uname,
     designTo:isProof?assignee:'none',workshopTo:!isProof?assignee:'none',
@@ -1423,11 +1471,11 @@ function buildWfGrid(tab){
     return`<div class="wf-grid" id="wf-cards">${list.map(o=>{const pct=orderProgress(o);const col=progressColor(o);
       const showQtActions=o.isQuickTask&&!o.incompleteClient&&o.currentDept!=='done'&&(cu.type==='admin'||cu.type==='receiver');
       const qtActions=showQtActions?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;" onclick="event.stopPropagation();">
-        <button class="btn btn-brand btn-xs" onclick="window._prefillClient='${(o.client||'').replace(/'/g,"\\'")}';window._prefillPhone='${o.phone||''}';nav('add')"><i class="ti ti-transfer"></i> تحويل لأمر تشغيل</button>
+        <button class="btn btn-brand btn-xs" onclick="transferQuickTaskToOrder('${o._key}')"><i class="ti ti-transfer"></i> تحويل لأمر تشغيل</button>
         <button class="btn btn-xs" style="background:linear-gradient(135deg,#78350F,#C89A4A);color:#fff;" onclick="nav('quote')"><i class="ti ti-receipt-2"></i> إنشاء عرض سعر</button>
       </div>`:'';
-      return`<div class="wf-card" data-dept="${o.currentDept||'design'}" data-name="${(o.client||'').toLowerCase()}" data-key="${o._key}" onclick="wfCardClick(event,'${o._key}')"><input type="checkbox" class="wf-check" data-key="${o._key}" onchange="toggleWfSelect('${o._key}',this.checked)"/><div class="wf-card-top">
-        <div class="wf-card-id">${o.id||o._key} · ${o.date}${o.isQuickTask?'<span class="urgent-tag" style="margin-right:6px;font-size:9px;"><i class="ti ti-bolt"></i>سريعة</span>':''}</div>
+      return`<div class="wf-card" data-dept="${o.currentDept||'design'}" data-name="${(o.client||'').toLowerCase()}" data-key="${o._key}" onclick="wfCardClick(event,'${o._key}')">${hasUnreadChat(o)?'<span class="chat-unread-dot" title="رسالة جديدة في المحادثة"></span>':''}<input type="checkbox" class="wf-check" data-key="${o._key}" onchange="toggleWfSelect('${o._key}',this.checked)"/><div class="wf-card-top">
+        <div class="wf-card-id">${o.id||o._key} · ${orderDateTime(o)}${o.isQuickTask?'<span class="urgent-tag" style="margin-right:6px;font-size:9px;"><i class="ti ti-bolt"></i>سريعة</span>':''}</div>
         <div class="wf-card-name">${o.client}</div>
         <div class="wf-card-svc">${o.service}</div>
         <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;margin-bottom:6px;">${deptBadge(o.currentDept)} ${gpbadge(o.priority)} ${timeBadge(hoursAgo(o.stageStartDate||o.date))}</div>
@@ -1451,7 +1499,7 @@ function buildWfGrid(tab){
       <div class="tab-bar">
         <button class="tab-btn ${cur==='active'?'active':''}" onclick="buildWfGrid('active')"><i class="ti ti-loader"></i> جارية (${active.length})</button>
         <button class="tab-btn ${cur==='done'?'active':''}" onclick="buildWfGrid('done')"><i class="ti ti-circle-check"></i> مكتملة (${done.length})</button>
-        <button class="tab-btn" id="wf-multi-btn" onclick="toggleWfMultiMode()" style="margin-right:auto;color:var(--maroon);"><i class="ti ti-checklist"></i> تحديد</button>
+        ${(cu.type==='admin'||cu.type==='receiver')?`<button class="tab-btn" id="wf-multi-btn" onclick="toggleWfMultiMode()" style="margin-right:auto;color:var(--maroon);"><i class="ti ti-checklist"></i> تحديد</button>`:''}
       </div>
       <div id="bulk-bar"><span id="bulk-count">0 محدد</span>
         <button class="btn btn-sm" style="background:#fff;color:var(--maroon);padding:6px 14px;" onclick="bulkAdvanceSelected()"><i class="ti ti-arrow-left"></i> نقل للتالي</button>
@@ -1530,8 +1578,8 @@ function buildMyWork(){
   const myOrders=ordersArr().filter(o=>isMyOrder(o));
   const isWorkshop=cu.type==='workshop';
   const cards=myOrders.length===0?'<div style="color:var(--text-3);padding:30px;text-align:center;"><i class="ti ti-check-circle" style="font-size:36px;display:block;margin-bottom:10px;color:#10B981;"></i>لا توجد أعمال موكلة إليك حالياً</div>'
-    :`<div class="wf-grid">${myOrders.map(o=>`<div class="wf-card" style="${o.isQuickTask?'border:2px solid #C89A4A;background:linear-gradient(135deg,#FFFDF8,#FFF5E0);':''}" onclick="openOrderModal('${o._key}')"><div class="wf-card-top">
-      <div class="wf-card-id">${o.id||o._key} · ${o.date}${o.isQuickTask?'<span class="urgent-tag" style="margin-right:6px;font-size:9px;background:linear-gradient(135deg,#78350F,#C89A4A);"><i class="ti ti-bolt"></i>مهمة سريعة</span>':''}</div>
+    :`<div class="wf-grid">${myOrders.map(o=>`<div class="wf-card" style="${o.isQuickTask?'border:2px solid #C89A4A;background:linear-gradient(135deg,#FFFDF8,#FFF5E0);':''}" onclick="openOrderModal('${o._key}')">${hasUnreadChat(o)?'<span class="chat-unread-dot" title="رسالة جديدة في المحادثة"></span>':''}<div class="wf-card-top">
+      <div class="wf-card-id">${o.id||o._key} · ${orderDateTime(o)}${o.isQuickTask?'<span class="urgent-tag" style="margin-right:6px;font-size:9px;background:linear-gradient(135deg,#78350F,#C89A4A);"><i class="ti ti-bolt"></i>مهمة سريعة</span>':''}</div>
       <div class="wf-card-name">${o.client}</div>
       <div class="wf-card-svc">${o.service}</div>
       <div style="display:flex;gap:5px;flex-wrap:wrap;">${deptBadge(o.currentDept)} ${gpbadge(o.priority)} ${timeBadge(hoursAgo(o.stageStartDate||o.date))}</div>
@@ -1551,8 +1599,9 @@ function buildMyWork(){
 function buildQuotePage(){
   window._quoteLines=[];
   const cArr=Object.values(clients);
-  // Auto-generate quote number
-  const autoRef='QT-'+new Date().getFullYear()+'-'+(Object.keys(standaloneQuotes).length+1).toString().padStart(5,'0');
+  // Auto-generate quote number (RA-0001 format, locked)
+  const autoRef='RA-'+(Object.keys(standaloneQuotes).length+1).toString().padStart(4,'0');
+  const todayQ=new Date().toISOString().split('T')[0];
   document.getElementById('page-quote').innerHTML=`
     <div class="page-header"><div class="ptitle"><i class="ti ti-receipt-2"></i> إصدار عرض سعر رسمي</div></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
@@ -1565,14 +1614,15 @@ function buildQuotePage(){
             <datalist id="q-cl-list">${cArr.map(c=>`<option value="${c.name}">`).join('')}</datalist>
             <input id="q-client" list="q-cl-list" placeholder="اسم الشركة أو العميل" oninput="onClientInputQuote(this.value)" autocomplete="off"/>
           </div>
-          <div class="fg"><label>رقم الجوال</label><input id="q-phone" placeholder="05XXXXXXXX"/></div>
+          <div class="fg"><label>رقم الجوال * <span style="color:#EF4444">(إلزامي)</span></label><input id="q-phone" placeholder="05XXXXXXXX"/></div>
         </div>
       </div>
       <!-- Quote Details Card -->
       <div class="card">
         <div class="card-header"><span class="card-title"><i class="ti ti-file-description"></i> بيانات العرض</span></div>
         <div style="padding:16px;display:flex;flex-direction:column;gap:12px;">
-          <div class="fg"><label>رقم العرض (تلقائي)</label><input id="q-ref" value="${autoRef}" placeholder="${autoRef}"/></div>
+          <div class="fg"><label>رقم العرض (تلقائي)</label><input id="q-ref" value="${autoRef}" placeholder="${autoRef}" readonly disabled style="background:var(--surface-2);color:var(--text-2);cursor:not-allowed;"/></div>
+          <div class="fg"><label>تاريخ العرض</label><input id="q-date" value="${todayQ}" readonly disabled style="background:var(--surface-2);color:var(--text-2);cursor:not-allowed;"/></div>
           <div class="fg"><label>مسؤول المبيعات</label><input id="q-sales" value="${cu.name}"/></div>
           <div class="fg"><label>صلاحية العرض حتى</label><input type="date" id="q-validity"/></div>
           <div class="fg"><label>مدة التنفيذ</label><input id="q-delivery" placeholder="مثال: 5-7 أيام عمل"/></div>
@@ -1620,12 +1670,14 @@ function buildQuotePage(){
     </div>
     <!-- Archive -->
     <div class="page-header" style="margin-top:24px;"><div class="ptitle"><i class="ti ti-archive"></i> أرشيف عروض الأسعار</div></div>
+    <div class="controls-row"><div class="search-bar"><i class="ti ti-search"></i><input placeholder="بحث بالعميل أو رقم العرض..." oninput="filterQuotesArchive(this.value)"/></div></div>
     <div class="card"><div class="tbl-wrap"><table id="quotes-archive-table">
       <thead><tr><th>العميل</th><th>رقم العرض</th><th>الإجمالي</th><th style="width:90px">التاريخ</th><th style="width:140px">إجراء</th></tr></thead>
-      <tbody>${buildQuoteArchiveRows()}</tbody>
+      <tbody id="quotes-archive-tbody">${buildQuoteArchiveRows()}</tbody>
     </table></div></div>`;
   addQuoteLine();
 }
+function filterQuotesArchive(q){document.querySelectorAll('#quotes-archive-tbody tr').forEach(r=>{r.style.display=r.textContent.toLowerCase().includes(q.toLowerCase())?'':'none';});}
 function onClientInputQuote(val){
   if(!val)return;
   const ex=Object.values(clients).find(c=>(c.name||'').trim()===val.trim());
@@ -1703,11 +1755,13 @@ function getQuoteData(){
   const lines=window._quoteLines.filter(l=>l.lbl.trim()!=='').map(l=>({...l}));
   const subtotal=lines.reduce((s,l)=>s+(l.q*l.p),0);
   const vat=subtotal*0.15;const totalWithVat=subtotal+vat;
-  return{client,ref,phone,validity,sales,delivery,paymentTerms,terms,bank,lines,subtotal,vat,totalWithVat,date:new Date().toISOString().split('T')[0],createdBy:cu.name};
+  const qDate=document.getElementById('q-date')?.value||new Date().toISOString().split('T')[0];
+  return{client,ref,phone:normalizeSaudiPhone(phone),validity,sales,delivery,paymentTerms,terms,bank,lines,subtotal,vat,totalWithVat,date:qDate,createdBy:cu.name};
 }
 async function saveQuoteToDb(){
   const data=getQuoteData();
   if(!data.client){toast('يرجى تحديد العميل');return;}
+  if(!data.phone||!isValidSaudiPhone(data.phone)){toast('⚠️ رقم الجوال إلزامي ويجب أن يكون رقم سعودي صحيح (05XXXXXXXX)');return;}
   if(!data.lines.length){toast('يرجى إضافة بند واحد على الأقل');return;}
   showSaving('جاري الحفظ...');
   await fbPush('standalone_quotes',data);
@@ -1745,7 +1799,7 @@ function renderA4Quote(data,key=''){
     const lineTotal=qty*price;
     const imgCell=l.img
       ?`<td style="padding:8px;text-align:center;"><img src="${l.img}" style="width:52px;height:52px;object-fit:cover;border-radius:8px;border:1px solid #e8e0d4;"/></td>`
-      :`<td style="padding:8px;text-align:center;"><div style="width:52px;height:52px;border-radius:8px;background:linear-gradient(135deg,#f5f0e8,#ede5d8);display:flex;align-items:center;justify-content:center;margin:0 auto;"><span style="font-size:20px;opacity:.4;">📦</span></div></td>`;
+      :`<td style="padding:8px;"></td>`;
     return `<tr style="background:${i%2===0?'#ffffff':'#fdf8f0'};">
       <td style="padding:10px 14px;text-align:center;font-weight:700;color:#6A1B1B;font-size:13px;">${i+1}</td>
       ${imgCell}
@@ -1968,6 +2022,7 @@ function renderA4Quote(data,key=''){
 async function convertQuoteToOrder(){
   const data=getQuoteData();
   if(!data.client){toast('يرجى تحديد العميل أولاً');return;}
+  if(!data.phone||!isValidSaudiPhone(data.phone)){toast('⚠️ رقم الجوال إلزامي ويجب أن يكون رقم سعودي صحيح (05XXXXXXXX)');return;}
   if(!data.lines.length){toast('يرجى إضافة بنود للعرض');return;}
   showSaving('جاري الحفظ...');
   const res=await fbPush('standalone_quotes',data);
@@ -2007,6 +2062,7 @@ async function finalizeConvertToOrder(quoteKey){
   const pU=document.getElementById('co-print').value;
   const wU=document.getElementById('co-workshop').value;
   if(!phone){toast('⚠️ رقم الجوال إلزامي');return;}
+  if(!isValidSaudiPhone(phone)){toast('⚠️ رقم الجوال يجب أن يكون رقم سعودي صحيح (05XXXXXXXX)');return;}
   if(!service){toast('⚠️ يرجى تحديد الخدمة');return;}
   if(dU==='none'&&pU==='none'&&wU==='none'){toast('⚠️ يجب اختيار قسم واحد على الأقل');return;}
   const q=standaloneQuotes[quoteKey]||await fbGet(`standalone_quotes/${quoteKey}`);
@@ -2015,8 +2071,8 @@ async function finalizeConvertToOrder(quoteKey){
   if(dU==='none'){if(pU!=='none')startDept='print';else startDept='workshop';}
   const today=new Date().toISOString().split('T')[0];
   const ord={
-    client:q.client,service,date:today,stageStartDate:new Date().toISOString(),
-    priority,phone,paymentStatus:'عند التسليم',paidAmount:0,deadline,
+    client:q.client,service,date:today,createdAt:new Date().toISOString(),stageStartDate:new Date().toISOString(),
+    priority,phone:normalizeSaudiPhone(phone),paymentStatus:'عند التسليم',paidAmount:0,deadline,
     notes:`تحويل من عرض السعر: ${q.ref||quoteKey}`,files:[],
     createdBy:cu.name,createdByUname:cu._uname,fromQuoteKey:quoteKey,fromQuoteRef:q.ref||quoteKey,
     designTo:dU,designName:dU==='none'?'❌ معفى':(USERS[dU]?.name||dU),
@@ -2068,7 +2124,16 @@ async function loadAndRenderChat(orderKey){
       return`<div class="chat-msg ${isMine?'mine':'other'}"><div class="chat-meta">${m.senderName} · ${new Date(m.timestamp).toLocaleTimeString('ar-SA',{hour:'2-digit',minute:'2-digit'})}</div><div>${m.text}</div></div>`;
     }).join('');
     container.scrollTop=container.scrollHeight;
+    markChatSeen(orderKey);
   }catch(e){container.innerHTML='<div style="text-align:center;color:#EF4444;font-size:11px;padding:16px;">خطأ في تحميل الرسائل</div>';}
+}
+function markChatSeen(orderKey){try{localStorage.setItem('chatSeen_'+cu._uname+'_'+orderKey,new Date().toISOString());}catch(e){}}
+function hasUnreadChat(o){
+  if(!o||!o._key)return false;
+  const oc=chats[o._key];if(!oc)return false;
+  let lastSeen='1970-01-01T00:00:00.000Z';
+  try{lastSeen=localStorage.getItem('chatSeen_'+cu._uname+'_'+o._key)||lastSeen;}catch(e){}
+  return Object.values(oc).some(m=>m&&m.senderUname!==cu._uname&&m.timestamp>lastSeen);
 }
 async function sendChatMsg(orderKey){
   const input=document.getElementById(`chat-input-${orderKey}`);if(!input||!input.value.trim())return;
@@ -2094,6 +2159,8 @@ function openOrderModal(key){
   const o=orders[key];if(!o)return;
   const t=cu.type,isMine=isMyOrder(o),canAct=t==='admin'||isMine;
   const nd=getNextDept(o);
+  const _prevDept=getPrevDept(o);
+  const revertBtn=(t==='admin'&&_prevDept)?`<button class="btn btn-out btn-sm" onclick="revertOrderToPrevDept('${key}')"><i class="ti ti-arrow-right"></i> إرجاع للمرحلة السابقة</button>`:'';
   const nextLabels={design:'اعتماد التصميم والإرسال للمرحلة التالية ➔',external:'إنهاء التوريد والنقل ➔',print:'إتمام الطباعة ➔',workshop:'اكتمال التركيب ✓'};
   let nextBtn='';
   if(canAct&&o.currentDept!=='done'){
@@ -2120,8 +2187,15 @@ function openOrderModal(key){
           const chips=(it.files&&it.files.length)?it.files.map(f=>`<a href="${f.data}" download="${f.name}" class="file-download-link"><i class="ti ti-download"></i>${f.name}</a>`).join(' ')
             :(it.fileData&&it.fileName?`<a href="${it.fileData}" download="${it.fileName}" class="file-download-link"><i class="ti ti-download"></i>${it.fileName}</a>`:'');
           return`<div style="background:${it.addedLater?'#FFFBEB':'var(--surface-2)'};border:1px solid ${it.addedLater?'#FDE68A':'var(--border)'};border-radius:8px;padding:10px 12px;">
-            <div style="font-size:12px;font-weight:800;color:var(--maroon);margin-bottom:3px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">بند ${i+1}: ${it.name||'—'} ${it.addedLater?`<span style="background:#C89A4A;color:#fff;font-size:9px;font-weight:800;padding:2px 7px;border-radius:20px;"><i class="ti ti-sparkles"></i> جديد</span>`:''}</div>
+            <div style="font-size:12px;font-weight:800;color:var(--maroon);margin-bottom:3px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+              <span style="flex:1;">بند ${i+1}: ${it.name||'—'}</span>
+              ${it.addedLater?`<span style="background:#C89A4A;color:#fff;font-size:9px;font-weight:800;padding:2px 7px;border-radius:20px;"><i class="ti ti-sparkles"></i> جديد</span>`:''}
+              ${it.edited?`<span style="background:#2563EB;color:#fff;font-size:9px;font-weight:800;padding:2px 7px;border-radius:20px;"><i class="ti ti-pencil"></i> معدّل</span>`:''}
+              <button class="btn btn-out btn-xs" style="padding:2px 8px;" onclick="openAddItemModal('${key}',${i})" title="تعديل البند"><i class="ti ti-pencil"></i></button>
+              ${chips?`<button class="btn btn-out btn-xs" style="padding:2px 8px;" onclick="downloadAllItemFiles('${key}',${i})" title="تنزيل كل مرفقات البند"><i class="ti ti-download"></i> تنزيل الكل</button>`:''}
+            </div>
             ${it.addedLater?`<div style="font-size:10px;color:#92400E;margin-bottom:5px;">أُضيف بواسطة ${it.addedBy||'—'} بتاريخ ${(it.addedAt||'').split('T')[0]||'—'}</div>`:''}
+            ${it.edited?`<div style="font-size:10px;color:#1E40AF;margin-bottom:5px;">آخر تعديل بواسطة ${it.editedBy||'—'} بتاريخ ${(it.editedAt||'').split('T')[0]||'—'}</div>`:''}
             ${it.details?`<div style="font-size:11px;color:var(--text-2);margin-bottom:6px;line-height:1.6;">${it.details}</div>`:''}
             <div style="display:flex;flex-wrap:wrap;gap:6px;">${chips||'<span style="font-size:10px;color:var(--text-3);">لا توجد مرفقات لهذا البند</span>'}</div>
           </div>`;
@@ -2160,10 +2234,10 @@ function openOrderModal(key){
     </div>
   </div>`;
   const fromQuoteHtml=o.fromQuoteRef?`<div style="background:#F0FDF4;border:1px solid #BBF7D0;border-radius:var(--radius-sm);padding:8px 14px;font-size:12px;color:#166534;margin-bottom:14px;"><i class="ti ti-receipt-2"></i> تحويل من عرض السعر: <strong>${o.fromQuoteRef}</strong></div>`:'';
-  const archiveBtn=cu.type==='admin'?`<button class="btn btn-red btn-sm" onclick="archiveOrder('${key}')"><i class="ti ti-archive"></i> إنهاء الطلب وأرشفته</button>`:'';
+  const archiveBtn=(cu.type==='admin'&&!(o.isQuickTask&&o.approvedPrintFile))?`<button class="btn btn-red btn-sm" onclick="archiveOrder('${key}')"><i class="ti ti-archive"></i> إنهاء الطلب وأرشفته</button>`:'';
   const _measureBtns=(k,cl,ph)=>`
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
-      <button class="btn btn-brand btn-sm" onclick="closeModal('order-modal');window._prefillClient='${cl}';window._prefillPhone='${ph||''}';nav('add')"><i class="ti ti-transfer"></i> تحويل لأمر تشغيل</button>
+      <button class="btn btn-brand btn-sm" onclick="transferQuickTaskToOrder('${k}')"><i class="ti ti-transfer"></i> تحويل لأمر تشغيل</button>
       <button class="btn btn-sm" style="background:linear-gradient(135deg,#78350F,#C89A4A);color:#fff;" onclick="closeModal('order-modal');nav('quote')"><i class="ti ti-receipt-2"></i> إنشاء عرض سعر</button>
       <button class="btn btn-out btn-sm" onclick="markAsIncomplete('${k}')"><i class="ti ti-user-off"></i> العميل لم يرغب</button>
     </div>`;
@@ -2193,13 +2267,14 @@ function openOrderModal(key){
     ${stageBar(o)}
     <div class="dg" style="margin-bottom:14px;">
       <div class="di"><span class="dk">اسم العميل</span><span class="dv">${o.client}</span></div>
+      <div class="di"><span class="dk">تاريخ ووقت الطلب</span><span class="dv">${orderDateTime(o)}</span></div>
       <div class="di"><span class="dk">رقم الهاتف</span><span class="dv">${o.phone||'—'} ${o.phone&&o.phone!=='—'?`<button class="btn btn-whatsapp btn-xs" style="margin-right:4px" onclick="openWhatsapp('${o.phone}')"><i class="ti ti-brand-whatsapp"></i></button>`:''}</span></div>
       <div class="di"><span class="dk">الخدمة</span><span class="dv">${o.service}</span></div>
       <div class="di"><span class="dk">الأولوية</span><span class="dv">${gpbadge(o.priority)}</span></div>
       <div class="di"><span class="dk">تاريخ التسليم</span><span class="dv">${o.deadline||'—'} ${deadlineBadge(o.deadline)}</span></div>
       <div class="di"><span class="dk">منشئ الطلب</span><span class="dv">${o.createdBy||'—'}</span></div>
       <div class="di" style="grid-column:1/-1;border-top:1px solid var(--border-soft);padding-top:10px;"><span class="dk">ملاحظات ومواصفات</span><span class="dv" style="font-weight:400;background:var(--surface-2);padding:8px 12px;border-radius:var(--radius-sm);border:1px solid var(--border);display:block;margin-top:4px;">${o.notes||'—'}</span></div>
-      <div class="di" style="grid-column:1/-1"><span class="dk">📁 الملفات المرفقة بالطلب</span><div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;">${fileChips}</div></div>${itemsSection}
+      <div class="di" style="grid-column:1/-1"><span class="dk">📁 الملفات المرفقة بالطلب ${(o.files&&o.files.length)?`<button class="btn btn-out btn-xs" style="padding:2px 8px;margin-right:6px;" onclick="downloadAllFiles(orders['${key}'].files,'مرفقات_الطلب')"><i class="ti ti-download"></i> تنزيل الكل</button>`:''}</span><div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;">${fileChips}</div></div>${itemsSection}
       <div class="di" style="grid-column:1/-1;border-top:1px solid var(--border-soft);padding-top:10px;"><span class="dk" style="color:#6B21A8">🎨 ملف التصميم المعتمد للطباعة</span><span class="dv">${pLink}</span></div>
       <div class="di" style="grid-column:1/-1"><span class="dk" style="color:#3730A3">📦 مخطط قياسات الورشة</span><span class="dv">${wLink}</span></div>
       <div class="di" style="grid-column:1/-1"><span class="dk" style="color:#9A3412">📷 توثيق التركيب النهائي</span><span class="dv">${dLink}</span></div>
@@ -2220,30 +2295,35 @@ function openOrderModal(key){
     ${uploadArea}
     ${renderChatSection(key,o.currentDept==='done')}
     ${measureActions}
-    <div class="arow">${nextBtn} <button class="btn btn-out btn-sm" onclick="openTimelineModal('${key}')"><i class="ti ti-clock"></i> مراحل الطلب</button> <button class="btn btn-gold btn-sm" onclick="openQuickTaskForOrder('${key}')"><i class="ti ti-bolt"></i> مهمة سريعة</button> ${o.phone&&o.phone!=='—'?`<button class="btn btn-whatsapp btn-sm" onclick="openWhatsapp('${o.phone}')"><i class="ti ti-brand-whatsapp"></i></button>`:''} ${archiveBtn}</div>`;
+    <div class="arow">${nextBtn} ${revertBtn} <button class="btn btn-out btn-sm" onclick="openTimelineModal('${key}')"><i class="ti ti-clock"></i> مراحل الطلب</button> <button class="btn btn-gold btn-sm" onclick="openQuickTaskForOrder('${key}')"><i class="ti ti-bolt"></i> مهمة سريعة</button> ${o.phone&&o.phone!=='—'?`<button class="btn btn-whatsapp btn-sm" onclick="openWhatsapp('${o.phone}')"><i class="ti ti-brand-whatsapp"></i></button>`:''} ${archiveBtn}</div>`;
   openModal('order-modal');
   setTimeout(()=>{generateQR(`order-qr-${key}`,trackingUrl,80);loadAndRenderChat(key);},200);
 }
-function openAddItemModal(key){
+function openAddItemModal(key,editIdx){
   const o=orders[key];if(!o)return;
-  window._newItemFiles=[];
+  const isEdit=(editIdx!==undefined&&editIdx!==null);
+  window._editingItemIndex=isEdit?editIdx:null;
+  const existing=isEdit?(o.orderItems[editIdx]||{}):null;
+  window._newItemFiles=isEdit?(existing.files&&existing.files.length?[...existing.files]:(existing.fileData&&existing.fileName?[{data:existing.fileData,name:existing.fileName}]:[])):[];
+  const nameVal=isEdit?String(existing.name||'').replace(/"/g,'&quot;'):'';
+  const detailsVal=isEdit?(existing.details||''):'';
   document.getElementById('add-item-modal-body').innerHTML=`
     <div class="modal-header">
-      <span class="modal-title"><i class="ti ti-square-rounded-plus"></i> إضافة بند جديد للطلب</span>
+      <span class="modal-title"><i class="ti ti-${isEdit?'pencil':'square-rounded-plus'}"></i> ${isEdit?'تعديل بند الطلب':'إضافة بند جديد للطلب'}</span>
       <button class="btn-close" onclick="closeModal('add-item-modal')">×</button>
     </div>
     <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:var(--text-2);">
-      إضافة بند جديد إلى الطلب <strong style="color:var(--maroon)">${o.id||key}</strong> — سيتم تمييزه تلقائياً بشارة "جديد"
+      ${isEdit?`تعديل بند في الطلب <strong style="color:var(--maroon)">${o.id||key}</strong> — سيتم تمييزه تلقائياً بشارة "معدّل"`:`إضافة بند جديد إلى الطلب <strong style="color:var(--maroon)">${o.id||key}</strong> — سيتم تمييزه تلقائياً بشارة "جديد"`}
     </div>
     <div style="display:flex;flex-direction:column;gap:10px;">
-      <div class="fg"><label>اسم البند *</label><input id="new-item-name" placeholder="مثال: لوحة إعلانية إضافية"/></div>
-      <div class="fg"><label>التفاصيل والمواصفات</label><textarea id="new-item-details" placeholder="المقاسات، المواد..." style="min-height:60px;"></textarea></div>
+      <div class="fg"><label>اسم البند *</label><input id="new-item-name" placeholder="مثال: لوحة إعلانية إضافية" value="${nameVal}"/></div>
+      <div class="fg"><label>التفاصيل والمواصفات</label><textarea id="new-item-details" placeholder="المقاسات، المواد..." style="min-height:60px;">${detailsVal}</textarea></div>
       <div class="fg"><label>إرفاق ملف (اختياري)</label>
         <div class="dept-upload-box" onclick="document.getElementById('new-item-file-input').click()"><i class="ti ti-upload" style="font-size:20px;color:var(--gold);"></i><br>اضغط لإرفاق ملف أو أكثر</div>
         <input type="file" id="new-item-file-input" style="display:none" accept="image/*,.pdf" multiple onchange="handleNewItemFiles(this.files)"/>
-        <div id="new-item-file-note" style="font-size:11px;color:#10B981;margin-top:4px;font-weight:700;"></div>
+        <div id="new-item-file-note" style="font-size:11px;color:#10B981;margin-top:4px;font-weight:700;">${window._newItemFiles.length?'✓ '+window._newItemFiles.length+' ملف مرفق':''}</div>
       </div>
-      <button class="btn btn-brand" style="width:100%;justify-content:center;" onclick="submitNewOrderItem('${key}')"><i class="ti ti-plus"></i> إضافة البند للطلب</button>
+      <button class="btn btn-brand" style="width:100%;justify-content:center;" onclick="submitNewOrderItem('${key}')"><i class="ti ti-${isEdit?'device-floppy':'plus'}"></i> ${isEdit?'حفظ التعديلات':'إضافة البند للطلب'}</button>
     </div>`;
   openModal('add-item-modal');
 }
@@ -2265,17 +2345,25 @@ async function submitNewOrderItem(key){
   const name=document.getElementById('new-item-name').value.trim();
   const details=document.getElementById('new-item-details').value.trim();
   if(!name){toast('⚠️ يرجى إدخال اسم البند');return;}
-  showSaving('جاري الإضافة...');
+  const editIdx=window._editingItemIndex;
+  const isEdit=(editIdx!==undefined&&editIdx!==null);
+  showSaving(isEdit?'جاري حفظ التعديلات...':'جاري الإضافة...');
   try{
     const o=orders[key];
     const items=Array.isArray(o.orderItems)?[...o.orderItems]:[];
-    items.push({name,details,files:window._newItemFiles||[],addedLater:true,addedAt:new Date().toISOString(),addedBy:cu.name});
+    if(isEdit){
+      const prev=items[editIdx]||{};
+      items[editIdx]={...prev,name,details,files:window._newItemFiles||[],edited:true,editedAt:new Date().toISOString(),editedBy:cu.name};
+    }else{
+      items.push({name,details,files:window._newItemFiles||[],addedLater:true,addedAt:new Date().toISOString(),addedBy:cu.name});
+    }
     await fbPatch(`orders/${key}`,{orderItems:items});
     await loadData();
     hideSaving();closeModal('add-item-modal');
-    toast('✓ تم إضافة البند الجديد');
+    toast(isEdit?'✓ تم حفظ التعديلات':'✓ تم إضافة البند الجديد');
+    window._editingItemIndex=null;
     openOrderModal(key);
-  }catch(e){hideSaving();toast('❌ فشل الإضافة');}
+  }catch(e){hideSaving();toast(isEdit?'❌ فشل الحفظ':'❌ فشل الإضافة');}
 }
 function openTimelineModal(key){
   const o=orders[key];if(!o)return;
@@ -2369,7 +2457,8 @@ async function markAsIncomplete(key){
 function buildAddForm(isUrgentQuick=false){
   const dw=getDeptWorkers('design'),pw=getDeptWorkers('print'),ww=getDeptWorkers('workshop'),ew=getDeptWorkers('external');
   const _prefillCl=window._prefillClient||'';const _prefillPh=window._prefillPhone||'';
-  window._prefillClient='';window._prefillPhone='';
+  const _prefillFl=window._prefillFiles||[];
+  window._prefillClient='';window._prefillPhone='';window._prefillFiles=[];
   const mkOpts=arr=>arr.map(w=>`<option value="${w.uname}">${w.name}</option>`).join('');
   const cArr=Object.values(clients);
   const isDesigner=cu.type==='designer';
@@ -2472,6 +2561,11 @@ function buildAddForm(isUrgentQuick=false){
     addOrderLine();
     if(_prefillCl){const fc=document.getElementById('fc');if(fc)fc.value=_prefillCl;}
     if(_prefillPh){const fp=document.getElementById('fp');if(fp)fp.value=_prefillPh;}
+    if(_prefillFl.length&&window._orderLines&&window._orderLines[0]){
+      window._orderLines[0].files=[...(window._orderLines[0].files||[]),..._prefillFl];
+      renderOrderLines();
+      toast('✓ تم إرفاق ملف المهمة السريعة تلقائياً بالبند الأول');
+    }
   },80);
 }
 function calcRemaining(){
@@ -2569,6 +2663,7 @@ async function submitOrder(isUrgentQuick=false){
   if(!_lines.length){toast('⚠️ يجب إضافة بند واحد على الأقل');return;}
   const s=_lines[0].name.trim()||'خدمة إعلانية';
   if(!phone){toast('⚠️ رقم الجوال إلزامي');return;}
+  if(!isValidSaudiPhone(phone)){toast('⚠️ رقم الجوال يجب أن يكون رقم سعودي صحيح (05XXXXXXXX)');return;}
   if(!payStatus){toast('⚠️ يرجى تحديد وضع السداد');return;}
   const dU=document.getElementById('fw-design').value,extU=document.getElementById('fw-external').value,pU=document.getElementById('fw-print').value,wU=document.getElementById('fw-workshop').value;
   if(dU==='none'&&extU==='none'&&pU==='none'&&wU==='none'){toast('⚠️ يجب اختيار قسم تنفيذي واحد');return;}
@@ -2585,10 +2680,10 @@ async function submitOrder(isUrgentQuick=false){
   }else if(payStatus==='تم الدفع'){
     paidAmt=parseInt(document.getElementById('fb2')?.value)||0;
   }
-  if(!Object.values(clients).find(c2=>c2.name===c))await fbPush('clients',{name:c,phone,date:today});
+  if(!Object.values(clients).find(c2=>c2.name===c))await fbPush('clients',{name:c,phone:normalizeSaudiPhone(phone),date:today});
   const ord={
-    client:c,service:s,orderItems:(window._orderLines||[]).map(l=>({name:l.name,details:l.details,files:l.files||[]})),date:today,stageStartDate:new Date().toISOString(),
-    priority:document.getElementById('fpr').value,phone,
+    client:c,service:s,orderItems:(window._orderLines||[]).map(l=>({name:l.name,details:l.details,files:l.files||[]})),date:today,createdAt:new Date().toISOString(),stageStartDate:new Date().toISOString(),
+    priority:document.getElementById('fpr').value,phone:normalizeSaudiPhone(phone),
     paymentStatus:payStatus,paidAmount:paidAmt,
     totalAmount:totalAmt,remainingAmount:remainingAmt,
     deadline:document.getElementById('fd').value||'—',notes:document.getElementById('fn').value||'—',
@@ -2620,23 +2715,46 @@ async function submitOrder(isUrgentQuick=false){
 // ============================================================
 async function buildClientsPage(){
   const arr=Object.entries(clients).map(([k,v])=>({...v,_key:k})).sort((a,b)=>new Date(b.date)-new Date(a.date));
+  const isAdmin=cu.type==='admin';
   const rows=arr.map(c=>`<tr>
+    ${isAdmin?`<td style="width:34px;"><input type="checkbox" class="client-check" data-key="${c._key}" onchange="toggleClientSelect('${c._key}',this.checked)"/></td>`:''}
     <td><strong>${c.name}</strong></td>
     <td>${c.phone||'—'} ${c.phone?`<button class="btn btn-whatsapp btn-xs" style="margin-right:4px" onclick="openWhatsapp('${c.phone}')"><i class="ti ti-brand-whatsapp"></i></button>`:''}</td>
     <td style="font-size:11px;">${c.date||'—'}</td>
-    <td><button class="btn btn-red btn-xs" onclick="deleteClient('${c._key}')"><i class="ti ti-trash"></i></button></td>
+    ${isAdmin?`<td><button class="btn btn-red btn-xs" onclick="deleteClient('${c._key}')"><i class="ti ti-trash"></i></button></td>`:''}
   </tr>`).join('');
+  window._clientSelected=new Set();
   document.getElementById('page-clients').innerHTML=`
     <div class="page-header"><div class="ptitle"><i class="ti ti-address-book"></i> سجل العملاء</div></div>
-    <div class="controls-row"><div class="search-bar"><i class="ti ti-search"></i><input placeholder="بحث في العملاء..." oninput="filterClients(this.value)"/></div></div>
+    <div class="controls-row"><div class="search-bar"><i class="ti ti-search"></i><input placeholder="بحث في العملاء..." oninput="filterClients(this.value)"/></div>
+    ${isAdmin?`<button class="btn btn-red btn-sm" id="clients-bulk-del-btn" style="display:none;margin-right:auto;" onclick="bulkDeleteClients()"><i class="ti ti-trash"></i> حذف المحدد (<span id="clients-sel-count">0</span>)</button>`:''}</div>
     <div class="card">
       <div class="card-header"><span class="card-title"><i class="ti ti-users"></i> العملاء (${arr.length})</span></div>
-      <div class="tbl-wrap"><table><thead><tr><th>العميل</th><th style="width:180px">الجوال</th><th style="width:100px">التاريخ</th><th style="width:60px"></th></tr></thead>
-      <tbody id="clients-tbody">${rows||'<tr><td colspan="4" style="text-align:center;padding:24px;color:var(--text-3)">لا يوجد عملاء</td></tr>'}</tbody></table></div>
+      <div class="tbl-wrap"><table><thead><tr>${isAdmin?'<th style="width:34px;"></th>':''}<th>العميل</th><th style="width:180px">الجوال</th><th style="width:100px">التاريخ</th>${isAdmin?'<th style="width:60px"></th>':''}</tr></thead>
+      <tbody id="clients-tbody">${rows||`<tr><td colspan="${isAdmin?5:3}" style="text-align:center;padding:24px;color:var(--text-3)">لا يوجد عملاء</td></tr>`}</tbody></table></div>
     </div>`;
 }
 function filterClients(q){document.querySelectorAll('#clients-tbody tr').forEach(r=>{r.style.display=r.textContent.toLowerCase().includes(q.toLowerCase())?'':'none';});}
-async function deleteClient(key){if(!confirm('حذف هذا العميل؟'))return;await fbDelete(`clients/${key}`);await loadData();buildClientsPage();}
+async function deleteClient(key){
+  if(cu.type!=='admin'){toast('⚠️ الحذف متاح للمدير فقط');return;}
+  if(!confirm('حذف هذا العميل؟'))return;await fbDelete(`clients/${key}`);await loadData();buildClientsPage();
+}
+function toggleClientSelect(key,checked){
+  if(!window._clientSelected)window._clientSelected=new Set();
+  if(checked)window._clientSelected.add(key);else window._clientSelected.delete(key);
+  const btn=document.getElementById('clients-bulk-del-btn');const cnt=document.getElementById('clients-sel-count');
+  if(cnt)cnt.textContent=window._clientSelected.size;
+  if(btn)btn.style.display=window._clientSelected.size?'inline-flex':'none';
+}
+async function bulkDeleteClients(){
+  if(cu.type!=='admin'){toast('⚠️ الحذف متاح للمدير فقط');return;}
+  const keys=Array.from(window._clientSelected||[]);
+  if(!keys.length)return;
+  if(!confirm(`حذف ${keys.length} عميل محدد؟`))return;
+  showSaving('جاري الحذف...');
+  try{for(const k of keys){await fbDelete(`clients/${k}`);}await loadData();hideSaving();toast('✓ تم الحذف');buildClientsPage();}
+  catch(e){hideSaving();toast('❌ فشل الحذف');}
+}
 // ============================================================
 // TIMELINE
 // ============================================================
@@ -3103,8 +3221,8 @@ function buildIncompletePage(){
   if(arr.length===0){
     cards='<div style="text-align:center;color:var(--text-3);padding:48px 20px;"><i class="ti ti-user-check" style="font-size:52px;display:block;margin-bottom:12px;color:#10B981;"></i><div style="font-size:16px;font-weight:700;">لا توجد مهام غير مكتملة</div><div style="font-size:13px;margin-top:6px;">المهام السريعة التي لم يرغب العميل بإكمالها ستظهر هنا</div></div>';
   }else{
-    cards=`<div class="wf-grid">${arr.map(o=>`<div class="wf-card" style="border:2px solid #FECACA;background:linear-gradient(135deg,#FFF8F8,#FEF2F2);" onclick="openOrderModal('${o._key}')"><div class="wf-card-top">
-      <div class="wf-card-id">${o.id||o._key} · ${o.date}<span class="urgent-tag" style="margin-right:6px;font-size:9px;background:#991B1B;"><i class="ti ti-user-off"></i>غير مكتمل</span></div>
+    cards=`<div class="wf-grid">${arr.map(o=>`<div class="wf-card" style="border:2px solid #FECACA;background:linear-gradient(135deg,#FFF8F8,#FEF2F2);" onclick="openOrderModal('${o._key}')">${hasUnreadChat(o)?'<span class="chat-unread-dot" title="رسالة جديدة في المحادثة"></span>':''}<div class="wf-card-top">
+      <div class="wf-card-id">${o.id||o._key} · ${orderDateTime(o)}<span class="urgent-tag" style="margin-right:6px;font-size:9px;background:#991B1B;"><i class="ti ti-user-off"></i>غير مكتمل</span></div>
       <div class="wf-card-name">${o.client}</div>
       <div class="wf-card-svc">${o.service}</div>
       <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;margin-bottom:4px;">${gpbadge(o.priority)} ${timeBadge(hoursAgo(o.stageStartDate||o.date))}</div>
