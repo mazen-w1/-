@@ -145,7 +145,7 @@ body{font-family:'Cairo','Segoe UI',Tahoma,Arial,sans-serif;background:var(--bg)
   background:var(--surface);border-radius:var(--radius-lg);
   padding:18px 18px 14px;
   box-shadow:var(--shadow-sm);border:1px solid var(--border);
-  transition:.2s;cursor:pointer;position:relative;overflow:hidden;
+  transition:.2s;cursor:default;position:relative;overflow:hidden;
 }
 .stat-card:hover{box-shadow:var(--shadow-md);transform:translateY(-2px);}
 .stat-card::before{content:'';position:absolute;top:0;right:0;width:3px;height:100%;}
@@ -438,14 +438,14 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--gold);bo
   .stats-row{grid-template-columns:1fr 1fr;}
   .partial-fields{grid-template-columns:1fr;}
 }
-/* ══ LUXURY PAGE TRANSITIONS ══════════════════════════════════════ */
-.page.active{animation:lxIn .52s cubic-bezier(.22,1,.36,1) both;}
+/* ══ PAGE TRANSITIONS (lightweight — no blur/scale, kept snappy for perf) ══ */
+.page.active{animation:lxIn .18s ease-out both;}
 @keyframes lxIn{
-  from{opacity:0;transform:translateY(30px) scale(.982);filter:blur(7px);}
-  to  {opacity:1;transform:translateY(0)    scale(1);   filter:blur(0);}}
-.page-out{animation:lxOut .26s ease forwards!important;display:block!important;}
+  from{opacity:0;transform:translateY(8px);}
+  to  {opacity:1;transform:translateY(0);}}
+.page-out{display:none!important;}
 @keyframes lxOut{
-  to{opacity:0;transform:translateY(-20px) scale(.97);filter:blur(4px);}}
+  to{opacity:0;}}
 /* ══ EMPLOYEE ANALYTICS ═══════════════════════════════════════════ */
 .emp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(308px,1fr));gap:18px;}
 .emp-card{background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;transition:.22s cubic-bezier(.22,1,.36,1);}
@@ -757,9 +757,8 @@ let submittedRequests={},chats={},standaloneQuotes={},warranties={};
 let _lastAssignSnapshot=null,_audioCtx=null,_audioUnlocked=false;
 let _navHistory=[];
 let _nuPhotoB64='',_euPhotoB64='',_euSelectedColor='',_nuSelectedColor='';
-let _curPage=null,_navBusy=false;
+let _curPage=null,_navBusy=false,_lastLoadAt=0;
 let _currentWfTab='active';
-window._editingQuoteKey=null;
 // ============================================================
 // MOBILE SIDEBAR
 // ============================================================
@@ -825,7 +824,11 @@ function enterApp(u){
   startClock();buildSidebar();
   if(cu.type==='accountant')nav('requests');
   else nav('dash');
-  setInterval(async()=>{await loadData();refreshCurrentPage();},60000);
+  setInterval(async()=>{
+    if((Date.now()-_lastLoadAt)<15000)return; // skip if data was already refreshed very recently (e.g. by the user's own action)
+    if(document.hidden)return; // skip background polling while the tab isn't visible — saves bandwidth/CPU
+    await loadData();refreshCurrentPage();
+  },60000);
 }
 function logout(){localStorage.removeItem(SESSION_KEY);location.reload();}
 // ============================================================
@@ -864,6 +867,7 @@ async function loadData(){
     updateNotifBell();updateRequestsBadgeSidebar();
     checkNewAssignments();
     cleanExpiredWarranties();
+    _lastLoadAt=Date.now();
   }catch(e){orders={};clients={};submittedRequests={};chats={};standaloneQuotes={};warranties={};}
 }
 // ============================================================
@@ -986,22 +990,37 @@ function compressImage(dataUrl,maxDim=1600,quality=0.72){
     img.src=dataUrl;
   });
 }
+// Firebase Realtime Database rejects any single string value over ~10MB. Base64 encoding
+// inflates raw byte size by ~1.37x, so a "compressed to 8MB" file can still blow past that
+// limit once encoded. FIREBASE_SAFE_LIMIT keeps a safety margin under the real 10MB ceiling.
+const FIREBASE_SAFE_LIMIT=9*1024*1024; // 9MB of base64 text, safely under Firebase's 10MB/value cap
+function _b64Len(dataUrl){return (dataUrl||'').length;}
 async function convertFileToBase64(file){
-  const MAX_IMAGE_SOURCE_BYTES=15*1024*1024; // 15MB raw source cap for images (before compression)
-  const MAX_OTHER_BYTES=8*1024*1024; // 8MB cap for non-image files (PDF etc.)
+  const MAX_IMAGE_SOURCE_BYTES=25*1024*1024; // 25MB raw source cap for images (compression will shrink these)
+  const MAX_OTHER_BYTES=6.5*1024*1024; // ~6.5MB raw cap for non-image files — after base64 inflation this lands safely under Firebase's 10MB limit (files can't be compressed client-side)
   const isImage=file.type&&file.type.startsWith('image/');
   if(isImage){
-    if(file.size>MAX_IMAGE_SOURCE_BYTES)throw new Error('⚠️ حجم الصورة كبير جداً (الحد الأقصى 15 ميجابايت). يرجى اختيار صورة أصغر.');
+    if(file.size>MAX_IMAGE_SOURCE_BYTES)throw new Error('⚠️ حجم الصورة كبير جداً (الحد الأقصى 25 ميجابايت). يرجى اختيار صورة أصغر.');
     const raw=await _readFileAsDataUrl(file);
-    // Only compress if the file is reasonably large — small images pass through untouched.
-    if(file.size>800*1024){
-      try{return await compressImage(raw,1600,0.72);}
-      catch(e){return raw;} // fall back to original if compression fails for any reason
+    let out=raw;
+    // Compress if the file is reasonably large, or if the raw base64 is already near the Firebase limit.
+    if(file.size>800*1024||_b64Len(raw)>FIREBASE_SAFE_LIMIT){
+      try{out=await compressImage(raw,1600,0.72);}catch(e){out=raw;}
     }
-    return raw;
+    // If still too big after a first pass, retry progressively harder before giving up.
+    const attempts=[[1200,0.55],[900,0.45],[700,0.35]];
+    let i=0;
+    while(_b64Len(out)>FIREBASE_SAFE_LIMIT&&i<attempts.length){
+      try{out=await compressImage(raw,attempts[i][0],attempts[i][1]);}catch(e){break;}
+      i++;
+    }
+    if(_b64Len(out)>FIREBASE_SAFE_LIMIT)throw new Error('⚠️ تعذر ضغط الصورة لحجم مناسب للرفع. يرجى اختيار صورة أصغر أو تقليل جودتها قبل الرفع.');
+    return out;
   }else{
-    if(file.size>MAX_OTHER_BYTES)throw new Error('⚠️ حجم الملف كبير جداً (الحد الأقصى 8 ميجابايت). يرجى اختيار ملف أصغر.');
-    return await _readFileAsDataUrl(file);
+    if(file.size>MAX_OTHER_BYTES)throw new Error('⚠️ حجم الملف كبير جداً (الحد الأقصى تقريباً 6 ميجابايت لملفات غير الصور مثل PDF). يرجى اختيار ملف أصغر — الملفات غير الصور لا يمكن ضغطها تلقائياً.');
+    const raw=await _readFileAsDataUrl(file);
+    if(_b64Len(raw)>FIREBASE_SAFE_LIMIT)throw new Error('⚠️ حجم الملف كبير جداً بعد المعالجة. يرجى اختيار ملف أصغر.');
+    return raw;
   }
 }
 function normalizeSaudiPhone(v){
@@ -1009,6 +1028,7 @@ function normalizeSaudiPhone(v){
   if(s.startsWith('+966'))s='0'+s.slice(4);
   else if(s.startsWith('00966'))s='0'+s.slice(5);
   else if(s.startsWith('966'))s='0'+s.slice(3);
+  else if(/^5\d{8}$/.test(s))s='0'+s; // bare 9-digit form (no leading 0 or country code)
   return s;
 }
 function isValidSaudiPhone(v){return /^05\d{8}$/.test(normalizeSaudiPhone(v));}
@@ -1121,19 +1141,16 @@ async function nav(p,skipHistory=false){
   if(p==='export'){exportExcel();return;}
   if(!skipHistory&&_curPage&&_curPage!==p)_navHistory.push(_curPage);
   _curPage=p;
-  // ── luxury exit animation ──
-  const prev=document.querySelector('.page.active');
-  if(prev&&!prev.classList.contains('page-out')){
-    prev.classList.add('page-out');
-    await new Promise(r=>setTimeout(r,230));
-    prev.classList.remove('active','page-out');
-  }
+  // ── instant page switch (no blocking animation delay — was 230ms per click) ──
   document.querySelectorAll('.page').forEach(x=>x.classList.remove('active','page-out'));
   document.querySelectorAll('.ni').forEach(x=>x.classList.remove('active'));
   const pg=document.getElementById('page-'+p);const nb=document.getElementById('n-'+p);
   if(pg)pg.classList.add('active');if(nb)nb.classList.add('active');
   _buildPage(p);
-  if(!_navBusy){_navBusy=true;try{await loadData();}catch(e){}if(p!=='add'&&p!=='request'&&p!=='quote')_buildPage(p);_navBusy=false;}
+  // ── only refetch from Firebase if data isn't freshly loaded already (throttled — avoids
+  //     re-downloading all collections, including embedded file attachments, on every click) ──
+  const dataIsFresh=(Date.now()-_lastLoadAt)<4000;
+  if(!_navBusy&&!dataIsFresh){_navBusy=true;try{await loadData();}catch(e){}if(p!=='add'&&p!=='request'&&p!=='quote')_buildPage(p);_navBusy=false;}
 }
 function navBack(){if(_navHistory.length===0)return;const prev=_navHistory.pop();nav(prev,true);}
 function backBtnHtml(){return`<div style="margin-bottom:16px;"><button class="btn btn-out btn-sm" onclick="navBack()"><i class="ti ti-arrow-right"></i> رجوع</button></div>`;}
@@ -1278,7 +1295,7 @@ function openQuickTask(type){
   document.getElementById('qt-modal-body').innerHTML=`
     <div style="display:flex;flex-direction:column;gap:14px;padding:4px 0;">
       <div class="fg"><label>اسم العميل / الجهة *</label><input id="qt-client" placeholder="اسم العميل"/></div>
-      <div class="fg"><label>رقم الجوال * <span style="color:#EF4444">(إلزامي)</span></label><input id="qt-phone" placeholder="05XXXXXXXX"/></div>
+      <div class="fg"><label>رقم الجوال * <span style="color:#EF4444">(إلزامي)</span></label><input id="qt-phone" placeholder="05XXXXXXXX أو +966XXXXXXXXX"/></div>
       ${isProof?`
         <div class="fg"><label>المصمم المكلف *</label>
           <select id="qt-assignee"><option value="all">📢 جميع المصممين</option>${dw.map(w=>`<option value="${w.uname}">${w.name}</option>`).join('')}</select>
@@ -1326,7 +1343,7 @@ async function submitQuickTask(type){
   const assignee=document.getElementById('qt-assignee').value;
   if(!c){toast('⚠️ يرجى كتابة اسم العميل');return;}
   if(!p){toast('⚠️ رقم الجوال إلزامي');return;}
-  if(!isValidSaudiPhone(p)){toast('⚠️ رقم الجوال يجب أن يكون رقم سعودي صحيح (05XXXXXXXX)');return;}
+  if(!isValidSaudiPhone(p)){toast('⚠️ رقم الجوال يجب أن يكون رقم سعودي صحيح (يبدأ بـ 05 أو +966)');return;}
   const isProof=type==='proof';
   const location=!isProof?(document.getElementById('qt-location')?.value.trim()||''):'';
   const ord={
@@ -1449,11 +1466,10 @@ function buildDash(){
   const _prAvg=function(){const c=arr.filter(o=>o.printDoneAt&&o.date&&getActiveDepts(o).includes('print'));if(!c.length)return 0;return Math.round(c.reduce((s,o)=>{const h=(new Date(o.printDoneAt)-new Date(o.date))/3600000;return s+(h>0?h:0);},0)/c.length);}();
   const _ovr=running.filter(o=>o.deadline&&o.deadline!=='—'&&new Date(o.deadline)<_now).length;
   const stats=`<div class="stats-row">
-    <div class="stat-card c-gold" onclick="dashGoto('active')"><div class="stat-icon i-gold"><i class="ti ti-loader-2"></i></div><div class="stat-label">جارية الآن</div><div class="stat-value">${total}</div><div class="stat-trend"><span style="background:rgba(212,175,55,.15);color:#92400E;border-radius:8px;padding:1px 6px;font-size:9px;font-weight:800;"><i class="ti ti-bolt"></i>${ug} عاجل</span></div></div>
-    <div class="stat-card c-green" onclick="dashGoto('done')"><div class="stat-icon i-green"><i class="ti ti-circle-check"></i></div><div class="stat-label">مكتملة</div><div class="stat-value">${dn}</div><div class="stat-trend"><i class="ti ti-calendar" style="color:var(--text-3)"></i>&nbsp;<span style="color:var(--text-2)">7 أيام: ${_last7d} &nbsp;·&nbsp; اليوم: ${_last24h}</span></div></div>
-    <div class="stat-card c-blue" onclick="dashGoto('done')"><div class="stat-icon i-blue"><i class="ti ti-hourglass"></i></div><div class="stat-label">متوسط الإنجاز</div><div class="stat-value" style="font-size:19px">${_fH(_avgH)}</div><div class="stat-trend"><i class="ti ti-clock" style="color:var(--text-3)"></i>&nbsp;<span style="color:var(--text-2)">تصميم: ${_fH(_dsAvg)}</span></div></div>
-    <div class="stat-card c-purple" onclick="dashGoto('print')"><div class="stat-icon i-purple"><i class="ti ti-printer"></i></div><div class="stat-label">متوسط الطباعة</div><div class="stat-value" style="font-size:19px">${_fH(_prAvg)}</div><div class="stat-trend"><i class="ti ti-layers" style="color:var(--text-3)"></i>&nbsp;<span style="color:var(--text-2)">${inProd} جارية</span></div></div>
-    <div class="stat-card c-red" onclick="dashGoto('overdue')"><div class="stat-icon i-red"><i class="ti ti-alarm-minus"></i></div><div class="stat-label">تجاوزت الميعاد</div><div class="stat-value" style="color:#EF4444">${_ovr}</div><div class="stat-trend"><i class="ti ti-brush" style="color:var(--text-3)"></i>&nbsp;<span style="color:var(--text-2)">تصميم: ${inDesign} جارية</span></div></div>
+    <div class="stat-card c-gold"><div class="stat-icon i-gold"><i class="ti ti-loader-2"></i></div><div class="stat-label">جارية الآن</div><div class="stat-value">${total}</div><div class="stat-trend"><span style="background:rgba(212,175,55,.15);color:#92400E;border-radius:8px;padding:1px 6px;font-size:9px;font-weight:800;"><i class="ti ti-bolt"></i>${ug} عاجل</span></div></div>
+    <div class="stat-card c-green"><div class="stat-icon i-green"><i class="ti ti-circle-check"></i></div><div class="stat-label">مكتملة</div><div class="stat-value">${dn}</div><div class="stat-trend"><i class="ti ti-calendar" style="color:var(--text-3)"></i>&nbsp;<span style="color:var(--text-2)">7 أيام: ${_last7d} &nbsp;·&nbsp; اليوم: ${_last24h}</span></div></div>
+    <div class="stat-card c-blue"><div class="stat-icon i-blue"><i class="ti ti-hourglass"></i></div><div class="stat-label">متوسط الإنجاز</div><div class="stat-value" style="font-size:19px">${_fH(_avgH)}</div><div class="stat-trend"><i class="ti ti-clock" style="color:var(--text-3)"></i>&nbsp;<span style="color:var(--text-2)">تصميم: ${_fH(_dsAvg)}</span></div></div>
+    <div class="stat-card c-red"><div class="stat-icon i-red"><i class="ti ti-alarm-minus"></i></div><div class="stat-label">تجاوزت الميعاد</div><div class="stat-value" style="color:#EF4444">${_ovr}</div><div class="stat-trend"><i class="ti ti-brush" style="color:var(--text-3)"></i>&nbsp;<span style="color:var(--text-2)">تصميم: ${inDesign} جارية</span></div></div>
   </div>`;
   // Alerts
   const now=new Date();
@@ -1522,20 +1538,6 @@ function buildDash(){
         <tbody>${tableRows||'<tr><td colspan="6" style="text-align:center;color:var(--text-3);padding:30px"><i class="ti ti-inbox" style="font-size:30px;display:block;margin-bottom:8px;"></i>لا توجد طلبات جارية</td></tr>'}</tbody>
       </table></div>
     </div>`;
-}
-async function dashGoto(mode){
-  _currentWfTab=mode==='done'?'done':'active';
-  await nav('wf');
-  if(mode==='print'){
-    filterWfDept('print');
-  }else if(mode==='overdue'){
-    const now=new Date();
-    document.querySelectorAll('.wf-card').forEach(c=>{
-      const key=c.getAttribute('data-key');const o=orders[key];
-      const isOv=o&&o.deadline&&o.deadline!=='—'&&o.currentDept!=='done'&&new Date(o.deadline)<now;
-      c.style.display=isOv?'':'none';
-    });
-  }
 }
 // ============================================================
 // WF GRID
@@ -1658,7 +1660,7 @@ function buildMyWork(){
   const myOrders=ordersArr().filter(o=>isMyOrder(o));
   const isWorkshop=cu.type==='workshop';
   const cards=myOrders.length===0?'<div style="color:var(--text-3);padding:30px;text-align:center;"><i class="ti ti-check-circle" style="font-size:36px;display:block;margin-bottom:10px;color:#10B981;"></i>لا توجد أعمال موكلة إليك حالياً</div>'
-    :`<div class="wf-grid">${myOrders.map(o=>`<div class="wf-card" style="${o.isQuickTask?'border:2px solid #C89A4A;background:linear-gradient(135deg,#FFFDF8,#FFF5E0);':''}" onclick="openOrderModal('${o._key}')">${hasUnreadChat(o)?'<span class="chat-unread-dot" title="رسالة جديدة في المحادثة"></span>':''}<div class="wf-card-top">
+    :`<div class="wf-grid">${myOrders.map(o=>`<div class="wf-card" data-key="${o._key}" style="${o.isQuickTask?'border:2px solid #C89A4A;background:linear-gradient(135deg,#FFFDF8,#FFF5E0);':''}" onclick="openOrderModal('${o._key}')">${hasUnreadChat(o)?'<span class="chat-unread-dot" title="رسالة جديدة في المحادثة"></span>':''}<div class="wf-card-top">
       <div class="wf-card-id">${o.id||o._key} · ${orderDateTime(o)}${o.isQuickTask?'<span class="urgent-tag" style="margin-right:6px;font-size:9px;background:linear-gradient(135deg,#78350F,#C89A4A);"><i class="ti ti-bolt"></i>مهمة سريعة</span>':''}</div>
       <div class="wf-card-name">${o.client}</div>
       <div class="wf-card-svc">${o.service}</div>
@@ -1684,7 +1686,6 @@ function buildQuotePage(){
   const todayQ=new Date().toISOString().split('T')[0];
   document.getElementById('page-quote').innerHTML=`
     <div class="page-header"><div class="ptitle"><i class="ti ti-receipt-2"></i> إصدار عرض سعر رسمي</div></div>
-    ${window._editingQuoteKey?`<div style="background:#FFF7E6;border:1px solid #F5D68A;color:#92400E;border-radius:var(--radius-md);padding:10px 16px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;"><span><i class="ti ti-edit"></i> وضع تعديل عرض السعر رقم <strong>${(standaloneQuotes[window._editingQuoteKey]&&standaloneQuotes[window._editingQuoteKey].ref)||window._editingQuoteKey}</strong></span><button class="btn btn-out btn-sm" onclick="cancelEditQuote()"><i class="ti ti-x"></i> إلغاء التعديل</button></div>`:''}
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
       <!-- Customer Info Card -->
       <div class="card">
@@ -1695,7 +1696,7 @@ function buildQuotePage(){
             <datalist id="q-cl-list">${cArr.map(c=>`<option value="${c.name}">`).join('')}</datalist>
             <input id="q-client" list="q-cl-list" placeholder="اسم الشركة أو العميل" oninput="onClientInputQuote(this.value)" autocomplete="off"/>
           </div>
-          <div class="fg"><label>رقم الجوال * <span style="color:#EF4444">(إلزامي)</span></label><input id="q-phone" placeholder="05XXXXXXXX"/></div>
+          <div class="fg"><label>رقم الجوال * <span style="color:#EF4444">(إلزامي)</span></label><input id="q-phone" placeholder="05XXXXXXXX أو +966XXXXXXXXX"/></div>
         </div>
       </div>
       <!-- Quote Details Card -->
@@ -1744,42 +1745,21 @@ function buildQuotePage(){
         </div>
         <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:16px;">
           <button class="btn btn-brand" onclick="saveAndPreviewQuote()"><i class="ti ti-eye"></i> معاينة وطباعة A4</button>
-          <button class="btn btn-gold" onclick="saveQuoteToDb()"><i class="ti ti-device-floppy"></i> ${window._editingQuoteKey?'حفظ التعديلات':'حفظ في السجلات'}</button>
+          <button class="btn btn-gold" onclick="saveQuoteToDb()"><i class="ti ti-device-floppy"></i> حفظ في السجلات</button>
           <button class="btn btn-purple" onclick="convertQuoteToOrder()"><i class="ti ti-transfer"></i> تحويل لأمر تشغيل</button>
         </div>
       </div>
     </div>
     <!-- Archive -->
     <div class="page-header" style="margin-top:24px;"><div class="ptitle"><i class="ti ti-archive"></i> أرشيف عروض الأسعار</div></div>
-    <div class="controls-row" style="flex-wrap:wrap;gap:10px;">
-      <div class="search-bar"><i class="ti ti-search"></i><input placeholder="بحث بالعميل أو رقم العرض..." oninput="filterQuotesArchive(this.value)"/></div>
-      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-        <label style="font-size:11px;color:var(--text-3);white-space:nowrap;">من تاريخ</label>
-        <input type="date" id="q-arch-from" onchange="filterQuotesArchiveByDate()" style="padding:6px 10px;border:1px solid var(--border);border-radius:8px;"/>
-        <label style="font-size:11px;color:var(--text-3);white-space:nowrap;">إلى تاريخ</label>
-        <input type="date" id="q-arch-to" onchange="filterQuotesArchiveByDate()" style="padding:6px 10px;border:1px solid var(--border);border-radius:8px;"/>
-        <button class="btn btn-out btn-sm" onclick="document.getElementById('q-arch-from').value='';document.getElementById('q-arch-to').value='';filterQuotesArchiveByDate();"><i class="ti ti-x"></i> مسح</button>
-      </div>
-    </div>
+    <div class="controls-row"><div class="search-bar"><i class="ti ti-search"></i><input placeholder="بحث بالعميل أو رقم العرض..." oninput="filterQuotesArchive(this.value)"/></div></div>
     <div class="card"><div class="tbl-wrap"><table id="quotes-archive-table">
-      <thead><tr><th>العميل</th><th>رقم العرض</th><th>الإجمالي</th><th style="width:90px">التاريخ</th><th style="width:180px">إجراء</th></tr></thead>
+      <thead><tr><th>العميل</th><th>رقم العرض</th><th>الإجمالي</th><th style="width:90px">التاريخ</th><th style="width:140px">إجراء</th></tr></thead>
       <tbody id="quotes-archive-tbody">${buildQuoteArchiveRows()}</tbody>
     </table></div></div>`;
   addQuoteLine();
 }
 function filterQuotesArchive(q){document.querySelectorAll('#quotes-archive-tbody tr').forEach(r=>{r.style.display=r.textContent.toLowerCase().includes(q.toLowerCase())?'':'none';});}
-function filterQuotesArchiveByDate(){
-  const from=document.getElementById('q-arch-from')?.value||'';
-  const to=document.getElementById('q-arch-to')?.value||'';
-  document.querySelectorAll('#quotes-archive-tbody tr').forEach(r=>{
-    const d=r.getAttribute('data-date')||'';
-    if(!d){r.style.display='';return;}
-    let show=true;
-    if(from&&d<from)show=false;
-    if(to&&d>to)show=false;
-    r.style.display=show?'':'none';
-  });
-}
 function onClientInputQuote(val){
   if(!val)return;
   const ex=Object.values(clients).find(c=>(c.name||'').trim()===val.trim());
@@ -1792,34 +1772,17 @@ function onQuotePaymentChange(v){}
 function buildQuoteArchiveRows(){
   const arr=Object.entries(standaloneQuotes).map(([k,v])=>({...v,_key:k})).sort((a,b)=>new Date(b.date)-new Date(a.date));
   if(!arr.length)return'<tr><td colspan="5" style="text-align:center;color:var(--text-3);padding:24px">لا يوجد عروض أسعار محفوظة</td></tr>';
-  return arr.map(q=>`<tr data-date="${q.date||''}">
+  return arr.map(q=>`<tr>
     <td><strong>${q.client}</strong></td>
     <td><span class="badge b-new">${q.ref||'—'}</span></td>
     <td><span class="badge b-proc" style="font-size:12px;">${Number(q.totalWithVat||q.total||0).toLocaleString()} ر.س</span></td>
     <td style="font-size:11px">${q.date}</td>
     <td><div style="display:flex;gap:5px;flex-wrap:wrap;">
       <button class="btn btn-out btn-xs" onclick="previewSavedQuote('${q._key}')"><i class="ti ti-eye"></i> معاينة</button>
-      <button class="btn btn-gold btn-xs" onclick="editQuote('${q._key}')"><i class="ti ti-edit"></i> تعديل</button>
       <button class="btn btn-purple btn-xs" onclick="convertSavedQuoteToOrder('${q._key}')"><i class="ti ti-transfer"></i> أمر</button>
     </div></td>
   </tr>`).join('');
 }
-async function editQuote(key){
-  const q=standaloneQuotes[key]||await fbGet(`standalone_quotes/${key}`);
-  if(!q){toast('⚠️ تعذر العثور على العرض');return;}
-  window._editingQuoteKey=key;
-  buildQuotePage();
-  const setVal=(id,v)=>{const el=document.getElementById(id);if(el)el.value=v||'';};
-  setVal('q-client',q.client);setVal('q-phone',q.phone);setVal('q-ref',q.ref||key);
-  setVal('q-date',q.date);setVal('q-sales',q.sales||cu.name);setVal('q-validity',q.validity);
-  setVal('q-delivery',q.delivery);setVal('q-terms',q.terms);setVal('q-bank',q.bank);
-  const ptSel=document.getElementById('q-payment-terms');if(ptSel&&q.paymentTerms)ptSel.value=q.paymentTerms;
-  window._quoteLines=(q.lines||[]).map(l=>({...l,id:'q'+Date.now()+Math.random().toString(36).slice(2)}));
-  renderQuoteLines();
-  document.getElementById('page-quote')?.scrollIntoView({behavior:'smooth',block:'start'});
-  toast('✏️ وضع التعديل: عرض رقم '+(q.ref||key));
-}
-function cancelEditQuote(){window._editingQuoteKey=null;buildQuotePage();}
 function addQuoteLine(){
   const id='q'+Date.now();
   window._quoteLines.push({id,lbl:'',q:1,p:0});
@@ -1855,7 +1818,7 @@ async function attachLineImage(id,files){
 function renderQuoteTotals(){
   const subtotal=window._quoteLines.reduce((s,l)=>s+(l.q*l.p),0);
   const vat=subtotal*0.15;const total=subtotal+vat;
-  const fmt=n=>n.toLocaleString('ar-SA',{minimumFractionDigits:2});
+  const fmt=n=>n.toLocaleString('en-US',{minimumFractionDigits:2});
   const g=document.getElementById('q-grand-total');
   const vn=document.getElementById('q-vat-note');
   if(g)g.textContent=fmt(total)+' ر.س';
@@ -1880,17 +1843,11 @@ function getQuoteData(){
 async function saveQuoteToDb(){
   const data=getQuoteData();
   if(!data.client){toast('يرجى تحديد العميل');return;}
-  if(!data.phone||!isValidSaudiPhone(data.phone)){toast('⚠️ رقم الجوال إلزامي ويجب أن يكون رقم سعودي صحيح (05XXXXXXXX)');return;}
+  if(!data.phone||!isValidSaudiPhone(data.phone)){toast('⚠️ رقم الجوال إلزامي ويجب أن يكون رقم سعودي صحيح (يبدأ بـ 05 أو +966)');return;}
   if(!data.lines.length){toast('يرجى إضافة بند واحد على الأقل');return;}
   showSaving('جاري الحفظ...');
-  if(window._editingQuoteKey){
-    await fbPatch('standalone_quotes/'+window._editingQuoteKey,data);
-    window._editingQuoteKey=null;
-    await loadData();hideSaving();toast('✓ تم تحديث عرض السعر');buildQuotePage();
-  }else{
-    await fbPush('standalone_quotes',data);
-    await loadData();hideSaving();toast('✓ تم حفظ عرض السعر');buildQuotePage();
-  }
+  await fbPush('standalone_quotes',data);
+  await loadData();hideSaving();toast('✓ تم حفظ عرض السعر');buildQuotePage();
 }
 function saveAndPreviewQuote(){
   const data=getQuoteData();
@@ -1909,7 +1866,7 @@ async function previewSavedQuote(key){
   setTimeout(()=>window.print(),400);
 }
 function renderA4Quote(data,key=''){
-  const fmt=n=>Number(n||0).toLocaleString('ar-SA',{minimumFractionDigits:2});
+  const fmt=n=>Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2});
   const issueDate=data.date||new Date().toISOString().split('T')[0];
   const expiryDate=data.validity||'';
   const lines=(data.lines||[]);
@@ -1917,21 +1874,21 @@ function renderA4Quote(data,key=''){
   const vat=subtotal*0.15;
   const totalWithVat=Number(data.totalWithVat||0)||(subtotal+vat);
   const trackingUrl=`${location.origin}${location.pathname.replace(/[^/]*$/,'tracking.html')}?id=${key||data.ref}`;
-  const hasAnyImg=lines.some(l=>l.img);
+  const LOGO='data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyMDAgMjAwIj48cmVjdCB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgcng9IjI4IiBmaWxsPSIjNEEwRTE3Ii8+PGNpcmNsZSBjeD0iMTAwIiBjeT0iMTAwIiByPSI3OCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjRDRBRjM3IiBzdHJva2Utd2lkdGg9IjUiLz48dGV4dCB4PSIxMDAiIHk9IjEzOCIgZm9udC1zaXplPSIxMTAiIGZvbnQtZmFtaWx5PSJUYWhvbWEsIEFyaWFsIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjRDRBRjM3Ij7YsTwvdGV4dD48L3N2Zz4=';
   const isExpired=!!(expiryDate&&new Date(expiryDate)<new Date());
   /* ── Products rows — Image | Description | Qty | Unit Price | Total (per spec: 5 cols) ── */
   const linesHtml=lines.map((l,i)=>{
     const qty=Number(l.q||0),price=Number(l.p||0);
     const lineTotal=qty*price;
-    const imgCell=hasAnyImg?(l.img
-      ?`<td style="padding:8px;text-align:center;"><img src="${l.img}" style="width:44px;height:44px;object-fit:cover;border-radius:8px;border:1px solid #EDE3D0;"/></td>`
-      :`<td style="padding:8px;text-align:center;"><div style="width:44px;height:44px;border-radius:8px;background:#F3EEE4;display:inline-flex;align-items:center;justify-content:center;"><i class="ti ti-photo" style="color:#C9A227;font-size:16px;"></i></div></td>`):'';
+    const imgCell=l.img
+      ?`<td style="padding:10px;text-align:center;"><img src="${l.img}" style="width:54px;height:54px;object-fit:cover;border-radius:10px;border:1px solid #EDE3D0;"/></td>`
+      :`<td style="padding:10px;text-align:center;"><div style="width:54px;height:54px;border-radius:10px;background:#F3EEE4;display:inline-flex;align-items:center;justify-content:center;"><i class="ti ti-photo" style="color:#C9A227;font-size:18px;"></i></div></td>`;
     return `<tr style="background:${i%2===0?'#ffffff':'#FBF8F2'};">
       ${imgCell}
-      <td style="padding:10px 12px;text-align:right;font-size:12.5px;color:#2A2A2A;font-weight:600;line-height:1.4;">${l.lbl||'—'}</td>
-      <td style="padding:10px 12px;text-align:center;font-size:12.5px;color:#5B0F19;font-weight:700;">${qty}</td>
-      <td style="padding:10px 12px;text-align:center;font-size:12.5px;color:#2A2A2A;">${fmt(price)} <span style="font-size:9.5px;color:#9B8F80;">ر.س</span></td>
-      <td style="padding:10px 12px;text-align:center;font-weight:800;color:#5B0F19;font-size:12.5px;">${fmt(lineTotal)} <span style="font-size:9.5px;font-weight:600;color:#9B8F80;">ر.س</span></td>
+      <td style="padding:14px 12px;text-align:right;font-size:13px;color:#2A2A2A;font-weight:600;line-height:1.5;">${l.lbl||'—'}</td>
+      <td style="padding:14px 12px;text-align:center;font-size:13px;color:#5B0F19;font-weight:700;">${qty}</td>
+      <td style="padding:14px 12px;text-align:center;font-size:13px;color:#2A2A2A;">${fmt(price)} <span style="font-size:10px;color:#9B8F80;">ر.س</span></td>
+      <td style="padding:14px 12px;text-align:center;font-weight:800;color:#5B0F19;font-size:13px;">${fmt(lineTotal)} <span style="font-size:10px;font-weight:600;color:#9B8F80;">ر.س</span></td>
     </tr>`;
   }).join('');
   /* ── Main print HTML — completely new luxury/enterprise layout ── */
@@ -1941,165 +1898,165 @@ function renderA4Quote(data,key=''){
 #print-area *{box-sizing:border-box;font-family:'Tajawal','Cairo',sans-serif;}
 #print-area{direction:rtl;background:#FAF8F5;max-width:794px;margin:0 auto;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
 @media print{
-  @page{size:A4;margin:6mm;}
   body>*:not(#modal-overlay):not(#modal-box):not(#print-area){display:none!important;}
   #print-area{max-width:100%;box-shadow:none!important;}
-  #print-area-inner{min-height:0!important;padding:0!important;}
   #no-print{display:none!important;}
 }
 </style>
-<div id="print-area-inner" style="background:#FAF8F5;min-height:297mm;padding:18px 20px;position:relative;">
+<div id="print-area-inner" style="background:#FAF8F5;min-height:297mm;padding:26px 28px;position:relative;">
   <!-- HEADER CARD -->
-  <div style="background:#fff;border-radius:16px;padding:16px 22px;box-shadow:0 10px 34px rgba(91,15,25,.08);display:flex;justify-content:space-between;align-items:center;gap:18px;margin-bottom:10px;flex-wrap:wrap;">
-    <div style="display:flex;align-items:center;gap:14px;">
-      <div style="width:52px;height:52px;border-radius:50%;border:2.5px solid #5B0F19;display:flex;align-items:center;justify-content:center;flex-shrink:0;background:#fff;">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="32" height="32"><path d="M 18 48 Q 45 38 78 52 Q 95 58 102 72" fill="none" stroke="#5B0F19" stroke-width="6" stroke-linecap="round"/><circle cx="22" cy="52" r="4" fill="#C9A227" opacity=".9"/><circle cx="98" cy="52" r="3.5" fill="#C9A227" opacity=".8"/></svg>
-      </div>
+  <div style="background:#fff;border-radius:20px;padding:26px 30px;box-shadow:0 10px 34px rgba(91,15,25,.08);display:flex;justify-content:space-between;align-items:center;gap:18px;margin-bottom:16px;flex-wrap:wrap;">
+    <div style="display:flex;align-items:center;gap:16px;">
+      <img src="${LOGO}" style="width:60px;height:60px;border-radius:16px;object-fit:contain;"/>
       <div>
-        <div style="font-size:17px;font-weight:900;color:#5B0F19;line-height:1.3;">روائع الأفكار الإعلانية</div>
-        <div style="font-size:9.5px;color:#9B8F80;letter-spacing:.5px;margin-top:2px;">Rawaee Al-Afkar For Advertising</div>
+        <div style="font-size:18px;font-weight:900;color:#5B0F19;line-height:1.3;">روائع الأفكار الإعلانية</div>
+        <div style="font-size:10px;color:#9B8F80;letter-spacing:.5px;margin-top:2px;">Rawaee Al-Afkar For Advertising</div>
       </div>
     </div>
     <div style="text-align:center;">
-      <div style="display:inline-block;background:linear-gradient(135deg,#5B0F19,#7A1B28);color:#fff;padding:7px 20px;border-radius:30px;font-size:11.5px;font-weight:800;letter-spacing:3px;">عرض سعر رسمي</div>
-      <div style="font-size:8.5px;color:#C9A227;font-weight:800;letter-spacing:4px;margin-top:6px;">OFFICIAL QUOTATION</div>
+      <div style="display:inline-block;background:linear-gradient(135deg,#5B0F19,#7A1B28);color:#fff;padding:8px 22px;border-radius:30px;font-size:12px;font-weight:800;letter-spacing:3px;">عرض سعر رسمي</div>
+      <div style="font-size:9px;color:#C9A227;font-weight:800;letter-spacing:4px;margin-top:8px;">OFFICIAL QUOTATION</div>
     </div>
     <div style="text-align:left;">
-      <div style="font-size:8.5px;color:#9B8F80;letter-spacing:1.5px;">رقم العرض</div>
-      <div style="font-size:17px;font-weight:900;color:#5B0F19;">${data.ref||key||'—'}</div>
+      <div style="font-size:9px;color:#9B8F80;letter-spacing:1.5px;">رقم العرض</div>
+      <div style="font-size:18px;font-weight:900;color:#5B0F19;">${data.ref||key||'—'}</div>
     </div>
   </div>
-  <!-- DATE STRIP -->
-  <div style="display:flex;gap:10px;margin-bottom:10px;">
-    <div style="flex:1;background:#fff;border-radius:14px;padding:11px 16px;box-shadow:0 6px 20px rgba(91,15,25,.06);display:flex;align-items:center;gap:10px;">
-      <i class="ti ti-calendar-event" style="color:#C9A227;font-size:18px;"></i>
-      <div><div style="font-size:9px;color:#9B8F80;">تاريخ الإصدار</div><div style="font-size:12.5px;font-weight:700;color:#2A2A2A;">${issueDate}</div></div>
+  <!-- DATE / STATUS STRIP -->
+  <div style="display:flex;gap:14px;margin-bottom:16px;">
+    <div style="flex:1;background:#fff;border-radius:16px;padding:14px 18px;box-shadow:0 6px 20px rgba(91,15,25,.06);display:flex;align-items:center;gap:10px;">
+      <i class="ti ti-calendar-event" style="color:#C9A227;font-size:20px;"></i>
+      <div><div style="font-size:9.5px;color:#9B8F80;">تاريخ الإصدار</div><div style="font-size:13px;font-weight:700;color:#2A2A2A;">${issueDate}</div></div>
     </div>
-    <div style="flex:1;background:#fff;border-radius:14px;padding:11px 16px;box-shadow:0 6px 20px rgba(91,15,25,.06);display:flex;align-items:center;gap:10px;">
-      <i class="ti ti-calendar-due" style="color:#C9A227;font-size:18px;"></i>
-      <div><div style="font-size:9px;color:#9B8F80;">تاريخ الانتهاء</div><div style="font-size:12.5px;font-weight:700;color:#2A2A2A;">${expiryDate||'—'}</div></div>
+    <div style="flex:1;background:#fff;border-radius:16px;padding:14px 18px;box-shadow:0 6px 20px rgba(91,15,25,.06);display:flex;align-items:center;gap:10px;">
+      <i class="ti ti-calendar-due" style="color:#C9A227;font-size:20px;"></i>
+      <div><div style="font-size:9.5px;color:#9B8F80;">تاريخ الانتهاء</div><div style="font-size:13px;font-weight:700;color:#2A2A2A;">${expiryDate||'—'}</div></div>
+    </div>
+    <div style="flex:1;background:${isExpired?'#FDECEC':'#F2F8F3'};border-radius:16px;padding:14px 18px;box-shadow:0 6px 20px rgba(91,15,25,.06);display:flex;align-items:center;gap:10px;">
+      <i class="ti ${isExpired?'ti-alert-triangle':'ti-circle-check'}" style="color:${isExpired?'#DC2626':'#16A34A'};font-size:20px;"></i>
+      <div><div style="font-size:9.5px;color:#9B8F80;">الحالة</div><div style="font-size:13px;font-weight:800;color:${isExpired?'#DC2626':'#16A34A'};">${isExpired?'منتهي الصلاحية':'ساري المفعول'}</div></div>
     </div>
   </div>
   <!-- CUSTOMER + QUOTE INFO -->
-  <div style="display:flex;gap:10px;margin-bottom:10px;">
-    <div style="flex:1;background:#fff;border-radius:16px;padding:14px 18px;box-shadow:0 10px 30px rgba(91,15,25,.07);">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
-        <i class="ti ti-user-circle" style="color:#5B0F19;font-size:15px;"></i>
-        <span style="font-size:11px;font-weight:800;color:#5B0F19;letter-spacing:1.5px;">بيانات العميل</span>
+  <div style="display:flex;gap:14px;margin-bottom:16px;">
+    <div style="flex:1;background:#fff;border-radius:20px;padding:22px 24px;box-shadow:0 10px 30px rgba(91,15,25,.07);">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;">
+        <i class="ti ti-user-circle" style="color:#5B0F19;font-size:16px;"></i>
+        <span style="font-size:11.5px;font-weight:800;color:#5B0F19;letter-spacing:1.5px;">بيانات العميل</span>
       </div>
-      <div style="display:flex;flex-direction:column;gap:8px;">
-        <div style="display:flex;justify-content:space-between;border-bottom:1px dashed #EEE3D3;padding-bottom:6px;">
-          <span style="font-size:11px;color:#9B8F80;">اسم العميل</span>
-          <span style="font-size:12.5px;font-weight:700;color:#2A2A2A;">${data.client||'—'}</span>
+      <div style="display:flex;flex-direction:column;gap:12px;">
+        <div style="display:flex;justify-content:space-between;border-bottom:1px dashed #EEE3D3;padding-bottom:10px;">
+          <span style="font-size:11.5px;color:#9B8F80;">اسم العميل</span>
+          <span style="font-size:13px;font-weight:700;color:#2A2A2A;">${data.client||'—'}</span>
         </div>
         <div style="display:flex;justify-content:space-between;">
-          <span style="font-size:11px;color:#9B8F80;">رقم الجوال</span>
-          <span style="font-size:12.5px;font-weight:700;color:#2A2A2A;direction:ltr;">${data.phone||'—'}</span>
+          <span style="font-size:11.5px;color:#9B8F80;">رقم الجوال</span>
+          <span style="font-size:13px;font-weight:700;color:#2A2A2A;direction:ltr;">${data.phone||'—'}</span>
         </div>
       </div>
     </div>
-    <div style="flex:1;background:#fff;border-radius:16px;padding:14px 18px;box-shadow:0 10px 30px rgba(91,15,25,.07);">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
-        <i class="ti ti-file-description" style="color:#5B0F19;font-size:15px;"></i>
-        <span style="font-size:11px;font-weight:800;color:#5B0F19;letter-spacing:1.5px;">بيانات العرض</span>
+    <div style="flex:1;background:#fff;border-radius:20px;padding:22px 24px;box-shadow:0 10px 30px rgba(91,15,25,.07);">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;">
+        <i class="ti ti-file-description" style="color:#5B0F19;font-size:16px;"></i>
+        <span style="font-size:11.5px;font-weight:800;color:#5B0F19;letter-spacing:1.5px;">بيانات العرض</span>
       </div>
-      <div style="display:flex;flex-direction:column;gap:8px;">
-        <div style="display:flex;justify-content:space-between;border-bottom:1px dashed #EEE3D3;padding-bottom:6px;">
-          <span style="font-size:11px;color:#9B8F80;">مسؤول المبيعات</span>
-          <span style="font-size:12.5px;font-weight:700;color:#2A2A2A;">${data.sales||'—'}</span>
+      <div style="display:flex;flex-direction:column;gap:12px;">
+        <div style="display:flex;justify-content:space-between;border-bottom:1px dashed #EEE3D3;padding-bottom:10px;">
+          <span style="font-size:11.5px;color:#9B8F80;">مسؤول المبيعات</span>
+          <span style="font-size:13px;font-weight:700;color:#2A2A2A;">${data.sales||'—'}</span>
         </div>
-        <div style="display:flex;justify-content:space-between;border-bottom:1px dashed #EEE3D3;padding-bottom:6px;">
-          <span style="font-size:11px;color:#9B8F80;">مدة التنفيذ</span>
-          <span style="font-size:12.5px;font-weight:700;color:#2A2A2A;">${data.delivery||'—'}</span>
+        <div style="display:flex;justify-content:space-between;border-bottom:1px dashed #EEE3D3;padding-bottom:10px;">
+          <span style="font-size:11.5px;color:#9B8F80;">مدة التنفيذ</span>
+          <span style="font-size:13px;font-weight:700;color:#2A2A2A;">${data.delivery||'—'}</span>
         </div>
         <div style="display:flex;justify-content:space-between;">
-          <span style="font-size:11px;color:#9B8F80;">طريقة وشروط الدفع</span>
-          <span style="font-size:12.5px;font-weight:700;color:#2A2A2A;">${data.paymentTerms||'—'}</span>
+          <span style="font-size:11.5px;color:#9B8F80;">طريقة وشروط الدفع</span>
+          <span style="font-size:13px;font-weight:700;color:#2A2A2A;">${data.paymentTerms||'—'}</span>
         </div>
       </div>
     </div>
   </div>
   <!-- PRODUCTS TABLE CARD -->
-  <div style="background:#fff;border-radius:16px;padding:14px 18px;box-shadow:0 10px 30px rgba(91,15,25,.07);margin-bottom:10px;">
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+  <div style="background:#fff;border-radius:20px;padding:22px 24px;box-shadow:0 10px 30px rgba(91,15,25,.07);margin-bottom:16px;">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
       <div style="width:26px;height:2px;background:linear-gradient(90deg,#C9A227,transparent);"></div>
-      <span style="font-size:11.5px;font-weight:800;color:#5B0F19;letter-spacing:2px;">المنتجات والخدمات</span>
+      <span style="font-size:12px;font-weight:800;color:#5B0F19;letter-spacing:2px;">المنتجات والخدمات</span>
       <div style="flex:1;height:1px;background:linear-gradient(90deg,#EEE3D3,transparent);"></div>
     </div>
-    <div style="border-radius:12px;overflow:hidden;border:1px solid #F1E9D8;">
+    <div style="border-radius:14px;overflow:hidden;border:1px solid #F1E9D8;">
       <table style="width:100%;border-collapse:collapse;">
         <thead>
           <tr style="background:#5B0F19;">
-            ${hasAnyImg?`<th style="padding:10px 12px;color:#C9A227;font-size:11px;font-weight:800;text-align:center;width:66px;">الصورة</th>`:''}
-            <th style="padding:10px 12px;color:#fff;font-size:11px;font-weight:800;text-align:right;">وصف الصنف</th>
-            <th style="padding:10px 12px;color:#C9A227;font-size:11px;font-weight:800;text-align:center;width:60px;">الكمية</th>
-            <th style="padding:10px 12px;color:#C9A227;font-size:11px;font-weight:800;text-align:center;width:95px;">سعر الوحدة</th>
-            <th style="padding:10px 12px;color:#fff;font-size:11px;font-weight:800;text-align:center;width:105px;">الإجمالي</th>
+            <th style="padding:13px 12px;color:#C9A227;font-size:11.5px;font-weight:800;text-align:center;width:80px;">الصورة</th>
+            <th style="padding:13px 12px;color:#fff;font-size:11.5px;font-weight:800;text-align:right;">وصف الصنف</th>
+            <th style="padding:13px 12px;color:#C9A227;font-size:11.5px;font-weight:800;text-align:center;width:65px;">الكمية</th>
+            <th style="padding:13px 12px;color:#C9A227;font-size:11.5px;font-weight:800;text-align:center;width:100px;">سعر الوحدة</th>
+            <th style="padding:13px 12px;color:#fff;font-size:11.5px;font-weight:800;text-align:center;width:110px;">الإجمالي</th>
           </tr>
         </thead>
-        <tbody>${linesHtml||`<tr><td colspan="${hasAnyImg?5:4}" style="text-align:center;padding:24px;color:#BBB;font-size:12.5px;">لا توجد بنود</td></tr>`}</tbody>
+        <tbody>${linesHtml||`<tr><td colspan="5" style="text-align:center;padding:34px;color:#BBB;font-size:13px;">لا توجد بنود</td></tr>`}</tbody>
       </table>
     </div>
   </div>
   <!-- GRAND TOTAL — visual focal point -->
-  <div style="background:linear-gradient(135deg,#5B0F19 0%,#7A1B28 50%,#5B0F19 100%);border-radius:16px;padding:16px 22px;margin-bottom:10px;box-shadow:0 14px 40px rgba(91,15,25,.28);position:relative;overflow:hidden;">
+  <div style="background:linear-gradient(135deg,#5B0F19 0%,#7A1B28 50%,#5B0F19 100%);border-radius:20px;padding:26px 30px;margin-bottom:16px;box-shadow:0 14px 40px rgba(91,15,25,.28);position:relative;overflow:hidden;">
     <div style="position:absolute;top:-20px;left:-20px;width:100px;height:100px;background:rgba(201,162,39,.10);border-radius:50%;"></div>
     <div style="position:absolute;bottom:-30px;right:-30px;width:130px;height:130px;background:rgba(201,162,39,.07);border-radius:50%;"></div>
-    <div style="display:flex;justify-content:space-between;align-items:center;position:relative;flex-wrap:wrap;gap:14px;">
-      <div style="display:flex;flex-direction:column;gap:6px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;position:relative;flex-wrap:wrap;gap:16px;">
+      <div style="display:flex;flex-direction:column;gap:8px;">
         <div style="display:flex;justify-content:space-between;gap:30px;">
-          <span style="color:rgba(255,255,255,.65);font-size:11px;">المجموع الفرعي</span>
-          <span style="color:#fff;font-size:12px;font-weight:700;">${fmt(subtotal)} ر.س</span>
+          <span style="color:rgba(255,255,255,.65);font-size:11.5px;">السعر بدون ضريبة (المجموع الفرعي)</span>
+          <span style="color:#fff;font-size:12.5px;font-weight:700;">${fmt(subtotal)} ر.س</span>
         </div>
         <div style="display:flex;justify-content:space-between;gap:30px;">
-          <span style="color:rgba(255,255,255,.65);font-size:11px;">ضريبة القيمة المضافة (15%)</span>
-          <span style="color:#fff;font-size:12px;font-weight:700;">${fmt(vat)} ر.س</span>
+          <span style="color:rgba(255,255,255,.65);font-size:11.5px;">ضريبة القيمة المضافة (15%)</span>
+          <span style="color:#fff;font-size:12.5px;font-weight:700;">${fmt(vat)} ر.س</span>
         </div>
       </div>
       <div style="width:1px;align-self:stretch;background:rgba(201,162,39,.35);"></div>
       <div style="text-align:center;">
-        <div style="color:#C9A227;font-size:9.5px;letter-spacing:2px;font-weight:700;margin-bottom:3px;">الإجمالي شامل الضريبة</div>
-        <div style="color:#fff;font-size:26px;font-weight:900;line-height:1;">${fmt(totalWithVat)}</div>
-        <div style="color:rgba(255,255,255,.6);font-size:10px;margin-top:4px;">ريال سعودي</div>
+        <div style="color:#C9A227;font-size:10px;letter-spacing:2px;font-weight:700;margin-bottom:4px;">السعر شامل الضريبة</div>
+        <div style="color:#fff;font-size:32px;font-weight:900;line-height:1;">${fmt(totalWithVat)}</div>
+        <div style="color:rgba(255,255,255,.6);font-size:11px;margin-top:6px;">ريال سعودي</div>
       </div>
     </div>
   </div>
   <!-- BANK INFO + QR -->
-  <div style="display:flex;gap:10px;margin-bottom:10px;">
-    <div style="flex:1.2;background:#fff;border-radius:16px;padding:14px 18px;box-shadow:0 10px 30px rgba(91,15,25,.07);">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
-        <i class="ti ti-building-bank" style="color:#5B0F19;font-size:15px;"></i>
-        <span style="font-size:11px;font-weight:800;color:#5B0F19;letter-spacing:1.5px;">البيانات البنكية</span>
+  <div style="display:flex;gap:14px;margin-bottom:16px;">
+    <div style="flex:1.2;background:#fff;border-radius:20px;padding:22px 24px;box-shadow:0 10px 30px rgba(91,15,25,.07);">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">
+        <i class="ti ti-building-bank" style="color:#5B0F19;font-size:16px;"></i>
+        <span style="font-size:11.5px;font-weight:800;color:#5B0F19;letter-spacing:1.5px;">البيانات البنكية</span>
       </div>
-      <div style="background:#FBF8F2;border:1px solid #F1E9D8;border-radius:10px;padding:10px 14px;font-size:11.5px;color:#2A2A2A;line-height:1.7;white-space:pre-line;">${data.bank||'—'}</div>
+      <div style="background:#FBF8F2;border:1px solid #F1E9D8;border-radius:12px;padding:14px 16px;font-size:12.5px;color:#2A2A2A;line-height:1.9;white-space:pre-line;">${data.bank||'—'}</div>
     </div>
-    <div style="flex:1;background:#fff;border-radius:16px;padding:14px 18px;box-shadow:0 10px 30px rgba(91,15,25,.07);display:flex;align-items:center;gap:14px;">
+    <div style="flex:1;background:#fff;border-radius:20px;padding:22px 24px;box-shadow:0 10px 30px rgba(91,15,25,.07);display:flex;align-items:center;gap:16px;">
       <div id="print-qr-${key||'new'}" style="flex-shrink:0;"></div>
       <div>
-        <div style="font-size:11.5px;font-weight:800;color:#5B0F19;margin-bottom:3px;">تتبع العرض</div>
-        <div style="font-size:9.5px;color:#9B8F80;line-height:1.5;">امسح الكود لمتابعة حالة العرض</div>
+        <div style="font-size:12px;font-weight:800;color:#5B0F19;margin-bottom:4px;">تتبع العرض</div>
+        <div style="font-size:10px;color:#9B8F80;line-height:1.6;">امسح الكود لمتابعة حالة العرض</div>
       </div>
     </div>
   </div>
   ${data.terms?`
   <!-- TERMS CARD -->
-  <div style="background:#fff;border-radius:16px;padding:12px 18px;box-shadow:0 10px 30px rgba(91,15,25,.07);margin-bottom:10px;">
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
-      <i class="ti ti-notes" style="color:#5B0F19;font-size:15px;"></i>
-      <span style="font-size:11px;font-weight:800;color:#5B0F19;letter-spacing:1.5px;">الشروط والأحكام</span>
+  <div style="background:#fff;border-radius:20px;padding:20px 24px;box-shadow:0 10px 30px rgba(91,15,25,.07);margin-bottom:16px;">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+      <i class="ti ti-notes" style="color:#5B0F19;font-size:16px;"></i>
+      <span style="font-size:11.5px;font-weight:800;color:#5B0F19;letter-spacing:1.5px;">الشروط والأحكام</span>
     </div>
-    <div style="font-size:11px;color:#5a5a5a;line-height:1.6;white-space:pre-line;">${data.terms}</div>
+    <div style="font-size:12px;color:#5a5a5a;line-height:1.8;white-space:pre-line;">${data.terms}</div>
   </div>`:''}
   <!-- FOOTER CARD -->
-  <div style="background:#fff;border-radius:16px;padding:12px 20px;box-shadow:0 10px 30px rgba(91,15,25,.07);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
-    <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
-      <div style="display:flex;align-items:center;gap:6px;"><i class="ti ti-mail" style="color:#C9A227;font-size:13px;"></i><span style="font-size:10px;color:#5a5a5a;">info@rawaee.sa</span></div>
-      <div style="display:flex;align-items:center;gap:6px;"><i class="ti ti-world" style="color:#C9A227;font-size:13px;"></i><span style="font-size:10px;color:#5a5a5a;">[www.rawaee.sa](https://www.rawaee.sa)</span></div>
-      <div style="display:flex;align-items:center;gap:6px;"><i class="ti ti-phone" style="color:#C9A227;font-size:13px;"></i><span style="font-size:10px;color:#5a5a5a;direction:ltr;">+966 55 000 0000</span></div>
+  <div style="background:#fff;border-radius:20px;padding:18px 26px;box-shadow:0 10px 30px rgba(91,15,25,.07);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
+    <div style="display:flex;align-items:center;gap:18px;flex-wrap:wrap;">
+      <div style="display:flex;align-items:center;gap:6px;"><i class="ti ti-mail" style="color:#C9A227;font-size:14px;"></i><span style="font-size:10.5px;color:#5a5a5a;">info@rawaee.sa</span></div>
+      <div style="display:flex;align-items:center;gap:6px;"><i class="ti ti-world" style="color:#C9A227;font-size:14px;"></i><span style="font-size:10.5px;color:#5a5a5a;">www.rawaee.sa</span></div>
+      <div style="display:flex;align-items:center;gap:6px;"><i class="ti ti-phone" style="color:#C9A227;font-size:14px;"></i><span style="font-size:10.5px;color:#5a5a5a;direction:ltr;">+966 55 000 0000</span></div>
     </div>
-    <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
-      <span style="font-size:9.5px;color:#9B8F80;">س.ت: 1010XXXXXX</span>
-      <span style="font-size:9.5px;color:#9B8F80;">ر.ض: 3XXXXXXXXXXXXX3</span>
+    <div style="display:flex;align-items:center;gap:18px;flex-wrap:wrap;">
+      <span style="font-size:10px;color:#9B8F80;">س.ت: 1010XXXXXX</span>
+      <span style="font-size:10px;color:#9B8F80;">ر.ض: 3XXXXXXXXXXXXX3</span>
     </div>
   </div>
 </div>
@@ -2110,7 +2067,7 @@ function renderA4Quote(data,key=''){
 async function convertQuoteToOrder(){
   const data=getQuoteData();
   if(!data.client){toast('يرجى تحديد العميل أولاً');return;}
-  if(!data.phone||!isValidSaudiPhone(data.phone)){toast('⚠️ رقم الجوال إلزامي ويجب أن يكون رقم سعودي صحيح (05XXXXXXXX)');return;}
+  if(!data.phone||!isValidSaudiPhone(data.phone)){toast('⚠️ رقم الجوال إلزامي ويجب أن يكون رقم سعودي صحيح (يبدأ بـ 05 أو +966)');return;}
   if(!data.lines.length){toast('يرجى إضافة بنود للعرض');return;}
   showSaving('جاري الحفظ...');
   const res=await fbPush('standalone_quotes',data);
@@ -2122,8 +2079,6 @@ async function convertSavedQuoteToOrder(key,preloadedData=null){
   const data=preloadedData||(standaloneQuotes[key]||await fbGet(`standalone_quotes/${key}`));
   if(!data){hideSaving();toast('خطأ: لم يتم العثور على العرض');return;}
   const dw=getDeptWorkers('design');const pw=getDeptWorkers('print');const ww=getDeptWorkers('workshop');
-  window._coItemFiles={};
-  (data.lines||[]).forEach((l,i)=>{if(l.img)window._coItemFiles[i]={data:l.img,name:(l.lbl||'بند')+'.jpg'};});
   hideSaving();
   document.getElementById('order-modal-body').innerHTML=`
     <div class="modal-header"><span class="modal-title"><i class="ti ti-transfer"></i> تحويل لأمر تشغيل</span><button class="btn-close" onclick="closeModal('order-modal')">×</button></div>
@@ -2132,26 +2087,8 @@ async function convertSavedQuoteToOrder(key,preloadedData=null){
       <div style="font-size:12px;color:var(--text-2);margin-top:3px;">الإجمالي: <strong>${Number(data.totalWithVat||0).toLocaleString()} ر.س</strong></div>
     </div>
     <div style="display:flex;flex-direction:column;gap:12px;">
-      <div class="fg"><label>رقم الجوال *</label><input id="co-phone" value="${data.phone||''}" placeholder="05XXXXXXXX"/></div>
-      <div class="fg">
-        <label>البنود (بدون أسعار للقسم الموكل)</label>
-        <div id="co-items-wrap" style="display:flex;flex-direction:column;gap:10px;">
-          ${(data.lines||[]).map((l,i)=>`
-          <div style="border:1px solid var(--border);border-radius:var(--radius-md);padding:10px 12px;background:var(--surface-2);">
-            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
-              <strong style="font-size:13px;color:var(--maroon);">${l.lbl||'بند '+(i+1)}</strong>
-              <span style="font-size:11px;color:var(--text-3);">الكمية: ${l.q||1}</span>
-            </div>
-            <div style="margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-              <label style="cursor:pointer;display:flex;align-items:center;gap:6px;font-size:11px;color:var(--maroon);border:1px dashed var(--border);border-radius:8px;padding:6px 10px;">
-                <i class="ti ti-paperclip"></i> إضافة مرفق
-                <input type="file" accept="image/*,application/pdf" style="display:none" onchange="attachCoItemFile(${i},this.files)"/>
-              </label>
-              <span id="co-item-file-${i}" style="font-size:11px;color:var(--text-2);">${l.img?'مرفق حالي: صورة الصنف':'لا يوجد مرفق'}</span>
-            </div>
-          </div>`).join('')||'<div style="font-size:12px;color:var(--text-3);">لا توجد بنود في هذا العرض</div>'}
-        </div>
-      </div>
+      <div class="fg"><label>رقم الجوال *</label><input id="co-phone" value="${data.phone||''}" placeholder="05XXXXXXXX أو +966XXXXXXXXX"/></div>
+      <div class="fg"><label>الخدمة / المنتج *</label><input id="co-service" value="${data.lines?data.lines.map(l=>l.lbl).join(' + '):''}"/></div>
       <div class="fg"><label>الأولوية</label><select id="co-priority"><option>عادية</option><option>متوسطة</option><option>عاجلة</option></select></div>
       <div class="fg"><label>تاريخ التسليم</label><input type="date" id="co-deadline"/></div>
       <div class="fg"><label>مسؤول التصميم</label><select id="co-design"><option value="none">❌ بدون تصميم</option>${dw.map(w=>`<option value="${w.uname}">${w.name}</option>`).join('')}</select></div>
@@ -2161,44 +2098,31 @@ async function convertSavedQuoteToOrder(key,preloadedData=null){
     </div>`;
   openModal('order-modal');
 }
-async function attachCoItemFile(idx,files){
-  if(!files||!files.length)return;
-  showSaving('جاري تجهيز المرفق...');
-  try{
-    const file=files[0];
-    const b64=await convertFileToBase64(file);
-    window._coItemFiles=window._coItemFiles||{};
-    window._coItemFiles[idx]={data:b64,name:file.name};
-    const lbl=document.getElementById('co-item-file-'+idx);
-    if(lbl)lbl.textContent='✓ تم إرفاق: '+file.name;
-  }catch(e){toast(e&&e.message?e.message:'⚠️ فشل رفع المرفق');}
-  hideSaving();
-}
 async function finalizeConvertToOrder(quoteKey){
   const phone=document.getElementById('co-phone').value.trim();
+  const service=document.getElementById('co-service').value.trim();
   const priority=document.getElementById('co-priority').value;
   const deadline=document.getElementById('co-deadline').value||'—';
   const dU=document.getElementById('co-design').value;
   const pU=document.getElementById('co-print').value;
   const wU=document.getElementById('co-workshop').value;
   if(!phone){toast('⚠️ رقم الجوال إلزامي');return;}
-  if(!isValidSaudiPhone(phone)){toast('⚠️ رقم الجوال يجب أن يكون رقم سعودي صحيح (05XXXXXXXX)');return;}
+  if(!isValidSaudiPhone(phone)){toast('⚠️ رقم الجوال يجب أن يكون رقم سعودي صحيح (يبدأ بـ 05 أو +966)');return;}
+  if(!service){toast('⚠️ يرجى تحديد الخدمة');return;}
   if(dU==='none'&&pU==='none'&&wU==='none'){toast('⚠️ يجب اختيار قسم واحد على الأقل');return;}
   const q=standaloneQuotes[quoteKey]||await fbGet(`standalone_quotes/${quoteKey}`);
   if(!q)return;
-  const service=(q.lines||[]).map(l=>l.lbl).filter(Boolean).join(' + ')||'—';
   let startDept='design';
   if(dU==='none'){if(pU!=='none')startDept='print';else startDept='workshop';}
   const today=new Date().toISOString().split('T')[0];
-  const itemFiles=window._coItemFiles||{};
   const ord={
     client:q.client,service,date:today,createdAt:new Date().toISOString(),stageStartDate:new Date().toISOString(),
     priority,phone:normalizeSaudiPhone(phone),paymentStatus:'عند التسليم',paidAmount:0,deadline,
     notes:`تحويل من عرض السعر: ${q.ref||quoteKey}`,files:[],
-    orderItems:(q.lines||[]).map((l,i)=>({
+    orderItems:(q.lines||[]).map(l=>({
       name:l.lbl||'بند',
-      details:`الكمية: ${l.q||1}`,
-      files:itemFiles[i]?[itemFiles[i]]:[]
+      details:`الكمية: ${l.q||1} × السعر: ${Number(l.p||0).toLocaleString()} ر.س`,
+      files:l.img?[{data:l.img,name:(l.lbl||'بند')+'.jpg'}]:[]
     })),
     createdBy:cu.name,createdByUname:cu._uname,fromQuoteKey:quoteKey,fromQuoteRef:q.ref||quoteKey,
     designTo:dU,designName:dU==='none'?'❌ معفى':(USERS[dU]?.name||dU),
@@ -2214,7 +2138,6 @@ async function finalizeConvertToOrder(quoteKey){
   await fbPatch(`orders/${res.name}`,{id:newId});
   await fbPatch(`standalone_quotes/${quoteKey}`,{convertedToOrder:newId,convertedAt:new Date().toISOString()});
   if(phone&&phone!=='—')await sendSmsNotification(phone,`مرحباً ${q.client}، تم استلام طلبكم رقم ${newId} وهو قيد التنفيذ. روائع الأفكار الإعلانية.`);
-  window._coItemFiles={};
   await loadData();hideSaving();closeModal('order-modal');
   toast('✓ تم إنشاء أمر التشغيل: '+newId);nav('wf');
 }
@@ -2232,11 +2155,21 @@ function renderChatSection(orderKey,orderDone=false){
   return`<div class="chat-container">
     <div class="chat-header"><i class="ti ti-message-circle"></i> المحادثة الداخلية</div>
     <div class="chat-messages" id="chat-msgs-${orderKey}"><div style="text-align:center;color:var(--text-3);font-size:11px;padding:16px;">جاري التحميل...</div></div>
+    <div id="chat-file-name-${orderKey}" style="font-size:10px;color:var(--text-3);padding:0 6px;"></div>
     <div class="chat-input-row">
       <input id="chat-input-${orderKey}" placeholder="اكتب رسالتك..." onkeydown="if(event.key==='Enter')sendChatMsg('${orderKey}')"/>
+      <input type="file" id="chat-file-${orderKey}" style="display:none;" onchange="_onChatFilePicked('${orderKey}')"/>
+      <button type="button" class="btn btn-out btn-sm" title="إرفاق ملف" onclick="document.getElementById('chat-file-${orderKey}').click()"><i class="ti ti-paperclip"></i></button>
       <button class="btn btn-brand btn-sm" onclick="sendChatMsg('${orderKey}')"><i class="ti ti-send"></i></button>
     </div>
   </div>`;
+}
+function _onChatFilePicked(orderKey){
+  const inp=document.getElementById(`chat-file-${orderKey}`);
+  const lbl=document.getElementById(`chat-file-name-${orderKey}`);
+  if(!inp||!lbl)return;
+  const f=inp.files&&inp.files[0];
+  lbl.textContent=f?`📎 ${f.name}`:'';
 }
 async function loadAndRenderChat(orderKey){
   const container=document.getElementById(`chat-msgs-${orderKey}`);if(!container)return;
@@ -2248,11 +2181,20 @@ async function loadAndRenderChat(orderKey){
     if(freshData)chats[orderKey]=freshData;
     if(!msgs.length){container.innerHTML='<div style="text-align:center;color:var(--text-3);font-size:11px;padding:20px;"><i class="ti ti-message-off" style="font-size:24px;display:block;margin-bottom:6px;color:var(--border)"></i>لا توجد رسائل بعد</div>';return;}
     container.innerHTML=msgs.map(m=>{const isMine=m.senderUname===cu._uname;
-      return`<div class="chat-msg ${isMine?'mine':'other'}"><div class="chat-meta">${m.senderName} · ${new Date(m.timestamp).toLocaleTimeString('ar-SA',{hour:'2-digit',minute:'2-digit'})}</div><div>${m.text}</div></div>`;
+      const isImg=m.fileType&&m.fileType.startsWith('image/');
+      const attHtml=m.fileData?(isImg
+        ?`<div style="margin-top:6px;"><img src="${m.fileData}" style="max-width:160px;max-height:160px;border-radius:8px;cursor:pointer;" onclick="window.open('${m.fileData.replace(/'/g,"\\'")}','_blank')"/></div>`
+        :`<div style="margin-top:6px;"><a href="${m.fileData}" download="${m.fileName||'ملف'}" class="btn btn-out btn-sm" style="display:inline-flex;"><i class="ti ti-paperclip"></i> ${m.fileName||'ملف مرفق'}</a></div>`
+      ):'';
+      return`<div class="chat-msg ${isMine?'mine':'other'}"><div class="chat-meta">${m.senderName} · ${new Date(m.timestamp).toLocaleTimeString('ar-SA',{hour:'2-digit',minute:'2-digit'})}</div>${m.text?`<div>${m.text}</div>`:''}${attHtml}</div>`;
     }).join('');
     container.scrollTop=container.scrollHeight;
     markChatSeen(orderKey);
+    _clearChatDotForOrder(orderKey);
   }catch(e){container.innerHTML='<div style="text-align:center;color:#EF4444;font-size:11px;padding:16px;">خطأ في تحميل الرسائل</div>';}
+}
+function _clearChatDotForOrder(orderKey){
+  document.querySelectorAll(`.wf-card[data-key="${orderKey}"] .chat-unread-dot`).forEach(d=>d.remove());
 }
 function markChatSeen(orderKey){try{localStorage.setItem('chatSeen_'+cu._uname+'_'+orderKey,new Date().toISOString());}catch(e){}}
 function hasUnreadChat(o){
@@ -2263,16 +2205,34 @@ function hasUnreadChat(o){
   return Object.values(oc).some(m=>m&&m.senderUname!==cu._uname&&m.timestamp>lastSeen);
 }
 async function sendChatMsg(orderKey){
-  const input=document.getElementById(`chat-input-${orderKey}`);if(!input||!input.value.trim())return;
-  const msg={senderName:cu.name,senderUname:cu._uname,senderRole:cu.role,text:input.value.trim(),timestamp:new Date().toISOString()};
-  const txt=input.value.trim();
-  input.value='';
+  const input=document.getElementById(`chat-input-${orderKey}`);
+  const fileInput=document.getElementById(`chat-file-${orderKey}`);
+  const file=fileInput&&fileInput.files&&fileInput.files[0];
+  const txt=input?input.value.trim():'';
+  if(!txt&&!file)return;
+  const msg={senderName:cu.name,senderUname:cu._uname,senderRole:cu.role,text:txt,timestamp:new Date().toISOString()};
+  if(input)input.value='';
+  if(file){
+    try{
+      showSaving('جاري رفع الملف...');
+      msg.fileData=await convertFileToBase64(file);
+      msg.fileName=file.name;
+      msg.fileType=file.type||'';
+    }catch(e){hideSaving();toast(e.message||'⚠️ تعذر رفع الملف');return;}
+    hideSaving();
+    fileInput.value='';
+    const lbl=document.getElementById(`chat-file-name-${orderKey}`);if(lbl)lbl.textContent='';
+  }
   // Optimistic UI: show immediately
   const container=document.getElementById(`chat-msgs-${orderKey}`);
   if(container){
     const div=document.createElement('div');
     div.className='chat-msg mine';
-    div.innerHTML=`<div class="chat-meta">${cu.name} · الآن</div><div>${txt}</div>`;
+    const attHtml=msg.fileData?(msg.fileType.startsWith('image/')
+      ?`<div style="margin-top:6px;"><img src="${msg.fileData}" style="max-width:160px;max-height:160px;border-radius:8px;"/></div>`
+      :`<div style="margin-top:6px;"><a href="${msg.fileData}" download="${msg.fileName}" class="btn btn-out btn-sm" style="display:inline-flex;"><i class="ti ti-paperclip"></i> ${msg.fileName}</a></div>`
+    ):'';
+    div.innerHTML=`<div class="chat-meta">${cu.name} · الآن</div>${txt?`<div>${txt}</div>`:''}${attHtml}`;
     container.appendChild(div);container.scrollTop=container.scrollHeight;
   }
   await fbPush(`chats/${orderKey}`,msg);
@@ -2386,16 +2346,8 @@ function openOrderModal(key){
   }
   const paymentRow=canSeePayment?`<div class="di" style="grid-column:1/-1;border-top:1px solid var(--border-soft);padding-top:10px;">
     <span class="dk">💳 الموقف المالي</span>
-    <span class="dv">${paymentBadge(o.paymentStatus)||'—'} ${(o.paymentStatus==='تم الدفع'||o.paymentStatus==='دفع جزئي')?`<span style="font-size:12px;color:#065F46">(${Number(o.paidAmount||0).toLocaleString()} ر.س)</span>`:''}</span>
+    <span class="dv">${paymentBadge(o.paymentStatus)||'—'} ${(o.paymentStatus==='تم الدفع'||o.paymentStatus==='دفع جزئي')?`<span style="font-size:12px;color:#065F46">(${Number(o.paidAmount||0).toLocaleString()} ر.س مدفوع)</span>`:''} ${(o.paymentStatus==='دفع جزئي'||o.paymentStatus==='عند التسليم')&&o.remainingAmount?`<span style="font-size:12px;color:#B45309">(${Number(o.remainingAmount||0).toLocaleString()} ر.س متبقي على العميل)</span>`:''}</span>
   </div>`:'';
-  const trackingUrl=`${location.origin}${location.pathname.replace(/[^/]*$/,'tracking.html')}?id=${o.id||key}`;
-  const qrBoxHtml=`<div class="di" style="grid-column:1/-1;border-top:1px solid var(--border-soft);padding-top:12px;">
-    <span class="dk">📱 رمز QR للتتبع</span>
-    <div style="display:flex;align-items:center;gap:14px;margin-top:8px;flex-wrap:wrap;">
-      <div class="qr-box"><div id="order-qr-${key}"></div><p>${o.id||key}</p></div>
-      <div style="font-size:11px;color:var(--text-3);max-width:180px;">يمكن طباعته مع وثيقة الطلب لتتبع العميل</div>
-    </div>
-  </div>`;
   const fromQuoteHtml=o.fromQuoteRef?`<div style="background:#F0FDF4;border:1px solid #BBF7D0;border-radius:var(--radius-sm);padding:8px 14px;font-size:12px;color:#166534;margin-bottom:14px;"><i class="ti ti-receipt-2"></i> تحويل من عرض السعر: <strong>${o.fromQuoteRef}</strong></div>`:'';
   const archiveBtn=(cu.type==='admin'&&!(o.isQuickTask&&o.approvedPrintFile))?`<button class="btn btn-red btn-sm" onclick="archiveOrder('${key}')"><i class="ti ti-archive"></i> إنهاء الطلب وأرشفته</button>`:'';
   const _measureBtns=(k,cl,ph)=>`
@@ -2452,16 +2404,14 @@ function openOrderModal(key){
           <span style="font-size:12px;">⏳ في المرحلة: ${timeBadge(hoursAgo(o.stageStartDate||o.date))}</span>
         </div>
       </div>
-      ${qrBoxHtml}
     </div>
-    ${o.currentDept!=='done'?`<div class="contact-box"><div class="contact-box-title"><i class="ti ti-messages"></i> التواصل بين الأقسام</div><div style="display:flex;gap:14px;flex-wrap:wrap;font-size:12px;"><div><span style="color:var(--text-3)">المسؤول الحالي:</span> <strong style="color:#166534">${currentPersonName(o)}</strong></div>${o.phone&&o.phone!=='—'?`<button class="btn btn-whatsapp btn-sm" onclick="openWhatsapp('${o.phone}')"><i class="ti ti-brand-whatsapp"></i> واتساب العميل</button>`:''}</div></div>`:''}
     ${buildReassignBox(o,key)}
     ${uploadArea}
     ${renderChatSection(key,o.currentDept==='done')}
     ${measureActions}
-    <div class="arow">${nextBtn} ${revertBtn} <button class="btn btn-out btn-sm" onclick="openTimelineModal('${key}')"><i class="ti ti-clock"></i> مراحل الطلب</button> <button class="btn btn-gold btn-sm" onclick="openQuickTaskForOrder('${key}')"><i class="ti ti-bolt"></i> مهمة سريعة</button> ${o.phone&&o.phone!=='—'?`<button class="btn btn-whatsapp btn-sm" onclick="openWhatsapp('${o.phone}')"><i class="ti ti-brand-whatsapp"></i></button>`:''} ${archiveBtn}</div>`;
+    <div class="arow">${nextBtn} ${revertBtn} <button class="btn btn-out btn-sm" onclick="openTimelineModal('${key}')"><i class="ti ti-clock"></i> مراحل الطلب</button> ${o.phone&&o.phone!=='—'?`<button class="btn btn-whatsapp btn-sm" onclick="openWhatsapp('${o.phone}')"><i class="ti ti-brand-whatsapp"></i></button>`:''} ${archiveBtn}</div>`;
   openModal('order-modal');
-  setTimeout(()=>{generateQR(`order-qr-${key}`,trackingUrl,80);loadAndRenderChat(key);},200);
+  setTimeout(()=>{loadAndRenderChat(key);},200);
 }
 function openAddItemModal(key,editIdx){
   const o=orders[key];if(!o)return;
@@ -2634,7 +2584,7 @@ function buildAddForm(isUrgentQuick=false){
       <div class="form-grid">
         <div class="fg"><label>اسم العميل / الجهة *</label><input id="fc" list="cl-list" oninput="onClientInput(this.value)" autocomplete="off" placeholder="اسم الشركة أو العميل"/></div>
         <div class="fg"><label>رقم الجوال * <span style="color:#EF4444">(إلزامي)</span></label>
-          <div style="display:flex;gap:6px;"><input id="fp" placeholder="05XXXXXXXX" style="flex:1;" required/><button type="button" class="btn btn-whatsapp btn-sm" onclick="openWhatsapp(document.getElementById('fp').value)"><i class="ti ti-brand-whatsapp"></i></button></div>
+          <div style="display:flex;gap:6px;"><input id="fp" placeholder="05XXXXXXXX أو +966XXXXXXXXX" style="flex:1;" required/><button type="button" class="btn btn-whatsapp btn-sm" onclick="openWhatsapp(document.getElementById('fp').value)"><i class="ti ti-brand-whatsapp"></i></button></div>
         </div>
         <div class="fg"><label>الأولوية</label>
           <select id="fpr"><option value="عادية">عادية</option><option value="متوسطة">متوسطة</option><option value="عاجلة"${isUrgentQuick?' selected':''}>عاجلة</option></select>
@@ -2653,11 +2603,11 @@ function buildAddForm(isUrgentQuick=false){
       <div id="partial-payment-section" style="display:none;padding:0 20px 16px;">
         <div class="partial-fields">
           <div class="fg">
-            <label>المبلغ الإجمالي (ر.س) <span style="color:#EF4444">*</span></label>
+            <label>المبلغ الإجمالي (ر.س)</label>
             <input type="number" id="f-total-amount" placeholder="0" min="0" oninput="calcRemaining()"/>
           </div>
           <div class="fg">
-            <label>المبلغ المدفوع (ر.س) <span style="color:#EF4444">*</span></label>
+            <label>المبلغ المدفوع (ر.س)</label>
             <input type="number" id="f-paid-amount" placeholder="0" min="0" oninput="calcRemaining()"/>
           </div>
           <div class="fg partial-field-ro">
@@ -2668,7 +2618,11 @@ function buildAddForm(isUrgentQuick=false){
       </div>
       <!-- Simple paid amount for full payment -->
       <div id="simple-amount-field" style="display:none;padding:0 20px 16px;">
-        <div class="fg"><label>المبلغ المدفوع (ر.س) <span style="color:#EF4444">*</span></label><input type="number" id="fb2" placeholder="0" min="0"/></div>
+        <div class="fg"><label>المبلغ المدفوع (ر.س)</label><input type="number" id="fb2" placeholder="0" min="0"/></div>
+      </div>
+      <!-- Pay-on-delivery: mandatory remaining amount owed by client -->
+      <div id="delivery-amount-field" style="display:none;padding:0 20px 16px;">
+        <div class="fg"><label>المبلغ المستحق عند التسليم (ر.س) * <span style="color:#EF4444">(إلزامي)</span></label><input type="number" id="f-delivery-amount" placeholder="0" min="0"/></div>
       </div>
       <div style="padding:0 20px 16px;">
         <div class="fg"><label>ملاحظات وتفاصيل المواصفات</label><textarea id="fn" placeholder="اكتب الملاحظات والمقاسات هنا..."></textarea></div>
@@ -2741,8 +2695,10 @@ function calcRemaining(){
 function onPaymentChange(v){
   const partial=document.getElementById('partial-payment-section');
   const simple=document.getElementById('simple-amount-field');
+  const delivery=document.getElementById('delivery-amount-field');
   if(partial)partial.style.display=v==='دفع جزئي'?'block':'none';
   if(simple)simple.style.display=v==='تم الدفع'?'block':'none';
+  if(delivery)delivery.style.display=v==='عند التسليم'?'block':'none';
 }
 function onExternalChange(v){const w=document.getElementById('external-note-wrap');if(w)w.style.display=v!=='none'?'block':'none';}
 async function handleWorkshopDeptFile(files){
@@ -2827,17 +2783,8 @@ async function submitOrder(isUrgentQuick=false){
   if(!_lines.length){toast('⚠️ يجب إضافة بند واحد على الأقل');return;}
   const s=_lines[0].name.trim()||'خدمة إعلانية';
   if(!phone){toast('⚠️ رقم الجوال إلزامي');return;}
-  if(!isValidSaudiPhone(phone)){toast('⚠️ رقم الجوال يجب أن يكون رقم سعودي صحيح (05XXXXXXXX)');return;}
+  if(!isValidSaudiPhone(phone)){toast('⚠️ رقم الجوال يجب أن يكون رقم سعودي صحيح (يبدأ بـ 05 أو +966)');return;}
   if(!payStatus){toast('⚠️ يرجى تحديد وضع السداد');return;}
-  if(payStatus==='دفع جزئي'){
-    const _tot=document.getElementById('f-total-amount')?.value;
-    const _paid=document.getElementById('f-paid-amount')?.value;
-    if(!_tot||parseFloat(_tot)<=0){toast('⚠️ يرجى إدخال المبلغ الإجمالي');return;}
-    if(!_paid||parseFloat(_paid)<=0){toast('⚠️ يرجى إدخال المبلغ المدفوع');return;}
-  }else if(payStatus==='تم الدفع'){
-    const _paid2=document.getElementById('fb2')?.value;
-    if(!_paid2||parseFloat(_paid2)<=0){toast('⚠️ يرجى إدخال المبلغ المدفوع');return;}
-  }
   const dU=document.getElementById('fw-design').value,extU=document.getElementById('fw-external').value,pU=document.getElementById('fw-print').value,wU=document.getElementById('fw-workshop').value;
   if(dU==='none'&&extU==='none'&&pU==='none'&&wU==='none'){toast('⚠️ يجب اختيار قسم تنفيذي واحد');return;}
   let startDept='design';
@@ -2849,9 +2796,14 @@ async function submitOrder(isUrgentQuick=false){
   if(payStatus==='دفع جزئي'){
     totalAmt=parseFloat(document.getElementById('f-total-amount')?.value)||0;
     paidAmt=parseFloat(document.getElementById('f-paid-amount')?.value)||0;
+    if(!totalAmt||totalAmt<=0){toast('⚠️ يرجى إدخال المبلغ الإجمالي (إلزامي عند الدفع الجزئي)');return;}
     remainingAmt=Math.max(0,totalAmt-paidAmt);
   }else if(payStatus==='تم الدفع'){
     paidAmt=parseInt(document.getElementById('fb2')?.value)||0;
+  }else if(payStatus==='عند التسليم'){
+    const delivAmt=parseFloat(document.getElementById('f-delivery-amount')?.value)||0;
+    if(!delivAmt||delivAmt<=0){toast('⚠️ يرجى إدخال المبلغ المستحق عند التسليم (إلزامي)');return;}
+    totalAmt=delivAmt;remainingAmt=delivAmt;paidAmt=0;
   }
   if(!Object.values(clients).find(c2=>c2.name===c))await fbPush('clients',{name:c,phone:normalizeSaudiPhone(phone),date:today});
   const ord={
@@ -3108,7 +3060,7 @@ async function exportExcel(){
 function buildRequestPage(){
   window.reqFileB64='';window.reqFileName='';
   const unpaidOrders=ordersArr().filter(o=>o.createdByUname===cu._uname&&o.paymentStatus!=='تم الدفع');
-  const orderOptions=unpaidOrders.map(o=>`<option value="${o._key}">${o.id||o._key} — ${o.client} (${o.paymentStatus||'بدون حالة'})</option>`).join('');
+  const orderOptions=unpaidOrders.map(o=>`<option value="${o._key}">${o.id||o._key} — ${o.client} (${o.paymentStatus||'بدون حالة'}${o.remainingAmount?' — متبقي '+Number(o.remainingAmount).toLocaleString()+' ر.س':''})</option>`).join('');
   document.getElementById('request-content').innerHTML=`
     <div class="page-header"><div class="ptitle"><i class="ti ti-send"></i> رفع طلب مالي</div></div>
     <div class="card">
@@ -3183,7 +3135,7 @@ function buildRequestsPage(){
       <td><strong>${o.client}</strong></td>
       <td>${o.service||'—'}</td>
       <td><span class="badge ${o.paymentStatus==='دفع جزئي'?'b-proc':'b-new'}">${o.paymentStatus||'—'}</span></td>
-      <td>${o.totalAmount?Number(o.totalAmount).toLocaleString()+' ر.س':'—'}</td>
+      <td>${(o.remainingAmount||o.totalAmount)?Number(o.remainingAmount||o.totalAmount).toLocaleString()+' ر.س':'—'}</td>
     </tr>`).join('');
   document.getElementById('requests-content').innerHTML=`
     <div class="page-header"><div class="ptitle"><i class="ti ti-inbox"></i> صندوق طلبات المحاسبة</div></div>
@@ -3200,7 +3152,7 @@ function buildRequestsPage(){
     </table></div></div>
     <!-- unpaid tab uses different columns -->
     <div id="req-pane-unpaid" style="display:none">
-      <div class="card"><div class="tbl-wrap"><table><thead><tr><th>رقم الطلب</th><th>العميل</th><th>الخدمة</th><th style="width:100px">حالة الدفع</th><th style="width:110px">الإجمالي</th></tr></thead>
+      <div class="card"><div class="tbl-wrap"><table><thead><tr><th>رقم الطلب</th><th>العميل</th><th>الخدمة</th><th style="width:100px">حالة الدفع</th><th style="width:110px">المبلغ المتبقي</th></tr></thead>
       <tbody>${makeUnpaidRows(unpaidOrds)}</tbody></table></div></div>
     </div>`;
   updateRequestsBadgeSidebar();
@@ -3394,7 +3346,7 @@ function buildIncompletePage(){
   if(arr.length===0){
     cards='<div style="text-align:center;color:var(--text-3);padding:48px 20px;"><i class="ti ti-user-check" style="font-size:52px;display:block;margin-bottom:12px;color:#10B981;"></i><div style="font-size:16px;font-weight:700;">لا توجد مهام غير مكتملة</div><div style="font-size:13px;margin-top:6px;">المهام السريعة التي لم يرغب العميل بإكمالها ستظهر هنا</div></div>';
   }else{
-    cards=`<div class="wf-grid">${arr.map(o=>`<div class="wf-card" style="border:2px solid #FECACA;background:linear-gradient(135deg,#FFF8F8,#FEF2F2);" onclick="openOrderModal('${o._key}')">${hasUnreadChat(o)?'<span class="chat-unread-dot" title="رسالة جديدة في المحادثة"></span>':''}<div class="wf-card-top">
+    cards=`<div class="wf-grid">${arr.map(o=>`<div class="wf-card" data-key="${o._key}" style="border:2px solid #FECACA;background:linear-gradient(135deg,#FFF8F8,#FEF2F2);" onclick="openOrderModal('${o._key}')">${hasUnreadChat(o)?'<span class="chat-unread-dot" title="رسالة جديدة في المحادثة"></span>':''}<div class="wf-card-top">
       <div class="wf-card-id">${o.id||o._key} · ${orderDateTime(o)}<span class="urgent-tag" style="margin-right:6px;font-size:9px;background:#991B1B;"><i class="ti ti-user-off"></i>غير مكتمل</span></div>
       <div class="wf-card-name">${o.client}</div>
       <div class="wf-card-svc">${o.service}</div>
