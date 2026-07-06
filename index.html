@@ -1839,13 +1839,23 @@ function updateQuoteLine(id,f,v){
     renderQuoteTotals();
   }
 }
+function updateQuoteLineFromTax(id,v){
+  const l=window._quoteLines.find(x=>x.id===id);
+  if(l){
+    const wtax=parseFloat(v)||0;
+    l.p=wtax/1.15;
+    const pEl=document.getElementById('q-line-notax-'+id);
+    if(pEl)pEl.value=l.p.toFixed(2);
+    renderQuoteTotals();
+  }
+}
 function renderQuoteLines(){
   const wrap=document.getElementById('quote-lines-wrap');if(!wrap)return;
   wrap.innerHTML=window._quoteLines.map(l=>`<div class="quote-line" style="grid-template-columns:2fr 1fr 1fr 1fr auto auto;gap:6px;">
     <input placeholder="وصف البند" value="${l.lbl}" oninput="updateQuoteLine('${l.id}','lbl',this.value)"/>
     <input type="number" placeholder="الكمية" value="${l.q}" oninput="updateQuoteLine('${l.id}','q',this.value)" min="1"/>
-    <input type="number" placeholder="السعر بدون ضريبة" value="${l.p}" oninput="updateQuoteLine('${l.id}','p',this.value)" min="0"/>
-    <input type="number" id="q-line-wtax-${l.id}" placeholder="السعر شامل الضريبة" value="${(l.p*1.15).toFixed(2)}" readonly style="background:var(--surface-2);color:var(--text-2);cursor:not-allowed;"/>
+    <input type="number" id="q-line-notax-${l.id}" placeholder="السعر بدون ضريبة" value="${l.p}" oninput="updateQuoteLine('${l.id}','p',this.value)" min="0"/>
+    <input type="number" id="q-line-wtax-${l.id}" placeholder="السعر شامل الضريبة" value="${(l.p*1.15).toFixed(2)}" oninput="updateQuoteLineFromTax('${l.id}',this.value)" min="0"/>
     <label title="إرفاق صورة للبند" style="cursor:pointer;display:flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:8px;border:1px dashed var(--border);background:var(--bg);flex-shrink:0;transition:.12s;" onmouseover="this.style.borderColor='var(--gold)'" onmouseout="this.style.borderColor='var(--border)'">
       ${l.img?`<img src="${l.img}" style="width:28px;height:28px;object-fit:cover;border-radius:6px;"/>`:
       `<i class="ti ti-photo" style="font-size:14px;color:var(--text-3);"></i>`}
