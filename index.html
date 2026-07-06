@@ -439,10 +439,10 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--gold);bo
   .partial-fields{grid-template-columns:1fr;}
 }
 /* ══ LUXURY PAGE TRANSITIONS ══════════════════════════════════════ */
-.page.active{animation:lxIn .18s ease-out both;}
+.page.active{animation:lxIn .52s cubic-bezier(.22,1,.36,1) both;}
 @keyframes lxIn{
-  from{opacity:0;transform:translateY(6px);}
-  to  {opacity:1;transform:translateY(0);}}
+  from{opacity:0;transform:translateY(30px) scale(.982);filter:blur(7px);}
+  to  {opacity:1;transform:translateY(0)    scale(1);   filter:blur(0);}}
 .page-out{animation:lxOut .26s ease forwards!important;display:block!important;}
 @keyframes lxOut{
   to{opacity:0;transform:translateY(-20px) scale(.97);filter:blur(4px);}}
@@ -757,7 +757,7 @@ let submittedRequests={},chats={},standaloneQuotes={},warranties={};
 let _lastAssignSnapshot=null,_audioCtx=null,_audioUnlocked=false;
 let _navHistory=[];
 let _nuPhotoB64='',_euPhotoB64='',_euSelectedColor='',_nuSelectedColor='';
-let _curPage=null,_navBusy=false,_lastLoadAt=0;
+let _curPage=null,_navBusy=false;
 let _currentWfTab='active';
 window._editingQuoteKey=null;
 // ============================================================
@@ -825,11 +825,7 @@ function enterApp(u){
   startClock();buildSidebar();
   if(cu.type==='accountant')nav('requests');
   else nav('dash');
-  setInterval(async()=>{
-    if((Date.now()-_lastLoadAt)<15000)return; // skip if data was already refreshed very recently (e.g. by the user's own action)
-    if(document.hidden)return; // skip background polling while the tab isn't visible — saves bandwidth/CPU
-    await loadData();refreshCurrentPage();
-  },60000);
+  setInterval(async()=>{await loadData();refreshCurrentPage();},60000);
 }
 function logout(){localStorage.removeItem(SESSION_KEY);location.reload();}
 // ============================================================
@@ -868,7 +864,6 @@ async function loadData(){
     updateNotifBell();updateRequestsBadgeSidebar();
     checkNewAssignments();
     cleanExpiredWarranties();
-    _lastLoadAt=Date.now();
   }catch(e){orders={};clients={};submittedRequests={};chats={};standaloneQuotes={};warranties={};}
 }
 // ============================================================
@@ -991,37 +986,22 @@ function compressImage(dataUrl,maxDim=1600,quality=0.72){
     img.src=dataUrl;
   });
 }
-// Firebase Realtime Database rejects any single string value over ~10MB. Base64 encoding
-// inflates raw byte size by ~1.37x, so a "compressed to 8MB" file can still blow past that
-// limit once encoded. FIREBASE_SAFE_LIMIT keeps a safety margin under the real 10MB ceiling.
-const FIREBASE_SAFE_LIMIT=9*1024*1024; // 9MB of base64 text, safely under Firebase's 10MB/value cap
-function _b64Len(dataUrl){return (dataUrl||'').length;}
 async function convertFileToBase64(file){
-  const MAX_IMAGE_SOURCE_BYTES=25*1024*1024; // 25MB raw source cap for images (compression will shrink these)
-  const MAX_OTHER_BYTES=6.5*1024*1024; // ~6.5MB raw cap for non-image files — after base64 inflation this lands safely under Firebase's 10MB limit (files can't be compressed client-side)
+  const MAX_IMAGE_SOURCE_BYTES=15*1024*1024; // 15MB raw source cap for images (before compression)
+  const MAX_OTHER_BYTES=8*1024*1024; // 8MB cap for non-image files (PDF etc.)
   const isImage=file.type&&file.type.startsWith('image/');
   if(isImage){
-    if(file.size>MAX_IMAGE_SOURCE_BYTES)throw new Error('⚠️ حجم الصورة كبير جداً (الحد الأقصى 25 ميجابايت). يرجى اختيار صورة أصغر.');
+    if(file.size>MAX_IMAGE_SOURCE_BYTES)throw new Error('⚠️ حجم الصورة كبير جداً (الحد الأقصى 15 ميجابايت). يرجى اختيار صورة أصغر.');
     const raw=await _readFileAsDataUrl(file);
-    let out=raw;
-    // Compress if the file is reasonably large, or if the raw base64 is already near the Firebase limit.
-    if(file.size>800*1024||_b64Len(raw)>FIREBASE_SAFE_LIMIT){
-      try{out=await compressImage(raw,1600,0.72);}catch(e){out=raw;}
+    // Only compress if the file is reasonably large — small images pass through untouched.
+    if(file.size>800*1024){
+      try{return await compressImage(raw,1600,0.72);}
+      catch(e){return raw;} // fall back to original if compression fails for any reason
     }
-    // If still too big after a first pass, retry progressively harder before giving up.
-    const attempts=[[1200,0.55],[900,0.45],[700,0.35]];
-    let i=0;
-    while(_b64Len(out)>FIREBASE_SAFE_LIMIT&&i<attempts.length){
-      try{out=await compressImage(raw,attempts[i][0],attempts[i][1]);}catch(e){break;}
-      i++;
-    }
-    if(_b64Len(out)>FIREBASE_SAFE_LIMIT)throw new Error('⚠️ تعذر ضغط الصورة لحجم مناسب للرفع. يرجى اختيار صورة أصغر أو تقليل جودتها قبل الرفع.');
-    return out;
-  }else{
-    if(file.size>MAX_OTHER_BYTES)throw new Error('⚠️ حجم الملف كبير جداً (الحد الأقصى تقريباً 6 ميجابايت لملفات غير الصور مثل PDF). يرجى اختيار ملف أصغر — الملفات غير الصور لا يمكن ضغطها تلقائياً.');
-    const raw=await _readFileAsDataUrl(file);
-    if(_b64Len(raw)>FIREBASE_SAFE_LIMIT)throw new Error('⚠️ حجم الملف كبير جداً بعد المعالجة. يرجى اختيار ملف أصغر.');
     return raw;
+  }else{
+    if(file.size>MAX_OTHER_BYTES)throw new Error('⚠️ حجم الملف كبير جداً (الحد الأقصى 8 ميجابايت). يرجى اختيار ملف أصغر.');
+    return await _readFileAsDataUrl(file);
   }
 }
 function normalizeSaudiPhone(v){
@@ -1029,7 +1009,6 @@ function normalizeSaudiPhone(v){
   if(s.startsWith('+966'))s='0'+s.slice(4);
   else if(s.startsWith('00966'))s='0'+s.slice(5);
   else if(s.startsWith('966'))s='0'+s.slice(3);
-  else if(/^5\d{8}$/.test(s))s='0'+s; // bare 9-digit form (no leading 0 or country code)
   return s;
 }
 function isValidSaudiPhone(v){return /^05\d{8}$/.test(normalizeSaudiPhone(v));}
@@ -1142,16 +1121,19 @@ async function nav(p,skipHistory=false){
   if(p==='export'){exportExcel();return;}
   if(!skipHistory&&_curPage&&_curPage!==p)_navHistory.push(_curPage);
   _curPage=p;
-  // ── instant page switch (no blocking animation delay — was 230ms per click) ──
+  // ── luxury exit animation ──
+  const prev=document.querySelector('.page.active');
+  if(prev&&!prev.classList.contains('page-out')){
+    prev.classList.add('page-out');
+    await new Promise(r=>setTimeout(r,230));
+    prev.classList.remove('active','page-out');
+  }
   document.querySelectorAll('.page').forEach(x=>x.classList.remove('active','page-out'));
   document.querySelectorAll('.ni').forEach(x=>x.classList.remove('active'));
   const pg=document.getElementById('page-'+p);const nb=document.getElementById('n-'+p);
   if(pg)pg.classList.add('active');if(nb)nb.classList.add('active');
   _buildPage(p);
-  // ── only refetch from Firebase if data isn't freshly loaded already (throttled — avoids
-  //     re-downloading all collections, including embedded file attachments, on every click) ──
-  const dataIsFresh=(Date.now()-_lastLoadAt)<4000;
-  if(!_navBusy&&!dataIsFresh){_navBusy=true;try{await loadData();}catch(e){}if(p!=='add'&&p!=='request'&&p!=='quote')_buildPage(p);_navBusy=false;}
+  if(!_navBusy){_navBusy=true;try{await loadData();}catch(e){}if(p!=='add'&&p!=='request'&&p!=='quote')_buildPage(p);_navBusy=false;}
 }
 function navBack(){if(_navHistory.length===0)return;const prev=_navHistory.pop();nav(prev,true);}
 function backBtnHtml(){return`<div style="margin-bottom:16px;"><button class="btn btn-out btn-sm" onclick="navBack()"><i class="ti ti-arrow-right"></i> رجوع</button></div>`;}
@@ -1296,7 +1278,7 @@ function openQuickTask(type){
   document.getElementById('qt-modal-body').innerHTML=`
     <div style="display:flex;flex-direction:column;gap:14px;padding:4px 0;">
       <div class="fg"><label>اسم العميل / الجهة *</label><input id="qt-client" placeholder="اسم العميل"/></div>
-      <div class="fg"><label>رقم الجوال * <span style="color:#EF4444">(إلزامي)</span></label><input id="qt-phone" placeholder="05XXXXXXXX أو +966XXXXXXXXX"/></div>
+      <div class="fg"><label>رقم الجوال * <span style="color:#EF4444">(إلزامي)</span></label><input id="qt-phone" placeholder="05XXXXXXXX"/></div>
       ${isProof?`
         <div class="fg"><label>المصمم المكلف *</label>
           <select id="qt-assignee"><option value="all">📢 جميع المصممين</option>${dw.map(w=>`<option value="${w.uname}">${w.name}</option>`).join('')}</select>
@@ -1344,7 +1326,7 @@ async function submitQuickTask(type){
   const assignee=document.getElementById('qt-assignee').value;
   if(!c){toast('⚠️ يرجى كتابة اسم العميل');return;}
   if(!p){toast('⚠️ رقم الجوال إلزامي');return;}
-  if(!isValidSaudiPhone(p)){toast('⚠️ رقم الجوال يجب أن يكون رقم سعودي صحيح (يبدأ بـ 05 أو +966)');return;}
+  if(!isValidSaudiPhone(p)){toast('⚠️ رقم الجوال يجب أن يكون رقم سعودي صحيح (05XXXXXXXX)');return;}
   const isProof=type==='proof';
   const location=!isProof?(document.getElementById('qt-location')?.value.trim()||''):'';
   const ord={
@@ -1470,6 +1452,7 @@ function buildDash(){
     <div class="stat-card c-gold" onclick="dashGoto('active')"><div class="stat-icon i-gold"><i class="ti ti-loader-2"></i></div><div class="stat-label">جارية الآن</div><div class="stat-value">${total}</div><div class="stat-trend"><span style="background:rgba(212,175,55,.15);color:#92400E;border-radius:8px;padding:1px 6px;font-size:9px;font-weight:800;"><i class="ti ti-bolt"></i>${ug} عاجل</span></div></div>
     <div class="stat-card c-green" onclick="dashGoto('done')"><div class="stat-icon i-green"><i class="ti ti-circle-check"></i></div><div class="stat-label">مكتملة</div><div class="stat-value">${dn}</div><div class="stat-trend"><i class="ti ti-calendar" style="color:var(--text-3)"></i>&nbsp;<span style="color:var(--text-2)">7 أيام: ${_last7d} &nbsp;·&nbsp; اليوم: ${_last24h}</span></div></div>
     <div class="stat-card c-blue" onclick="dashGoto('done')"><div class="stat-icon i-blue"><i class="ti ti-hourglass"></i></div><div class="stat-label">متوسط الإنجاز</div><div class="stat-value" style="font-size:19px">${_fH(_avgH)}</div><div class="stat-trend"><i class="ti ti-clock" style="color:var(--text-3)"></i>&nbsp;<span style="color:var(--text-2)">تصميم: ${_fH(_dsAvg)}</span></div></div>
+    <div class="stat-card c-purple" onclick="dashGoto('print')"><div class="stat-icon i-purple"><i class="ti ti-printer"></i></div><div class="stat-label">متوسط الطباعة</div><div class="stat-value" style="font-size:19px">${_fH(_prAvg)}</div><div class="stat-trend"><i class="ti ti-layers" style="color:var(--text-3)"></i>&nbsp;<span style="color:var(--text-2)">${inProd} جارية</span></div></div>
     <div class="stat-card c-red" onclick="dashGoto('overdue')"><div class="stat-icon i-red"><i class="ti ti-alarm-minus"></i></div><div class="stat-label">تجاوزت الميعاد</div><div class="stat-value" style="color:#EF4444">${_ovr}</div><div class="stat-trend"><i class="ti ti-brush" style="color:var(--text-3)"></i>&nbsp;<span style="color:var(--text-2)">تصميم: ${inDesign} جارية</span></div></div>
   </div>`;
   // Alerts
@@ -1675,7 +1658,7 @@ function buildMyWork(){
   const myOrders=ordersArr().filter(o=>isMyOrder(o));
   const isWorkshop=cu.type==='workshop';
   const cards=myOrders.length===0?'<div style="color:var(--text-3);padding:30px;text-align:center;"><i class="ti ti-check-circle" style="font-size:36px;display:block;margin-bottom:10px;color:#10B981;"></i>لا توجد أعمال موكلة إليك حالياً</div>'
-    :`<div class="wf-grid">${myOrders.map(o=>`<div class="wf-card" data-key="${o._key}" style="${o.isQuickTask?'border:2px solid #C89A4A;background:linear-gradient(135deg,#FFFDF8,#FFF5E0);':''}" onclick="openOrderModal('${o._key}')">${hasUnreadChat(o)?'<span class="chat-unread-dot" title="رسالة جديدة في المحادثة"></span>':''}<div class="wf-card-top">
+    :`<div class="wf-grid">${myOrders.map(o=>`<div class="wf-card" style="${o.isQuickTask?'border:2px solid #C89A4A;background:linear-gradient(135deg,#FFFDF8,#FFF5E0);':''}" onclick="openOrderModal('${o._key}')">${hasUnreadChat(o)?'<span class="chat-unread-dot" title="رسالة جديدة في المحادثة"></span>':''}<div class="wf-card-top">
       <div class="wf-card-id">${o.id||o._key} · ${orderDateTime(o)}${o.isQuickTask?'<span class="urgent-tag" style="margin-right:6px;font-size:9px;background:linear-gradient(135deg,#78350F,#C89A4A);"><i class="ti ti-bolt"></i>مهمة سريعة</span>':''}</div>
       <div class="wf-card-name">${o.client}</div>
       <div class="wf-card-svc">${o.service}</div>
@@ -1712,7 +1695,7 @@ function buildQuotePage(){
             <datalist id="q-cl-list">${cArr.map(c=>`<option value="${c.name}">`).join('')}</datalist>
             <input id="q-client" list="q-cl-list" placeholder="اسم الشركة أو العميل" oninput="onClientInputQuote(this.value)" autocomplete="off"/>
           </div>
-          <div class="fg"><label>رقم الجوال * <span style="color:#EF4444">(إلزامي)</span></label><input id="q-phone" placeholder="05XXXXXXXX أو +966XXXXXXXXX"/></div>
+          <div class="fg"><label>رقم الجوال * <span style="color:#EF4444">(إلزامي)</span></label><input id="q-phone" placeholder="05XXXXXXXX"/></div>
         </div>
       </div>
       <!-- Quote Details Card -->
@@ -1739,12 +1722,19 @@ function buildQuotePage(){
         </div>
         <div id="quote-lines-wrap"></div>
         <button class="btn btn-out btn-sm" onclick="addQuoteLine()" style="margin-top:8px;"><i class="ti ti-plus"></i> إضافة بند</button>
-        <!-- Grand Total Only (simplified) -->
-        <div style="margin-top:14px;text-align:center;">
-          <div style="background:var(--maroon);color:#fff;border-radius:var(--radius-md);padding:10px 18px;display:inline-block;min-width:180px;">
+        <!-- Totals: without tax / VAT / with tax -->
+        <div style="margin-top:14px;display:flex;justify-content:center;gap:10px;flex-wrap:wrap;">
+          <div style="background:var(--bg-2,#f4f4f4);border:1px solid var(--border,#ddd);border-radius:var(--radius-md);padding:10px 18px;display:inline-block;min-width:160px;text-align:center;">
+            <div style="font-size:10px;color:var(--text-3);font-weight:700;margin-bottom:2px;">السعر بدون ضريبة (المجموع الفرعي)</div>
+            <div id="q-subtotal" style="font-size:16px;font-weight:900;color:var(--text-1,#222);">0.00 ر.س</div>
+          </div>
+          <div style="background:var(--bg-2,#f4f4f4);border:1px solid var(--border,#ddd);border-radius:var(--radius-md);padding:10px 18px;display:inline-block;min-width:160px;text-align:center;">
+            <div style="font-size:10px;color:var(--text-3);font-weight:700;margin-bottom:2px;">ضريبة القيمة المضافة 15%</div>
+            <div id="q-vat-amount" style="font-size:16px;font-weight:900;color:var(--text-1,#222);">0.00 ر.س</div>
+          </div>
+          <div style="background:var(--maroon);color:#fff;border-radius:var(--radius-md);padding:10px 18px;display:inline-block;min-width:180px;text-align:center;">
             <div style="font-size:10px;color:var(--gold);font-weight:700;margin-bottom:2px;">الإجمالي شامل ضريبة القيمة المضافة 15%</div>
             <div id="q-grand-total" style="font-size:18px;font-weight:900;color:#fff;">0.00 ر.س</div>
-            <div id="q-vat-note" style="font-size:9px;color:rgba(255,255,255,.7);margin-top:2px;"></div>
           </div>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:16px;">
@@ -1812,7 +1802,12 @@ function buildQuoteArchiveRows(){
   return arr.map(q=>`<tr data-date="${q.date||''}">
     <td><strong>${q.client}</strong></td>
     <td><span class="badge b-new">${q.ref||'—'}</span></td>
-    <td><span class="badge b-proc" style="font-size:12px;">${Number(q.totalWithVat||q.total||0).toLocaleString()} ر.س</span></td>
+    <td>
+      <div style="display:flex;flex-direction:column;gap:2px;">
+        <span class="badge b-proc" style="font-size:12px;">${Number(q.totalWithVat||q.total||0).toLocaleString('en-US',{minimumFractionDigits:2})} ر.س <span style="opacity:.75;font-weight:600;">(شامل الضريبة)</span></span>
+        <span style="font-size:10.5px;color:var(--text-3);">${Number(q.subtotal||0).toLocaleString('en-US',{minimumFractionDigits:2})} ر.س بدون ضريبة</span>
+      </div>
+    </td>
     <td style="font-size:11px">${q.date}</td>
     <td><div style="display:flex;gap:5px;flex-wrap:wrap;">
       <button class="btn btn-out btn-xs" onclick="previewSavedQuote('${q._key}')"><i class="ti ti-eye"></i> معاينة</button>
@@ -1874,9 +1869,11 @@ function renderQuoteTotals(){
   const vat=subtotal*0.15;const total=subtotal+vat;
   const fmt=n=>n.toLocaleString('en-US',{minimumFractionDigits:2});
   const g=document.getElementById('q-grand-total');
-  const vn=document.getElementById('q-vat-note');
+  const s=document.getElementById('q-subtotal');
+  const v=document.getElementById('q-vat-amount');
   if(g)g.textContent=fmt(total)+' ر.س';
-  if(vn)vn.textContent=`(قبل الضريبة: ${fmt(subtotal)} + ضريبة: ${fmt(vat)})`;
+  if(s)s.textContent=fmt(subtotal)+' ر.س';
+  if(v)v.textContent=fmt(vat)+' ر.س';
 }
 function getQuoteData(){
   const client=document.getElementById('q-client')?.value.trim()||'';
@@ -1897,7 +1894,7 @@ function getQuoteData(){
 async function saveQuoteToDb(){
   const data=getQuoteData();
   if(!data.client){toast('يرجى تحديد العميل');return;}
-  if(!data.phone||!isValidSaudiPhone(data.phone)){toast('⚠️ رقم الجوال إلزامي ويجب أن يكون رقم سعودي صحيح (يبدأ بـ 05 أو +966)');return;}
+  if(!data.phone||!isValidSaudiPhone(data.phone)){toast('⚠️ رقم الجوال إلزامي ويجب أن يكون رقم سعودي صحيح (05XXXXXXXX)');return;}
   if(!data.lines.length){toast('يرجى إضافة بند واحد على الأقل');return;}
   showSaving('جاري الحفظ...');
   if(window._editingQuoteKey){
@@ -1926,7 +1923,7 @@ async function previewSavedQuote(key){
   setTimeout(()=>window.print(),400);
 }
 function renderA4Quote(data,key=''){
-  const fmt=n=>Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2});
+  const fmt=n=>Number(n||0).toLocaleString('ar-SA',{minimumFractionDigits:2});
   const issueDate=data.date||new Date().toISOString().split('T')[0];
   const expiryDate=data.validity||'';
   const lines=(data.lines||[]);
@@ -2065,7 +2062,7 @@ function renderA4Quote(data,key=''){
     <div style="display:flex;justify-content:space-between;align-items:center;position:relative;flex-wrap:wrap;gap:14px;">
       <div style="display:flex;flex-direction:column;gap:6px;">
         <div style="display:flex;justify-content:space-between;gap:30px;">
-          <span style="color:rgba(255,255,255,.65);font-size:11px;">السعر بدون ضريبة (المجموع الفرعي)</span>
+          <span style="color:rgba(255,255,255,.65);font-size:11px;">المجموع الفرعي</span>
           <span style="color:#fff;font-size:12px;font-weight:700;">${fmt(subtotal)} ر.س</span>
         </div>
         <div style="display:flex;justify-content:space-between;gap:30px;">
@@ -2075,7 +2072,7 @@ function renderA4Quote(data,key=''){
       </div>
       <div style="width:1px;align-self:stretch;background:rgba(201,162,39,.35);"></div>
       <div style="text-align:center;">
-        <div style="color:#C9A227;font-size:9.5px;letter-spacing:2px;font-weight:700;margin-bottom:3px;">السعر شامل الضريبة</div>
+        <div style="color:#C9A227;font-size:9.5px;letter-spacing:2px;font-weight:700;margin-bottom:3px;">الإجمالي شامل الضريبة</div>
         <div style="color:#fff;font-size:26px;font-weight:900;line-height:1;">${fmt(totalWithVat)}</div>
         <div style="color:rgba(255,255,255,.6);font-size:10px;margin-top:4px;">ريال سعودي</div>
       </div>
@@ -2127,7 +2124,7 @@ function renderA4Quote(data,key=''){
 async function convertQuoteToOrder(){
   const data=getQuoteData();
   if(!data.client){toast('يرجى تحديد العميل أولاً');return;}
-  if(!data.phone||!isValidSaudiPhone(data.phone)){toast('⚠️ رقم الجوال إلزامي ويجب أن يكون رقم سعودي صحيح (يبدأ بـ 05 أو +966)');return;}
+  if(!data.phone||!isValidSaudiPhone(data.phone)){toast('⚠️ رقم الجوال إلزامي ويجب أن يكون رقم سعودي صحيح (05XXXXXXXX)');return;}
   if(!data.lines.length){toast('يرجى إضافة بنود للعرض');return;}
   showSaving('جاري الحفظ...');
   const res=await fbPush('standalone_quotes',data);
@@ -2149,7 +2146,7 @@ async function convertSavedQuoteToOrder(key,preloadedData=null){
       <div style="font-size:12px;color:var(--text-2);margin-top:3px;">الإجمالي: <strong>${Number(data.totalWithVat||0).toLocaleString()} ر.س</strong></div>
     </div>
     <div style="display:flex;flex-direction:column;gap:12px;">
-      <div class="fg"><label>رقم الجوال *</label><input id="co-phone" value="${data.phone||''}" placeholder="05XXXXXXXX أو +966XXXXXXXXX"/></div>
+      <div class="fg"><label>رقم الجوال *</label><input id="co-phone" value="${data.phone||''}" placeholder="05XXXXXXXX"/></div>
       <div class="fg">
         <label>البنود (بدون أسعار للقسم الموكل)</label>
         <div id="co-items-wrap" style="display:flex;flex-direction:column;gap:10px;">
@@ -2199,7 +2196,7 @@ async function finalizeConvertToOrder(quoteKey){
   const pU=document.getElementById('co-print').value;
   const wU=document.getElementById('co-workshop').value;
   if(!phone){toast('⚠️ رقم الجوال إلزامي');return;}
-  if(!isValidSaudiPhone(phone)){toast('⚠️ رقم الجوال يجب أن يكون رقم سعودي صحيح (يبدأ بـ 05 أو +966)');return;}
+  if(!isValidSaudiPhone(phone)){toast('⚠️ رقم الجوال يجب أن يكون رقم سعودي صحيح (05XXXXXXXX)');return;}
   if(dU==='none'&&pU==='none'&&wU==='none'){toast('⚠️ يجب اختيار قسم واحد على الأقل');return;}
   const q=standaloneQuotes[quoteKey]||await fbGet(`standalone_quotes/${quoteKey}`);
   if(!q)return;
@@ -2249,21 +2246,11 @@ function renderChatSection(orderKey,orderDone=false){
   return`<div class="chat-container">
     <div class="chat-header"><i class="ti ti-message-circle"></i> المحادثة الداخلية</div>
     <div class="chat-messages" id="chat-msgs-${orderKey}"><div style="text-align:center;color:var(--text-3);font-size:11px;padding:16px;">جاري التحميل...</div></div>
-    <div id="chat-file-name-${orderKey}" style="font-size:10px;color:var(--text-3);padding:0 6px;"></div>
     <div class="chat-input-row">
       <input id="chat-input-${orderKey}" placeholder="اكتب رسالتك..." onkeydown="if(event.key==='Enter')sendChatMsg('${orderKey}')"/>
-      <input type="file" id="chat-file-${orderKey}" style="display:none;" onchange="_onChatFilePicked('${orderKey}')"/>
-      <button type="button" class="btn btn-out btn-sm" title="إرفاق ملف" onclick="document.getElementById('chat-file-${orderKey}').click()"><i class="ti ti-paperclip"></i></button>
       <button class="btn btn-brand btn-sm" onclick="sendChatMsg('${orderKey}')"><i class="ti ti-send"></i></button>
     </div>
   </div>`;
-}
-function _onChatFilePicked(orderKey){
-  const inp=document.getElementById(`chat-file-${orderKey}`);
-  const lbl=document.getElementById(`chat-file-name-${orderKey}`);
-  if(!inp||!lbl)return;
-  const f=inp.files&&inp.files[0];
-  lbl.textContent=f?`📎 ${f.name}`:'';
 }
 async function loadAndRenderChat(orderKey){
   const container=document.getElementById(`chat-msgs-${orderKey}`);if(!container)return;
@@ -2275,20 +2262,11 @@ async function loadAndRenderChat(orderKey){
     if(freshData)chats[orderKey]=freshData;
     if(!msgs.length){container.innerHTML='<div style="text-align:center;color:var(--text-3);font-size:11px;padding:20px;"><i class="ti ti-message-off" style="font-size:24px;display:block;margin-bottom:6px;color:var(--border)"></i>لا توجد رسائل بعد</div>';return;}
     container.innerHTML=msgs.map(m=>{const isMine=m.senderUname===cu._uname;
-      const isImg=m.fileType&&m.fileType.startsWith('image/');
-      const attHtml=m.fileData?(isImg
-        ?`<div style="margin-top:6px;"><img src="${m.fileData}" style="max-width:160px;max-height:160px;border-radius:8px;cursor:pointer;" onclick="window.open('${m.fileData.replace(/'/g,"\\'")}','_blank')"/></div>`
-        :`<div style="margin-top:6px;"><a href="${m.fileData}" download="${m.fileName||'ملف'}" class="btn btn-out btn-sm" style="display:inline-flex;"><i class="ti ti-paperclip"></i> ${m.fileName||'ملف مرفق'}</a></div>`
-      ):'';
-      return`<div class="chat-msg ${isMine?'mine':'other'}"><div class="chat-meta">${m.senderName} · ${new Date(m.timestamp).toLocaleTimeString('ar-SA',{hour:'2-digit',minute:'2-digit'})}</div>${m.text?`<div>${m.text}</div>`:''}${attHtml}</div>`;
+      return`<div class="chat-msg ${isMine?'mine':'other'}"><div class="chat-meta">${m.senderName} · ${new Date(m.timestamp).toLocaleTimeString('ar-SA',{hour:'2-digit',minute:'2-digit'})}</div><div>${m.text}</div></div>`;
     }).join('');
     container.scrollTop=container.scrollHeight;
     markChatSeen(orderKey);
-    _clearChatDotForOrder(orderKey);
   }catch(e){container.innerHTML='<div style="text-align:center;color:#EF4444;font-size:11px;padding:16px;">خطأ في تحميل الرسائل</div>';}
-}
-function _clearChatDotForOrder(orderKey){
-  document.querySelectorAll(`.wf-card[data-key="${orderKey}"] .chat-unread-dot`).forEach(d=>d.remove());
 }
 function markChatSeen(orderKey){try{localStorage.setItem('chatSeen_'+cu._uname+'_'+orderKey,new Date().toISOString());}catch(e){}}
 function hasUnreadChat(o){
@@ -2299,34 +2277,16 @@ function hasUnreadChat(o){
   return Object.values(oc).some(m=>m&&m.senderUname!==cu._uname&&m.timestamp>lastSeen);
 }
 async function sendChatMsg(orderKey){
-  const input=document.getElementById(`chat-input-${orderKey}`);
-  const fileInput=document.getElementById(`chat-file-${orderKey}`);
-  const file=fileInput&&fileInput.files&&fileInput.files[0];
-  const txt=input?input.value.trim():'';
-  if(!txt&&!file)return;
-  const msg={senderName:cu.name,senderUname:cu._uname,senderRole:cu.role,text:txt,timestamp:new Date().toISOString()};
-  if(input)input.value='';
-  if(file){
-    try{
-      showSaving('جاري رفع الملف...');
-      msg.fileData=await convertFileToBase64(file);
-      msg.fileName=file.name;
-      msg.fileType=file.type||'';
-    }catch(e){hideSaving();toast(e.message||'⚠️ تعذر رفع الملف');return;}
-    hideSaving();
-    fileInput.value='';
-    const lbl=document.getElementById(`chat-file-name-${orderKey}`);if(lbl)lbl.textContent='';
-  }
+  const input=document.getElementById(`chat-input-${orderKey}`);if(!input||!input.value.trim())return;
+  const msg={senderName:cu.name,senderUname:cu._uname,senderRole:cu.role,text:input.value.trim(),timestamp:new Date().toISOString()};
+  const txt=input.value.trim();
+  input.value='';
   // Optimistic UI: show immediately
   const container=document.getElementById(`chat-msgs-${orderKey}`);
   if(container){
     const div=document.createElement('div');
     div.className='chat-msg mine';
-    const attHtml=msg.fileData?(msg.fileType.startsWith('image/')
-      ?`<div style="margin-top:6px;"><img src="${msg.fileData}" style="max-width:160px;max-height:160px;border-radius:8px;"/></div>`
-      :`<div style="margin-top:6px;"><a href="${msg.fileData}" download="${msg.fileName}" class="btn btn-out btn-sm" style="display:inline-flex;"><i class="ti ti-paperclip"></i> ${msg.fileName}</a></div>`
-    ):'';
-    div.innerHTML=`<div class="chat-meta">${cu.name} · الآن</div>${txt?`<div>${txt}</div>`:''}${attHtml}`;
+    div.innerHTML=`<div class="chat-meta">${cu.name} · الآن</div><div>${txt}</div>`;
     container.appendChild(div);container.scrollTop=container.scrollHeight;
   }
   await fbPush(`chats/${orderKey}`,msg);
@@ -2440,8 +2400,16 @@ function openOrderModal(key){
   }
   const paymentRow=canSeePayment?`<div class="di" style="grid-column:1/-1;border-top:1px solid var(--border-soft);padding-top:10px;">
     <span class="dk">💳 الموقف المالي</span>
-    <span class="dv">${paymentBadge(o.paymentStatus)||'—'} ${(o.paymentStatus==='تم الدفع'||o.paymentStatus==='دفع جزئي')?`<span style="font-size:12px;color:#065F46">(${Number(o.paidAmount||0).toLocaleString()} ر.س مدفوع)</span>`:''} ${(o.paymentStatus==='دفع جزئي'||o.paymentStatus==='عند التسليم')&&o.remainingAmount?`<span style="font-size:12px;color:#B45309">(${Number(o.remainingAmount||0).toLocaleString()} ر.س متبقي على العميل)</span>`:''}</span>
+    <span class="dv">${paymentBadge(o.paymentStatus)||'—'} ${(o.paymentStatus==='تم الدفع'||o.paymentStatus==='دفع جزئي')?`<span style="font-size:12px;color:#065F46">(${Number(o.paidAmount||0).toLocaleString()} ر.س)</span>`:''}</span>
   </div>`:'';
+  const trackingUrl=`${location.origin}${location.pathname.replace(/[^/]*$/,'tracking.html')}?id=${o.id||key}`;
+  const qrBoxHtml=`<div class="di" style="grid-column:1/-1;border-top:1px solid var(--border-soft);padding-top:12px;">
+    <span class="dk">📱 رمز QR للتتبع</span>
+    <div style="display:flex;align-items:center;gap:14px;margin-top:8px;flex-wrap:wrap;">
+      <div class="qr-box"><div id="order-qr-${key}"></div><p>${o.id||key}</p></div>
+      <div style="font-size:11px;color:var(--text-3);max-width:180px;">يمكن طباعته مع وثيقة الطلب لتتبع العميل</div>
+    </div>
+  </div>`;
   const fromQuoteHtml=o.fromQuoteRef?`<div style="background:#F0FDF4;border:1px solid #BBF7D0;border-radius:var(--radius-sm);padding:8px 14px;font-size:12px;color:#166534;margin-bottom:14px;"><i class="ti ti-receipt-2"></i> تحويل من عرض السعر: <strong>${o.fromQuoteRef}</strong></div>`:'';
   const archiveBtn=(cu.type==='admin'&&!(o.isQuickTask&&o.approvedPrintFile))?`<button class="btn btn-red btn-sm" onclick="archiveOrder('${key}')"><i class="ti ti-archive"></i> إنهاء الطلب وأرشفته</button>`:'';
   const _measureBtns=(k,cl,ph)=>`
@@ -2498,14 +2466,16 @@ function openOrderModal(key){
           <span style="font-size:12px;">⏳ في المرحلة: ${timeBadge(hoursAgo(o.stageStartDate||o.date))}</span>
         </div>
       </div>
+      ${qrBoxHtml}
     </div>
+    ${o.currentDept!=='done'?`<div class="contact-box"><div class="contact-box-title"><i class="ti ti-messages"></i> التواصل بين الأقسام</div><div style="display:flex;gap:14px;flex-wrap:wrap;font-size:12px;"><div><span style="color:var(--text-3)">المسؤول الحالي:</span> <strong style="color:#166534">${currentPersonName(o)}</strong></div>${o.phone&&o.phone!=='—'?`<button class="btn btn-whatsapp btn-sm" onclick="openWhatsapp('${o.phone}')"><i class="ti ti-brand-whatsapp"></i> واتساب العميل</button>`:''}</div></div>`:''}
     ${buildReassignBox(o,key)}
     ${uploadArea}
     ${renderChatSection(key,o.currentDept==='done')}
     ${measureActions}
-    <div class="arow">${nextBtn} ${revertBtn} <button class="btn btn-out btn-sm" onclick="openTimelineModal('${key}')"><i class="ti ti-clock"></i> مراحل الطلب</button> ${o.phone&&o.phone!=='—'?`<button class="btn btn-whatsapp btn-sm" onclick="openWhatsapp('${o.phone}')"><i class="ti ti-brand-whatsapp"></i></button>`:''} ${archiveBtn}</div>`;
+    <div class="arow">${nextBtn} ${revertBtn} <button class="btn btn-out btn-sm" onclick="openTimelineModal('${key}')"><i class="ti ti-clock"></i> مراحل الطلب</button> <button class="btn btn-gold btn-sm" onclick="openQuickTaskForOrder('${key}')"><i class="ti ti-bolt"></i> مهمة سريعة</button> ${o.phone&&o.phone!=='—'?`<button class="btn btn-whatsapp btn-sm" onclick="openWhatsapp('${o.phone}')"><i class="ti ti-brand-whatsapp"></i></button>`:''} ${archiveBtn}</div>`;
   openModal('order-modal');
-  setTimeout(()=>{loadAndRenderChat(key);},200);
+  setTimeout(()=>{generateQR(`order-qr-${key}`,trackingUrl,80);loadAndRenderChat(key);},200);
 }
 function openAddItemModal(key,editIdx){
   const o=orders[key];if(!o)return;
@@ -2678,7 +2648,7 @@ function buildAddForm(isUrgentQuick=false){
       <div class="form-grid">
         <div class="fg"><label>اسم العميل / الجهة *</label><input id="fc" list="cl-list" oninput="onClientInput(this.value)" autocomplete="off" placeholder="اسم الشركة أو العميل"/></div>
         <div class="fg"><label>رقم الجوال * <span style="color:#EF4444">(إلزامي)</span></label>
-          <div style="display:flex;gap:6px;"><input id="fp" placeholder="05XXXXXXXX أو +966XXXXXXXXX" style="flex:1;" required/><button type="button" class="btn btn-whatsapp btn-sm" onclick="openWhatsapp(document.getElementById('fp').value)"><i class="ti ti-brand-whatsapp"></i></button></div>
+          <div style="display:flex;gap:6px;"><input id="fp" placeholder="05XXXXXXXX" style="flex:1;" required/><button type="button" class="btn btn-whatsapp btn-sm" onclick="openWhatsapp(document.getElementById('fp').value)"><i class="ti ti-brand-whatsapp"></i></button></div>
         </div>
         <div class="fg"><label>الأولوية</label>
           <select id="fpr"><option value="عادية">عادية</option><option value="متوسطة">متوسطة</option><option value="عاجلة"${isUrgentQuick?' selected':''}>عاجلة</option></select>
@@ -2713,10 +2683,6 @@ function buildAddForm(isUrgentQuick=false){
       <!-- Simple paid amount for full payment -->
       <div id="simple-amount-field" style="display:none;padding:0 20px 16px;">
         <div class="fg"><label>المبلغ المدفوع (ر.س) <span style="color:#EF4444">*</span></label><input type="number" id="fb2" placeholder="0" min="0"/></div>
-      </div>
-      <!-- Pay-on-delivery: mandatory remaining amount owed by client -->
-      <div id="delivery-amount-field" style="display:none;padding:0 20px 16px;">
-        <div class="fg"><label>المبلغ المستحق عند التسليم (ر.س) <span style="color:#EF4444">*</span></label><input type="number" id="f-delivery-amount" placeholder="0" min="0"/></div>
       </div>
       <div style="padding:0 20px 16px;">
         <div class="fg"><label>ملاحظات وتفاصيل المواصفات</label><textarea id="fn" placeholder="اكتب الملاحظات والمقاسات هنا..."></textarea></div>
@@ -2789,10 +2755,8 @@ function calcRemaining(){
 function onPaymentChange(v){
   const partial=document.getElementById('partial-payment-section');
   const simple=document.getElementById('simple-amount-field');
-  const delivery=document.getElementById('delivery-amount-field');
   if(partial)partial.style.display=v==='دفع جزئي'?'block':'none';
   if(simple)simple.style.display=v==='تم الدفع'?'block':'none';
-  if(delivery)delivery.style.display=v==='عند التسليم'?'block':'none';
 }
 function onExternalChange(v){const w=document.getElementById('external-note-wrap');if(w)w.style.display=v!=='none'?'block':'none';}
 async function handleWorkshopDeptFile(files){
@@ -2877,7 +2841,7 @@ async function submitOrder(isUrgentQuick=false){
   if(!_lines.length){toast('⚠️ يجب إضافة بند واحد على الأقل');return;}
   const s=_lines[0].name.trim()||'خدمة إعلانية';
   if(!phone){toast('⚠️ رقم الجوال إلزامي');return;}
-  if(!isValidSaudiPhone(phone)){toast('⚠️ رقم الجوال يجب أن يكون رقم سعودي صحيح (يبدأ بـ 05 أو +966)');return;}
+  if(!isValidSaudiPhone(phone)){toast('⚠️ رقم الجوال يجب أن يكون رقم سعودي صحيح (05XXXXXXXX)');return;}
   if(!payStatus){toast('⚠️ يرجى تحديد وضع السداد');return;}
   if(payStatus==='دفع جزئي'){
     const _tot=document.getElementById('f-total-amount')?.value;
@@ -2887,9 +2851,6 @@ async function submitOrder(isUrgentQuick=false){
   }else if(payStatus==='تم الدفع'){
     const _paid2=document.getElementById('fb2')?.value;
     if(!_paid2||parseFloat(_paid2)<=0){toast('⚠️ يرجى إدخال المبلغ المدفوع');return;}
-  }else if(payStatus==='عند التسليم'){
-    const _delivAmt=document.getElementById('f-delivery-amount')?.value;
-    if(!_delivAmt||parseFloat(_delivAmt)<=0){toast('⚠️ يرجى إدخال المبلغ المستحق عند التسليم (إلزامي)');return;}
   }
   const dU=document.getElementById('fw-design').value,extU=document.getElementById('fw-external').value,pU=document.getElementById('fw-print').value,wU=document.getElementById('fw-workshop').value;
   if(dU==='none'&&extU==='none'&&pU==='none'&&wU==='none'){toast('⚠️ يجب اختيار قسم تنفيذي واحد');return;}
@@ -2905,9 +2866,6 @@ async function submitOrder(isUrgentQuick=false){
     remainingAmt=Math.max(0,totalAmt-paidAmt);
   }else if(payStatus==='تم الدفع'){
     paidAmt=parseInt(document.getElementById('fb2')?.value)||0;
-  }else if(payStatus==='عند التسليم'){
-    const delivAmt=parseFloat(document.getElementById('f-delivery-amount')?.value)||0;
-    totalAmt=delivAmt;remainingAmt=delivAmt;paidAmt=0;
   }
   if(!Object.values(clients).find(c2=>c2.name===c))await fbPush('clients',{name:c,phone:normalizeSaudiPhone(phone),date:today});
   const ord={
@@ -3164,7 +3122,7 @@ async function exportExcel(){
 function buildRequestPage(){
   window.reqFileB64='';window.reqFileName='';
   const unpaidOrders=ordersArr().filter(o=>o.createdByUname===cu._uname&&o.paymentStatus!=='تم الدفع');
-  const orderOptions=unpaidOrders.map(o=>`<option value="${o._key}">${o.id||o._key} — ${o.client} (${o.paymentStatus||'بدون حالة'}${o.remainingAmount?' — متبقي '+Number(o.remainingAmount).toLocaleString()+' ر.س':''})</option>`).join('');
+  const orderOptions=unpaidOrders.map(o=>`<option value="${o._key}">${o.id||o._key} — ${o.client} (${o.paymentStatus||'بدون حالة'})</option>`).join('');
   document.getElementById('request-content').innerHTML=`
     <div class="page-header"><div class="ptitle"><i class="ti ti-send"></i> رفع طلب مالي</div></div>
     <div class="card">
@@ -3239,7 +3197,7 @@ function buildRequestsPage(){
       <td><strong>${o.client}</strong></td>
       <td>${o.service||'—'}</td>
       <td><span class="badge ${o.paymentStatus==='دفع جزئي'?'b-proc':'b-new'}">${o.paymentStatus||'—'}</span></td>
-      <td>${(o.remainingAmount||o.totalAmount)?Number(o.remainingAmount||o.totalAmount).toLocaleString()+' ر.س':'—'}</td>
+      <td>${o.totalAmount?Number(o.totalAmount).toLocaleString()+' ر.س':'—'}</td>
     </tr>`).join('');
   document.getElementById('requests-content').innerHTML=`
     <div class="page-header"><div class="ptitle"><i class="ti ti-inbox"></i> صندوق طلبات المحاسبة</div></div>
@@ -3256,7 +3214,7 @@ function buildRequestsPage(){
     </table></div></div>
     <!-- unpaid tab uses different columns -->
     <div id="req-pane-unpaid" style="display:none">
-      <div class="card"><div class="tbl-wrap"><table><thead><tr><th>رقم الطلب</th><th>العميل</th><th>الخدمة</th><th style="width:100px">حالة الدفع</th><th style="width:110px">المبلغ المتبقي</th></tr></thead>
+      <div class="card"><div class="tbl-wrap"><table><thead><tr><th>رقم الطلب</th><th>العميل</th><th>الخدمة</th><th style="width:100px">حالة الدفع</th><th style="width:110px">الإجمالي</th></tr></thead>
       <tbody>${makeUnpaidRows(unpaidOrds)}</tbody></table></div></div>
     </div>`;
   updateRequestsBadgeSidebar();
@@ -3450,7 +3408,7 @@ function buildIncompletePage(){
   if(arr.length===0){
     cards='<div style="text-align:center;color:var(--text-3);padding:48px 20px;"><i class="ti ti-user-check" style="font-size:52px;display:block;margin-bottom:12px;color:#10B981;"></i><div style="font-size:16px;font-weight:700;">لا توجد مهام غير مكتملة</div><div style="font-size:13px;margin-top:6px;">المهام السريعة التي لم يرغب العميل بإكمالها ستظهر هنا</div></div>';
   }else{
-    cards=`<div class="wf-grid">${arr.map(o=>`<div class="wf-card" data-key="${o._key}" style="border:2px solid #FECACA;background:linear-gradient(135deg,#FFF8F8,#FEF2F2);" onclick="openOrderModal('${o._key}')">${hasUnreadChat(o)?'<span class="chat-unread-dot" title="رسالة جديدة في المحادثة"></span>':''}<div class="wf-card-top">
+    cards=`<div class="wf-grid">${arr.map(o=>`<div class="wf-card" style="border:2px solid #FECACA;background:linear-gradient(135deg,#FFF8F8,#FEF2F2);" onclick="openOrderModal('${o._key}')">${hasUnreadChat(o)?'<span class="chat-unread-dot" title="رسالة جديدة في المحادثة"></span>':''}<div class="wf-card-top">
       <div class="wf-card-id">${o.id||o._key} · ${orderDateTime(o)}<span class="urgent-tag" style="margin-right:6px;font-size:9px;background:#991B1B;"><i class="ti ti-user-off"></i>غير مكتمل</span></div>
       <div class="wf-card-name">${o.client}</div>
       <div class="wf-card-svc">${o.service}</div>
