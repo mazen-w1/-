@@ -2678,7 +2678,7 @@ function buildAddForm(isUrgentQuick=false){
       <div class="form-grid">
         <div class="fg"><label>اسم العميل / الجهة *</label><input id="fc" list="cl-list" oninput="onClientInput(this.value)" autocomplete="off" placeholder="اسم الشركة أو العميل"/></div>
         <div class="fg"><label>رقم الجوال * <span style="color:#EF4444">(إلزامي)</span></label>
-          <div style="display:flex;gap:6px;"><input id="fp" placeholder="05XXXXXXXX" maxlength="13" style="flex:1;" required/><button type="button" class="btn btn-whatsapp btn-sm" onclick="openWhatsapp(document.getElementById('fp').value)"><i class="ti ti-brand-whatsapp"></i></button></div>
+          <div style="display:flex;gap:6px;"><input id="fp" placeholder="05XXXXXXXX" maxlength="20" style="flex:1;" required/><button type="button" class="btn btn-whatsapp btn-sm" onclick="openWhatsapp(document.getElementById('fp').value)"><i class="ti ti-brand-whatsapp"></i></button></div>
         </div>
         <div class="fg"><label>الأولوية</label>
           <select id="fpr"><option value="عادية">عادية</option><option value="متوسطة">متوسطة</option><option value="عاجلة"${isUrgentQuick?' selected':''}>عاجلة</option></select>
