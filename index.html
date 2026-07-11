@@ -1882,7 +1882,7 @@ function renderQuoteLines(){
   const wrap=document.getElementById('quote-lines-wrap');if(!wrap)return;
   wrap.innerHTML=window._quoteLines.map(l=>`<div class="quote-line" style="grid-template-columns:2fr 1fr 1fr 1fr 1fr auto auto;gap:6px;">
     <input placeholder="وصف البند" value="${l.lbl}" oninput="updateQuoteLine('${l.id}','lbl',this.value)"/>
-    <input type="text" inputmode="decimal" placeholder="الكمية" value="${l.q}" oninput="updateQuoteLine('${l.id}','q',this.value)" min="1"/>
+    <input type="text" inputmode="decimal" id="q-line-qty-${l.id}" placeholder="الكمية" value="${l.q}" oninput="updateQuoteLine('${l.id}','q',this.value)" min="1"/>
     <input type="text" inputmode="decimal" id="q-line-notax-${l.id}" placeholder="السعر بدون ضريبة" value="${l.p}" oninput="updateQuoteLine('${l.id}','p',this.value)" min="0"/>
     <input type="text" inputmode="decimal" id="q-line-wtax-${l.id}" placeholder="السعر شامل الضريبة" value="${(l.p*1.15).toFixed(2)}" oninput="updateQuoteLineFromTax('${l.id}',this.value)" min="0"/>
     <div id="q-line-total-${l.id}" style="display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:var(--maroon);background:var(--surface-2);border:1.5px solid var(--border);border-radius:8px;padding:8px 6px;text-align:center;">${((l.q||0)*(l.p||0)*1.15).toFixed(2)}</div>
@@ -1907,13 +1907,22 @@ async function attachLineImage(id,files){
 }
 function renderQuoteTotals(){
   const fmt=n=>n.toLocaleString('en-US',{minimumFractionDigits:2});
-  // Keep each line's "إجمالي البند" box in sync with its own qty × price —
-  // this is what makes the total visibly react as soon as the quantity changes.
+  // ── Read qty/price straight from the DOM inputs (the source of truth the
+  // user actually sees) instead of trusting window._quoteLines, which is
+  // mutated piecemeal by separate event handlers and can drift out of sync
+  // with what's on screen. This also keeps window._quoteLines corrected so
+  // saving/printing the quote always matches what was displayed. ──
+  let subtotal=0;
   window._quoteLines.forEach(l=>{
+    const qEl=document.getElementById('q-line-qty-'+l.id);
+    const pEl=document.getElementById('q-line-notax-'+l.id);
+    const q=qEl?(parseFloat(qEl.value)||0):(l.q||0);
+    const p=pEl?(parseFloat(pEl.value)||0):(l.p||0);
+    l.q=q;l.p=p;
+    subtotal+=q*p;
     const totEl=document.getElementById('q-line-total-'+l.id);
-    if(totEl)totEl.textContent=fmt((l.q||0)*(l.p||0)*1.15);
+    if(totEl)totEl.textContent=fmt(q*p*1.15);
   });
-  const subtotal=window._quoteLines.reduce((s,l)=>s+(l.q*l.p),0);
   const vat=subtotal*0.15;const total=subtotal+vat;
   const g=document.getElementById('q-grand-total');
   const vn=document.getElementById('q-vat-note');
