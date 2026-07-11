@@ -2138,24 +2138,26 @@ function renderA4Quote(data,key=''){
        content order (WhatsApp preview, some mobile PDF viewers, etc). A plain
        table keeps DOM order == visual order == PDF content order. -->
   <div style="background:linear-gradient(135deg,#5B0F19 0%,#7A1B28 50%,#5B0F19 100%);border-radius:16px;padding:16px 22px;margin-bottom:10px;box-shadow:0 14px 40px rgba(91,15,25,.28);">
-    <div style="display:table;width:100%;border-collapse:collapse;">
-      <div style="display:table-cell;vertical-align:middle;">
-        <div style="display:flex;justify-content:space-between;gap:30px;">
-          <span style="color:rgba(255,255,255,.65);font-size:11px;">المجموع الفرعي</span>
-          <span style="color:#fff;font-size:12px;font-weight:700;">${fmt(subtotal)} ر.س</span>
+    <div style="display:table;width:100%;table-layout:fixed;border-collapse:collapse;">
+      <div style="display:table-cell;vertical-align:middle;width:auto;">
+        <div style="display:table;width:100%;table-layout:fixed;">
+          <div style="display:table-row;">
+            <div style="display:table-cell;text-align:right;color:rgba(255,255,255,.65);font-size:11px;">المجموع الفرعي</div>
+            <div style="display:table-cell;text-align:left;color:#fff;font-size:12px;font-weight:700;white-space:nowrap;width:90px;">${fmt(subtotal)} ر.س</div>
+          </div>
+          <div style="display:table-row;">
+            <div style="display:table-cell;text-align:right;color:rgba(255,255,255,.65);font-size:11px;padding-top:6px;">ضريبة القيمة المضافة (15%)</div>
+            <div style="display:table-cell;text-align:left;color:#fff;font-size:12px;font-weight:700;white-space:nowrap;width:90px;padding-top:6px;">${fmt(vat)} ر.س</div>
+          </div>
+          ${paidAmt>0?`<div style="display:table-row;">
+            <div style="display:table-cell;text-align:right;color:rgba(255,255,255,.65);font-size:11px;padding-top:6px;">المبلغ المدفوع</div>
+            <div style="display:table-cell;text-align:left;color:#8FE3B3;font-size:12px;font-weight:800;white-space:nowrap;width:90px;padding-top:6px;">${fmt(paidAmt)} ر.س</div>
+          </div>
+          <div style="display:table-row;">
+            <div style="display:table-cell;text-align:right;color:rgba(255,255,255,.65);font-size:11px;padding-top:6px;">المبلغ المتبقي</div>
+            <div style="display:table-cell;text-align:left;color:#FFC0C0;font-size:12px;font-weight:800;white-space:nowrap;width:90px;padding-top:6px;">${fmt(remainingAmt)} ر.س</div>
+          </div>`:''}
         </div>
-        <div style="display:flex;justify-content:space-between;gap:30px;margin-top:6px;">
-          <span style="color:rgba(255,255,255,.65);font-size:11px;">ضريبة القيمة المضافة (15%)</span>
-          <span style="color:#fff;font-size:12px;font-weight:700;">${fmt(vat)} ر.س</span>
-        </div>
-        ${paidAmt>0?`<div style="display:flex;justify-content:space-between;gap:30px;margin-top:6px;">
-          <span style="color:rgba(255,255,255,.65);font-size:11px;">المبلغ المدفوع</span>
-          <span style="color:#8FE3B3;font-size:12px;font-weight:800;">${fmt(paidAmt)} ر.س</span>
-        </div>
-        <div style="display:flex;justify-content:space-between;gap:30px;margin-top:6px;">
-          <span style="color:rgba(255,255,255,.65);font-size:11px;">المبلغ المتبقي</span>
-          <span style="color:#FFC0C0;font-size:12px;font-weight:800;">${fmt(remainingAmt)} ر.س</span>
-        </div>`:''}
       </div>
       <div style="display:table-cell;width:16px;"></div>
       <div style="display:table-cell;width:1px;background:rgba(201,162,39,.35);"></div>
