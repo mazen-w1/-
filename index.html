@@ -1762,7 +1762,8 @@ function buildQuotePage(){
         <div id="q-remaining-wrap" style="text-align:center;margin-top:8px;font-size:12px;font-weight:700;"></div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:16px;">
           <div class="fg"><label>شروط وأحكام</label><textarea id="q-terms" placeholder="الدفع 50% مقدماً | التسليم خلال 5 أيام عمل..."></textarea></div>
-          <div class="fg"><label>بيانات البنك</label><textarea id="q-bank" placeholder="اسم البنك | رقم IBAN..."></textarea></div>
+          <div class="fg"><label>بيانات البنك (ثابتة)</label><textarea id="q-bank" readonly style="background:var(--surface-2);color:var(--text-2);cursor:not-allowed;">رقم الآيبان (IBAN): SA6880000370608010177725
+رقم الحساب: 370608010177725</textarea></div>
         </div>
         <div class="fg" style="margin-top:12px;"><label>طريقة الدفع</label>
           <select id="q-payment-terms" onchange="onQuotePaymentChange(this.value)">
@@ -1825,7 +1826,7 @@ function buildQuoteArchiveRows(){
   return arr.map(q=>`<tr data-date="${q.date||''}">
     <td><strong>${q.client}</strong></td>
     <td><span class="badge b-new">${q.ref||'—'}</span></td>
-    <td><span class="badge b-proc" style="font-size:12px;">${Number(q.totalWithVat||q.total||0).toLocaleString()} ر.س</span></td>
+    <td><span class="badge b-proc" style="font-size:12px;">${Number(q.totalWithVat||q.total||0).toFixed(2)} ر.س</span></td>
     <td style="font-size:11px">${q.date}</td>
     <td><div style="display:flex;gap:5px;flex-wrap:wrap;">
       <button class="btn btn-out btn-xs" onclick="previewSavedQuote('${q._key}')"><i class="ti ti-eye"></i> معاينة</button>
@@ -1842,7 +1843,8 @@ async function editQuote(key){
   const setVal=(id,v)=>{const el=document.getElementById(id);if(el)el.value=v||'';};
   setVal('q-client',q.client);setVal('q-phone',q.phone);setVal('q-ref',q.ref||key);
   setVal('q-date',q.date);setVal('q-sales',q.sales||cu.name);setVal('q-validity',q.validity);
-  setVal('q-delivery',q.delivery);setVal('q-terms',q.terms);setVal('q-bank',q.bank);
+  setVal('q-delivery',q.delivery);setVal('q-terms',q.terms);
+  // q-bank is intentionally left untouched — it always shows the fixed company bank details set in buildQuotePage().
   setVal('q-paid-amount',q.paidAmount);
   const ptSel=document.getElementById('q-payment-terms');if(ptSel&&q.paymentTerms)ptSel.value=q.paymentTerms;
   window._quoteLines=(q.lines||[]).map(l=>({...l,id:'q'+Date.now()+Math.random().toString(36).slice(2)}));
@@ -1906,19 +1908,20 @@ async function attachLineImage(id,files){
   hideSaving();
 }
 function renderQuoteTotals(){
-  const fmt=n=>n.toLocaleString('en-US',{minimumFractionDigits:2});
-  // ── Read qty/price straight from the DOM inputs (the source of truth the
-  // user actually sees) instead of trusting window._quoteLines, which is
-  // mutated piecemeal by separate event handlers and can drift out of sync
-  // with what's on screen. This also keeps window._quoteLines corrected so
-  // saving/printing the quote always matches what was displayed. ──
+  const fmt=n=>Number(n||0).toFixed(2);
+  // ── Quantity is read fresh from its input (cheap, no precision risk — it's
+  // always a whole/simple number) so a quantity edit always reflects immediately.
+  // Price is kept from window._quoteLines at FULL precision — never re-parsed
+  // from the price input's *displayed* text, because that text is deliberately
+  // rounded to 2 decimals for readability (e.g. 80÷1.15 shown as "69.57").
+  // Re-reading the rounded text back in would bake that rounding into every
+  // future calculation and compound into a noticeably wrong total. ──
   let subtotal=0;
   window._quoteLines.forEach(l=>{
     const qEl=document.getElementById('q-line-qty-'+l.id);
-    const pEl=document.getElementById('q-line-notax-'+l.id);
     const q=qEl?(parseFloat(qEl.value)||0):(l.q||0);
-    const p=pEl?(parseFloat(pEl.value)||0):(l.p||0);
-    l.q=q;l.p=p;
+    const p=l.p||0;
+    l.q=q;
     subtotal+=q*p;
     const totEl=document.getElementById('q-line-total-'+l.id);
     if(totEl)totEl.textContent=fmt(q*p*1.15);
@@ -1987,7 +1990,11 @@ async function previewSavedQuote(key){
   setTimeout(()=>window.print(),400);
 }
 function renderA4Quote(data,key=''){
-  const fmt=n=>Number(n||0).toLocaleString('ar-SA',{minimumFractionDigits:2});
+  // Plain Western digits, always exactly 2 decimals, no thousands separator.
+  // 'ar-SA' locale formatting was producing Eastern Arabic-Indic digits with an
+  // inconsistent number of decimal places and a decimal comma that reads like a
+  // thousands separator — confusing on a printed invoice. This is unambiguous.
+  const fmt=n=>Number(n||0).toFixed(2);
   const issueDate=data.date||new Date().toISOString().split('T')[0];
   const expiryDate=data.validity||'';
   const lines=(data.lines||[]);
@@ -2217,7 +2224,7 @@ async function convertSavedQuoteToOrder(key,preloadedData=null){
     <div class="modal-header"><span class="modal-title"><i class="ti ti-transfer"></i> تحويل لأمر تشغيل</span><button class="btn-close" onclick="closeModal('order-modal')">×</button></div>
     <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-md);padding:14px;margin-bottom:16px;">
       <div style="font-size:14px;font-weight:700;color:var(--maroon);">${data.client}</div>
-      <div style="font-size:12px;color:var(--text-2);margin-top:3px;">الإجمالي: <strong>${Number(data.totalWithVat||0).toLocaleString()} ر.س</strong></div>
+      <div style="font-size:12px;color:var(--text-2);margin-top:3px;">الإجمالي: <strong>${Number(data.totalWithVat||0).toFixed(2)} ر.س</strong></div>
     </div>
     <div style="display:flex;flex-direction:column;gap:12px;">
       <div class="fg"><label>رقم الجوال *</label><input id="co-phone" inputmode="tel" value="${data.phone||''}" placeholder="05XXXXXXXX"/></div>
@@ -2482,7 +2489,7 @@ function openOrderModal(key){
   }
   const paymentRow=canSeePayment?`<div class="di" style="grid-column:1/-1;border-top:1px solid var(--border-soft);padding-top:10px;">
     <span class="dk">💳 الموقف المالي</span>
-    <span class="dv">${paymentBadge(o.paymentStatus)||'—'} ${(o.paymentStatus==='تم الدفع'||o.paymentStatus==='دفع جزئي')?`<span style="font-size:12px;color:#065F46">(${Number(o.paidAmount||0).toLocaleString()} ر.س)</span>`:''}</span>
+    <span class="dv">${paymentBadge(o.paymentStatus)||'—'} ${(o.paymentStatus==='تم الدفع'||o.paymentStatus==='دفع جزئي')?`<span style="font-size:12px;color:#065F46">(${Number(o.paidAmount||0).toFixed(2)} ر.س)</span>`:''}</span>
   </div>`:'';
   const canLogMaintenance=['admin','receiver','workshop'].includes(t);
   const _lastVisit=(o.maintenanceVisits&&o.maintenanceVisits.length)?o.maintenanceVisits[o.maintenanceVisits.length-1]:null;
@@ -3322,7 +3329,7 @@ function buildRequestsPage(){
       <td><strong>${o.client}</strong></td>
       <td>${o.service||'—'}</td>
       <td><span class="badge ${o.paymentStatus==='دفع جزئي'?'b-proc':'b-new'}">${o.paymentStatus||'—'}</span></td>
-      <td>${o.totalAmount?Number(o.totalAmount).toLocaleString()+' ر.س':'—'}</td>
+      <td>${o.totalAmount?Number(o.totalAmount).toFixed(2)+' ر.س':'—'}</td>
     </tr>`).join('');
   document.getElementById('requests-content').innerHTML=`
     <div class="page-header"><div class="ptitle"><i class="ti ti-inbox"></i> صندوق طلبات المحاسبة</div></div>
