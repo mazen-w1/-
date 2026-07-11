@@ -2037,7 +2037,7 @@ function renderA4Quote(data,key=''){
 </style>
 <div id="print-area-inner" style="background:#FAF8F5;min-height:297mm;padding:18px 20px;position:relative;">
   <!-- HEADER CARD -->
-  <div style="background:#fff;border-radius:16px;padding:16px 22px;box-shadow:0 10px 34px rgba(91,15,25,.08);display:flex;justify-content:space-between;align-items:center;gap:18px;margin-bottom:10px;flex-wrap:wrap;">
+  <div style="background:#fff;border-radius:16px;padding:16px 22px;border:1px solid #F1E9D8;display:flex;justify-content:space-between;align-items:center;gap:18px;margin-bottom:14px;flex-wrap:wrap;">
     <div style="display:flex;align-items:center;gap:14px;">
       <div style="width:52px;height:52px;border-radius:50%;border:2.5px solid #5B0F19;display:flex;align-items:center;justify-content:center;flex-shrink:0;background:#fff;">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="32" height="32"><path d="M 18 48 Q 45 38 78 52 Q 95 58 102 72" fill="none" stroke="#5B0F19" stroke-width="6" stroke-linecap="round"/><circle cx="22" cy="52" r="4" fill="#C9A227" opacity=".9"/><circle cx="98" cy="52" r="3.5" fill="#C9A227" opacity=".8"/></svg>
@@ -2058,18 +2058,18 @@ function renderA4Quote(data,key=''){
   </div>
   <!-- DATE STRIP -->
   <div style="display:flex;gap:10px;margin-bottom:10px;">
-    <div style="flex:1;background:#fff;border-radius:14px;padding:11px 16px;box-shadow:0 6px 20px rgba(91,15,25,.06);display:flex;align-items:center;gap:10px;">
+    <div style="flex:1;background:#fff;border-radius:14px;padding:11px 16px;border:1px solid #F1E9D8;display:flex;align-items:center;gap:10px;">
       <i class="ti ti-calendar-event" style="color:#C9A227;font-size:18px;"></i>
       <div><div style="font-size:9px;color:#9B8F80;">تاريخ الإصدار</div><div style="font-size:12.5px;font-weight:700;color:#2A2A2A;">${issueDate}</div></div>
     </div>
-    <div style="flex:1;background:#fff;border-radius:14px;padding:11px 16px;box-shadow:0 6px 20px rgba(91,15,25,.06);display:flex;align-items:center;gap:10px;">
+    <div style="flex:1;background:#fff;border-radius:14px;padding:11px 16px;border:1px solid #F1E9D8;display:flex;align-items:center;gap:10px;">
       <i class="ti ti-calendar-due" style="color:#C9A227;font-size:18px;"></i>
       <div><div style="font-size:9px;color:#9B8F80;">تاريخ الانتهاء</div><div style="font-size:12.5px;font-weight:700;color:#2A2A2A;">${expiryDate||'—'}</div></div>
     </div>
   </div>
   <!-- CUSTOMER + QUOTE INFO -->
   <div style="display:flex;gap:10px;margin-bottom:10px;">
-    <div style="flex:1;background:#fff;border-radius:16px;padding:14px 18px;box-shadow:0 10px 30px rgba(91,15,25,.07);">
+    <div style="flex:1;background:#fff;border-radius:16px;padding:14px 18px;border:1px solid #F1E9D8;">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
         <i class="ti ti-user-circle" style="color:#5B0F19;font-size:15px;"></i>
         <span style="font-size:11px;font-weight:800;color:#5B0F19;letter-spacing:1.5px;">بيانات العميل</span>
@@ -2085,7 +2085,7 @@ function renderA4Quote(data,key=''){
         </div>
       </div>
     </div>
-    <div style="flex:1;background:#fff;border-radius:16px;padding:14px 18px;box-shadow:0 10px 30px rgba(91,15,25,.07);">
+    <div style="flex:1;background:#fff;border-radius:16px;padding:14px 18px;border:1px solid #F1E9D8;">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
         <i class="ti ti-file-description" style="color:#5B0F19;font-size:15px;"></i>
         <span style="font-size:11px;font-weight:800;color:#5B0F19;letter-spacing:1.5px;">بيانات العرض</span>
@@ -2107,7 +2107,7 @@ function renderA4Quote(data,key=''){
     </div>
   </div>
   <!-- PRODUCTS TABLE CARD -->
-  <div style="background:#fff;border-radius:16px;padding:14px 18px;box-shadow:0 10px 30px rgba(91,15,25,.07);margin-bottom:10px;">
+  <div style="background:#fff;border-radius:16px;padding:14px 18px;border:1px solid #F1E9D8;margin-bottom:10px;">
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
       <div style="width:26px;height:2px;background:linear-gradient(90deg,#C9A227,transparent);"></div>
       <span style="font-size:11.5px;font-weight:800;color:#5B0F19;letter-spacing:2px;">المنتجات والخدمات</span>
@@ -2137,7 +2137,7 @@ function renderA4Quote(data,key=''){
        correct-looking on screen, but scrambled in PDF viewers that read by
        content order (WhatsApp preview, some mobile PDF viewers, etc). A plain
        table keeps DOM order == visual order == PDF content order. -->
-  <div style="background:linear-gradient(135deg,#5B0F19 0%,#7A1B28 50%,#5B0F19 100%);border-radius:16px;padding:16px 22px;margin-bottom:10px;box-shadow:0 14px 40px rgba(91,15,25,.28);">
+  <div style="background:linear-gradient(135deg,#5B0F19 0%,#7A1B28 50%,#5B0F19 100%);border-radius:16px;padding:16px 22px;margin-bottom:14px;border:1px solid #7A1B28;">
     <div style="display:table;width:100%;table-layout:fixed;border-collapse:collapse;">
       <div style="display:table-cell;vertical-align:middle;width:auto;">
         <div style="display:table;width:100%;table-layout:fixed;">
@@ -2171,14 +2171,14 @@ function renderA4Quote(data,key=''){
   </div>
   <!-- BANK INFO + QR -->
   <div style="display:flex;gap:10px;margin-bottom:10px;">
-    <div style="flex:1.2;background:#fff;border-radius:16px;padding:14px 18px;box-shadow:0 10px 30px rgba(91,15,25,.07);">
+    <div style="flex:1.2;background:#fff;border-radius:16px;padding:14px 18px;border:1px solid #F1E9D8;">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
         <i class="ti ti-building-bank" style="color:#5B0F19;font-size:15px;"></i>
         <span style="font-size:11px;font-weight:800;color:#5B0F19;letter-spacing:1.5px;">البيانات البنكية</span>
       </div>
       <div style="background:#FBF8F2;border:1px solid #F1E9D8;border-radius:10px;padding:10px 14px;font-size:11.5px;color:#2A2A2A;line-height:1.7;white-space:pre-line;">${data.bank||'—'}</div>
     </div>
-    <div style="flex:1;background:#fff;border-radius:16px;padding:14px 18px;box-shadow:0 10px 30px rgba(91,15,25,.07);display:flex;align-items:center;gap:14px;">
+    <div style="flex:1;background:#fff;border-radius:16px;padding:14px 18px;border:1px solid #F1E9D8;display:flex;align-items:center;gap:14px;">
       <div id="print-qr-${key||'new'}" style="flex-shrink:0;"></div>
       <div>
         <div style="font-size:11.5px;font-weight:800;color:#5B0F19;margin-bottom:3px;">تتبع العرض</div>
@@ -2188,7 +2188,7 @@ function renderA4Quote(data,key=''){
   </div>
   ${data.terms?`
   <!-- TERMS CARD -->
-  <div style="background:#fff;border-radius:16px;padding:12px 18px;box-shadow:0 10px 30px rgba(91,15,25,.07);margin-bottom:10px;">
+  <div style="background:#fff;border-radius:16px;padding:12px 18px;border:1px solid #F1E9D8;margin-bottom:10px;">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
       <i class="ti ti-notes" style="color:#5B0F19;font-size:15px;"></i>
       <span style="font-size:11px;font-weight:800;color:#5B0F19;letter-spacing:1.5px;">الشروط والأحكام</span>
@@ -2196,7 +2196,7 @@ function renderA4Quote(data,key=''){
     <div style="font-size:11px;color:#5a5a5a;line-height:1.6;white-space:pre-line;">${data.terms}</div>
   </div>`:''}
   <!-- FOOTER CARD -->
-  <div style="background:#fff;border-radius:16px;padding:12px 20px;box-shadow:0 10px 30px rgba(91,15,25,.07);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+  <div style="background:#fff;border-radius:16px;padding:12px 20px;border:1px solid #F1E9D8;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
     <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
       <div style="display:flex;align-items:center;gap:6px;"><i class="ti ti-mail" style="color:#C9A227;font-size:13px;"></i><span style="font-size:10px;color:#5a5a5a;">info@rawaee.sa</span></div>
       <div style="display:flex;align-items:center;gap:6px;"><i class="ti ti-world" style="color:#C9A227;font-size:13px;"></i><span style="font-size:10px;color:#5a5a5a;">[www.rawaee.sa](https://www.rawaee.sa)</span></div>
