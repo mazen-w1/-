@@ -1737,11 +1737,12 @@ function buildQuotePage(){
     <div class="card">
       <div class="card-header"><span class="card-title"><i class="ti ti-table"></i> تفاصيل المنتجات والخدمات</span></div>
       <div style="padding:16px;">
-        <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr 0.5fr;gap:8px;margin-bottom:8px;padding:0 4px;">
+        <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1fr 0.5fr;gap:8px;margin-bottom:8px;padding:0 4px;">
           <span style="font-size:11px;font-weight:800;color:var(--text-3);">وصف البند</span>
           <span style="font-size:11px;font-weight:800;color:var(--text-3);">الكمية</span>
           <span style="font-size:11px;font-weight:800;color:var(--text-3);">السعر بدون ضريبة</span>
           <span style="font-size:11px;font-weight:800;color:var(--text-3);">السعر شامل الضريبة</span>
+          <span style="font-size:11px;font-weight:800;color:var(--text-3);">إجمالي البند</span>
           <span></span>
         </div>
         <div id="quote-lines-wrap"></div>
@@ -1879,11 +1880,12 @@ function updateQuoteLineFromTax(id,v){
 }
 function renderQuoteLines(){
   const wrap=document.getElementById('quote-lines-wrap');if(!wrap)return;
-  wrap.innerHTML=window._quoteLines.map(l=>`<div class="quote-line" style="grid-template-columns:2fr 1fr 1fr 1fr auto auto;gap:6px;">
+  wrap.innerHTML=window._quoteLines.map(l=>`<div class="quote-line" style="grid-template-columns:2fr 1fr 1fr 1fr 1fr auto auto;gap:6px;">
     <input placeholder="وصف البند" value="${l.lbl}" oninput="updateQuoteLine('${l.id}','lbl',this.value)"/>
     <input type="text" inputmode="decimal" placeholder="الكمية" value="${l.q}" oninput="updateQuoteLine('${l.id}','q',this.value)" min="1"/>
     <input type="text" inputmode="decimal" id="q-line-notax-${l.id}" placeholder="السعر بدون ضريبة" value="${l.p}" oninput="updateQuoteLine('${l.id}','p',this.value)" min="0"/>
     <input type="text" inputmode="decimal" id="q-line-wtax-${l.id}" placeholder="السعر شامل الضريبة" value="${(l.p*1.15).toFixed(2)}" oninput="updateQuoteLineFromTax('${l.id}',this.value)" min="0"/>
+    <div id="q-line-total-${l.id}" style="display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:var(--maroon);background:var(--surface-2);border:1.5px solid var(--border);border-radius:8px;padding:8px 6px;text-align:center;">${((l.q||0)*(l.p||0)*1.15).toFixed(2)}</div>
     <label title="إرفاق صورة للبند" style="cursor:pointer;display:flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:8px;border:1px dashed var(--border);background:var(--bg);flex-shrink:0;transition:.12s;" onmouseover="this.style.borderColor='var(--gold)'" onmouseout="this.style.borderColor='var(--border)'">
       ${l.img?`<img src="${l.img}" style="width:28px;height:28px;object-fit:cover;border-radius:6px;"/>`:
       `<i class="ti ti-photo" style="font-size:14px;color:var(--text-3);"></i>`}
@@ -1904,9 +1906,15 @@ async function attachLineImage(id,files){
   hideSaving();
 }
 function renderQuoteTotals(){
+  const fmt=n=>n.toLocaleString('en-US',{minimumFractionDigits:2});
+  // Keep each line's "إجمالي البند" box in sync with its own qty × price —
+  // this is what makes the total visibly react as soon as the quantity changes.
+  window._quoteLines.forEach(l=>{
+    const totEl=document.getElementById('q-line-total-'+l.id);
+    if(totEl)totEl.textContent=fmt((l.q||0)*(l.p||0)*1.15);
+  });
   const subtotal=window._quoteLines.reduce((s,l)=>s+(l.q*l.p),0);
   const vat=subtotal*0.15;const total=subtotal+vat;
-  const fmt=n=>n.toLocaleString('en-US',{minimumFractionDigits:2});
   const g=document.getElementById('q-grand-total');
   const vn=document.getElementById('q-vat-note');
   if(g)g.textContent=fmt(total)+' ر.س';
