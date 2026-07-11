@@ -609,6 +609,7 @@ input[inputmode="decimal"],input[inputmode="numeric"],input[type="number"],input
         <div class="page active" id="page-dash"><div id="dash-content"></div></div>
         <div class="page" id="page-add"><div class="page-header"><div><div class="ptitle"><i class="ti ti-plus"></i> تسجيل طلب جديد</div></div></div><div id="add-content"></div></div>
         <div class="page" id="page-quote"><div id="quote-content"></div></div>
+        <div class="page" id="page-teamchat"><div id="teamchat-content"></div></div>
         <div class="page" id="page-wf"><div id="wf-content"></div></div>
         <div class="page" id="page-my"><div id="my-content"></div></div>
         <div class="page" id="page-users"><div id="users-content"></div></div>
@@ -762,7 +763,7 @@ const INITIAL_USERS={
   external1:{pass:'1234',name:'منفذ خارجي',role:'تنفيذ خارجي',color:'#713F12',type:'external',photo:''},
 };
 let cu=null,orders={},clients={},USERS={},currentSortMode='date-desc',_pendingPortalType=null;
-let submittedRequests={},chats={},standaloneQuotes={},warranties={};
+let submittedRequests={},chats={},standaloneQuotes={},warranties={},teamChat={};
 let _lastAssignSnapshot=null,_audioCtx=null,_audioUnlocked=false;
 let _navHistory=[];
 let _nuPhotoB64='',_euPhotoB64='',_euSelectedColor='',_nuSelectedColor='';
@@ -865,13 +866,14 @@ async function syncUsers(){
 }
 async function loadData(){
   try{
-    const [ord,cli,req,cht,sqt,wrt]=await Promise.all([
+    const [ord,cli,req,cht,sqt,wrt,tch]=await Promise.all([
       fbGet('orders').catch(()=>null),
       fbGet('clients').catch(()=>null),
       fbGet('requests').catch(()=>null),
       fbGet('chats').catch(()=>null),
       fbGet('standalone_quotes').catch(()=>null),
-      fbGet('warranties').catch(()=>null)
+      fbGet('warranties').catch(()=>null),
+      fbGet('team_chat').catch(()=>null)
     ]);
     orders=(ord&&typeof ord==='object')?ord:{};
     clients=(cli&&typeof cli==='object')?cli:{};
@@ -879,10 +881,11 @@ async function loadData(){
     chats=(cht&&typeof cht==='object')?cht:{};
     standaloneQuotes=(sqt&&typeof sqt==='object')?sqt:{};
     warranties=(wrt&&typeof wrt==='object')?wrt:{};
-    updateNotifBell();updateRequestsBadgeSidebar();
+    teamChat=(tch&&typeof tch==='object')?tch:{};
+    updateNotifBell();updateRequestsBadgeSidebar();updateTeamChatBadge();
     checkNewAssignments();
     cleanExpiredWarranties();
-  }catch(e){orders={};clients={};submittedRequests={};chats={};standaloneQuotes={};warranties={};}
+  }catch(e){orders={};clients={};submittedRequests={};chats={};standaloneQuotes={};warranties={};teamChat={};}
 }
 // ============================================================
 // NOTIFICATION SOUND (new-assignment beep)
@@ -1081,6 +1084,7 @@ function buildSidebar(){
       ni('warranty','ti-shield-check','ضمان اللوحات'),
       ni('request','ti-send','رفع طلب'),
     ]);
+    h+=navGroup('التواصل',[ni('teamchat','ti-messages','Teem Rawaee','','teamchat-badge')]);
   }else if(t==='external'){
     h+=navGroup('أعمالي',[ni('my','ti-user-check','أعمالي الحالية')]);
     h+=navGroup('إدارة الطلبات',[
@@ -1089,12 +1093,15 @@ function buildSidebar(){
       ni('wf','ti-grid-dots','سير العمل'),
     ]);
     h+=navGroup('إضافي',[ni('request','ti-send','رفع طلب')]);
+    h+=navGroup('التواصل',[ni('teamchat','ti-messages','Teem Rawaee','','teamchat-badge')]);
   }else if(['designer','printer','workshop'].includes(t)){
     h+=navGroup('الأعمال',[ni('my','ti-user-check','أعمالي الحالية')]);
     if(t==='designer'){h+=navGroup('إضافي',[ni('add','ti-bolt','طلب مستعجل'),ni('request','ti-send','رفع طلب')]);}
     if(t==='workshop'){h+=navGroup('إضافي',[ni('warranty','ti-shield-check','ضمان اللوحات'),ni('request','ti-send','رفع طلب')]);}
+    h+=navGroup('التواصل',[ni('teamchat','ti-messages','Teem Rawaee','','teamchat-badge')]);
   }else if(t==='follower'){
     h+=navGroup('المتابعة',[ni('wf','ti-grid-dots','متابعة الأعمال')]);
+    h+=navGroup('التواصل',[ni('teamchat','ti-messages','Teem Rawaee','','teamchat-badge')]);
   }else if(t==='admin'){
     h+=navGroup('الرئيسية',[ni('dash','ti-layout-dashboard','لوحة التحكم')]);
     h+=navGroup('إدارة الطلبات',[
@@ -1113,11 +1120,13 @@ function buildSidebar(){
       ni('incomplete','ti-list-check','غير مكتملة'),
       ni('export','ti-table-export','تصدير Excel'),
     ]);
+    h+=navGroup('التواصل',[ni('teamchat','ti-messages','Teem Rawaee','','teamchat-badge')]);
   }else if(t==='accountant'){
     h+=navGroup('المحاسبة',[
       ni('requests','ti-inbox','الطلبات الواردة','','requests-badge'),
       ni('export','ti-table-export','تصدير Excel'),
     ]);
+    h+=navGroup('التواصل',[ni('teamchat','ti-messages','Teem Rawaee','','teamchat-badge')]);
   }
   sb.innerHTML=h;
   // Sidebar footer CTA
@@ -1128,6 +1137,7 @@ function buildSidebar(){
     }else{footer.innerHTML='';}
   }
   updateRequestsBadgeSidebar();
+  updateTeamChatBadge();
 }
 function navGroup(label, items){
   return`<div class="nav-group"><div class="nav-group-label">${label}</div><div class="nav-tiles">${items.join('')}</div></div>`;
@@ -1160,7 +1170,7 @@ async function nav(p,skipHistory=false){
 }
 function navBack(){if(_navHistory.length===0)return;const prev=_navHistory.pop();nav(prev,true);}
 function backBtnHtml(){return`<div style="margin-bottom:16px;"><button class="btn btn-out btn-sm" onclick="navBack()"><i class="ti ti-arrow-right"></i> رجوع</button></div>`;}
-function refreshCurrentPage(){const p=_curPage;if(p==='add'||p==='request'||p==='quote')return;if(p)_buildPage(p);}
+function refreshCurrentPage(){const p=_curPage;if(p==='add'||p==='request'||p==='quote')return;if(p==='teamchat'){loadAndRenderTeamChat();return;}if(p)_buildPage(p);}
 function updateRequestsBadgeSidebar(){
   const badge=document.getElementById('requests-badge');if(!badge)return;
   const pending=Object.values(submittedRequests).filter(r=>r.status==='pending');
@@ -2391,6 +2401,62 @@ async function sendChatMsg(orderKey){
   await fbPush(`chats/${orderKey}`,msg);
   // Refresh to confirm from server
   setTimeout(()=>loadAndRenderChat(orderKey),500);
+}
+// ============================================================
+// TEEM RAWAEE — global cross-department chat (not tied to an order)
+// ============================================================
+function buildTeamChatPage(){
+  document.getElementById('teamchat-content').innerHTML=`
+    <div class="page-header"><div class="ptitle"><i class="ti ti-messages"></i> Teem Rawaee</div></div>
+    <div style="background:#FFF7E6;border:1px solid #F5D68A;color:#92400E;border-radius:var(--radius-md);padding:10px 16px;margin-bottom:14px;font-size:12px;"><i class="ti ti-info-circle"></i> محادثة عامة لجميع الأقسام — شارك إنجاز، تحديث، أو أي شيء يخص العمل ويشوفه الكل.</div>
+    <div class="chat-container" style="margin-top:0;">
+      <div class="chat-header"><i class="ti ti-users-group"></i> Teem Rawaee — محادثة الفريق</div>
+      <div class="chat-messages" id="team-chat-msgs" style="max-height:60vh;min-height:320px;"><div style="text-align:center;color:var(--text-3);font-size:11px;padding:16px;">جاري التحميل...</div></div>
+      <div class="chat-input-row">
+        <input id="team-chat-input" placeholder="اكتب رسالتك للفريق..." onkeydown="if(event.key==='Enter')sendTeamChatMsg()"/>
+        <button class="btn btn-brand btn-sm" onclick="sendTeamChatMsg()"><i class="ti ti-send"></i></button>
+      </div>
+    </div>`;
+  loadAndRenderTeamChat();
+}
+async function loadAndRenderTeamChat(){
+  const container=document.getElementById('team-chat-msgs');if(!container)return;
+  try{
+    const freshData=await fbGet('team_chat');
+    const msgs=freshData?Object.entries(freshData).map(([k,v])=>({...v,_key:k})).sort((a,b)=>new Date(a.timestamp)-new Date(b.timestamp)):[];
+    teamChat=freshData||{};
+    if(!msgs.length){container.innerHTML='<div style="text-align:center;color:var(--text-3);font-size:12px;padding:30px;"><i class="ti ti-messages" style="font-size:28px;display:block;margin-bottom:8px;color:var(--border)"></i>لا توجد رسائل بعد — كن أول من يشارك إنجازاً!</div>';return;}
+    container.innerHTML=msgs.map(m=>{const isMine=m.senderUname===cu._uname;
+      return`<div class="chat-msg ${isMine?'mine':'other'}"><div class="chat-meta">${m.senderName} · ${m.senderRole||''} · ${new Date(m.timestamp).toLocaleString('ar-SA',{hour:'2-digit',minute:'2-digit',day:'2-digit',month:'2-digit'})}</div><div>${m.text}</div></div>`;
+    }).join('');
+    container.scrollTop=container.scrollHeight;
+    markTeamChatSeen();
+    updateTeamChatBadge();
+  }catch(e){container.innerHTML='<div style="text-align:center;color:#EF4444;font-size:11px;padding:16px;">خطأ في تحميل الرسائل</div>';}
+}
+async function sendTeamChatMsg(){
+  const input=document.getElementById('team-chat-input');if(!input||!input.value.trim())return;
+  const msg={senderName:cu.name,senderUname:cu._uname,senderRole:cu.role,text:input.value.trim(),timestamp:new Date().toISOString()};
+  const txt=input.value.trim();
+  input.value='';
+  const container=document.getElementById('team-chat-msgs');
+  if(container){
+    const div=document.createElement('div');
+    div.className='chat-msg mine';
+    div.innerHTML=`<div class="chat-meta">${cu.name} · ${cu.role||''} · الآن</div><div>${txt}</div>`;
+    container.appendChild(div);container.scrollTop=container.scrollHeight;
+  }
+  await fbPush('team_chat',msg);
+  setTimeout(()=>loadAndRenderTeamChat(),500);
+}
+function markTeamChatSeen(){try{localStorage.setItem('teamChatSeen_'+cu._uname,new Date().toISOString());}catch(e){}}
+function updateTeamChatBadge(){
+  const badge=document.getElementById('teamchat-badge');if(!badge)return;
+  let lastSeen='1970-01-01T00:00:00.000Z';
+  try{lastSeen=localStorage.getItem('teamChatSeen_'+cu._uname)||lastSeen;}catch(e){}
+  const unread=Object.values(teamChat||{}).filter(m=>m&&m.senderUname!==cu._uname&&m.timestamp>lastSeen).length;
+  if(unread>0){badge.style.display='inline-block';badge.textContent=unread;}
+  else{badge.style.display='none';}
 }
 // ============================================================
 // ORDER MODAL
@@ -3648,6 +3714,7 @@ function _buildPage(p){
   else if(p==='emp')      buildEmpPage();
   else if(p==='incomplete') buildIncompletePage();
   else if(p==='warranty') buildWarrantyPage();
+  else if(p==='teamchat') buildTeamChatPage();
 }
 </script>
 </body>
