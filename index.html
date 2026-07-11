@@ -824,8 +824,17 @@ function enterApp(u){
   document.getElementById('sb-name').textContent=cu.name;
   document.getElementById('sb-role-txt').textContent=cu.role;
   startClock();buildSidebar();
-  if(cu.type==='accountant')nav('requests');
-  else nav('dash');
+  // ── Restore last visited page instead of always forcing the dashboard.
+  // Without this, any browser/tab reload (mobile OS reclaiming the tab, a
+  // manual refresh, a network blip, etc.) silently kicks the user back to
+  // the dashboard even if they were in the middle of reviewing another page. ──
+  const _defaultPage=cu.type==='accountant'?'requests':'dash';
+  let _restorePage=_defaultPage;
+  try{
+    const _saved=localStorage.getItem('rawaee_last_page_'+u);
+    if(_saved&&document.getElementById('n-'+_saved))_restorePage=_saved;
+  }catch(e){}
+  nav(_restorePage);
   setInterval(async()=>{await loadData();refreshCurrentPage();},60000);
 }
 function logout(){localStorage.removeItem(SESSION_KEY);location.reload();}
@@ -1126,6 +1135,7 @@ async function nav(p,skipHistory=false){
   if(p==='export'){exportExcel();return;}
   if(!skipHistory&&_curPage&&_curPage!==p)_navHistory.push(_curPage);
   _curPage=p;
+  if(cu&&cu._uname){try{localStorage.setItem('rawaee_last_page_'+cu._uname,p);}catch(e){}}
   // ── luxury exit animation ──
   const prev=document.querySelector('.page.active');
   if(prev&&!prev.classList.contains('page-out')){
