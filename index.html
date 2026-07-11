@@ -1028,6 +1028,7 @@ function transferQuickTaskToOrder(key){
   const o=orders[key];if(!o)return;
   window._prefillClient=o.client||'';
   window._prefillPhone=o.phone||'';
+  window._prefillFromQuickTaskKey=key;
   const _tfiles=[];
   if(o.quickTaskFile)_tfiles.push({data:o.quickTaskFile,name:o.quickTaskFileName||'الصورة_الأساسية'});
   if(o.approvedPrintFile)_tfiles.push({data:o.approvedPrintFile,name:o.approvedPrintFileName||'ملف_البروفة_المرسل_للعميل'});
@@ -1735,6 +1736,11 @@ function buildQuotePage(){
             <div id="q-vat-note" style="font-size:9px;color:rgba(255,255,255,.7);margin-top:2px;"></div>
           </div>
         </div>
+        <div class="fg" style="max-width:260px;margin:14px auto 0;">
+          <label>المبلغ المدفوع (اختياري)</label>
+          <input type="text" inputmode="decimal" id="q-paid-amount" placeholder="0" oninput="renderQuoteTotals()"/>
+        </div>
+        <div id="q-remaining-wrap" style="text-align:center;margin-top:8px;font-size:12px;font-weight:700;"></div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:16px;">
           <div class="fg"><label>شروط وأحكام</label><textarea id="q-terms" placeholder="الدفع 50% مقدماً | التسليم خلال 5 أيام عمل..."></textarea></div>
           <div class="fg"><label>بيانات البنك</label><textarea id="q-bank" placeholder="اسم البنك | رقم IBAN..."></textarea></div>
@@ -1818,6 +1824,7 @@ async function editQuote(key){
   setVal('q-client',q.client);setVal('q-phone',q.phone);setVal('q-ref',q.ref||key);
   setVal('q-date',q.date);setVal('q-sales',q.sales||cu.name);setVal('q-validity',q.validity);
   setVal('q-delivery',q.delivery);setVal('q-terms',q.terms);setVal('q-bank',q.bank);
+  setVal('q-paid-amount',q.paidAmount);
   const ptSel=document.getElementById('q-payment-terms');if(ptSel&&q.paymentTerms)ptSel.value=q.paymentTerms;
   window._quoteLines=(q.lines||[]).map(l=>({...l,id:'q'+Date.now()+Math.random().toString(36).slice(2)}));
   renderQuoteLines();
@@ -1886,6 +1893,14 @@ function renderQuoteTotals(){
   const vn=document.getElementById('q-vat-note');
   if(g)g.textContent=fmt(total)+' ر.س';
   if(vn)vn.textContent=`(قبل الضريبة: ${fmt(subtotal)} + ضريبة: ${fmt(vat)})`;
+  const paid=parseFloat(document.getElementById('q-paid-amount')?.value)||0;
+  const remWrap=document.getElementById('q-remaining-wrap');
+  if(remWrap){
+    if(paid>0){
+      const rem=Math.max(0,total-paid);
+      remWrap.innerHTML=`<span style="color:#10B981">المدفوع: ${fmt(paid)} ر.س</span> &nbsp;|&nbsp; <span style="color:#EF4444">المتبقي: ${fmt(rem)} ر.س</span>`;
+    }else{remWrap.innerHTML='';}
+  }
 }
 function getQuoteData(){
   const client=document.getElementById('q-client')?.value.trim()||'';
@@ -1900,8 +1915,10 @@ function getQuoteData(){
   const lines=window._quoteLines.filter(l=>l.lbl.trim()!=='').map(l=>({...l}));
   const subtotal=lines.reduce((s,l)=>s+(l.q*l.p),0);
   const vat=subtotal*0.15;const totalWithVat=subtotal+vat;
+  const paidAmount=parseFloat(document.getElementById('q-paid-amount')?.value)||0;
+  const remainingAmount=Math.max(0,totalWithVat-paidAmount);
   const qDate=document.getElementById('q-date')?.value||new Date().toISOString().split('T')[0];
-  return{client,ref,phone:normalizeSaudiPhone(phone),validity,sales,delivery,paymentTerms,terms,bank,lines,subtotal,vat,totalWithVat,date:qDate,createdBy:cu.name};
+  return{client,ref,phone:normalizeSaudiPhone(phone),validity,sales,delivery,paymentTerms,terms,bank,lines,subtotal,vat,totalWithVat,paidAmount,remainingAmount,date:qDate,createdBy:cu.name};
 }
 async function saveQuoteToDb(){
   const data=getQuoteData();
@@ -1942,6 +1959,8 @@ function renderA4Quote(data,key=''){
   const subtotal=lines.reduce((s,l)=>s+(Number(l.q||0)*Number(l.p||0)),0);
   const vat=subtotal*0.15;
   const totalWithVat=Number(data.totalWithVat||0)||(subtotal+vat);
+  const paidAmt=Number(data.paidAmount||0);
+  const remainingAmt=Math.max(0,totalWithVat-paidAmt);
   const trackingUrl=`${location.origin}${location.pathname.replace(/[^/]*$/,'tracking.html')}?id=${key||data.ref}`;
   const hasAnyImg=lines.some(l=>l.img);
   const isExpired=!!(expiryDate&&new Date(expiryDate)<new Date());
@@ -2081,6 +2100,14 @@ function renderA4Quote(data,key=''){
           <span style="color:rgba(255,255,255,.65);font-size:11px;">ضريبة القيمة المضافة (15%)</span>
           <span style="color:#fff;font-size:12px;font-weight:700;">${fmt(vat)} ر.س</span>
         </div>
+        ${paidAmt>0?`<div style="display:flex;justify-content:space-between;gap:30px;">
+          <span style="color:rgba(255,255,255,.65);font-size:11px;">المبلغ المدفوع</span>
+          <span style="color:#8FE3B3;font-size:12px;font-weight:800;">${fmt(paidAmt)} ر.س</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;gap:30px;">
+          <span style="color:rgba(255,255,255,.65);font-size:11px;">المبلغ المتبقي</span>
+          <span style="color:#FFC0C0;font-size:12px;font-weight:800;">${fmt(remainingAmt)} ر.س</span>
+        </div>`:''}
       </div>
       <div style="width:1px;align-self:stretch;background:rgba(201,162,39,.35);"></div>
       <div style="text-align:center;">
@@ -2680,6 +2707,8 @@ function buildAddForm(isUrgentQuick=false){
   const dw=getDeptWorkers('design'),pw=getDeptWorkers('print'),ww=getDeptWorkers('workshop'),ew=getDeptWorkers('external');
   const _prefillCl=window._prefillClient||'';const _prefillPh=window._prefillPhone||'';
   const _prefillFl=window._prefillFiles||[];
+  window._pendingQuickTaskKey=window._prefillFromQuickTaskKey||'';
+  window._prefillFromQuickTaskKey='';
   window._prefillClient='';window._prefillPhone='';window._prefillFiles=[];
   const mkOpts=arr=>arr.map(w=>`<option value="${w.uname}">${w.name}</option>`).join('');
   const cArr=Object.values(clients);
@@ -2831,7 +2860,7 @@ function onClientInput(val){
     if(phoneEl&&ex.phone&&!phoneEl.value)phoneEl.value=ex.phone;
   }
 }
-function openWhatsapp(phone){if(!phone){toast('⚠️ يرجى إدخال رقم جوال');return;}const n=phone.replace(/[^0-9]/g,'');window.open(`https://wa.me/${n.startsWith('0')?'966'+n.substring(1):n}`,'_blank');}
+function openWhatsapp(phone){if(!phone){toast('⚠️ يرجى إدخال رقم جوال');return;}const n=phone.replace(/[^0-9]/g,'');const full=n.startsWith('0')?'966'+n.substring(1):n;window.open(`https://web.whatsapp.com/send?phone=${full}`,'_blank');}
 // ── Order Line Items ──────────────────────────────────────────────────────────
 function addOrderLine(){
   if(!window._orderLines)window._orderLines=[];
@@ -2949,6 +2978,11 @@ async function submitOrder(isUrgentQuick=false){
     const newId='ORD-'+String(ordersArr().length).padStart(3,'0');
     await fbPatch(`orders/${res.name}`,{id:newId});await loadData();
     if(phone)await sendSmsNotification(phone,`مرحباً ${c}، تم استلام طلبكم رقم ${newId} وهو قيد التنفيذ. روائع الأفكار الإعلانية - 0500447999`);
+    if(window._pendingQuickTaskKey){
+      try{await fbDelete('orders/'+window._pendingQuickTaskKey);}catch(e2){}
+      window._pendingQuickTaskKey='';
+      await loadData();
+    }
     hideSaving();window.globalAttachedFiles=[];window._workshopDeptFileB64='';window._workshopDeptFileName='';
     toast('✓ تم إنشاء الطلب: '+newId);nav('wf');
   }catch(e){hideSaving();toast('❌ فشل الاتصال');}
@@ -3165,7 +3199,7 @@ async function exportExcel(){
     await loadData();const arr=ordersArr();
     const headers=['رقم الطلب','اسم العميل','رقم الجوال','اسم الخدمة','تاريخ الاستلام','تاريخ التسليم','المبلغ الإجمالي','المبلغ المدفوع','المبلغ المتبقي','منشئ الطلب'];
     const rows=arr.map(o=>[o.id||o._key,o.client||'—',o.phone||'—',(o.orderItems&&o.orderItems.length?o.orderItems[0].name:o.service)||'—',o.date||'—',o.deadline||'—',o.totalAmount||0,o.paidAmount||0,o.remainingAmount||0,o.createdBy||'—']);
-    let csv='\uFEFF'+headers.join(',')+'\n'+rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+    let csv='﻿'+headers.join(',')+'\n'+rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
     const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});const url=URL.createObjectURL(blob);
     const a=document.createElement('a');a.href=url;a.download=`تقرير_روائع_${new Date().toISOString().split('T')[0]}.csv`;
     document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
