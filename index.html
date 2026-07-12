@@ -8,7 +8,6 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&family=Tajawal:wght@400;500;700;800;900&display=swap" rel="stylesheet"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-<script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
 /* ============================================================
    DESIGN TOKENS — روائع الأفكار Premium v3
@@ -577,7 +576,7 @@ input[inputmode="decimal"],input[inputmode="numeric"],input[type="number"],input
       </div>
       <div class="header-right">
         <div class="clock-chip" id="header-clock"></div>
-        <div class="notif-bell" id="gdrive-status-btn" onclick="connectGoogleDrive()" title="ربط Google Drive لرفع الملفات الكبيرة (أكبر من 10 ميجابايت)">
+        <div class="notif-bell" id="gdrive-status-btn" title="ربط Google Drive لرفع الملفات الكبيرة (أكبر من 10 ميجابايت)">
           <i class="ti ti-cloud-upload"></i>
         </div>
         <div class="notif-bell" id="notif-bell" onclick="openNotifPanel()">
@@ -1041,144 +1040,7 @@ async function uploadToCloudinary(fileOrDataUrl){
   }
   return data.secure_url;
 }
-async function convertFileToBase64(file){
-  const MAX_IMAGE_SOURCE_BYTES=25*1024*1024; // 25MB raw source cap for images (before compression) — beyond this, still small enough to just go through Cloudinary after compression, so images never need Drive
-  const MAX_OTHER_BYTES=10*1024*1024; // 10MB cap for non-image files (PDF etc.) — matches Cloudinary's free-plan raw-file limit
-  const isImage=file.type&&file.type.startsWith('image/');
-  if(isImage){
-    if(file.size>MAX_IMAGE_SOURCE_BYTES)throw new Error('⚠️ حجم الصورة كبير جداً (الحد الأقصى 25 ميجابايت). يرجى اختيار صورة أصغر.');
-    let uploadPayload=file;
-    // Only compress if the file is reasonably large — small images pass through untouched.
-    if(file.size>800*1024){
-      try{
-        const raw=await _readFileAsDataUrl(file);
-        uploadPayload=await compressImage(raw,1600,0.72);
-      }catch(e){uploadPayload=file;} // fall back to original if compression fails for any reason
-    }
-    return await uploadToCloudinary(uploadPayload);
-  }else{
-    // Files up to 10MB go to Cloudinary as before. Larger files (PDFs, Word docs, workshop
-    // files...) are routed automatically to Google Drive instead of being rejected.
-    if(file.size>MAX_OTHER_BYTES)return await uploadToGoogleDrive(file);
-    return await uploadToCloudinary(file);
-  }
-}
-
-// ============================================================
-// GOOGLE DRIVE FALLBACK — for files larger than Cloudinary's free-plan cap (10MB)
-// ============================================================
-// Uses a single shared Google account for the whole system (no per-employee accounts).
-// One person signs in once per device via the cloud-upload icon in the header; after that,
-// large-file uploads happen automatically in the background without leaving the site.
-const GOOGLE_CLIENT_ID='807266380870-0q69bdvce8cb0qr2qvdvp9sgs71j7qaf.apps.googleusercontent.com';
-const GOOGLE_DRIVE_SCOPE='https://www.googleapis.com/auth/drive.file';
-const MAX_DRIVE_BYTES=500*1024*1024; // 500MB safety cap so an upload never hangs the browser indefinitely
-const GOOGLE_TOKEN_STORAGE_KEY='googleDriveToken';
-let _googleTokenClient=null;
-
-function _loadGoogleToken(){
-  try{
-    const raw=localStorage.getItem(GOOGLE_TOKEN_STORAGE_KEY);
-    if(!raw)return null;
-    const obj=JSON.parse(raw);
-    if(obj&&obj.token&&obj.expiresAt>Date.now()+60000)return obj;
-  }catch(e){}
-  return null;
-}
-function _saveGoogleToken(token,expiresInSeconds){
-  const obj={token,expiresAt:Date.now()+((expiresInSeconds||3500)*1000)};
-  try{localStorage.setItem(GOOGLE_TOKEN_STORAGE_KEY,JSON.stringify(obj));}catch(e){}
-  return obj;
-}
-function _updateGoogleDriveStatusUI(){
-  const btn=document.getElementById('gdrive-status-btn');
-  if(!btn)return;
-  const connected=!!_loadGoogleToken();
-  btn.style.color=connected?'#22C55E':'';
-  btn.title=connected?'Google Drive متصل ✓ (لرفع الملفات الكبيرة)':'ربط Google Drive لرفع الملفات الكبيرة (أكبر من 10 ميجابايت)';
-}
-function _ensureGoogleTokenClient(){
-  if(_googleTokenClient)return _googleTokenClient;
-  if(!window.google||!google.accounts||!google.accounts.oauth2){
-    throw new Error('⚠️ تعذر تحميل خدمة تسجيل الدخول من Google، تحقق من الإنترنت وأعد المحاولة.');
-  }
-  _googleTokenClient=google.accounts.oauth2.initTokenClient({
-    client_id:GOOGLE_CLIENT_ID,
-    scope:GOOGLE_DRIVE_SCOPE,
-    callback:()=>{} // overridden per-request below
-  });
-  return _googleTokenClient;
-}
-function getGoogleAccessToken(interactive){
-  return new Promise((resolve,reject)=>{
-    const cached=_loadGoogleToken();
-    if(cached){resolve(cached.token);return;}
-    let client;
-    try{client=_ensureGoogleTokenClient();}catch(e){reject(e);return;}
-    client.callback=(resp)=>{
-      if(resp&&resp.access_token){
-        _saveGoogleToken(resp.access_token,resp.expires_in);
-        _updateGoogleDriveStatusUI();
-        resolve(resp.access_token);
-      }else{
-        reject(new Error('⚠️ تعذر تسجيل الدخول إلى Google Drive.'));
-      }
-    };
-    client.error_callback=()=>{reject(new Error('⚠️ تم إلغاء تسجيل الدخول إلى Google Drive أو فشل الاتصال.'));};
-    try{
-      client.requestAccessToken({prompt:interactive?'consent':''});
-    }catch(e){
-      reject(new Error('⚠️ تعذر فتح نافذة تسجيل الدخول إلى Google Drive.'));
-    }
-  });
-}
-async function connectGoogleDrive(){
-  try{
-    await getGoogleAccessToken(true);
-    toast('✓ تم ربط Google Drive بنجاح على هذا الجهاز');
-  }catch(e){
-    toast(e.message||'⚠️ فشل الربط مع Google Drive');
-  }
-}
-async function uploadToGoogleDrive(file){
-  if(file.size>MAX_DRIVE_BYTES)throw new Error('⚠️ حجم الملف كبير جداً حتى لـ Google Drive (الحد الأقصى 500 ميجابايت). يرجى ضغط الملف أو تصغيره.');
-  let token;
-  try{
-    token=await getGoogleAccessToken(false); // try silently first (works if already connected on this device)
-  }catch(e){
-    token=await getGoogleAccessToken(true); // fall back to an interactive sign-in popup
-  }
-  const metadata={name:file.name||('ملف_'+Date.now())};
-  const form=new FormData();
-  form.append('metadata',new Blob([JSON.stringify(metadata)],{type:'application/json'}));
-  form.append('file',file);
-  let res;
-  try{
-    res=await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id',{
-      method:'POST',
-      headers:{'Authorization':'Bearer '+token},
-      body:form
-    });
-  }catch(netErr){
-    throw new Error('⚠️ تعذر الاتصال بـ Google Drive، تحقق من الإنترنت وحاول مجدداً.');
-  }
-  let data=null;
-  try{data=await res.json();}catch(e){}
-  if(!res.ok||!data||!data.id){
-    const msg=(data&&data.error&&data.error.message)?data.error.message:('HTTP '+res.status);
-    throw new Error('⚠️ فشل رفع الملف إلى Google Drive: '+msg);
-  }
-  // Make the file viewable by anyone with the link (so it can be opened later from Firebase without needing to sign in)
-  try{
-    await fetch(`https://www.googleapis.com/drive/v3/files/${data.id}/permissions`,{
-      method:'POST',
-      headers:{'Authorization':'Bearer '+token,'Content-Type':'application/json'},
-      body:JSON.stringify({role:'reader',type:'anyone'})
-    });
-  }catch(e){/* not fatal — the file itself still uploaded fine */}
-  return `https://drive.google.com/file/d/${data.id}/view?usp=sharing`;
-}
-function normalizeSaudiPhone(v){
+async function convertFileToBase64(file,folderCtx){const MAX_IMAGE_SOURCE_BYTES=25*1024*1024;const MAX_OTHER_BYTES=10*1024*1024;const isImage=file.type&&file.type.startsWith('image/');if(isImage){if(file.size>MAX_IMAGE_SOURCE_BYTES)throw new Error('⚠️ حجم الصورة كبير جداً (الحد الأقصى 25 ميجابايت). يرجى اختيار صورة أصغر.');let uploadPayload=file;if(file.size>800*1024){try{const raw=await _readFileAsDataUrl(file);uploadPayload=await compressImage(raw,1600,0.72);}catch(e){uploadPayload=file;}}return await uploadToCloudinary(uploadPayload);}else{if(file.size>MAX_OTHER_BYTES)return await uploadToGoogleDrive(file,folderCtx);return await uploadToCloudinary(file);}}f const DRIVE_PROXY_URL='https://rawaee-drive-proxy.vercel.app/api/token'; const MAX_DRIVE_BYTES=500*1024*1024; let _driveAccessToken=null; async function getGoogleAccessToken(){if(_driveAccessToken&&_driveAccessToken.expiresAt>Date.now()+60000)return _driveAccessToken.value;let resp;try{resp=await fetch(DRIVE_PROXY_URL);}catch(e){throw new Error('⚠️ تعذر الاتصال بخادم رفع الملفات، تحقق من الإنترنت وحاول مجدداً.');}let data=null;try{data=await resp.json();}catch(e){}if(!resp.ok||!data||!data.access_token){throw new Error('⚠️ تعذر تجهيز صلاحية رفع الملفات إلى Google Drive.');}_driveAccessToken={value:data.access_token,expiresAt:Date.now()+((data.expires_in||3500)*1000)};return _driveAccessToken.value;} function _updateGoogleDriveStatusUI(){} async function _driveFindOrCreateFolder(name,parentId,accessToken){const safeName=String(name).replace(/'/g,"\\'");const q="name='"+safeName+"' and '"+(parentId||'root')+"' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false";const listRes=await fetch('https://www.googleapis.com/drive/v3/files?q='+encodeURIComponent(q)+'&fields=files(id,name)',{headers:{Authorization:'Bearer '+accessToken}});const listData=await listRes.json().catch(()=>null);if(listData&&listData.files&&listData.files.length)return listData.files[0].id;const createRes=await fetch('https://www.googleapis.com/drive/v3/files',{method:'POST',headers:{Authorization:'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({name:String(name),mimeType:'application/vnd.google-apps.folder',parents:parentId?[parentId]:undefined})});const createData=await createRes.json().catch(()=>null);if(!createData||!createData.id)throw new Error('folder_create_failed');return createData.id;} async function uploadToGoogleDrive(file,folderCtx){if(file.size>MAX_DRIVE_BYTES)throw new Error('⚠️ حجم الملف كبير جداً حتى لـ Google Drive (الحد الأقصى 500 ميجابايت). يرجى ضغط الملف أو تصغيره.');const accessToken=await getGoogleAccessToken();let parentId=null;try{const personName=(folderCtx&&folderCtx.person)||(typeof cu!=='undefined'&&cu&&cu.name)||'غير محدد';const personFolderId=await _driveFindOrCreateFolder(personName,null,accessToken);parentId=personFolderId;const orderRef=folderCtx&&folderCtx.order;if(orderRef){const humanLabel=(typeof orders!=='undefined'&&orders[orderRef]&&orders[orderRef].id)?orders[orderRef].id:orderRef;parentId=await _driveFindOrCreateFolder(String(humanLabel),personFolderId,accessToken);}}catch(e){parentId=null;}const metadata={name:file.name||('ملف_'+Date.now())};if(parentId)metadata.parents=[parentId];const form=new FormData();form.append('metadata',new Blob([JSON.stringify(metadata)],{type:'application/json'}));form.append('file',file);let res;try{res=await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id',{method:'POST',headers:{Authorization:'Bearer '+accessToken},body:form});}catch(netErr){throw new Error('⚠️ تعذر الاتصال بـ Google Drive، تحقق من الإنترنت وحاول مجدداً.');}let data=null;try{data=await res.json();}catch(e){}if(!res.ok||!data||!data.id){const msg=(data&&data.error&&data.error.message)?data.error.message:('HTTP '+res.status);throw new Error('⚠️ فشل رفع الملف إلى Google Drive: '+msg);}try{await fetch('https://www.googleapis.com/drive/v3/files/'+data.id+'/permissions',{method:'POST',headers:{Authorization:'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({role:'reader',type:'anyone'})});}catch(e){}return 'https://drive.google.com/file/d/'+data.id+'/view?usp=sharing';}function normalizeSaudiPhone(v){
   let s=toEnglishDigits(String(v||'')).trim();
   s=s.replace(/[^\d+]/g,''); // strip everything except digits and a leading +
   if(s.startsWith('+966'))s='0'+s.slice(4);
@@ -2413,7 +2275,7 @@ async function convertSavedQuoteToOrder(key,preloadedData=null){
             <div style="margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
               <label style="cursor:pointer;display:flex;align-items:center;gap:6px;font-size:11px;color:var(--maroon);border:1px dashed var(--border);border-radius:8px;padding:6px 10px;">
                 <i class="ti ti-paperclip"></i> إضافة مرفق
-                <input type="file" accept="image/*,application/pdf,.doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" style="display:none" onchange="attachCoItemFile(${i},this.files)"/>
+                <input type="file" accept="image/*,application/pdf,.doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" style="display:none" onchange="attachCoItemFile(${i},this.files,'${key}')"/>
               </label>
               <span id="co-item-file-${i}" style="font-size:11px;color:var(--text-2);">${l.img?'مرفق حالي: صورة الصنف':'لا يوجد مرفق'}</span>
             </div>
@@ -2429,12 +2291,12 @@ async function convertSavedQuoteToOrder(key,preloadedData=null){
     </div>`;
   openModal('order-modal');
 }
-async function attachCoItemFile(idx,files){
+async function attachCoItemFile(idx,files,orderKey){
   if(!files||!files.length)return;
   showSaving('جاري تجهيز المرفق...');
   try{
     const file=files[0];
-    const b64=await convertFileToBase64(file);
+    const b64=await convertFileToBase64(file,{order:orderKey});
     window._coItemFiles=window._coItemFiles||{};
     window._coItemFiles[idx]={data:b64,name:file.name};
     const lbl=document.getElementById('co-item-file-'+idx);
@@ -2829,20 +2691,20 @@ function openAddItemModal(key,editIdx){
       <div class="fg"><label>التفاصيل والمواصفات</label><textarea id="new-item-details" placeholder="المقاسات، المواد..." style="min-height:60px;">${detailsVal}</textarea></div>
       <div class="fg"><label>إرفاق ملف (اختياري)</label>
         <div class="dept-upload-box" onclick="document.getElementById('new-item-file-input').click()"><i class="ti ti-upload" style="font-size:20px;color:var(--gold);"></i><br>اضغط لإرفاق ملف أو أكثر</div>
-        <input type="file" id="new-item-file-input" style="display:none" accept="image/*,.pdf,.doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" multiple onchange="handleNewItemFiles(this.files)"/>
+        <input type="file" id="new-item-file-input" style="display:none" accept="image/*,.pdf,.doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" multiple onchange="handleNewItemFiles(this.files,'${key}')"/>
         <div id="new-item-file-note" style="font-size:11px;color:#10B981;margin-top:4px;font-weight:700;">${window._newItemFiles.length?'✓ '+window._newItemFiles.length+' ملف مرفق':''}</div>
       </div>
       <button class="btn btn-brand" style="width:100%;justify-content:center;" onclick="submitNewOrderItem('${key}')"><i class="ti ti-${isEdit?'device-floppy':'plus'}"></i> ${isEdit?'حفظ التعديلات':'إضافة البند للطلب'}</button>
     </div>`;
   openModal('add-item-modal');
 }
-async function handleNewItemFiles(files){
+async function handleNewItemFiles(files,orderKey){
   if(!files||!files.length)return;
   showSaving('جاري تحميل الملفات...');
   try{
     if(!window._newItemFiles)window._newItemFiles=[];
     for(const f of Array.from(files)){
-      const b64=await convertFileToBase64(f);
+      const b64=await convertFileToBase64(f,{order:orderKey});
       window._newItemFiles.push({data:b64,name:f.name});
     }
     const note=document.getElementById('new-item-file-note');
@@ -2910,7 +2772,7 @@ function openTimelineModal(key){
 async function uploadFileDirect(key,ff,fn2,inputId){
   const el=document.getElementById(inputId);if(!el||!el.files||!el.files.length)return;
   showSaving('جاري حفظ الملف...');
-  try{const b64=await convertFileToBase64(el.files[0]);const upd={};upd[ff]=b64;upd[fn2]=el.files[0].name;await fbPatch(`orders/${key}`,upd);await loadData();hideSaving();toast('✓ تم التحديث');openOrderModal(key);}
+  try{const b64=await convertFileToBase64(el.files[0],{order:key});const upd={};upd[ff]=b64;upd[fn2]=el.files[0].name;await fbPatch(`orders/${key}`,upd);await loadData();hideSaving();toast('✓ تم التحديث');openOrderModal(key);}
   catch(e){hideSaving();toast('❌ فشل الرفع');}
 }
 async function sendToNextDept(key,next){
