@@ -1038,7 +1038,7 @@ async function uploadToCloudinary(fileOrDataUrl){
 }
 async function convertFileToBase64(file){
   const MAX_IMAGE_SOURCE_BYTES=25*1024*1024; // 25MB raw source cap for images (before compression)
-  const MAX_OTHER_BYTES=20*1024*1024; // 20MB cap for non-image files (PDF etc.)
+  const MAX_OTHER_BYTES=10*1024*1024; // 10MB cap for non-image files (PDF etc.) — matches Cloudinary's free-plan raw-file limit
   const isImage=file.type&&file.type.startsWith('image/');
   if(isImage){
     if(file.size>MAX_IMAGE_SOURCE_BYTES)throw new Error('⚠️ حجم الصورة كبير جداً (الحد الأقصى 25 ميجابايت). يرجى اختيار صورة أصغر.');
@@ -1052,7 +1052,7 @@ async function convertFileToBase64(file){
     }
     return await uploadToCloudinary(uploadPayload);
   }else{
-    if(file.size>MAX_OTHER_BYTES)throw new Error('⚠️ حجم الملف كبير جداً (الحد الأقصى 20 ميجابايت). يرجى اختيار ملف أصغر.');
+    if(file.size>MAX_OTHER_BYTES)throw new Error('⚠️ حجم الملف كبير جداً (الحد الأقصى 10 ميجابايت). يرجى اختيار ملف أصغر.');
     return await uploadToCloudinary(file);
   }
 }
