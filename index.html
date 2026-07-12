@@ -8,6 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&family=Tajawal:wght@400;500;700;800;900&display=swap" rel="stylesheet"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
 /* ============================================================
    DESIGN TOKENS — روائع الأفكار Premium v3
@@ -576,6 +577,9 @@ input[inputmode="decimal"],input[inputmode="numeric"],input[type="number"],input
       </div>
       <div class="header-right">
         <div class="clock-chip" id="header-clock"></div>
+        <div class="notif-bell" id="gdrive-status-btn" onclick="connectGoogleDrive()" title="ربط Google Drive لرفع الملفات الكبيرة (أكبر من 10 ميجابايت)">
+          <i class="ti ti-cloud-upload"></i>
+        </div>
         <div class="notif-bell" id="notif-bell" onclick="openNotifPanel()">
           <i class="ti ti-bell"></i>
           <div class="notif-dot" id="notif-count" style="display:none">0</div>
@@ -833,6 +837,7 @@ function enterApp(u){
   document.getElementById('sb-name').textContent=cu.name;
   document.getElementById('sb-role-txt').textContent=cu.role;
   startClock();buildSidebar();
+  try{_updateGoogleDriveStatusUI();}catch(e){}
   // ── Restore last visited page instead of always forcing the dashboard.
   // Without this, any browser/tab reload (mobile OS reclaiming the tab, a
   // manual refresh, a network blip, etc.) silently kicks the user back to
@@ -1037,7 +1042,7 @@ async function uploadToCloudinary(fileOrDataUrl){
   return data.secure_url;
 }
 async function convertFileToBase64(file){
-  const MAX_IMAGE_SOURCE_BYTES=25*1024*1024; // 25MB raw source cap for images (before compression)
+  const MAX_IMAGE_SOURCE_BYTES=25*1024*1024; // 25MB raw source cap for images (before compression) — beyond this, still small enough to just go through Cloudinary after compression, so images never need Drive
   const MAX_OTHER_BYTES=10*1024*1024; // 10MB cap for non-image files (PDF etc.) — matches Cloudinary's free-plan raw-file limit
   const isImage=file.type&&file.type.startsWith('image/');
   if(isImage){
@@ -1052,9 +1057,126 @@ async function convertFileToBase64(file){
     }
     return await uploadToCloudinary(uploadPayload);
   }else{
-    if(file.size>MAX_OTHER_BYTES)throw new Error('⚠️ حجم الملف كبير جداً (الحد الأقصى 10 ميجابايت). يرجى اختيار ملف أصغر.');
+    // Files up to 10MB go to Cloudinary as before. Larger files (PDFs, Word docs, workshop
+    // files...) are routed automatically to Google Drive instead of being rejected.
+    if(file.size>MAX_OTHER_BYTES)return await uploadToGoogleDrive(file);
     return await uploadToCloudinary(file);
   }
+}
+
+// ============================================================
+// GOOGLE DRIVE FALLBACK — for files larger than Cloudinary's free-plan cap (10MB)
+// ============================================================
+// Uses a single shared Google account for the whole system (no per-employee accounts).
+// One person signs in once per device via the cloud-upload icon in the header; after that,
+// large-file uploads happen automatically in the background without leaving the site.
+const GOOGLE_CLIENT_ID='807266380870-0q69bdvce8cb0qr2qvdvp9sgs71j7qaf.apps.googleusercontent.com';
+const GOOGLE_DRIVE_SCOPE='https://www.googleapis.com/auth/drive.file';
+const MAX_DRIVE_BYTES=500*1024*1024; // 500MB safety cap so an upload never hangs the browser indefinitely
+const GOOGLE_TOKEN_STORAGE_KEY='googleDriveToken';
+let _googleTokenClient=null;
+
+function _loadGoogleToken(){
+  try{
+    const raw=localStorage.getItem(GOOGLE_TOKEN_STORAGE_KEY);
+    if(!raw)return null;
+    const obj=JSON.parse(raw);
+    if(obj&&obj.token&&obj.expiresAt>Date.now()+60000)return obj;
+  }catch(e){}
+  return null;
+}
+function _saveGoogleToken(token,expiresInSeconds){
+  const obj={token,expiresAt:Date.now()+((expiresInSeconds||3500)*1000)};
+  try{localStorage.setItem(GOOGLE_TOKEN_STORAGE_KEY,JSON.stringify(obj));}catch(e){}
+  return obj;
+}
+function _updateGoogleDriveStatusUI(){
+  const btn=document.getElementById('gdrive-status-btn');
+  if(!btn)return;
+  const connected=!!_loadGoogleToken();
+  btn.style.color=connected?'#22C55E':'';
+  btn.title=connected?'Google Drive متصل ✓ (لرفع الملفات الكبيرة)':'ربط Google Drive لرفع الملفات الكبيرة (أكبر من 10 ميجابايت)';
+}
+function _ensureGoogleTokenClient(){
+  if(_googleTokenClient)return _googleTokenClient;
+  if(!window.google||!google.accounts||!google.accounts.oauth2){
+    throw new Error('⚠️ تعذر تحميل خدمة تسجيل الدخول من Google، تحقق من الإنترنت وأعد المحاولة.');
+  }
+  _googleTokenClient=google.accounts.oauth2.initTokenClient({
+    client_id:GOOGLE_CLIENT_ID,
+    scope:GOOGLE_DRIVE_SCOPE,
+    callback:()=>{} // overridden per-request below
+  });
+  return _googleTokenClient;
+}
+function getGoogleAccessToken(interactive){
+  return new Promise((resolve,reject)=>{
+    const cached=_loadGoogleToken();
+    if(cached){resolve(cached.token);return;}
+    let client;
+    try{client=_ensureGoogleTokenClient();}catch(e){reject(e);return;}
+    client.callback=(resp)=>{
+      if(resp&&resp.access_token){
+        _saveGoogleToken(resp.access_token,resp.expires_in);
+        _updateGoogleDriveStatusUI();
+        resolve(resp.access_token);
+      }else{
+        reject(new Error('⚠️ تعذر تسجيل الدخول إلى Google Drive.'));
+      }
+    };
+    client.error_callback=()=>{reject(new Error('⚠️ تم إلغاء تسجيل الدخول إلى Google Drive أو فشل الاتصال.'));};
+    try{
+      client.requestAccessToken({prompt:interactive?'consent':''});
+    }catch(e){
+      reject(new Error('⚠️ تعذر فتح نافذة تسجيل الدخول إلى Google Drive.'));
+    }
+  });
+}
+async function connectGoogleDrive(){
+  try{
+    await getGoogleAccessToken(true);
+    toast('✓ تم ربط Google Drive بنجاح على هذا الجهاز');
+  }catch(e){
+    toast(e.message||'⚠️ فشل الربط مع Google Drive');
+  }
+}
+async function uploadToGoogleDrive(file){
+  if(file.size>MAX_DRIVE_BYTES)throw new Error('⚠️ حجم الملف كبير جداً حتى لـ Google Drive (الحد الأقصى 500 ميجابايت). يرجى ضغط الملف أو تصغيره.');
+  let token;
+  try{
+    token=await getGoogleAccessToken(false); // try silently first (works if already connected on this device)
+  }catch(e){
+    token=await getGoogleAccessToken(true); // fall back to an interactive sign-in popup
+  }
+  const metadata={name:file.name||('ملف_'+Date.now())};
+  const form=new FormData();
+  form.append('metadata',new Blob([JSON.stringify(metadata)],{type:'application/json'}));
+  form.append('file',file);
+  let res;
+  try{
+    res=await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id',{
+      method:'POST',
+      headers:{'Authorization':'Bearer '+token},
+      body:form
+    });
+  }catch(netErr){
+    throw new Error('⚠️ تعذر الاتصال بـ Google Drive، تحقق من الإنترنت وحاول مجدداً.');
+  }
+  let data=null;
+  try{data=await res.json();}catch(e){}
+  if(!res.ok||!data||!data.id){
+    const msg=(data&&data.error&&data.error.message)?data.error.message:('HTTP '+res.status);
+    throw new Error('⚠️ فشل رفع الملف إلى Google Drive: '+msg);
+  }
+  // Make the file viewable by anyone with the link (so it can be opened later from Firebase without needing to sign in)
+  try{
+    await fetch(`https://www.googleapis.com/drive/v3/files/${data.id}/permissions`,{
+      method:'POST',
+      headers:{'Authorization':'Bearer '+token,'Content-Type':'application/json'},
+      body:JSON.stringify({role:'reader',type:'anyone'})
+    });
+  }catch(e){/* not fatal — the file itself still uploaded fine */}
+  return `https://drive.google.com/file/d/${data.id}/view?usp=sharing`;
 }
 function normalizeSaudiPhone(v){
   let s=toEnglishDigits(String(v||'')).trim();
