@@ -1007,22 +1007,53 @@ function compressImage(dataUrl,maxDim=1600,quality=0.72){
     img.src=dataUrl;
   });
 }
+// ============================================================
+// CLOUDINARY FILE STORAGE
+// ============================================================
+// All uploaded files (order attachments, item files, quote images, quick-task
+// photos, workshop feedback photos, avatars, financial request proofs...) are
+// uploaded directly to Cloudinary from the browser using an UNSIGNED upload
+// preset (no secret key involved, safe to call from client-side code). Only
+// the short returned URL is stored in Firebase — never the file itself — so
+// large files no longer bloat the database or get rejected.
+const CLOUDINARY_CLOUD_NAME='xo8imy4r';
+const CLOUDINARY_UPLOAD_PRESET='rawaee_unsigned';
+async function uploadToCloudinary(fileOrDataUrl){
+  const fd=new FormData();
+  fd.append('file',fileOrDataUrl);
+  fd.append('upload_preset',CLOUDINARY_UPLOAD_PRESET);
+  let res;
+  try{
+    res=await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/auto/upload`,{method:'POST',body:fd});
+  }catch(netErr){
+    throw new Error('⚠️ تعذر الاتصال بخدمة رفع الملفات، تحقق من الإنترنت وحاول مجدداً.');
+  }
+  let data=null;
+  try{data=await res.json();}catch(e){}
+  if(!res.ok||!data||data.error){
+    const msg=(data&&data.error&&data.error.message)?data.error.message:('HTTP '+res.status);
+    throw new Error('⚠️ فشل رفع الملف: '+msg);
+  }
+  return data.secure_url;
+}
 async function convertFileToBase64(file){
-  const MAX_IMAGE_SOURCE_BYTES=15*1024*1024; // 15MB raw source cap for images (before compression)
-  const MAX_OTHER_BYTES=8*1024*1024; // 8MB cap for non-image files (PDF etc.)
+  const MAX_IMAGE_SOURCE_BYTES=25*1024*1024; // 25MB raw source cap for images (before compression)
+  const MAX_OTHER_BYTES=20*1024*1024; // 20MB cap for non-image files (PDF etc.)
   const isImage=file.type&&file.type.startsWith('image/');
   if(isImage){
-    if(file.size>MAX_IMAGE_SOURCE_BYTES)throw new Error('⚠️ حجم الصورة كبير جداً (الحد الأقصى 15 ميجابايت). يرجى اختيار صورة أصغر.');
-    const raw=await _readFileAsDataUrl(file);
+    if(file.size>MAX_IMAGE_SOURCE_BYTES)throw new Error('⚠️ حجم الصورة كبير جداً (الحد الأقصى 25 ميجابايت). يرجى اختيار صورة أصغر.');
+    let uploadPayload=file;
     // Only compress if the file is reasonably large — small images pass through untouched.
     if(file.size>800*1024){
-      try{return await compressImage(raw,1600,0.72);}
-      catch(e){return raw;} // fall back to original if compression fails for any reason
+      try{
+        const raw=await _readFileAsDataUrl(file);
+        uploadPayload=await compressImage(raw,1600,0.72);
+      }catch(e){uploadPayload=file;} // fall back to original if compression fails for any reason
     }
-    return raw;
+    return await uploadToCloudinary(uploadPayload);
   }else{
-    if(file.size>MAX_OTHER_BYTES)throw new Error('⚠️ حجم الملف كبير جداً (الحد الأقصى 8 ميجابايت). يرجى اختيار ملف أصغر.');
-    return await _readFileAsDataUrl(file);
+    if(file.size>MAX_OTHER_BYTES)throw new Error('⚠️ حجم الملف كبير جداً (الحد الأقصى 20 ميجابايت). يرجى اختيار ملف أصغر.');
+    return await uploadToCloudinary(file);
   }
 }
 function normalizeSaudiPhone(v){
@@ -2545,9 +2576,9 @@ function openOrderModal(key){
     <div class="di" style="grid-column:1/-1;border-top:1px solid var(--border-soft);padding-top:10px;">
       <button class="btn btn-out btn-xs" onclick="openAddItemModal('${key}')"><i class="ti ti-square-rounded-plus"></i> إضافة بند جديد للطلب</button>
     </div>`;
-  const pLink=o.approvedPrintFile?.startsWith('data:')?`<a href="${o.approvedPrintFile}" download class="file-download-link"><i class="ti ti-printer"></i> ملف الطباعة</a>`:o.printTo==='none'?'—':'— بانتظار الاعتماد';
-  const wLink=o.approvedWorkshopFile?.startsWith('data:')?`<a href="${o.approvedWorkshopFile}" download class="file-download-link"><i class="ti ti-box"></i> مخطط الورشة</a>`:o.workshopTo==='none'?'—':'— بانتظار الاعتماد';
-  const dLink=o.finalWorkshopDoneFile?.startsWith('data:')?`<a href="${o.finalWorkshopDoneFile}" download class="file-download-link"><i class="ti ti-photo"></i> صورة المنجز</a>`:o.workshopTo==='none'?'—':'— بانتظار التوثيق';
+  const pLink=o.approvedPrintFile?`<a href="${o.approvedPrintFile}" download class="file-download-link"><i class="ti ti-printer"></i> ملف الطباعة</a>`:o.printTo==='none'?'—':'— بانتظار الاعتماد';
+  const wLink=o.approvedWorkshopFile?`<a href="${o.approvedWorkshopFile}" download class="file-download-link"><i class="ti ti-box"></i> مخطط الورشة</a>`:o.workshopTo==='none'?'—':'— بانتظار الاعتماد';
+  const dLink=o.finalWorkshopDoneFile?`<a href="${o.finalWorkshopDoneFile}" download class="file-download-link"><i class="ti ti-photo"></i> صورة المنجز</a>`:o.workshopTo==='none'?'—':'— بانتظار التوثيق';
   const wdLink=o.workshopDeptFile?`<a href="${o.workshopDeptFile}" download="${o.workshopDeptFileName||'ملف'}" class="file-download-link"><i class="ti ti-paperclip"></i> ${o.workshopDeptFileName||'ملف مرفق'}</a>`:'—';
   let uploadArea='';
   if(isMine||t==='admin'){
