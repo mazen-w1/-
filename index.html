@@ -3329,11 +3329,11 @@ function buildAddForm(isUrgentQuick=false){
         <div class="partial-fields">
           <div class="fg">
             <label>المبلغ الإجمالي (ر.س) <span style="color:#EF4444">*</span></label>
-            <input type="text" inputmode="decimal" id="f-total-amount" placeholder="0" min="0" oninput="calcRemaining()" onfocus="this.select()"/>
+            <input type="text" inputmode="decimal" id="f-total-amount" placeholder="0" min="0" oninput="normalizeAmountInput(this)" onfocus="this.select()"/>
           </div>
           <div class="fg">
             <label>المبلغ المدفوع (ر.س) <span style="color:#EF4444">*</span></label>
-            <input type="text" inputmode="decimal" id="f-paid-amount" placeholder="0" min="0" oninput="calcRemaining()" onfocus="this.select()"/>
+            <input type="text" inputmode="decimal" id="f-paid-amount" placeholder="0" min="0" oninput="normalizeAmountInput(this)" onfocus="this.select()"/>
           </div>
           <div class="fg partial-field-ro">
             <label>المبلغ المتبقي (ر.س)</label>
@@ -3411,9 +3411,24 @@ function buildAddForm(isUrgentQuick=false){
     }
   },80);
 }
+function normalizeDigits(str){
+  if(str==null)return str;
+  const map={'٠':'0','١':'1','٢':'2','٣':'3','٤':'4','٥':'5','٦':'6','٧':'7','٨':'8','٩':'9','۰':'0','۱':'1','۲':'2','۳':'3','۴':'4','۵':'5','۶':'6','۷':'7','۸':'8','۹':'9','٫':'.','٬':''};
+  return String(str).replace(/[٠-٩۰-۹٫٬]/g,ch=>map[ch]!==undefined?map[ch]:ch);
+}
+function normalizeAmountInput(el){
+  if(!el)return;
+  const norm=normalizeDigits(el.value);
+  if(norm!==el.value){
+    const pos=el.selectionStart;
+    el.value=norm;
+    try{el.setSelectionRange(pos,pos);}catch(e){}
+  }
+  calcRemaining();
+}
 function calcRemaining(){
-  const total=parseFloat(document.getElementById('f-total-amount')?.value)||0;
-  const paid=parseFloat(document.getElementById('f-paid-amount')?.value)||0;
+  const total=parseFloat(normalizeDigits(document.getElementById('f-total-amount')?.value))||0;
+  const paid=parseFloat(normalizeDigits(document.getElementById('f-paid-amount')?.value))||0;
   const rem=document.getElementById('f-remaining-amount');
   if(rem)rem.value=Math.max(0,total-paid).toFixed(2);
 }
@@ -3512,15 +3527,15 @@ async function submitOrder(isUrgentQuick=false){
   if(!payStatus){toast('⚠️ يرجى تحديد وضع السداد');return;}
   if(!document.getElementById('fd').value){toast('⚠️ يرجى تحديد تاريخ التسليم المتوقع');return;}
   if(payStatus==='دفع جزئي'){
-    const _tot=document.getElementById('f-total-amount')?.value;
-    const _paid=document.getElementById('f-paid-amount')?.value;
+    const _tot=normalizeDigits(document.getElementById('f-total-amount')?.value);
+    const _paid=normalizeDigits(document.getElementById('f-paid-amount')?.value);
     if(!_tot||parseFloat(_tot)<=0){toast('⚠️ يرجى إدخال المبلغ الإجمالي');return;}
     if(!_paid||parseFloat(_paid)<=0){toast('⚠️ يرجى إدخال المبلغ المدفوع');return;}
   }else if(payStatus==='تم الدفع'){
-    const _paid2=document.getElementById('fb2')?.value;
+    const _paid2=normalizeDigits(document.getElementById('fb2')?.value);
     if(!_paid2||parseFloat(_paid2)<=0){toast('⚠️ يرجى إدخال المبلغ المدفوع');return;}
   }else if(payStatus==='عند التسليم'){
-    const _delTot=document.getElementById('f-delivery-total')?.value;
+    const _delTot=normalizeDigits(document.getElementById('f-delivery-total')?.value);
     if(!_delTot||parseFloat(_delTot)<=0){toast('⚠️ يرجى إدخال المبلغ الإجمالي');return;}
   }
   const dU=document.getElementById('fw-design').value,extU=document.getElementById('fw-external').value,pU=document.getElementById('fw-print').value,wU=document.getElementById('fw-workshop').value;
