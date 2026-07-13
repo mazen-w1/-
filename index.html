@@ -564,6 +564,9 @@ input[inputmode="decimal"],input[inputmode="numeric"],input[type="number"],input
 #page-quote input:focus,#page-quote select:focus,#page-quote textarea:focus{
   background:var(--surface);border-color:var(--gold);
 }
+
+#page-quote .tbl-wrap thead th{padding:8px 12px;font-size:10.5px;}
+#page-quote .tbl-wrap tbody td{padding:8px 12px;font-size:12px;}
 </style>
 </head>
 <body>
@@ -1881,7 +1884,7 @@ function buildQuotePage(){
   document.getElementById('page-quote').innerHTML=`
     <div class="page-header"><div class="ptitle"><i class="ti ti-receipt-2"></i> إصدار عرض سعر رسمي</div></div>
     ${window._editingQuoteKey?`<div style="background:#FFF7E6;border:1px solid #F5D68A;color:#92400E;border-radius:var(--radius-md);padding:10px 16px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;"><span><i class="ti ti-edit"></i> وضع تعديل عرض السعر رقم <strong>${(standaloneQuotes[window._editingQuoteKey]&&standaloneQuotes[window._editingQuoteKey].ref)||window._editingQuoteKey}</strong></span><button class="btn btn-out btn-sm" onclick="cancelEditQuote()"><i class="ti ti-x"></i> إلغاء التعديل</button></div>`:''}
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;align-items:start;">
       <!-- Customer Info Card -->
       <div class="card">
         <div class="card-header"><span class="card-title"><i class="ti ti-user"></i> بيانات العميل</span></div>
