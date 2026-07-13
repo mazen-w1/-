@@ -1349,6 +1349,16 @@ function generateQR(containerId,text,size=100){
 // SMS SIMULATION
 // ============================================================
 async function sendSmsNotification(phone,message){console.log(`📱 SMS to ${phone}: ${message}`);return true;}
+async function syncOrderToSheet(orderNo,clientName,clientPhone,paymentStatus,items){
+  try{
+    await fetch('https://script.google.com/macros/s/AKfycbyfV3KMj8lJuHK5-JHrcbBTXILf7cVfZV8Lsg19YFJb8tCCKfWX_cQp_Ua-Pq7yLscaUA/exec',{
+      method:'POST',
+      mode:'no-cors',
+      body:JSON.stringify({orderNo,clientName,clientPhone,paymentStatus,items})
+    });
+  }catch(e){console.warn('syncOrderToSheet failed',e);}
+}
+
 // ============================================================
 // QUICK TASKS
 // ============================================================
@@ -2378,6 +2388,7 @@ async function finalizeConvertToOrder(quoteKey){
   const newId='ORD-'+String(Object.keys(orders).length+1).padStart(3,'0');
   await fbPatch(`orders/${res.name}`,{id:newId});
   await fbPatch(`standalone_quotes/${quoteKey}`,{convertedToOrder:newId,convertedAt:new Date().toISOString()});
+  syncOrderToSheet(newId,q.client,phone,'عند التسليم',service);
   if(phone&&phone!=='—')await sendSmsNotification(phone,`مرحباً ${q.client}، تم استلام طلبكم رقم ${newId} وهو قيد التنفيذ. روائع الأفكار الإعلانية.`);
   window._coItemFiles={};
   await loadData();hideSaving();closeModal('order-modal');
@@ -3167,6 +3178,7 @@ async function submitOrder(isUrgentQuick=false){
     const res=await fbPush('orders',ord);await loadData();
     const newId='ORD-'+String(ordersArr().length).padStart(3,'0');
     await fbPatch(`orders/${res.name}`,{id:newId});await loadData();
+    syncOrderToSheet(newId,c,phone,payStatus,_lines.map(l=>l.name.trim()).join('، '));
     if(phone)await sendSmsNotification(phone,`مرحباً ${c}، تم استلام طلبكم رقم ${newId} وهو قيد التنفيذ. روائع الأفكار الإعلانية - 0500447999`);
     if(window._pendingQuickTaskKey){
       try{await fbDelete('orders/'+window._pendingQuickTaskKey);}catch(e2){}
