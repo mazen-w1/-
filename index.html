@@ -1280,6 +1280,24 @@ function progressColor(o){const m={new:'#CBD5E1',design:'#6B21A8',external:'#B45
 function currentPersonName(o){if(!o.currentDept||o.currentDept==='design')return o.designName||'—';if(o.currentDept==='external')return o.externalName||o.externalNote||'تنفيذ خارجي';if(o.currentDept==='print')return o.printName||'—';if(o.currentDept==='workshop')return o.workshopName||'—';if(o.currentDept==='done')return'✓ مكتمل';return'—';}
 function hoursAgo(dateStr){if(!dateStr)return 0;return Math.round((new Date()-new Date(dateStr))/3600000);}
 function timeBadge(hours){if(hours<24)return`<span class="time-badge time-ok"><i class="ti ti-clock"></i>${hours}س</span>`;const days=Math.round(hours/24);if(days<=3)return`<span class="time-badge time-warn"><i class="ti ti-clock"></i>${days}ي</span>`;return`<span class="time-badge time-over"><i class="ti ti-alarm"></i>${days}ي</span>`;}
+function fmtStageDuration(hours){
+  if(!hours||hours<=0)return'—';
+  if(hours<1)return Math.round(hours*60)+' د';
+  if(hours<24){
+    const h=Math.floor(hours);
+    const m=Math.round((hours-h)*60);
+    if(m>=60)return(h+1)+'س';
+    return m>0?(h+'س '+m+'د'):(h+'س');
+  }
+  return(hours/24).toFixed(1)+' يوم';
+}
+function preciseTimeBadge(hours){
+  const txt=fmtStageDuration(hours);
+  if(hours<24)return`<span class="time-badge time-ok"><i class="ti ti-clock"></i>${txt}</span>`;
+  const days=Math.round(hours/24);
+  if(days<=3)return`<span class="time-badge time-warn"><i class="ti ti-clock"></i>${txt}</span>`;
+  return`<span class="time-badge time-over"><i class="ti ti-alarm"></i>${txt}</span>`;
+}
 function deadlineBadge(deadline){if(!deadline||deadline==='—')return'';const now=new Date();const dl=new Date(deadline);const hours=Math.round((dl-now)/3600000);if(hours<0)return`<div class="deadline-warn deadline-over"><i class="ti ti-alert-triangle"></i>تجاوز موعد التسليم!</div>`;if(hours<=24)return`<div class="deadline-warn"><i class="ti ti-clock"></i>التسليم خلال ${hours} ساعة</div>`;if(hours<=72)return`<div class="deadline-warn"><i class="ti ti-clock"></i>التسليم خلال ${Math.round(hours/24)} أيام</div>`;return'';}
 function formatDate(iso){if(!iso)return'—';try{return new Date(iso).toLocaleDateString('ar-SA');}catch{return iso;}}
 function stageBar(o){
@@ -3261,7 +3279,7 @@ function buildTimelineStats(arr){
     const activeNow=arr.filter(o=>o.currentDept===dk);
     const completedForDept=arr.filter(o=>getActiveDepts(o).includes(dk)&&o[doneAtMap[dk]]);
     const durations=completedForDept.map(o=>Math.max(0,(new Date(o[doneAtMap[dk]])-new Date(startAtMap2[dk](o)))/3600000));
-    const avgHours=durations.length?Math.round(durations.reduce((a,b)=>a+b,0)/durations.length):0;
+    const avgHours=durations.length?(durations.reduce((a,b)=>a+b,0)/durations.length):0;
     const maxH=Math.max(...activeNow.map(o=>hoursAgo(o.stageStartDate||o.date)),0);
     return{dk,label:deptMeta[dk].label,color:deptMeta[dk].color,activeNow:activeNow.length,completedCount:completedForDept.length,avgHours,maxH};
   });
@@ -3270,7 +3288,7 @@ function buildTimelineStats(arr){
   const allStats=deptStats;
   return`
   ${activeStats.length?`<div style="margin-bottom:6px;font-size:11px;font-weight:800;color:var(--maroon);letter-spacing:.5px;"><i class="ti ti-loader"></i> المراحل الجارية حالياً</div>
-  <div class="stats-row" style="grid-template-columns:repeat(auto-fill,minmax(200px,1fr));margin-bottom:16px;">${activeStats.map(d=>`<div class="mini-stat-card" style="border-right:3px solid ${d.color}"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;"><strong style="font-size:13px;color:${d.color}">${d.label}</strong><span class="badge" style="background:${d.color}20;color:${d.color};font-weight:800;">${d.activeNow} طلب</span></div><div style="font-size:11px;color:var(--text-3);">أطول انتظار حالي: <strong style="color:${d.maxH>72?'#EF4444':d.maxH>24?'#F59E0B':'#10B981'}">${d.maxH<24?d.maxH+'س':Math.round(d.maxH/24)+' يوم'}</strong></div><div style="font-size:11px;color:var(--text-3);margin-top:3px;">متوسط الإنجاز: <strong style="color:var(--text-1)">${d.avgHours===0?'—':d.avgHours<24?d.avgHours+'س':Math.round(d.avgHours/24)+' يوم'}</strong></div></div>`).join('')}</div>`:''}
+  <div class="stats-row" style="grid-template-columns:repeat(auto-fill,minmax(200px,1fr));margin-bottom:16px;">${activeStats.map(d=>`<div class="mini-stat-card" style="border-right:3px solid ${d.color}"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;"><strong style="font-size:13px;color:${d.color}">${d.label}</strong><span class="badge" style="background:${d.color}20;color:${d.color};font-weight:800;">${d.activeNow} طلب</span></div><div style="font-size:11px;color:var(--text-3);">أطول انتظار حالي: <strong style="color:${d.maxH>72?'#EF4444':d.maxH>24?'#F59E0B':'#10B981'}">${fmtStageDuration(d.maxH)}</strong></div><div style="font-size:11px;color:var(--text-3);margin-top:3px;">متوسط الإنجاز: <strong style="color:var(--text-1)">${fmtStageDuration(d.avgHours)}</strong></div></div>`).join('')}</div>`:''}
   <div style="margin-bottom:6px;font-size:11px;font-weight:800;color:var(--text-2);letter-spacing:.5px;"><i class="ti ti-chart-bar"></i> إحصائيات جميع المراحل</div>
   <div class="stats-row" style="grid-template-columns:repeat(auto-fill,minmax(200px,1fr));">${allStats.map(d=>`<div class="mini-stat-card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;"><strong style="font-size:13px;color:var(--maroon)">${d.label}</strong></div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;"><span class="badge" style="background:${d.color}20;color:${d.color};"><i class="ti ti-loader"></i> ${d.activeNow} جارية</span><span class="badge" style="background:#D1FAE5;color:#065F46;"><i class="ti ti-check"></i> ${d.completedCount} مكتملة</span></div><div style="font-size:11px;color:var(--text-3);">متوسط المدة: <strong style="color:var(--text-1)">${d.avgHours===0?'—':d.avgHours<24?d.avgHours+' ساعة':Math.round(d.avgHours/24)+' يوم'}</strong></div><div class="mini-stat-bar-track" style="margin-top:8px;"><div class="mini-stat-bar-fill" style="width:${Math.round((d.avgHours/maxAvg)*100)}%;background:${d.color}"></div></div></div>`).join('')}</div>`;
 }
@@ -3283,17 +3301,17 @@ function buildTimelinePage(){
   const deptHeaders={design:'وقت التصميم',external:'وقت الخارجي',print:'وقت الطباعة',workshop:'وقت الورشة'};
   const headerCols=usedDepts.map(dk=>`<th style="width:90px">${deptHeaders[dk]}</th>`).join('');
   const makeRow=o=>{
-    const stageHours=hoursAgo(o.stageStartDate||o.date);const pct=orderProgress(o);const col=progressColor(o);
+    const stageHours=hoursAgo(o.stageStartDate||o.date);const preciseStageHours=(new Date()-new Date(o.stageStartDate||o.date))/3600000;const pct=orderProgress(o);const col=progressColor(o);
     const stagesCells=usedDepts.map(dk=>{
       const doneAtMap={design:o.designDoneAt,external:o.externalDoneAt,print:o.printDoneAt,workshop:o.workshopDoneAt};
       const startAtMap={design:o.designStartAt||o.date,external:o.externalStartAt||o.designDoneAt||o.date,print:o.printStartAt||o.designDoneAt||o.externalDoneAt||o.date,workshop:o.workshopStartAt||o.printDoneAt||o.externalDoneAt||o.designDoneAt||o.date};
       const doneAt=doneAtMap[dk];const startAt=startAtMap[dk]||o.date;
-      if(doneAt){const h=Math.max(0,Math.round((new Date(doneAt)-new Date(startAt))/3600000));return`<td>${timeBadge(h)}</td>`;}
-      if(o.currentDept===dk)return`<td>${timeBadge(stageHours)}</td>`;
+      if(doneAt){const h=Math.max(0,(new Date(doneAt)-new Date(startAt))/3600000);return`<td>${preciseTimeBadge(h)}</td>`;}
+      if(o.currentDept===dk)return`<td>${preciseTimeBadge(preciseStageHours)}</td>`;
       if(o.currentDept==='done')return`<td><span class="badge b-done" style="font-size:9px">✓</span></td>`;
       return`<td style="color:var(--text-3);font-size:10px">—</td>`;
     }).join('');
-    return`<tr onclick="openOrderModal('${o._key}')" style="cursor:pointer"><td><strong style="color:var(--maroon)">${o.id||o._key}</strong></td><td>${o.client}</td><td>${deptBadge(o.currentDept)}</td>${stagesCells}<td>${timeBadge(stageHours)}</td><td><div style="width:80px;background:var(--border);border-radius:4px;height:6px"><div style="width:${pct}%;background:${col};height:6px;border-radius:4px"></div></div></td></tr>`;
+    return`<tr onclick="openOrderModal('${o._key}')" style="cursor:pointer"><td><strong style="color:var(--maroon)">${o.id||o._key}</strong></td><td>${o.client}</td><td>${deptBadge(o.currentDept)}</td>${stagesCells}<td>${preciseTimeBadge(preciseStageHours)}</td><td><div style="width:80px;background:var(--border);border-radius:4px;height:6px"><div style="width:${pct}%;background:${col};height:6px;border-radius:4px"></div></div></td></tr>`;
   };
   const thead=`<thead><tr><th style="width:70px">الطلب</th><th style="width:110px">العميل</th><th style="width:90px">المرحلة</th>${headerCols}<th style="width:90px">الحالي</th><th style="width:90px">الإنجاز</th></tr></thead>`;
   const activeRows=activeArr.map(makeRow).join('');
