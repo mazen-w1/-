@@ -1131,7 +1131,7 @@ function buildSidebar(){
       ni('warranty','ti-shield-check','ضمان اللوحات'),
       ni('request','ti-send','رفع طلب'),
     ]);
-    h+=navGroup('التواصل',[ni('teamchat','ti-messages','Teem Rawaee','','teamchat-badge')]);
+    h+=niCompactIcon('teamchat','ti-messages','teamchat-badge');
   }else if(t==='external'){
     h+=navGroup('أعمالي',[ni('my','ti-user-check','أعمالي الحالية')]);
     h+=navGroup('إدارة الطلبات',[
@@ -1140,15 +1140,15 @@ function buildSidebar(){
       ni('wf','ti-grid-dots','سير العمل'),
     ]);
     h+=navGroup('إضافي',[ni('request','ti-send','رفع طلب')]);
-    h+=navGroup('التواصل',[ni('teamchat','ti-messages','Teem Rawaee','','teamchat-badge')]);
+    h+=niCompactIcon('teamchat','ti-messages','teamchat-badge');
   }else if(['designer','printer','workshop'].includes(t)){
     h+=navGroup('الأعمال',[ni('my','ti-user-check','أعمالي الحالية')]);
     if(t==='designer'){h+=navGroup('إضافي',[ni('add','ti-bolt','طلب مستعجل'),ni('request','ti-send','رفع طلب')]);}
     if(t==='workshop'){h+=navGroup('إضافي',[ni('warranty','ti-shield-check','ضمان اللوحات'),ni('request','ti-send','رفع طلب')]);}
-    h+=navGroup('التواصل',[ni('teamchat','ti-messages','Teem Rawaee','','teamchat-badge')]);
+    h+=niCompactIcon('teamchat','ti-messages','teamchat-badge');
   }else if(t==='follower'){
     h+=navGroup('المتابعة',[ni('wf','ti-grid-dots','متابعة الأعمال')]);
-    h+=navGroup('التواصل',[ni('teamchat','ti-messages','Teem Rawaee','','teamchat-badge')]);
+    h+=niCompactIcon('teamchat','ti-messages','teamchat-badge');
   }else if(t==='admin'){
     h+=navGroup('الرئيسية',[ni('dash','ti-layout-dashboard','لوحة التحكم')]);
     h+=navGroup('إدارة الطلبات',[
@@ -1166,13 +1166,13 @@ function buildSidebar(){
       ni('warranty','ti-shield-check','ضمان اللوحات'),
       ni('export','ti-table-export','تصدير Excel'),
     ]);
-    h+=navGroup('التواصل',[ni('teamchat','ti-messages','Teem Rawaee','','teamchat-badge')]);
+    h+=niCompactIcon('teamchat','ti-messages','teamchat-badge');
   }else if(t==='accountant'){
     h+=navGroup('المحاسبة',[
       ni('requests','ti-inbox','الطلبات الواردة','','requests-badge'),
       ni('export','ti-table-export','تصدير Excel'),
     ]);
-    h+=navGroup('التواصل',[ni('teamchat','ti-messages','Teem Rawaee','','teamchat-badge')]);
+    h+=niCompactIcon('teamchat','ti-messages','teamchat-badge');
   }
   sb.innerHTML=h;
   // Sidebar footer CTA
@@ -1191,6 +1191,10 @@ function navGroup(label, items){
 function ni(p,ic,lbl,extra='',badgeId=''){
   const badgeHtml=badgeId?`<span id="${badgeId}" class="badge-pill"></span>`:'';
   return`<div class="ni ${extra}" id="n-${p}" onclick="nav('${p}');closeSidebar()"><div class="ni-icon"><i class="ti ${ic}"></i></div><span class="ni-lbl">${lbl}</span>${badgeHtml}</div>`;
+}
+function niCompactIcon(p,ic,badgeId){
+  const badgeHtml=badgeId?`<span id="${badgeId}" class="badge-pill" style="position:absolute;top:-2px;left:-2px;"></span>`:'';
+  return`<div style="position:relative;display:flex;justify-content:center;margin:8px 0;"><div class="ni" id="n-${p}" onclick="nav('${p}');closeSidebar()" title="Teem Rawaee" style="width:40px;height:40px;padding:0;justify-content:center;border-radius:50%;flex:none;"><div class="ni-icon" style="margin:0;"><i class="ti ${ic}"></i></div></div>${badgeHtml}</div>`;
 }
 // ============================================================
 // NAV
