@@ -2888,7 +2888,12 @@ async function finishOrder(key){
   const o=orders[key];
   await fbPatch(`orders/${key}`,{currentDept:'done',status:'مكتمل',workshopDoneAt:new Date().toISOString()});
   await createWarrantyIfNeeded(key,o);
-  if(o?.phone&&o.phone!=='—')await sendSmsNotification(o.phone,`مرحباً ${o.client}، طلبكم رقم ${o.id||key} اكتمل. روائع الأفكار الإعلانية.`);
+  if(o.phone&&o.phone!=='—'){
+    const n=o.phone.replace(/[^0-9]/g,'');
+    const full=n.startsWith('0')?'966'+n.substring(1):n;
+    const waMsg=encodeURIComponent('شكراً لثقتكم بنا، طلبكم جاهز للاستلام');
+    window.open(`https://wa.me/${full}?text=${waMsg}`,'_blank');
+  }
   await loadData();hideSaving();closeModal('order-modal');
   toast('✓ تم إغلاق الطلب');refreshCurrentPage();
 }
