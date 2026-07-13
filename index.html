@@ -700,6 +700,22 @@ input[inputmode="decimal"],input[inputmode="numeric"],input[type="number"],input
     </div>
   </div>
 </div>
+<div class="modal-overlay" id="maint-visit-modal">
+  <div class="modal-box" dir="rtl">
+    <div class="modal-header"><span class="modal-title">تسجيل طلب صيانة</span><button class="btn-close" onclick="closeModal('maint-visit-modal')"><i class="ti ti-x"></i></button></div>
+    <div class="modal-body">
+      <div class="fg"><label>سبب المشكلة</label><textarea id="mv-reason" rows="3" placeholder="اكتب سبب طلب الصيانة..."></textarea></div>
+      <div class="fg">
+        <label>صورة المشكلة (اختياري)</label>
+        <div class="dept-upload-box" onclick="document.getElementById('mv-photo-input').click()">
+          <i class="ti ti-camera"></i> <span id="mv-photo-label">اضغط لإرفاق صورة</span>
+        </div>
+        <input type="file" id="mv-photo-input" accept="image/*" style="display:none" onchange="handleMvPhoto(this.files)">
+      </div>
+      <button class="btn btn-primary" style="width:100%;margin-top:8px;" onclick="submitMaintVisit()">تسجيل الطلب</button>
+    </div>
+  </div>
+</div>
 <div class="modal-overlay" id="quick-task-modal">
   <div class="modal-box" dir="rtl">
     <div class="modal-header"><span class="modal-title" id="qt-modal-title">مهمة سريعة</span><button class="btn-close" onclick="closeModal('quick-task-modal')">×</button></div>
@@ -2583,12 +2599,13 @@ function openOrderModal(key){
     <span class="dv">${paymentBadge(o.paymentStatus)||'—'} ${(o.paymentStatus==='تم الدفع'||o.paymentStatus==='دفع جزئي')?`<span style="font-size:12px;color:#065F46">(${Number(o.paidAmount||0).toFixed(2)} ر.س)</span>`:''}</span>
   </div>`:'';
   const canLogMaintenance=['admin','receiver','workshop'].includes(t);
-  const _lastVisit=(o.maintenanceVisits&&o.maintenanceVisits.length)?o.maintenanceVisits[o.maintenanceVisits.length-1]:null;
+  const _lastVisit=(o.maintenanceVisits&&o.maintenanceVisits.length)?o.maintenanceVisits[o.maintenanceVisits.length-1]:null;const _lastVisitDate=_lastVisit?(typeof _lastVisit==='object'?_lastVisit.date:_lastVisit):null;const _visitsHistory=(o.maintenanceVisits||[]).slice().reverse().map(v=>{const vd=typeof v==='object'?v:{date:v,reason:'',photo:''};return `<div style="border:1px solid var(--border-soft);border-radius:8px;padding:8px;margin-top:4px;width:100%;"><div style="font-size:11px;color:var(--text-3);">${vd.date?new Date(vd.date).toLocaleDateString('ar-SA'):'—'}</div>${vd.reason?`<div style="font-size:13px;margin-top:4px;">${vd.reason}</div>`:''}${vd.photo?`<a href="${vd.photo}" target="_blank" style="font-size:12px;color:var(--maroon);display:inline-block;margin-top:4px;"><i class="ti ti-photo"></i> عرض الصورة</a>`:''}</div>`;}).join('');
   const maintenanceRow=o.maintenanceContract?`<div class="di" style="grid-column:1/-1;border-top:1px solid var(--border-soft);padding-top:10px;">
     <span class="dk" style="color:#065F46"><i class="ti ti-shield-check"></i> عقد الصيانة</span>
     <div class="dv" style="display:flex;flex-direction:column;gap:6px;">
-      <span>عدد مرات طلب الصيانة: <strong>${o.maintenanceVisitsCount||0}</strong>${_lastVisit?` <span style="font-size:11px;color:var(--text-3);">(آخر طلب: ${new Date(_lastVisit).toLocaleDateString('ar-SA')})</span>`:''}</span>
-      ${canLogMaintenance?`<button class="btn btn-out btn-sm" style="align-self:flex-start;" onclick="logMaintenanceVisit('${key}')"><i class="ti ti-tool"></i> تسجيل طلب صيانة جديد</button>`:''}
+      <span>عدد مرات طلب الصيانة: <strong>${o.maintenanceVisitsCount||0}</strong>${_lastVisitDate?` <span style="font-size:11px;color:var(--text-3);">(آخر طلب: ${new Date(_lastVisitDate).toLocaleDateString('ar-SA')})</span>`:''}</span>
+      ${canLogMaintenance?`<button class="btn btn-out btn-sm" style="align-self:flex-start;" onclick="openMaintVisitModal('${key}')"><i class="ti ti-tool"></i> تسجيل طلب صيانة جديد</button>`:''}
+      ${_visitsHistory}
     </div>
   </div>`:'';
   const trackingUrl=`${location.origin}${location.pathname.replace(/[^/]*$/,'tracking.html')}?id=${o.id||key}`;
@@ -2795,14 +2812,35 @@ async function createWarrantyIfNeeded(key,o){
     await fbPatch(`orders/${key}`,{warrantyAdded:true,warrantyKey:res.name});
   }catch(e){}
 }
-async function logMaintenanceVisit(key){
+function openMaintVisitModal(key){
   const o=orders[key];if(!o)return;
-  if(!confirm('تأكيد تسجيل طلب صيانة جديد لهذه اللوحة؟'))return;
+  window.__mvKey=key;
+  window.__mvPhotoUrl='';
+  document.getElementById('mv-reason').value='';
+  document.getElementById('mv-photo-label').textContent='اضغط لإرفاق صورة';
+  openModal('maint-visit-modal');
+}
+async function handleMvPhoto(files){
+  if(!files||!files[0])return;
+  const file=files[0];
+  document.getElementById('mv-photo-label').textContent='جاري رفع الصورة...';
+  try{
+    const url=await convertFileToBase64(file,{order:window.__mvKey});
+    window.__mvPhotoUrl=url;
+    document.getElementById('mv-photo-label').textContent=file.name;
+  }catch(e){
+    document.getElementById('mv-photo-label').textContent='فشل رفع الصورة';
+  }
+}
+async function submitMaintVisit(){
+  const key=window.__mvKey;const o=orders[key];if(!o)return;
+  const reason=(document.getElementById('mv-reason').value||'').trim();
+  if(!reason){toast('⚠️ الرجاء كتابة سبب المشكلة');return;}
   showSaving('جاري التسجيل...');
   try{
-    const visits=(o.maintenanceVisits||[]).concat([new Date().toISOString()]);
+    const visits=(o.maintenanceVisits||[]).concat([{date:new Date().toISOString(),reason,photo:window.__mvPhotoUrl||''}]);
     await fbPatch(`orders/${key}`,{maintenanceVisits:visits,maintenanceVisitsCount:visits.length,currentDept:'workshop',stageStartDate:new Date().toISOString()});
-    await loadData();hideSaving();openOrderModal(key);
+    await loadData();hideSaving();closeModal('maint-visit-modal');openOrderModal(key);
     toast('✓ تم تسجيل طلب الصيانة');
   }catch(e){hideSaving();toast('⚠️ فشل تسجيل طلب الصيانة');}
 }
