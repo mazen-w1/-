@@ -547,6 +547,23 @@ input[inputmode="decimal"],input[inputmode="numeric"],input[type="number"],input
 
 .urgent-tag{border-radius:20px;}
 .ro-notice{border-radius:var(--radius-lg);}
+
+/* ---- تعديل خاص بصفحة عرض السعر: تصغير الحجم + تحسين حقول الإدخال ---- */
+#page-quote .page-header{padding-bottom:10px;margin-bottom:16px;border-bottom:none;}
+#page-quote .ptitle{font-size:19px;}
+#page-quote .ptitle i{background:none;width:auto;height:auto;border-radius:0;font-size:18px;color:var(--maroon);}
+#page-quote .card{border-radius:var(--radius-md);}
+#page-quote .card-header{padding:11px 16px;background:var(--surface-2);}
+#page-quote .card-title{font-size:13px;}
+#page-quote .fg{gap:4px;}
+#page-quote label{font-size:11.5px;}
+#page-quote input,#page-quote select,#page-quote textarea{
+  padding:8px 12px;font-size:12.5px;border-radius:var(--radius-sm);
+  background:var(--surface-2);border-color:var(--border-soft);
+}
+#page-quote input:focus,#page-quote select:focus,#page-quote textarea:focus{
+  background:var(--surface);border-color:var(--gold);
+}
 </style>
 </head>
 <body>
