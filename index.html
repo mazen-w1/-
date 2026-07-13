@@ -1131,7 +1131,6 @@ function buildSidebar(){
       ni('warranty','ti-shield-check','ضمان اللوحات'),
       ni('request','ti-send','رفع طلب'),
     ]);
-    h+=niCompactIcon('teamchat','ti-messages','teamchat-badge');
   }else if(t==='external'){
     h+=navGroup('أعمالي',[ni('my','ti-user-check','أعمالي الحالية')]);
     h+=navGroup('إدارة الطلبات',[
@@ -1140,15 +1139,12 @@ function buildSidebar(){
       ni('wf','ti-grid-dots','سير العمل'),
     ]);
     h+=navGroup('إضافي',[ni('request','ti-send','رفع طلب')]);
-    h+=niCompactIcon('teamchat','ti-messages','teamchat-badge');
   }else if(['designer','printer','workshop'].includes(t)){
     h+=navGroup('الأعمال',[ni('my','ti-user-check','أعمالي الحالية')]);
     if(t==='designer'){h+=navGroup('إضافي',[ni('add','ti-bolt','طلب مستعجل'),ni('request','ti-send','رفع طلب')]);}
     if(t==='workshop'){h+=navGroup('إضافي',[ni('warranty','ti-shield-check','ضمان اللوحات'),ni('request','ti-send','رفع طلب')]);}
-    h+=niCompactIcon('teamchat','ti-messages','teamchat-badge');
   }else if(t==='follower'){
     h+=navGroup('المتابعة',[ni('wf','ti-grid-dots','متابعة الأعمال')]);
-    h+=niCompactIcon('teamchat','ti-messages','teamchat-badge');
   }else if(t==='admin'){
     h+=navGroup('الرئيسية',[ni('dash','ti-layout-dashboard','لوحة التحكم')]);
     h+=navGroup('إدارة الطلبات',[
@@ -1166,21 +1162,17 @@ function buildSidebar(){
       ni('warranty','ti-shield-check','ضمان اللوحات'),
       ni('export','ti-table-export','تصدير Excel'),
     ]);
-    h+=niCompactIcon('teamchat','ti-messages','teamchat-badge');
   }else if(t==='accountant'){
     h+=navGroup('المحاسبة',[
       ni('requests','ti-inbox','الطلبات الواردة','','requests-badge'),
       ni('export','ti-table-export','تصدير Excel'),
     ]);
-    h+=niCompactIcon('teamchat','ti-messages','teamchat-badge');
   }
   sb.innerHTML=h;
   // Sidebar footer CTA
   const footer=document.getElementById('sidebar-footer');
   if(footer){
-    if(['admin','receiver'].includes(t)){
-      footer.innerHTML='';
-    }else{footer.innerHTML='';}
+    footer.innerHTML=niCompactIcon('teamchat','ti-messages','teamchat-badge');
   }
   updateRequestsBadgeSidebar();
   updateTeamChatBadge();
