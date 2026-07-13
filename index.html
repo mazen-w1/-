@@ -120,6 +120,8 @@ body{font-family:'Cairo','Segoe UI',Tahoma,Arial,sans-serif;background:var(--bg)
 .floating-teamchat{position:fixed;bottom:24px;right:24px;width:52px;height:52px;border-radius:50%;background:var(--maroon);color:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(0,0,0,.28);cursor:pointer;z-index:9999;font-size:22px;transition:transform .15s;}
 .floating-teamchat:hover{background:var(--maroon-dark);transform:scale(1.06);}
 .floating-teamchat .badge-pill{font-size:10px;padding:2px 6px;}
+#voice-rec-btn.recording{background:#EF4444!important;color:#fff!important;animation:voicePulse 1.1s infinite;}
+@keyframes voicePulse{0%{box-shadow:0 0 0 0 rgba(239,68,68,.5);}70%{box-shadow:0 0 0 8px rgba(239,68,68,0);}100%{box-shadow:0 0 0 0 rgba(239,68,68,0);}}
 .sep{height:1px;background:var(--border-soft);margin:6px 16px;}
 .sidebar-footer{padding:16px;border-top:1px solid var(--border-soft);}
 .sidebar-cta{
@@ -2513,6 +2515,7 @@ function buildTeamChatPage(){
       <div class="chat-input-row">
         <input id="team-chat-input" placeholder="اكتب رسالتك للفريق..." onkeydown="if(event.key==='Enter')sendTeamChatMsg()"/>
         <button class="btn btn-brand btn-sm" onclick="sendTeamChatMsg()"><i class="ti ti-send"></i></button>
+        <button id="voice-rec-btn" class="btn btn-sm" onclick="toggleVoiceRecording()" title="تسجيل صوتي"><i class="ti ti-microphone" id="voice-rec-icon"></i></button>
       </div>
     </div>`;
   loadAndRenderTeamChat();
@@ -2525,7 +2528,7 @@ async function loadAndRenderTeamChat(){
     teamChat=freshData||{};
     if(!msgs.length){container.innerHTML='<div style="text-align:center;color:var(--text-3);font-size:12px;padding:30px;"><i class="ti ti-messages" style="font-size:28px;display:block;margin-bottom:8px;color:var(--border)"></i>لا توجد رسائل بعد — كن أول من يشارك إنجازاً!</div>';return;}
     container.innerHTML=msgs.map(m=>{const isMine=m.senderUname===cu._uname;
-      return`<div class="chat-msg ${isMine?'mine':'other'}"><div class="chat-meta">${m.senderName} · ${m.senderRole||''} · ${new Date(m.timestamp).toLocaleString('ar-SA',{hour:'2-digit',minute:'2-digit',day:'2-digit',month:'2-digit'})}</div><div>${m.text}</div></div>`;
+      return`<div class="chat-msg ${isMine?'mine':'other'}"><div class="chat-meta">${m.senderName} · ${m.senderRole||''} · ${new Date(m.timestamp).toLocaleString('ar-SA',{hour:'2-digit',minute:'2-digit',day:'2-digit',month:'2-digit'})}</div>${m.audioUrl?`<audio controls src="${m.audioUrl}" style="max-width:220px;height:32px;"></audio>`:`<div>${m.text}</div>`}</div>`;
     }).join('');
     container.scrollTop=container.scrollHeight;
     markTeamChatSeen();
@@ -2547,6 +2550,59 @@ async function sendTeamChatMsg(){
   await fbPush('team_chat',msg);
   setTimeout(()=>loadAndRenderTeamChat(),500);
 }
+let __voiceRecorder=null;
+let __voiceChunks=[];
+let __voiceStream=null;
+async function toggleVoiceRecording(){
+  const btn=document.getElementById('voice-rec-btn');
+  const icon=document.getElementById('voice-rec-icon');
+  if(__voiceRecorder&&__voiceRecorder.state==='recording'){
+    __voiceRecorder.stop();
+    return;
+  }
+  let stream;
+  try{
+    stream=await navigator.mediaDevices.getUserMedia({audio:true});
+  }catch(e){
+    alert('⚠️ تعذر الوصول للميكروفون، تحقق من الأذونات.');
+    return;
+  }
+  __voiceStream=stream;
+  __voiceChunks=[];
+  __voiceRecorder=new MediaRecorder(stream);
+  __voiceRecorder.ondataavailable=function(e){if(e.data.size>0)__voiceChunks.push(e.data);};
+  __voiceRecorder.onstop=async function(){
+    __voiceStream.getTracks().forEach(function(t){t.stop();});
+    if(icon)icon.className='ti ti-microphone';
+    if(btn)btn.classList.remove('recording');
+    if(!__voiceChunks.length)return;
+    const blob=new Blob(__voiceChunks,{type:'audio/webm'});
+    if(blob.size<800)return;
+    await sendTeamChatVoice(blob);
+  };
+  __voiceRecorder.start();
+  if(icon)icon.className='ti ti-player-stop';
+  if(btn)btn.classList.add('recording');
+}
+async function sendTeamChatVoice(blob){
+  const container=document.getElementById('team-chat-msgs');
+  let tempDiv=null;
+  if(container){
+    tempDiv=document.createElement('div');
+    tempDiv.className='chat-msg mine';
+    tempDiv.innerHTML='<div class="chat-meta">'+cu.name+' · الآن</div><div style="color:var(--text-3);font-size:11px;">⏳ جاري رفع التسجيل الصوتي...</div>';
+    container.appendChild(tempDiv);container.scrollTop=container.scrollHeight;
+  }
+  try{
+    const audioUrl=await uploadToCloudinary(blob);
+    const msg={senderName:cu.name,senderUname:cu._uname,senderRole:cu.role,text:'',audioUrl:audioUrl,timestamp:new Date().toISOString()};
+    await fbPush('team_chat',msg);
+  }catch(e){
+    if(tempDiv)tempDiv.innerHTML='<div class="chat-meta">'+cu.name+'</div><div style="color:#EF4444;font-size:11px;">⚠️ فشل رفع التسجيل الصوتي</div>';
+  }
+  setTimeout(function(){loadAndRenderTeamChat();},600);
+}
+
 function markTeamChatSeen(){try{localStorage.setItem('teamChatSeen_'+cu._uname,new Date().toISOString());}catch(e){}}
 function updateTeamChatBadge(){
   const badge=document.getElementById('teamchat-badge');if(!badge)return;
