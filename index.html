@@ -2801,7 +2801,7 @@ async function logMaintenanceVisit(key){
   showSaving('جاري التسجيل...');
   try{
     const visits=(o.maintenanceVisits||[]).concat([new Date().toISOString()]);
-    await fbPatch(`orders/${key}`,{maintenanceVisits:visits,maintenanceVisitsCount:visits.length});
+    await fbPatch(`orders/${key}`,{maintenanceVisits:visits,maintenanceVisitsCount:visits.length,currentDept:'workshop',stageStartDate:new Date().toISOString()});
     await loadData();hideSaving();openOrderModal(key);
     toast('✓ تم تسجيل طلب الصيانة');
   }catch(e){hideSaving();toast('⚠️ فشل تسجيل طلب الصيانة');}
