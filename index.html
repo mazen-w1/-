@@ -39,6 +39,9 @@
 }
 *{box-sizing:border-box;margin:0;padding:0;}
 body{font-family:'Cairo','Segoe UI',Tahoma,Arial,sans-serif;background:var(--bg);min-height:100vh;color:var(--text-1);line-height:1.5;}
+.site-watermark{position:fixed;inset:0;z-index:-1;display:flex;align-items:center;justify-content:center;pointer-events:none;user-select:none;overflow:hidden;}
+.site-watermark span{font-family:'Changa','Segoe UI',sans-serif;font-weight:800;font-size:min(55vw,620px);line-height:1;color:var(--maroon);opacity:.045;position:relative;display:block;}
+.site-watermark span::after{content:'';position:absolute;top:8%;left:16%;width:2.5%;height:70%;background:var(--gold);border-radius:4px;opacity:.6;}
 /* ============================================================ SCROLLBAR */
 ::-webkit-scrollbar{width:5px;height:5px;}
 ::-webkit-scrollbar-track{background:transparent;}
@@ -699,6 +702,7 @@ input[inputmode="decimal"],input[inputmode="numeric"],input[type="number"],input
 </style>
 </head>
 <body>
+<div class="site-watermark" aria-hidden="true"><span>ر</span></div>
 <!-- ====== LOGIN SCREEN ====== -->
 <div id="ls" style="display:block;">
   <div class="portal-bg"></div>
