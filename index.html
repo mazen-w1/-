@@ -2670,14 +2670,7 @@ function openOrderModal(key){
     </div>
   </div>`:'';
   const trackingUrl=`${location.origin}${location.pathname.replace(/[^/]*$/,'tracking.html')}?id=${o.id||key}`;
-  const qrBoxHtml=`<div class="di" style="grid-column:1/-1;border-top:1px solid var(--border-soft);padding-top:12px;">
-    <span class="dk">📱 رمز QR للتتبع</span>
-    <div style="display:flex;align-items:center;gap:14px;margin-top:8px;flex-wrap:wrap;">
-      <div class="qr-box"><div id="order-qr-${key}"></div><p>${o.id||key}</p></div>
-      <div style="font-size:11px;color:var(--text-3);max-width:180px;">يمكن طباعته مع وثيقة الطلب لتتبع العميل</div>
-    </div>
-  </div>`;
-  const fromQuoteHtml=o.fromQuoteRef?`<div style="background:#F0FDF4;border:1px solid #BBF7D0;border-radius:var(--radius-sm);padding:8px 14px;font-size:12px;color:#166534;margin-bottom:14px;"><i class="ti ti-receipt-2"></i> تحويل من عرض السعر: <strong>${o.fromQuoteRef}</strong></div>`:'';
+    const fromQuoteHtml=o.fromQuoteRef?`<div style="background:#F0FDF4;border:1px solid #BBF7D0;border-radius:var(--radius-sm);padding:8px 14px;font-size:12px;color:#166534;margin-bottom:14px;"><i class="ti ti-receipt-2"></i> تحويل من عرض السعر: <strong>${o.fromQuoteRef}</strong></div>`:'';
   const updateBannerHtml=o.lastItemUpdateAt?`<div style="background:#FFFBEB;border:1px solid #FDE68A;border-radius:var(--radius-sm);padding:8px 14px;font-size:12px;color:#92400E;margin-bottom:14px;display:flex;align-items:center;gap:6px;"><i class="ti ti-refresh"></i> تم تحديث الطلب (${o.lastItemUpdateType==='edit'?'تعديل بند':'إضافة بند جديد'}) بواسطة <strong>${o.lastItemUpdateBy||'—'}</strong> بتاريخ ${(o.lastItemUpdateAt||'').split('T')[0]||'—'}</div>`:'';
   const archiveBtn=(cu.type==='admin'&&!(o.isQuickTask&&o.approvedPrintFile))?`<button class="btn btn-red btn-sm" onclick="archiveOrder('${key}')"><i class="ti ti-archive"></i> إنهاء الطلب وأرشفته</button>`:'';
   const _measureBtns=(k,cl,ph)=>`
@@ -2720,10 +2713,10 @@ function openOrderModal(key){
       <div class="di"><span class="dk">تاريخ التسليم</span><span class="dv">${o.deadline||'—'} ${deadlineBadge(o.deadline)}</span></div>
       <div class="di"><span class="dk">منشئ الطلب</span><span class="dv">${o.createdBy||'—'}</span></div>
       <div class="di" style="grid-column:1/-1;border-top:1px solid var(--border-soft);padding-top:10px;"><span class="dk">ملاحظات ومواصفات</span><span class="dv" style="font-weight:400;background:var(--surface-2);padding:8px 12px;border-radius:var(--radius-sm);border:1px solid var(--border);display:block;margin-top:4px;">${o.notes||'—'}</span></div>
-      <div class="di" style="grid-column:1/-1"><span class="dk">📁 الملفات المرفقة بالطلب ${(o.files&&o.files.length)?`<button class="btn btn-out btn-xs" style="padding:2px 8px;margin-right:6px;" onclick="downloadAllFiles(orders['${key}'].files,'مرفقات_الطلب')"><i class="ti ti-download"></i> تنزيل الكل</button>`:''}</span><div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;">${fileChips}</div></div>${itemsSection}
-      <div class="di" style="grid-column:1/-1;border-top:1px solid var(--border-soft);padding-top:10px;"><span class="dk" style="color:#6B21A8">🎨 ملف التصميم المعتمد للطباعة</span><span class="dv">${pLink}</span></div>
-      <div class="di" style="grid-column:1/-1"><span class="dk" style="color:#3730A3">📦 مخطط قياسات الورشة</span><span class="dv">${wLink}</span></div>
-      <div class="di" style="grid-column:1/-1"><span class="dk" style="color:#9A3412">📷 توثيق التركيب النهائي</span><span class="dv">${dLink}</span></div>
+      ${itemsSection}
+      ${getActiveDepts(o).includes('print')?`<div class="di" style="grid-column:1/-1;border-top:1px solid var(--border-soft);padding-top:10px;"><span class="dk" style="color:#6B21A8">🎨 ملف التصميم المعتمد للطباعة</span><span class="dv">${pLink}</span></div>`:''}
+      ${getActiveDepts(o).includes('workshop')?`<div class="di" style="grid-column:1/-1"><span class="dk" style="color:#3730A3">📦 مخطط قياسات الورشة</span><span class="dv">${wLink}</span></div>
+      <div class="di" style="grid-column:1/-1"><span class="dk" style="color:#9A3412">📷 توثيق التركيب النهائي</span><span class="dv">${dLink}</span></div>`:''}
       ${o.workshopDeptFile?`<div class="di" style="grid-column:1/-1"><span class="dk" style="color:#9A3412">📎 ملف الورشة عند التسجيل</span><span class="dv">${wdLink}</span></div>`:''}
       ${o.workshopFeedback?`<div class="di" style="grid-column:1/-1;border-top:1px solid var(--border-soft);padding-top:10px;"><span class="dk" style="color:#9A3412">📐 بيانات القياسات الميدانية</span><span class="dv" style="font-weight:400;background:#FFEDD5;padding:8px;border-radius:6px;display:block;margin-top:4px;">${o.workshopFeedback}</span>${o.workshopSitePhoto?`<a href="${o.workshopSitePhoto}" download class="file-download-link" style="margin-top:6px;display:inline-flex;"><i class="ti ti-photo"></i> صورة الموقع</a>`:''}</div>`:''}
       ${paymentRow}
@@ -2736,14 +2729,13 @@ function openOrderModal(key){
           <span style="font-size:12px;">⏳ في المرحلة: ${timeBadge(hoursAgo(o.stageStartDate||o.date))}</span>
         </div>
       </div>
-      ${qrBoxHtml}
     </div>
-    ${o.currentDept!=='done'?`<div class="contact-box"><div class="contact-box-title"><i class="ti ti-messages"></i> التواصل بين الأقسام</div><div style="display:flex;gap:14px;flex-wrap:wrap;font-size:12px;"><div><span style="color:var(--text-3)">المسؤول الحالي:</span> <strong style="color:#166534">${currentPersonName(o)}</strong></div>${o.phone&&o.phone!=='—'?`<button class="btn btn-whatsapp btn-sm" onclick="openWhatsapp('${o.phone}')"><i class="ti ti-brand-whatsapp"></i> واتساب العميل</button>`:''}</div></div>`:''}
+    
     ${buildReassignBox(o,key)}
     ${uploadArea}
     ${renderChatSection(key,o.currentDept==='done')}
     ${measureActions}
-    <div class="arow">${nextBtn} ${revertBtn} <button class="btn btn-out btn-sm" onclick="openTimelineModal('${key}')"><i class="ti ti-clock"></i> مراحل الطلب</button> <button class="btn btn-gold btn-sm" onclick="openQuickTaskForOrder('${key}')"><i class="ti ti-bolt"></i> مهمة سريعة</button> ${o.phone&&o.phone!=='—'?`<button class="btn btn-whatsapp btn-sm" onclick="openWhatsapp('${o.phone}')"><i class="ti ti-brand-whatsapp"></i></button>`:''} ${archiveBtn}</div>`;
+    <div class="arow">${nextBtn} ${revertBtn} <button class="btn btn-out btn-sm" onclick="openTimelineModal('${key}')"><i class="ti ti-clock"></i> مراحل الطلب</button>   ${archiveBtn}</div>`;
   openModal('order-modal');
   markOrderUpdateSeen(key);
   setTimeout(()=>{generateQR(`order-qr-${key}`,trackingUrl,80);loadAndRenderChat(key);},200);
