@@ -626,7 +626,7 @@ input[inputmode="decimal"],input[inputmode="numeric"],input[type="number"],input
       <!-- MAIN CONTENT -->
       <div class="main">
         <div class="page active" id="page-dash"><div id="dash-content"></div></div>
-        <div class="page" id="page-add"><div class="page-header"><div><div class="ptitle"><i class="ti ti-plus"></i> تسجيل طلب جديد</div></div></div><div id="add-content"></div></div>
+        <div class="page" id="page-add"><div class="page-header"><div><div class="ptitle"><i class="ti ti-plus"></i> تسجيل طلب</div></div></div><div id="add-content"></div></div>
         <div class="page" id="page-quote"><div id="quote-content"></div></div>
         <div class="page" id="page-teamchat"><div id="teamchat-content"></div></div>
         <div class="page" id="page-wf"><div id="wf-content"></div></div>
@@ -1120,14 +1120,13 @@ function buildSidebar(){
       ni('dash','ti-layout-dashboard','لوحة التحكم'),
     ]);
     h+=navGroup('إدارة الطلبات',[
-      ni('add','ti-plus','تسجيل طلب جديد'),
+      ni('add','ti-plus','تسجيل طلب'),
       ni('quote','ti-receipt-2','عرض سعر رسمي'),
       ni('wf','ti-grid-dots','سير العمل'),
     ]);
     h+=navGroup('الخدمات',[
       ni('clients','ti-address-book','العملاء'),
       ni('timeline','ti-clock','توقيت المراحل'),
-      ni('incomplete','ti-list-check','غير مكتملة'),
       ni('warranty','ti-shield-check','ضمان اللوحات'),
       ni('request','ti-send','رفع طلب'),
     ]);
@@ -1135,7 +1134,7 @@ function buildSidebar(){
   }else if(t==='external'){
     h+=navGroup('أعمالي',[ni('my','ti-user-check','أعمالي الحالية')]);
     h+=navGroup('إدارة الطلبات',[
-      ni('add','ti-plus','تسجيل طلب جديد'),
+      ni('add','ti-plus','تسجيل طلب'),
       ni('quote','ti-receipt-2','عرض سعر رسمي'),
       ni('wf','ti-grid-dots','سير العمل'),
     ]);
@@ -1152,7 +1151,7 @@ function buildSidebar(){
   }else if(t==='admin'){
     h+=navGroup('الرئيسية',[ni('dash','ti-layout-dashboard','لوحة التحكم')]);
     h+=navGroup('إدارة الطلبات',[
-      ni('add','ti-plus','تسجيل طلب جديد'),
+      ni('add','ti-plus','تسجيل طلب'),
       ni('quote','ti-receipt-2','عرض سعر رسمي'),
       ni('wf','ti-grid-dots','سير العمل'),
     ]);
@@ -1164,7 +1163,6 @@ function buildSidebar(){
       ni('timeline','ti-clock','إحصائيات المراحل'),
       ni('emp','ti-chart-bar','أداء الموظفين'),
       ni('warranty','ti-shield-check','ضمان اللوحات'),
-      ni('incomplete','ti-list-check','غير مكتملة'),
       ni('export','ti-table-export','تصدير Excel'),
     ]);
     h+=navGroup('التواصل',[ni('teamchat','ti-messages','Teem Rawaee','','teamchat-badge')]);
@@ -1368,7 +1366,7 @@ function openQuickTask(type){
   document.getElementById('qt-modal-body').innerHTML=`
     <div style="display:flex;flex-direction:column;gap:14px;padding:4px 0;">
       <div class="fg"><label>اسم العميل / الجهة *</label><input id="qt-client" placeholder="اسم العميل"/></div>
-      <div class="fg"><label>رقم الجوال * <span style="color:#EF4444">(إلزامي)</span></label><input id="qt-phone" inputmode="tel" placeholder="05XXXXXXXX"/></div>
+      <div class="fg"><label>رقم الجوال *</label><input id="qt-phone" inputmode="tel" placeholder="05XXXXXXXX"/></div>
       ${isProof?`
         <div class="fg"><label>المصمم المكلف *</label>
           <select id="qt-assignee"><option value="all">📢 جميع المصممين</option>${dw.map(w=>`<option value="${w.uname}">${w.name}</option>`).join('')}</select>
@@ -1415,7 +1413,7 @@ async function submitQuickTask(type){
   const n=document.getElementById('qt-notes').value.trim();
   const assignee=document.getElementById('qt-assignee').value;
   if(!c){toast('⚠️ يرجى كتابة اسم العميل');return;}
-  if(!p){toast('⚠️ رقم الجوال إلزامي');return;}
+  if(!p){toast('⚠️ يرجى إدخال رقم الجوال');return;}
   if(!isValidSaudiPhone(p)){toast('⚠️ رقم الجوال يجب أن يكون رقم سعودي صحيح (05XXXXXXXX)');return;}
   const isProof=type==='proof';
   const location=!isProof?(document.getElementById('qt-location')?.value.trim()||''):'';
@@ -1453,7 +1451,7 @@ function openWorkshopFeedback(key){
       </div>
       <div class="fg"><label>ملاحظات ميدانية</label><textarea id="fb-notes" placeholder="ملاحظات مهمة..."></textarea></div>
       <div class="fg">
-        <label style="color:#EF4444;font-weight:800;"><i class="ti ti-camera"></i> صورة الموقع الميداني * (إلزامية)</label>
+        <label style="color:#EF4444;font-weight:800;"><i class="ti ti-camera"></i> صورة الموقع الميداني *</label>
         <div class="dept-upload-box" id="fb-photo-box" onclick="document.getElementById('fb-site-photo-inp').click()" style="cursor:pointer;">
           <i class="ti ti-camera" style="font-size:26px;color:var(--gold);display:block;margin-bottom:6px;"></i>
           اضغط لالتقاط صورة الموقع أو رفعها
@@ -1511,7 +1509,7 @@ function buildDash(){
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px;">
       <button onclick="nav('add')" style="background:linear-gradient(135deg,var(--maroon) 0%,#6B1520 100%);color:#fff;border:none;border-radius:14px;padding:20px 22px;cursor:pointer;display:flex;align-items:center;gap:14px;font-family:inherit;transition:.15s;box-shadow:0 6px 24px rgba(74,14,23,.3);" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">
         <div style="width:46px;height:46px;border-radius:12px;background:rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;flex-shrink:0;"><i class="ti ti-plus" style="font-size:22px;color:#fff;"></i></div>
-        <div style="text-align:right;"><div style="font-size:15px;font-weight:900;color:#fff;">تسجيل طلب جديد</div><div style="font-size:11px;color:rgba(255,255,255,.7);margin-top:2px;">إنشاء أمر تشغيل جديد</div></div>
+        <div style="text-align:right;"><div style="font-size:15px;font-weight:900;color:#fff;">تسجيل طلب</div><div style="font-size:11px;color:rgba(255,255,255,.7);margin-top:2px;">إنشاء أمر تشغيل جديد</div></div>
       </button>
       <button onclick="nav('quote')" style="background:linear-gradient(135deg,#78350F 0%,#C89A4A 100%);color:#fff;border:none;border-radius:14px;padding:20px 22px;cursor:pointer;display:flex;align-items:center;gap:14px;font-family:inherit;transition:.15s;box-shadow:0 6px 24px rgba(120,53,15,.25);" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">
         <div style="width:46px;height:46px;border-radius:12px;background:rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;flex-shrink:0;"><i class="ti ti-receipt-2" style="font-size:22px;color:#fff;"></i></div>
@@ -1785,7 +1783,7 @@ function buildQuotePage(){
             <datalist id="q-cl-list">${cArr.map(c=>`<option value="${c.name}">`).join('')}</datalist>
             <input id="q-client" list="q-cl-list" placeholder="اسم الشركة أو العميل" oninput="onClientInputQuote(this.value)" autocomplete="off"/>
           </div>
-          <div class="fg"><label>رقم الجوال * <span style="color:#EF4444">(إلزامي)</span></label><input id="q-phone" inputmode="tel" placeholder="05XXXXXXXX"/></div>
+          <div class="fg"><label>رقم الجوال *</label><input id="q-phone" inputmode="tel" placeholder="05XXXXXXXX"/></div>
         </div>
       </div>
       <!-- Quote Details Card -->
@@ -2028,7 +2026,7 @@ function getQuoteData(){
 async function saveQuoteToDb(){
   const data=getQuoteData();
   if(!data.client){toast('يرجى تحديد العميل');return;}
-  if(!data.phone||!isValidSaudiPhone(data.phone)){toast('⚠️ رقم الجوال إلزامي ويجب أن يكون رقم سعودي صحيح (05XXXXXXXX)');return;}
+  if(!data.phone||!isValidSaudiPhone(data.phone)){toast('⚠️ يرجى إدخال رقم الجوال ويجب أن يكون رقم سعودي صحيح (05XXXXXXXX)');return;}
   if(!data.lines.length){toast('يرجى إضافة بند واحد على الأقل');return;}
   showSaving('جاري الحفظ...');
   if(window._editingQuoteKey){
@@ -2285,7 +2283,7 @@ function renderA4Quote(data,key=''){
 async function convertQuoteToOrder(){
   const data=getQuoteData();
   if(!data.client){toast('يرجى تحديد العميل أولاً');return;}
-  if(!data.phone||!isValidSaudiPhone(data.phone)){toast('⚠️ رقم الجوال إلزامي ويجب أن يكون رقم سعودي صحيح (05XXXXXXXX)');return;}
+  if(!data.phone||!isValidSaudiPhone(data.phone)){toast('⚠️ يرجى إدخال رقم الجوال ويجب أن يكون رقم سعودي صحيح (05XXXXXXXX)');return;}
   if(!data.lines.length){toast('يرجى إضافة بنود للعرض');return;}
   showSaving('جاري الحفظ...');
   const res=await fbPush('standalone_quotes',data);
@@ -2328,7 +2326,7 @@ async function convertSavedQuoteToOrder(key,preloadedData=null){
         </div>
       </div>
       <div class="fg"><label>الأولوية</label><select id="co-priority"><option>عادية</option><option>متوسطة</option><option>عاجلة</option></select></div>
-      <div class="fg"><label>تاريخ التسليم</label><input type="datetime-local" id="co-deadline"/></div>
+      <div class="fg"><label>تاريخ التسليم *</label><input type="datetime-local" id="co-deadline" required/></div>
       <div class="fg"><label>مسؤول التصميم</label><select id="co-design"><option value="none">❌ بدون تصميم</option>${dw.map(w=>`<option value="${w.uname}">${w.name}</option>`).join('')}</select></div>
       <div class="fg"><label>مسؤول الطباعة</label><select id="co-print"><option value="none">❌ بدون طباعة</option>${pw.map(w=>`<option value="${w.uname}">${w.name}</option>`).join('')}</select></div>
       <div class="fg"><label>مسؤول الورشة</label><select id="co-workshop"><option value="none">❌ بدون ورشة</option>${ww.map(w=>`<option value="${w.uname}">${w.name}</option>`).join('')}</select></div>
@@ -2353,10 +2351,11 @@ async function finalizeConvertToOrder(quoteKey){
   const phone=document.getElementById('co-phone').value.trim();
   const priority=document.getElementById('co-priority').value;
   const deadline=document.getElementById('co-deadline').value||'—';
+  if(!document.getElementById('co-deadline').value){toast('⚠️ يرجى تحديد تاريخ التسليم');return;}
   const dU=document.getElementById('co-design').value;
   const pU=document.getElementById('co-print').value;
   const wU=document.getElementById('co-workshop').value;
-  if(!phone){toast('⚠️ رقم الجوال إلزامي');return;}
+  if(!phone){toast('⚠️ يرجى إدخال رقم الجوال');return;}
   if(!isValidSaudiPhone(phone)){toast('⚠️ رقم الجوال يجب أن يكون رقم سعودي صحيح (05XXXXXXXX)');return;}
   if(dU==='none'&&pU==='none'&&wU==='none'){toast('⚠️ يجب اختيار قسم واحد على الأقل');return;}
   const q=standaloneQuotes[quoteKey]||await fbGet(`standalone_quotes/${quoteKey}`);
@@ -2921,13 +2920,13 @@ function buildAddForm(isUrgentQuick=false){
       <div class="card-header"><span class="card-title"><i class="ti ti-user"></i> بيانات العميل والطلب</span></div>
       <div class="form-grid">
         <div class="fg"><label>اسم العميل / الجهة *</label><input id="fc" list="cl-list" oninput="onClientInput(this.value)" autocomplete="off" placeholder="اسم الشركة أو العميل"/></div>
-        <div class="fg"><label>رقم الجوال * <span style="color:#EF4444">(إلزامي)</span></label>
+        <div class="fg"><label>رقم الجوال *</label>
           <div style="display:flex;gap:6px;"><input id="fp" inputmode="tel" placeholder="05XXXXXXXX" maxlength="20" style="flex:1;" required/><button type="button" class="btn btn-whatsapp btn-sm" onclick="openWhatsapp(document.getElementById('fp').value)"><i class="ti ti-brand-whatsapp"></i></button></div>
         </div>
         <div class="fg"><label>الأولوية</label>
           <select id="fpr"><option value="عادية">عادية</option><option value="متوسطة">متوسطة</option><option value="عاجلة"${isUrgentQuick?' selected':''}>عاجلة</option></select>
         </div>
-        <div class="fg"><label>حالة الدفع * <span style="color:#EF4444">(إلزامي)</span></label>
+        <div class="fg"><label>حالة الدفع *</label>
           <select id="fpay" onchange="onPaymentChange(this.value)">
             <option value="">— اختر حالة الدفع —</option>
             <option value="تم الدفع">تم الدفع بالكامل</option>
@@ -2935,7 +2934,7 @@ function buildAddForm(isUrgentQuick=false){
             <option value="عند التسليم">عند التسليم</option>
           </select>
         </div>
-        <div class="fg"><label>تاريخ التسليم المتوقع</label><input type="datetime-local" id="fd"/></div>
+        <div class="fg"><label>تاريخ التسليم المتوقع *</label><input type="datetime-local" id="fd" required/></div>
       </div>
       <!-- Partial Payment Fields -->
       <div id="partial-payment-section" style="display:none;padding:0 20px 16px;">
@@ -3120,9 +3119,10 @@ async function submitOrder(isUrgentQuick=false){
   const _lines=(window._orderLines||[]).filter(l=>l.name.trim());
   if(!_lines.length){toast('⚠️ يجب إضافة بند واحد على الأقل');return;}
   const s=_lines[0].name.trim()||'خدمة إعلانية';
-  if(!phone){toast('⚠️ رقم الجوال إلزامي');return;}
+  if(!phone){toast('⚠️ يرجى إدخال رقم الجوال');return;}
   if(!isValidSaudiPhone(phone)){toast('⚠️ رقم الجوال يجب أن يكون رقم سعودي صحيح (05XXXXXXXX)');return;}
   if(!payStatus){toast('⚠️ يرجى تحديد وضع السداد');return;}
+  if(!document.getElementById('fd').value){toast('⚠️ يرجى تحديد تاريخ التسليم المتوقع');return;}
   if(payStatus==='دفع جزئي'){
     const _tot=document.getElementById('f-total-amount')?.value;
     const _paid=document.getElementById('f-paid-amount')?.value;
