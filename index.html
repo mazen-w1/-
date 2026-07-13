@@ -117,6 +117,9 @@ body{font-family:'Cairo','Segoe UI',Tahoma,Arial,sans-serif;background:var(--bg)
 .ni:hover i,.ni.active i{color:var(--maroon);}
 .ni .ni-lbl{font-size:12.5px;line-height:1.3;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .ni .badge-pill{margin-right:auto;background:#EF4444;color:#fff;font-size:8px;font-weight:800;border-radius:8px;padding:1px 5px;flex-shrink:0;}
+.floating-teamchat{position:fixed;bottom:24px;right:24px;width:52px;height:52px;border-radius:50%;background:var(--maroon);color:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(0,0,0,.28);cursor:pointer;z-index:9999;font-size:22px;transition:transform .15s;}
+.floating-teamchat:hover{background:var(--maroon-dark);transform:scale(1.06);}
+.floating-teamchat .badge-pill{font-size:10px;padding:2px 6px;}
 .sep{height:1px;background:var(--border-soft);margin:6px 16px;}
 .sidebar-footer{padding:16px;border-top:1px solid var(--border-soft);}
 .sidebar-cta{
@@ -1172,8 +1175,9 @@ function buildSidebar(){
   // Sidebar footer CTA
   const footer=document.getElementById('sidebar-footer');
   if(footer){
-    footer.innerHTML=niCompactIcon('teamchat','ti-messages','teamchat-badge');
+    footer.innerHTML='';
   }
+  renderFloatingTeamChat();
   updateRequestsBadgeSidebar();
   updateTeamChatBadge();
 }
@@ -1187,6 +1191,16 @@ function ni(p,ic,lbl,extra='',badgeId=''){
 function niCompactIcon(p,ic,badgeId){
   const badgeHtml=badgeId?`<span id="${badgeId}" class="badge-pill" style="position:absolute;top:-2px;left:-2px;"></span>`:'';
   return`<div style="position:relative;display:flex;justify-content:center;margin:8px 0;"><div class="ni" id="n-${p}" onclick="nav('${p}');closeSidebar()" title="Teem Rawaee" style="width:40px;height:40px;padding:0;justify-content:center;border-radius:50%;flex:none;"><div class="ni-icon" style="margin:0;"><i class="ti ${ic}"></i></div></div>${badgeHtml}</div>`;
+}
+function renderFloatingTeamChat(){
+  if(document.getElementById('floating-teamchat'))return;
+  const div=document.createElement('div');
+  div.id='floating-teamchat';
+  div.className='floating-teamchat';
+  div.title='Teem Rawaee';
+  div.onclick=function(){nav('teamchat');};
+  div.innerHTML='<i class="ti ti-messages"></i><span id="teamchat-badge" class="badge-pill" style="position:absolute;top:-4px;left:-4px;"></span>';
+  document.body.appendChild(div);
 }
 // ============================================================
 // NAV
