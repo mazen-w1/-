@@ -247,6 +247,13 @@ input[inputmode="decimal"],input[inputmode="numeric"],input[type="number"],input
 .stage-label{font-size:10px;}.stage-person{font-size:9px;margin-top:2px;}
 /* ============================================================ WF CARDS */
 .wf-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px;margin-bottom:20px;}
+.wf-kanban{display:grid;grid-template-columns:repeat(5,minmax(230px,1fr));gap:14px;margin-bottom:20px;align-items:start;}
+.wf-kanban-col{background:var(--bg);border:1px solid var(--border-soft);border-radius:var(--radius-lg);padding:10px;display:flex;flex-direction:column;gap:10px;min-width:0;}
+.wf-kanban-col-header{display:flex;align-items:center;justify-content:space-between;padding:2px 4px 8px;border-bottom:1px solid var(--border-soft);}
+.wf-kanban-count{font-size:12px;font-weight:800;color:var(--text-3);background:var(--surface);border-radius:20px;padding:2px 9px;}
+.wf-kanban-list{display:flex;flex-direction:column;gap:10px;max-height:70vh;overflow-y:auto;padding-left:2px;}
+@media (max-width:1100px){.wf-kanban{grid-template-columns:repeat(2,1fr);}}
+@media (max-width:640px){.wf-kanban{grid-template-columns:1fr;}}
 .wf-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;cursor:pointer;transition:.2s;position:relative;}
 .chat-unread-dot{position:absolute;top:9px;left:9px;width:10px;height:10px;border-radius:50%;background:#EF4444;box-shadow:0 0 0 2px #fff,0 0 0 3px #EF444455;z-index:2;animation:chatPulse 1.6s infinite;}
 .order-update-dot{position:absolute;top:9px;right:9px;width:10px;height:10px;border-radius:50%;background:#F59E0B;box-shadow:0 0 0 2px #fff,0 0 0 3px #F59E0B55;z-index:2;animation:chatPulse 1.6s infinite;}
@@ -1607,18 +1614,14 @@ async function dashGoto(mode){
 function buildWfGrid(tab){
   _currentWfTab=tab||'active';
   const arr=ordersArr();
-  const active=arr.filter(o=>o.currentDept!=='done');
-  const done=arr.filter(o=>o.currentDept==='done');
-  const cur=_currentWfTab;
-  const makeCards=list=>{
-    if(!list.length)return'<div style="color:var(--text-3);padding:30px;text-align:center;"><i class="ti ti-inbox" style="font-size:36px;display:block;margin-bottom:10px;"></i>لا توجد أعمال</div>';
-    return`<div class="wf-grid" id="wf-cards">${list.map(o=>{const pct=orderProgress(o);const col=progressColor(o);
-      const showQtActions=o.isQuickTask&&!o.incompleteClient&&o.currentDept!=='done'&&(cu.type==='admin'||cu.type==='receiver');
-      const qtActions=showQtActions?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;" onclick="event.stopPropagation();">
+  const cardHtml=o=>{
+    const pct=orderProgress(o);const col=progressColor(o);
+    const showQtActions=o.isQuickTask&&!o.incompleteClient&&o.currentDept!=='done'&&(cu.type==='admin'||cu.type==='receiver');
+    const qtActions=showQtActions?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;" onclick="event.stopPropagation();">
         <button class="btn btn-brand btn-xs" onclick="transferQuickTaskToOrder('${o._key}')"><i class="ti ti-transfer"></i> تحويل لأمر تشغيل</button>
         <button class="btn btn-xs" style="background:linear-gradient(135deg,#78350F,#C89A4A);color:#fff;" onclick="nav('quote')"><i class="ti ti-receipt-2"></i> إنشاء عرض سعر</button>
       </div>`:'';
-      return`<div class="wf-card" data-dept="${o.currentDept||'design'}" data-name="${(o.client||'').toLowerCase()}" data-key="${o._key}" onclick="wfCardClick(event,'${o._key}')">${hasUnreadChat(o)?'<span class="chat-unread-dot" title="رسالة جديدة في المحادثة"></span>':''}${hasOrderUpdate(o)?'<span class="order-update-dot" title="تم تحديث بيانات الطلب"></span>':''}<input type="checkbox" class="wf-check" data-key="${o._key}" onchange="toggleWfSelect('${o._key}',this.checked)"/><div class="wf-card-top">
+    return `<div class="wf-card" data-dept="${o.currentDept||'design'}" data-name="${(o.client||'').toLowerCase()}" data-key="${o._key}" onclick="wfCardClick(event,'${o._key}')">${hasUnreadChat(o)?'<span class="chat-unread-dot" title="رسالة جديدة في المحادثة"></span>':''}${hasOrderUpdate(o)?'<span class="order-update-dot" title="تم تحديث بيانات الطلب"></span>':''}<input type="checkbox" class="wf-check" data-key="${o._key}" onchange="toggleWfSelect('${o._key}',this.checked)"/><div class="wf-card-top">
         <div class="wf-card-id">${o.id||o._key} · ${orderDateTime(o)}${o.isQuickTask?'<span class="urgent-tag" style="margin-right:6px;font-size:9px;"><i class="ti ti-bolt"></i>سريعة</span>':''}</div>
         <div class="wf-card-name">${o.client}</div>
         <div class="wf-card-svc">${o.service}</div>
@@ -1627,31 +1630,35 @@ function buildWfGrid(tab){
         ${deadlineBadge(o.deadline)}
         ${qtActions}
       </div><div class="wf-card-prog"><div class="wf-card-fill" style="width:${pct}%;background:${col}"></div></div></div>`;
-    }).join('')}</div>`;
   };
-  const deptFilter=cur==='active'?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;">
-    <button class="btn btn-sm btn-out" onclick="filterWfDept('all')" style="border-color:var(--gold);color:var(--maroon);">الكل</button>
-    <button class="btn btn-sm btn-out" onclick="filterWfDept('design')"><span class="badge b-design">التصميم</span></button>
-    <button class="btn btn-sm btn-out" onclick="filterWfDept('external')"><span class="badge b-ext">خارجي</span></button>
-    <button class="btn btn-sm btn-out" onclick="filterWfDept('print')"><span class="badge b-print">الطباعة</span></button>
-    <button class="btn btn-sm btn-out" onclick="filterWfDept('workshop')"><span class="badge b-workshop">الورشة</span></button>
-  </div>`:'';
+  const colsDef=[
+    {key:'design',label:'التصميم',cls:'b-design',icon:'ti-pencil'},
+    {key:'print',label:'الطباعة',cls:'b-print',icon:'ti-printer'},
+    {key:'workshop',label:'الورشة',cls:'b-workshop',icon:'ti-tool'},
+    {key:'external',label:'تنفيذ خارجي',cls:'b-ext',icon:'ti-truck-delivery'},
+    {key:'done',label:'التسليم',cls:'b-done',icon:'ti-circle-check'}
+  ];
+  const buckets={design:[],print:[],workshop:[],external:[],done:[]};
+  arr.forEach(o=>{const d=o.currentDept||'design';(buckets[d]||buckets.design).push(o);});
+  const colsHtml=colsDef.map(c=>{
+    const list=buckets[c.key]||[];
+    const cardsHtml=list.length?list.map(cardHtml).join(''):`<div style="color:var(--text-3);padding:20px 10px;text-align:center;font-size:12px;"><i class="ti ti-inbox" style="font-size:26px;display:block;margin-bottom:6px;"></i>لا توجد أعمال</div>`;
+    return `<div class="wf-kanban-col">
+      <div class="wf-kanban-col-header"><span class="badge ${c.cls}"><i class="ti ${c.icon}"></i> ${c.label}</span><span class="wf-kanban-count">${list.length}</span></div>
+      <div class="wf-kanban-list">${cardsHtml}</div>
+    </div>`;
+  }).join('');
   document.getElementById('page-wf').innerHTML=`
     <div class="page-header"><div class="ptitle"><i class="ti ti-grid-dots"></i> متابعة سير العمل</div></div>
     <div id="wf-content">
       ${controlsRow(true,'wf-search','ابحث عن عميل أو رقم طلب...')}
-      <div class="tab-bar">
-        <button class="tab-btn ${cur==='active'?'active':''}" onclick="buildWfGrid('active')"><i class="ti ti-loader"></i> جارية (${active.length})</button>
-        <button class="tab-btn ${cur==='done'?'active':''}" onclick="buildWfGrid('done')"><i class="ti ti-circle-check"></i> مكتملة (${done.length})</button>
-        ${(cu.type==='admin'||cu.type==='receiver')?`<button class="tab-btn" id="wf-multi-btn" onclick="toggleWfMultiMode()" style="margin-right:auto;color:var(--maroon);"><i class="ti ti-checklist"></i> تحديد</button>`:''}
-      </div>
+      ${(cu.type==='admin'||cu.type==='receiver')?`<div style="display:flex;justify-content:flex-end;margin-bottom:10px;"><button class="tab-btn" id="wf-multi-btn" onclick="toggleWfMultiMode()" style="color:var(--maroon);"><i class="ti ti-checklist"></i> تحديد</button></div>`:''}
       <div id="bulk-bar"><span id="bulk-count">0 محدد</span>
         <button class="btn btn-sm" style="background:#fff;color:var(--maroon);padding:6px 14px;" onclick="bulkAdvanceSelected()"><i class="ti ti-arrow-left"></i> نقل للتالي</button>
         <button class="btn btn-red btn-sm" style="padding:6px 14px;" onclick="bulkDeleteSelected()"><i class="ti ti-trash"></i> حذف</button>
         <button class="btn btn-sm" style="background:rgba(255,255,255,.15);color:#fff;padding:6px 14px;" onclick="toggleWfMultiMode()"><i class="ti ti-x"></i> إلغاء</button>
       </div>
-      ${deptFilter}
-      <div id="wf-cards-wrap">${cur==='active'?makeCards(active):makeCards(done)}</div>
+      <div id="wf-cards-wrap"><div id="wf-cards" class="wf-kanban">${colsHtml}</div></div>
     </div>`;
 }
 window._wfSelected=new Set();
