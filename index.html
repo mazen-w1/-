@@ -654,6 +654,48 @@ input[inputmode="decimal"],input[inputmode="numeric"],input[type="number"],input
 .btn-sm{padding:6px 11px!important;font-size:11px!important;border-radius:6px!important;}
 .btn-xs{padding:4px 8px!important;font-size:10px!important;border-radius:5px!important;}
 .badge{padding:3px 10px!important;font-size:10px!important;}
+
+/* ================================================================
+   PREMIUM POLISH — تعميم تصميم "أداء الموظفين" على كل صفحات الموقع
+   ================================================================ */
+:root{ --radius-lg:18px; }
+
+.ptitle i{
+  background:linear-gradient(135deg, var(--gold), #B08D2B)!important;
+  color:#fff!important; width:42px!important; height:42px!important;
+  border-radius:14px!important; box-shadow:0 6px 16px rgba(212,175,55,.35)!important;
+  font-size:18px!important;
+}
+
+.card, .wf-card{ position:relative; }
+.card::before, .wf-card::before{
+  content:''; position:absolute; top:0; left:0; right:0; height:3px;
+  background:linear-gradient(90deg, var(--gold), #B08D2B);
+  opacity:0; transition:.25s; pointer-events:none;
+}
+.card:hover::before, .wf-card:hover::before{ opacity:1; }
+.card:hover{
+  box-shadow:0 14px 36px rgba(74,14,23,.13)!important;
+  border-color:rgba(212,175,55,.5)!important;
+  transform:translateY(-3px);
+  transition:.22s cubic-bezier(.22,1,.36,1);
+}
+.wf-card:hover{
+  box-shadow:0 16px 40px rgba(74,14,23,.14)!important;
+  transform:translateY(-5px)!important;
+}
+.stat-card:hover{
+  box-shadow:0 14px 34px rgba(74,14,23,.13)!important;
+  transform:translateY(-3px)!important;
+}
+
+.controls-row{
+  background:var(--surface-2); border:1px solid var(--border-soft);
+  border-radius:18px; padding:14px 16px; box-shadow:var(--shadow-sm);
+  margin-bottom:20px!important;
+}
+.search-bar{ transition:.2s; }
+.search-bar:focus-within{ border-color:var(--gold); box-shadow:0 0 0 3px var(--gold-soft); }
 </style>
 </head>
 <body>
