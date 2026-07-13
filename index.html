@@ -648,6 +648,12 @@ input[inputmode="decimal"],input[inputmode="numeric"],input[type="number"],input
   background:var(--e-burgundy)!important; color:#fff!important; border-color:var(--e-burgundy)!important;
   transform:translateY(-1px);
 }
+
+/* إصلاح عام: استعادة الأحجام الصغيرة لأزرار btn-sm/btn-xs في كل الموقع
+   (كانت الأحجام الكبيرة في .btn تطغى على .btn-sm/.btn-xs بسبب ترتيب القواعد) */
+.btn-sm{padding:6px 11px!important;font-size:11px!important;border-radius:6px!important;}
+.btn-xs{padding:4px 8px!important;font-size:10px!important;border-radius:5px!important;}
+.badge{padding:3px 10px!important;font-size:10px!important;}
 </style>
 </head>
 <body>
