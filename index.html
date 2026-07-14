@@ -719,6 +719,28 @@ input[inputmode="decimal"],input[inputmode="numeric"],input[type="number"],input
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script>
+(function(){
+  var firebaseConfig = {
+    apiKey: "AIzaSyBV5SJjpKDE18R-gjdNY7S7FH14o0TTl3g",
+    authDomain: "rawaee-alafkar.firebaseapp.com",
+    databaseURL: "https://rawaee-alafkar-default-rtdb.firebaseio.com",
+    projectId: "rawaee-alafkar",
+    storageBucket: "rawaee-alafkar.firebasestorage.app",
+    messagingSenderId: "807266380870",
+    appId: "1:807266380870:web:6b1491702ba67be6396e47"
+  };
+  firebase.initializeApp(firebaseConfig);
+  window._fbAuthReady = new Promise(function(resolve){
+    firebase.auth().onAuthStateChanged(function(user){
+      if(user) resolve(user);
+    });
+  });
+  firebase.auth().signInAnonymously().catch(function(e){ console.error("Anon auth failed", e); });
+})();
+</script>
 </head>
 <body>
 <div class="site-watermark" aria-hidden="true"><span>ر</span></div>
@@ -1120,7 +1142,10 @@ function logout(){localStorage.removeItem(SESSION_KEY);location.reload();}
 // FIREBASE
 // ============================================================
 async function fbReq(path,method='GET',data=null){
-  const r=await fetch(`${fbUrl}/${path}.json`,{method,headers:{'Content-Type':'application/json'},body:data?JSON.stringify(data):undefined});
+  if(window._fbAuthReady) await window._fbAuthReady;
+  let authQS='';
+  try{ if(firebase.auth().currentUser){ const tok=await firebase.auth().currentUser.getIdToken(); authQS='?auth='+tok; } }catch(e){}
+  const r=await fetch(`${fbUrl}/${path}.json${authQS}`,{method,headers:{'Content-Type':'application/json'},body:data?JSON.stringify(data):undefined});
   if(!r.ok)throw new Error('HTTP '+r.status);
   return r.json();
 }
