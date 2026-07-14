@@ -2109,34 +2109,46 @@ function buildQuotePage(){
     <!-- Archive -->
     <div class="page-header" style="margin-top:24px;"><div class="ptitle"><i class="ti ti-archive"></i> أرشيف عروض الأسعار</div></div>
     <div class="controls-row" style="flex-wrap:wrap;gap:10px;">
-      <div class="search-bar"><i class="ti ti-search"></i><input placeholder="بحث بالعميل أو رقم العرض..." oninput="filterQuotesArchive(this.value)"/></div>
+      <div class="search-bar"><i class="ti ti-search"></i><input id="q-arch-search" placeholder="بحث بالعميل أو رقم العرض..." oninput="filterQuotesArchiveCombined()"/></div>
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+        <label style="font-size:11px;color:var(--text-3);white-space:nowrap;">الحالة</label>
+        <select id="q-arch-status" onchange="filterQuotesArchiveCombined()" style="padding:6px 10px;border:1px solid var(--border);border-radius:8px;font-size:12px;">
+          <option value="">كل الحالات</option>
+          <option value="converted">محوّل لأمر عمل</option>
+          <option value="not">غير محوّل</option>
+        </select>
+      </div>
       <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
         <label style="font-size:11px;color:var(--text-3);white-space:nowrap;">من تاريخ</label>
-        <input type="date" id="q-arch-from" onchange="filterQuotesArchiveByDate()" style="padding:6px 10px;border:1px solid var(--border);border-radius:8px;"/>
+        <input type="date" id="q-arch-from" onchange="filterQuotesArchiveCombined()" style="padding:6px 10px;border:1px solid var(--border);border-radius:8px;"/>
         <label style="font-size:11px;color:var(--text-3);white-space:nowrap;">إلى تاريخ</label>
-        <input type="date" id="q-arch-to" onchange="filterQuotesArchiveByDate()" style="padding:6px 10px;border:1px solid var(--border);border-radius:8px;"/>
-        <button class="btn btn-out btn-sm" onclick="document.getElementById('q-arch-from').value='';document.getElementById('q-arch-to').value='';filterQuotesArchiveByDate();"><i class="ti ti-x"></i> مسح</button>
+        <input type="date" id="q-arch-to" onchange="filterQuotesArchiveCombined()" style="padding:6px 10px;border:1px solid var(--border);border-radius:8px;"/>
+        <button class="btn btn-out btn-sm" onclick="document.getElementById('q-arch-from').value='';document.getElementById('q-arch-to').value='';document.getElementById('q-arch-search').value='';document.getElementById('q-arch-status').value='';filterQuotesArchiveCombined();"><i class="ti ti-x"></i> مسح</button>
       </div>
-    </div>
-    <div class="card"><div class="tbl-wrap"><table id="quotes-archive-table">
+    </div><div class="card"><div class="tbl-wrap"><table id="quotes-archive-table">
       <thead><tr><th>العميل</th><th>رقم العرض</th><th>الإجمالي</th><th style="width:90px">التاريخ</th><th style="width:180px">إجراء</th></tr></thead>
       <tbody id="quotes-archive-tbody">${buildQuoteArchiveRows()}</tbody>
     </table></div></div>`;
   addQuoteLine();
 }
-function filterQuotesArchive(q){document.querySelectorAll('#quotes-archive-tbody tr').forEach(r=>{r.style.display=r.textContent.toLowerCase().includes(q.toLowerCase())?'':'none';});}
-function filterQuotesArchiveByDate(){
+function filterQuotesArchiveCombined(){
+  const q=(document.getElementById('q-arch-search')?.value||'').toLowerCase();
   const from=document.getElementById('q-arch-from')?.value||'';
   const to=document.getElementById('q-arch-to')?.value||'';
+  const status=document.getElementById('q-arch-status')?.value||'';
   document.querySelectorAll('#quotes-archive-tbody tr').forEach(r=>{
-    const d=r.getAttribute('data-date')||'';
-    if(!d){r.style.display='';return;}
     let show=true;
-    if(from&&d<from)show=false;
-    if(to&&d>to)show=false;
+    if(q && !r.textContent.toLowerCase().includes(q))show=false;
+    const d=r.getAttribute('data-date')||'';
+    if(from && d && d<from)show=false;
+    if(to && d && d>to)show=false;
+    const conv=r.getAttribute('data-converted')==='1';
+    if(status==='converted' && !conv)show=false;
+    if(status==='not' && conv)show=false;
     r.style.display=show?'':'none';
   });
 }
+
 function onClientInputQuote(val){
   if(!val)return;
   const ex=Object.values(clients).find(c=>(c.name||'').trim()===val.trim());
@@ -2151,7 +2163,7 @@ function buildQuoteArchiveRows(){
   if(!arr.length)return'<tr><td colspan="5" style="text-align:center;color:var(--text-3);padding:24px">لا يوجد عروض أسعار محفوظة</td></tr>';
   return arr.map(q=>{
     const conv=q.convertedToOrder;
-    return `<tr data-date="${q.date||''}" style="${conv?'background:#F0FDF4;':''}">
+    return `<tr data-date="${q.date||''}" data-converted="${conv?'1':'0'}" style="${conv?'background:#F0FDF4;':''}">
     <td><strong>${q.client}</strong></td>
     <td><span class="badge b-new">${q.ref||'—'}</span></td>
     <td><span class="badge b-proc" style="font-size:12px;">${Number(q.totalWithVat||q.total||0).toFixed(2)} ر.س</span></td>
