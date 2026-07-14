@@ -3184,6 +3184,7 @@ function openOrderTimelineView(key){
 function openOrderModal(key){
   const o=orders[key];if(!o)return;
   const t=cu.type,isMine=isMyOrder(o),canAct=t==='admin'||isMine;
+  const deptRestricted=['designer','printer','workshop'].includes(t);
   const nd=getNextDept(o);
   const _prevDept=getPrevDept(o);
   const revertBtn=(t==='admin'&&_prevDept)?`<button class="btn btn-out btn-sm" onclick="revertOrderToPrevDept('${key}')"><i class="ti ti-arrow-right"></i> إرجاع للمرحلة السابقة</button>`:'';
@@ -3217,7 +3218,7 @@ function openOrderModal(key){
               <span style="flex:1;">بند ${i+1}: ${it.name||'—'}</span>
               ${it.addedLater?`<span style="background:#C89A4A;color:#fff;font-size:9px;font-weight:800;padding:2px 7px;border-radius:20px;"><i class="ti ti-sparkles"></i> جديد</span>`:''}
               ${it.edited?`<span style="background:#2563EB;color:#fff;font-size:9px;font-weight:800;padding:2px 7px;border-radius:20px;"><i class="ti ti-pencil"></i> معدّل</span>`:''}
-              <button class="btn btn-out btn-xs" style="padding:2px 8px;" onclick="openAddItemModal('${key}',${i})" title="تعديل البند"><i class="ti ti-pencil"></i></button>
+              ${deptRestricted?'':`<button class="btn btn-out btn-xs" style="padding:2px 8px;" onclick="openAddItemModal('${key}',${i})" title="تعديل البند"><i class="ti ti-pencil"></i></button>`}
               ${chips?`<button class="btn btn-out btn-xs" style="padding:2px 8px;" onclick="downloadAllItemFiles('${key}',${i})" title="تنزيل كل مرفقات البند"><i class="ti ti-download"></i> تنزيل الكل</button>`:''}
             </div>
             ${it.addedLater?`<div style="font-size:10px;color:#92400E;margin-bottom:5px;">أُضيف بواسطة ${it.addedBy||'—'} بتاريخ ${(it.addedAt||'').split('T')[0]||'—'}</div>`:''}
@@ -3227,10 +3228,10 @@ function openOrderModal(key){
           </div>`;
         }).join('')}
       </div>
-      <button class="btn btn-out btn-xs" style="margin-top:8px;" onclick="openAddItemModal('${key}')"><i class="ti ti-square-rounded-plus"></i> إضافة بند جديد للطلب</button>
+      ${deptRestricted?'':`<button class="btn btn-out btn-xs" style="margin-top:8px;" onclick="openAddItemModal('${key}')"><i class="ti ti-square-rounded-plus"></i> إضافة بند جديد للطلب</button>`}
     </div>`:`
     <div class="di" style="grid-column:1/-1;border-top:1px solid var(--border-soft);padding-top:10px;">
-      <button class="btn btn-out btn-xs" onclick="openAddItemModal('${key}')"><i class="ti ti-square-rounded-plus"></i> إضافة بند جديد للطلب</button>
+      ${deptRestricted?'':`<button class="btn btn-out btn-xs" onclick="openAddItemModal('${key}')"><i class="ti ti-square-rounded-plus"></i> إضافة بند جديد للطلب</button>`}
     </div>`;
   const pLink=o.approvedPrintFile?`<a href="${o.approvedPrintFile}" download class="file-download-link"><i class="ti ti-printer"></i> ملف الطباعة</a>`:o.printTo==='none'?'—':'— بانتظار الاعتماد';
   const wLink=o.approvedWorkshopFile?`<a href="${o.approvedWorkshopFile}" download class="file-download-link"><i class="ti ti-box"></i> مخطط الورشة</a>`:o.workshopTo==='none'?'—':'— بانتظار الاعتماد';
