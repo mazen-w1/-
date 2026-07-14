@@ -717,6 +717,8 @@ input[inputmode="decimal"],input[inputmode="numeric"],input[type="number"],input
 .search-bar{ transition:.2s; }
 .search-bar:focus-within{ border-color:var(--gold); box-shadow:0 0 0 3px var(--gold-soft); }
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
 <body>
 <div class="site-watermark" aria-hidden="true"><span>ر</span></div>
@@ -1900,6 +1902,7 @@ function buildWfGrid(tab){
         <button class="btn btn-xs" style="background:linear-gradient(135deg,#78350F,#C89A4A);color:#fff;" onclick="nav('quote')"><i class="ti ti-receipt-2"></i> إنشاء عرض سعر</button>
       </div>`:'';
     return `<div class="wf-card" data-dept="${o.currentDept||'design'}" data-name="${(o.client||'').toLowerCase()}" data-key="${o._key}" onclick="wfCardClick(event,'${o._key}')">${hasUnreadChat(o)?'<span class="chat-unread-dot" title="رسالة جديدة في المحادثة"></span>':''}${hasOrderUpdate(o)?'<span class="order-update-dot" title="تم تحديث بيانات الطلب"></span>':''}<input type="checkbox" class="wf-check" data-key="${o._key}" onchange="toggleWfSelect('${o._key}',this.checked)"/><div class="wf-card-top">
+        <div style="display:flex;justify-content:center;margin-bottom:4px;"><div style="width:22px;height:22px;border-radius:50%;background:var(--maroon);display:flex;align-items:center;justify-content:center;position:relative;flex-shrink:0;box-shadow:0 1px 3px rgba(0,0,0,.25);"><span style="font-family:'Changa',sans-serif;font-weight:800;font-size:12px;line-height:1;color:rgba(255,255,255,.92);">ر</span><span style="position:absolute;top:3px;left:5px;width:1px;height:9px;background:#D4AF37;border-radius:1px;"></span></div></div>
         <div class="wf-card-id">${o.id||o._key} · ${orderDateTime(o)}${o.isQuickTask?'<span class="urgent-tag" style="margin-right:6px;font-size:9px;"><i class="ti ti-bolt"></i>سريعة</span>':''}</div>
         <div class="wf-card-name">${o.client}</div>
         <div class="wf-card-svc">${o.service}</div>
@@ -1914,13 +1917,37 @@ function buildWfGrid(tab){
     {key:'print',label:'الطباعة',cls:'b-print',icon:'ti-printer'},
     {key:'workshop',label:'الورشة',cls:'b-workshop',icon:'ti-tool'},
     {key:'external',label:'تنفيذ خارجي',cls:'b-ext',icon:'ti-truck-delivery'},
-    {key:'done',label:'التسليم',cls:'b-done',icon:'ti-circle-check'}
+    {key:'done',label:'التسليم',cls:'b-done',icon:'ti-circle-check'},
+    {key:'completed',label:'الطلبات المكتملة',cls:'b-done',icon:'ti-archive'}
   ];
-  const buckets={design:[],print:[],workshop:[],external:[],done:[]};
-  arr.forEach(o=>{const d=o.currentDept||'design';(buckets[d]||buckets.design).push(o);});
+  const buckets={design:[],print:[],workshop:[],external:[],done:[],completed:[]};
+  const _wfNow=Date.now();
+  arr.forEach(o=>{
+    const d=o.currentDept||'design';
+    if(d==='done'){
+      const ageH=(_wfNow-new Date(o.stageStartDate||o.date).getTime())/3600000;
+      if(ageH>=24) buckets.completed.push(o); else buckets.done.push(o);
+    } else {
+      (buckets[d]||buckets.design).push(o);
+    }
+  });
   const colsHtml=colsDef.map(c=>{
     const list=buckets[c.key]||[];
-    const cardsHtml=list.length?list.map(cardHtml).join(''):`<div style="color:var(--text-3);padding:20px 10px;text-align:center;font-size:12px;"><i class="ti ti-inbox" style="font-size:26px;display:block;margin-bottom:6px;"></i>لا توجد أعمال</div>`;
+    let cardsHtml;
+    if(c.key==='completed'){
+      const visible=list.filter(o=>((_wfNow-new Date(o.stageStartDate||o.date).getTime())/3600000)<48);
+      const hiddenCount=list.length-visible.length;
+      const expanded=window._wfCompletedExpanded===true;
+      const shown=expanded?list:visible;
+      cardsHtml=shown.length?shown.map(cardHtml).join(''):'<div style="color:var(--text-3);padding:20px 10px;text-align:center;font-size:12px;"><i class="ti ti-inbox" style="font-size:26px;display:block;margin-bottom:6px;"></i>لا توجد أعمال</div>';
+      if(!expanded && hiddenCount>0){
+        cardsHtml+='<div onclick="toggleCompletedWfColumn()" style="cursor:pointer;text-align:center;padding:10px;font-size:12px;color:var(--maroon);font-weight:700;border-top:1px dashed var(--border);">عرض '+hiddenCount+' طلب إضافي</div>';
+      } else if(expanded && list.length>visible.length){
+        cardsHtml+='<div onclick="toggleCompletedWfColumn()" style="cursor:pointer;text-align:center;padding:10px;font-size:12px;color:var(--text-3);border-top:1px dashed var(--border);">إخفاء الطلبات القديمة</div>';
+      }
+    } else {
+      cardsHtml=list.length?list.map(cardHtml).join(''):'<div style="color:var(--text-3);padding:20px 10px;text-align:center;font-size:12px;"><i class="ti ti-inbox" style="font-size:26px;display:block;margin-bottom:6px;"></i>لا توجد أعمال</div>';
+    }
     return `<div class="wf-kanban-col">
       <div class="wf-kanban-col-header"><span class="badge ${c.cls}"><i class="ti ${c.icon}"></i> ${c.label}</span><span class="wf-kanban-count">${list.length}</span></div>
       <div class="wf-kanban-list">${cardsHtml}</div>
@@ -1963,6 +1990,45 @@ function toggleWfMultiMode(){
     if(bar)bar.classList.remove('show');
   }
 }
+async function downloadQuotePDF(savedKey){
+  let data;
+  if(savedKey){
+    const q=standaloneQuotes[savedKey]||await fbGet(`standalone_quotes/${savedKey}`);
+    if(!q){toast('تعذر العثور على عرض السعر');return;}
+    data=q;
+  } else {
+    data=getQuoteData();
+    if(!data.client){toast('يرجى تحديد العميل');return;}
+    if(!data.lines.length){toast('يرجى إضافة بند واحد على الأقل');return;}
+  }
+  if(typeof html2canvas==='undefined'||!window.jspdf){toast('الأدوات اللازمة للتنزيل لم تُحمّل بعد، حاول مجدداً بعد ثوانٍ');return;}
+  showSaving('جاري تجهيز ملف PDF...');
+  try{
+    renderA4Quote(data,savedKey||'');
+    await new Promise(r=>setTimeout(r,500));
+    const el=document.getElementById('print-area');
+    const canvas=await html2canvas(el,{scale:2,useCORS:true});
+    const imgData=canvas.toDataURL('image/jpeg',0.95);
+    const {jsPDF}=window.jspdf;
+    const pdf=new jsPDF('p','mm','a4');
+    const pageW=210,pageH=297;
+    const imgW=pageW;
+    const imgH=canvas.height*imgW/canvas.width;
+    let heightLeft=imgH,pos=0;
+    pdf.addImage(imgData,'JPEG',0,pos,imgW,imgH);
+    heightLeft-=pageH;
+    while(heightLeft>0){
+      pos=heightLeft-imgH;
+      pdf.addPage();
+      pdf.addImage(imgData,'JPEG',0,pos,imgW,imgH);
+      heightLeft-=pageH;
+    }
+    pdf.save('عرض_سعر_'+(data.client||'')+'_'+(data.ref||'')+'.pdf');
+  }catch(e){console.error(e);toast('حدث خطأ أثناء إنشاء ملف PDF');}
+  hideSaving();
+}
+function fmtMoney(n){n=Number(n)||0;var s=n.toFixed(2);if(s.slice(-3)===".00")return s.slice(0,-3);return s;}
+function toggleCompletedWfColumn(){window._wfCompletedExpanded=!window._wfCompletedExpanded;buildWfGrid(_currentWfTab||'active');}
 function toggleWfSelect(key,checked){
   if(checked)window._wfSelected.add(key);else window._wfSelected.delete(key);
   const card=document.querySelector('.wf-card[data-key="'+key+'"]');
@@ -1987,8 +2053,12 @@ async function bulkDeleteSelected(){
 async function bulkAdvanceSelected(){
   if(!window._wfSelected.size){toast('لم يتم تحديد أي طلبات');return;}
   const deptOrder=['design','external','print','workshop','done'];
+  const selKeys=[...window._wfSelected];
+  const toMove=selKeys.filter(k=>orders[k]&&orders[k].currentDept!=='done');
+  const skipped=selKeys.length-toMove.length;
+  if(!toMove.length){toast('الطلبات المحددة موجودة في التسليم بالفعل ولا توجد مرحلة تالية لها');return;}
   showSaving('جاري نقل الطلبات...');
-  for(const key of window._wfSelected){
+  for(const key of toMove){
     const o=orders[key];if(!o)continue;
     const idx=deptOrder.indexOf(o.currentDept);
     const nd=idx>=0&&idx<deptOrder.length-1?deptOrder[idx+1]:'done';
@@ -1996,7 +2066,8 @@ async function bulkAdvanceSelected(){
   }
   await loadData();hideSaving();
   window._wfSelected=new Set();window._wfMultiMode=false;
-  toast('✓ تم نقل الطلبات للمرحلة التالية');buildWfGrid(_currentWfTab||'active');
+  toast(skipped>0?('✓ تم نقل '+toMove.length+' طلب (تم تجاهل '+skipped+' في التسليم)'):'✓ تم نقل الطلبات للمرحلة التالية');
+  buildWfGrid(_currentWfTab||'active');
 }
 function filterWf(q){document.querySelectorAll('.wf-card').forEach(c=>{c.style.display=c.textContent.toLowerCase().includes(q.toLowerCase())?'':'none';});}
 function filterWfDept(dept){document.querySelectorAll('.wf-card').forEach(c=>{c.style.display=(dept==='all'||c.getAttribute('data-dept')===dept)?'':'none';});}
@@ -2101,6 +2172,7 @@ function buildQuotePage(){
         </div>
         <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:16px;">
           <button class="btn btn-brand" onclick="saveAndPreviewQuote()"><i class="ti ti-eye"></i> معاينة وطباعة A4</button>
+          <button class="btn btn-teal" onclick="downloadQuotePDF()"><i class="ti ti-download"></i> تنزيل PDF</button>
           <button class="btn btn-gold" onclick="saveQuoteToDb()"><i class="ti ti-device-floppy"></i> ${window._editingQuoteKey?'حفظ التعديلات':'حفظ في السجلات'}</button>
           <button class="btn btn-purple" onclick="convertQuoteToOrder()"><i class="ti ti-transfer"></i> تحويل لأمر تشغيل</button>
         </div>
@@ -2166,11 +2238,12 @@ function buildQuoteArchiveRows(){
     return `<tr data-date="${q.date||''}" data-converted="${conv?'1':'0'}" style="${conv?'background:#F0FDF4;':''}">
     <td><strong>${q.client}</strong></td>
     <td><span class="badge b-new">${q.ref||'—'}</span></td>
-    <td><span class="badge b-proc" style="font-size:12px;">${Number(q.totalWithVat||q.total||0).toFixed(2)} ر.س</span></td>
+    <td><span class="badge b-proc" style="font-size:12px;">${fmtMoney(Number(q.totalWithVat||q.total||0))} ر.س</span></td>
     <td style="font-size:11px">${q.date}</td>
     <td><div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center;">
       ${conv?`<span class=\"badge\" style=\"background:#DCFCE7;color:#166534;font-weight:800;\"><i class=\"ti ti-circle-check\"></i> محوّل لأمر ${conv}</span>`:''}
       <button class="btn btn-out btn-xs" onclick="previewSavedQuote('${q._key}')"><i class="ti ti-eye"></i> معاينة</button>
+      <button class="btn btn-out btn-xs" onclick="downloadQuotePDF('${q._key}')"><i class="ti ti-download"></i> تنزيل PDF</button>
       <button class="btn btn-gold btn-xs" onclick="editQuote('${q._key}')"><i class="ti ti-edit"></i> تعديل</button>
       ${conv?'':`<button class=\"btn btn-purple btn-xs\" onclick=\"convertSavedQuoteToOrder('${q._key}')\"><i class=\"ti ti-transfer\"></i> أمر</button>`}
     </div></td>
@@ -2207,7 +2280,7 @@ function updateQuoteLine(id,f,v){
     l[f]=f==='lbl'?v:parseFloat(v)||0;
     if(f==='p'){
       const wtaxEl=document.getElementById('q-line-wtax-'+id);
-      if(wtaxEl)wtaxEl.value=(l.p*1.15).toFixed(2);
+      if(wtaxEl)wtaxEl.value=fmtMoney((l.p*1.15));
     }
     renderQuoteTotals();
   }
@@ -2218,7 +2291,7 @@ function updateQuoteLineFromTax(id,v){
     const wtax=parseFloat(v)||0;
     l.p=wtax/1.15;
     const pEl=document.getElementById('q-line-notax-'+id);
-    if(pEl)pEl.value=l.p.toFixed(2);
+    if(pEl)pEl.value=fmtMoney(l.p);
     renderQuoteTotals();
   }
 }
@@ -2228,8 +2301,8 @@ function renderQuoteLines(){
     <input placeholder="وصف البند" value="${l.lbl}" oninput="updateQuoteLine('${l.id}','lbl',this.value)"/>
     <input type="text" inputmode="decimal" id="q-line-qty-${l.id}" placeholder="الكمية" value="${l.q}" oninput="updateQuoteLine('${l.id}','q',this.value)" min="1" onfocus="this.select()"/>
     <input type="text" inputmode="decimal" id="q-line-notax-${l.id}" placeholder="السعر بدون ضريبة" value="${l.p}" oninput="updateQuoteLine('${l.id}','p',this.value)" min="0" onfocus="this.select()"/>
-    <input type="text" inputmode="decimal" id="q-line-wtax-${l.id}" placeholder="السعر شامل الضريبة" value="${(l.p*1.15).toFixed(2)}" oninput="updateQuoteLineFromTax('${l.id}',this.value)" min="0" onfocus="this.select()"/>
-    <div id="q-line-total-${l.id}" style="display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:var(--maroon);background:var(--surface-2);border:1.5px solid var(--border);border-radius:8px;padding:8px 6px;text-align:center;">${((l.q||0)*(l.p||0)*1.15).toFixed(2)}</div>
+    <input type="text" inputmode="decimal" id="q-line-wtax-${l.id}" placeholder="السعر شامل الضريبة" value="${fmtMoney((l.p*1.15))}" oninput="updateQuoteLineFromTax('${l.id}',this.value)" min="0" onfocus="this.select()"/>
+    <div id="q-line-total-${l.id}" style="display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:var(--maroon);background:var(--surface-2);border:1.5px solid var(--border);border-radius:8px;padding:8px 6px;text-align:center;">${fmtMoney(((l.q||0)*(l.p||0)*1.15))}</div>
     <label title="إرفاق صورة للبند" style="cursor:pointer;display:flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:8px;border:1px dashed var(--border);background:var(--bg);flex-shrink:0;transition:.12s;" onmouseover="this.style.borderColor='var(--gold)'" onmouseout="this.style.borderColor='var(--border)'">
       ${l.img?`<img src="${l.img}" style="width:28px;height:28px;object-fit:cover;border-radius:6px;"/>`:
       `<i class="ti ti-photo" style="font-size:14px;color:var(--text-3);"></i>`}
@@ -2250,7 +2323,7 @@ async function attachLineImage(id,files){
   hideSaving();
 }
 function renderQuoteTotals(){
-  const fmt=n=>Number(n||0).toFixed(2);
+  const fmt=n=>fmtMoney(Number(n||0));
   // ── Quantity is read fresh from its input (cheap, no precision risk — it's
   // always a whole/simple number) so a quantity edit always reflects immediately.
   // Price is kept from window._quoteLines at FULL precision — never re-parsed
@@ -2336,7 +2409,7 @@ function renderA4Quote(data,key=''){
   // 'ar-SA' locale formatting was producing Eastern Arabic-Indic digits with an
   // inconsistent number of decimal places and a decimal comma that reads like a
   // thousands separator — confusing on a printed invoice. This is unambiguous.
-  const fmt=n=>Number(n||0).toFixed(2);
+  const fmt=n=>fmtMoney(Number(n||0));
   const issueDate=data.date||new Date().toISOString().split('T')[0];
   const expiryDate=data.validity||'';
   const lines=(data.lines||[]);
@@ -2579,7 +2652,7 @@ async function convertSavedQuoteToOrder(key,preloadedData=null){
     <div class="modal-header"><span class="modal-title"><i class="ti ti-transfer"></i> تحويل لأمر تشغيل</span><button class="btn-close" onclick="closeModal('order-modal')">×</button></div>
     <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-md);padding:14px;margin-bottom:16px;">
       <div style="font-size:14px;font-weight:700;color:var(--maroon);">${data.client}</div>
-      <div style="font-size:12px;color:var(--text-2);margin-top:3px;">الإجمالي: <strong>${Number(data.totalWithVat||0).toFixed(2)} ر.س</strong></div>
+      <div style="font-size:12px;color:var(--text-2);margin-top:3px;">الإجمالي: <strong>${fmtMoney(Number(data.totalWithVat||0))} ر.س</strong></div>
     </div>
     <div style="display:flex;flex-direction:column;gap:12px;">
       <div class="fg"><label>رقم الجوال *</label><input id="co-phone" inputmode="tel" value="${data.phone||''}" placeholder="05XXXXXXXX"/></div>
@@ -3000,15 +3073,15 @@ function openUnpaidOrderSummary(key){
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
         <div style="background:var(--surface-2);border-radius:var(--radius-sm);padding:10px;text-align:center;border:1px solid var(--border);">
           <div style="font-size:11px;color:var(--text-3);">الإجمالي</div>
-          <div style="font-weight:800;margin-top:2px;">${total.toFixed(2)} ر.س</div>
+          <div style="font-weight:800;margin-top:2px;">${fmtMoney(total)} ر.س</div>
         </div>
         <div style="background:#F0FDF4;border-radius:var(--radius-sm);padding:10px;text-align:center;border:1px solid #DCFCE7;">
           <div style="font-size:11px;color:var(--text-3);">المدفوع</div>
-          <div style="font-weight:800;margin-top:2px;color:#16A34A;">${paid.toFixed(2)} ر.س</div>
+          <div style="font-weight:800;margin-top:2px;color:#16A34A;">${fmtMoney(paid)} ر.س</div>
         </div>
         <div style="background:#FEF2F2;border-radius:var(--radius-sm);padding:10px;text-align:center;border:1px solid #FEE2E2;">
           <div style="font-size:11px;color:var(--text-3);">المتبقي</div>
-          <div style="font-weight:800;margin-top:2px;color:#DC2626;">${remaining.toFixed(2)} ر.س</div>
+          <div style="font-weight:800;margin-top:2px;color:#DC2626;">${fmtMoney(remaining)} ر.س</div>
         </div>
       </div>
       <button class="btn btn-out btn-sm" style="width:100%;justify-content:center;" onclick="openOrderModal('${key}')"><i class="ti ti-file-text"></i> عرض تفاصيل الطلب كاملة</button>
@@ -3154,7 +3227,7 @@ function openOrderModal(key){
   }
   const paymentRow=canSeePayment?`<div class="di" style="grid-column:1/-1;border-top:1px solid var(--border-soft);padding-top:10px;">
     <span class="dk">💳 الموقف المالي</span>
-    <span class="dv">${paymentBadge(o.paymentStatus)||'—'} ${(o.paymentStatus==='تم الدفع'||o.paymentStatus==='دفع جزئي')?`<span style="font-size:12px;color:#065F46">(${Number(o.paidAmount||0).toFixed(2)} ر.س)</span>`:''}</span>
+    <span class="dv">${paymentBadge(o.paymentStatus)||'—'} ${(o.paymentStatus==='تم الدفع'||o.paymentStatus==='دفع جزئي')?`<span style="font-size:12px;color:#065F46">(${fmtMoney(Number(o.paidAmount||0))} ر.س)</span>`:''}</span>
   </div>`:'';
   const canLogMaintenance=['admin','receiver','workshop'].includes(t);
   const _lastVisit=(o.maintenanceVisits&&o.maintenanceVisits.length)?o.maintenanceVisits[o.maintenanceVisits.length-1]:null;const _lastVisitDate=_lastVisit?(typeof _lastVisit==='object'?_lastVisit.date:_lastVisit):null;const _visitsHistory=(o.maintenanceVisits||[]).slice().reverse().map(v=>{const vd=typeof v==='object'?v:{date:v,reason:'',photo:''};return `<div style="border:1px solid var(--border-soft);border-radius:8px;padding:8px;margin-top:4px;width:100%;"><div style="font-size:11px;color:var(--text-3);">${vd.date?new Date(vd.date).toLocaleDateString('ar-SA'):'—'}</div>${vd.reason?`<div style="font-size:13px;margin-top:4px;">${vd.reason}</div>`:''}${vd.photo?`<a href="${vd.photo}" target="_blank" style="font-size:12px;color:var(--maroon);display:inline-block;margin-top:4px;"><i class="ti ti-photo"></i> عرض الصورة</a>`:''}</div>`;}).join('');
@@ -3568,7 +3641,7 @@ function calcRemaining(){
   const total=parseFloat(normalizeDigits(document.getElementById('f-total-amount')?.value))||0;
   const paid=parseFloat(normalizeDigits(document.getElementById('f-paid-amount')?.value))||0;
   const rem=document.getElementById('f-remaining-amount');
-  if(rem)rem.value=Math.max(0,total-paid).toFixed(2);
+  if(rem)rem.value=Math.fmtMoney(max(0,total-paid));
 }
 function onPaymentChange(v){
   const partial=document.getElementById('partial-payment-section');
@@ -4030,7 +4103,7 @@ function buildRequestsPage(){
       <td><strong>${o.client}</strong></td>
       <td>${o.service||'—'}</td>
       <td><span class="badge ${o.paymentStatus==='دفع جزئي'?'b-proc':'b-new'}">${o.paymentStatus||'—'}</span></td>
-      <td>${o.totalAmount?Number(o.totalAmount).toFixed(2)+' ر.س':'—'}</td>
+      <td>${o.totalAmount?fmtMoney(Number(o.totalAmount))+' ر.س':'—'}</td>
     </tr>`).join('');
   document.getElementById('requests-content').innerHTML=`
     <div class="page-header"><div class="ptitle"><i class="ti ti-inbox"></i> صندوق طلبات المحاسبة</div></div>
