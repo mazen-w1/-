@@ -1453,7 +1453,7 @@ async function nav(p,skipHistory=false){
 }
 function navBack(){if(_navHistory.length===0)return;const prev=_navHistory.pop();nav(prev,true);}
 function backBtnHtml(){return`<div style="margin-bottom:16px;"><button class="btn btn-out btn-sm" onclick="navBack()"><i class="ti ti-arrow-right"></i> رجوع</button></div>`;}
-function refreshCurrentPage(){const p=_curPage;if(p==='add'||p==='request'||p==='quote')return;if(p==='teamchat'){loadAndRenderTeamChat();return;}if(p)_buildPage(p);}
+function refreshCurrentPage(){const p=_curPage;if(p==='add'||p==='request'||p==='quote')return;if(document.querySelector('.modal-overlay.open'))return;const ae=document.activeElement;if(ae&&(ae.tagName==='INPUT'||ae.tagName==='TEXTAREA'||ae.tagName==='SELECT'||ae.isContentEditable))return;if(p==='teamchat'){loadAndRenderTeamChat();return;}if(p){const sy=window.scrollY;_buildPage(p);window.scrollTo(0,sy);}}
 function updateRequestsBadgeSidebar(){
   const badge=document.getElementById('requests-badge');if(!badge)return;
   const pending=Object.values(submittedRequests).filter(r=>r.status==='pending');
@@ -2978,6 +2978,44 @@ async function reassignOrderDept(key){
   try{await fbPatch(`orders/${key}`,upd);await loadData();hideSaving();toast('✓ تم تغيير الموظف المسؤول');openOrderModal(key);}
   catch(e){hideSaving();toast('❌ فشل تحديث المسؤول');}
 }
+function openUnpaidOrderSummary(key){
+  const o=orders[key];if(!o)return;
+  const total=Number(o.totalAmount||0);
+  const paid=Number(o.paidAmount||0);
+  const remaining=Number(o.remainingAmount!=null?o.remainingAmount:Math.max(0,total-paid));
+  document.getElementById('order-modal-body').innerHTML=`
+    <div class="modal-header">
+      <div class="mh-title"><i class="ti ti-file-invoice"></i> ${o.id||key}</div>
+      <button class="modal-close" onclick="closeModal('order-modal')"><i class="ti ti-x"></i></button>
+    </div>
+    <div style="padding:16px;display:grid;gap:12px;">
+      <div>
+        <div style="font-weight:800;font-size:15px;">${o.client||'—'}</div>
+        <div style="font-size:12px;color:var(--text-3);margin-top:2px;">${(o.orderItems&&o.orderItems.length?o.orderItems[0].name:o.service)||'—'}</div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+        <span class="badge ${o.paymentStatus==='دفع جزئي'?'b-proc':'b-new'}">${o.paymentStatus||'—'}</span>
+        <span style="font-size:12px;color:var(--text-3);"><i class="ti ti-calendar"></i> ${o.date||'—'}</span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+        <div style="background:var(--surface-2);border-radius:var(--radius-sm);padding:10px;text-align:center;border:1px solid var(--border);">
+          <div style="font-size:11px;color:var(--text-3);">الإجمالي</div>
+          <div style="font-weight:800;margin-top:2px;">${total.toFixed(2)} ر.س</div>
+        </div>
+        <div style="background:#F0FDF4;border-radius:var(--radius-sm);padding:10px;text-align:center;border:1px solid #DCFCE7;">
+          <div style="font-size:11px;color:var(--text-3);">المدفوع</div>
+          <div style="font-weight:800;margin-top:2px;color:#16A34A;">${paid.toFixed(2)} ر.س</div>
+        </div>
+        <div style="background:#FEF2F2;border-radius:var(--radius-sm);padding:10px;text-align:center;border:1px solid #FEE2E2;">
+          <div style="font-size:11px;color:var(--text-3);">المتبقي</div>
+          <div style="font-weight:800;margin-top:2px;color:#DC2626;">${remaining.toFixed(2)} ر.س</div>
+        </div>
+      </div>
+      <button class="btn btn-out btn-sm" style="width:100%;justify-content:center;" onclick="openOrderModal('${key}')"><i class="ti ti-file-text"></i> عرض تفاصيل الطلب كاملة</button>
+    </div>
+  `;
+  openModal('order-modal');
+}
 function openOrderModal(key){
   const o=orders[key];if(!o)return;
   const t=cu.type,isMine=isMyOrder(o),canAct=t==='admin'||isMine;
@@ -3920,7 +3958,7 @@ function buildRequestsPage(){
       </td>
     </tr>`).join('');
   const makeUnpaidRows=(list)=>list.length===0?`<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--text-3)">لا توجد طلبات غير مسددة</td></tr>`
-    :list.map(o=>`<tr onclick="openOrderModal('${o._key}')" style="cursor:pointer">
+    :list.map(o=>`<tr onclick="openUnpaidOrderSummary('${o._key}')" style="cursor:pointer">
       <td><strong style="color:var(--maroon)">${o.id||o._key}</strong></td>
       <td><strong>${o.client}</strong></td>
       <td>${o.service||'—'}</td>
