@@ -1453,7 +1453,7 @@ async function nav(p,skipHistory=false){
 }
 function navBack(){if(_navHistory.length===0)return;const prev=_navHistory.pop();nav(prev,true);}
 function backBtnHtml(){return`<div style="margin-bottom:16px;"><button class="btn btn-out btn-sm" onclick="navBack()"><i class="ti ti-arrow-right"></i> رجوع</button></div>`;}
-function refreshCurrentPage(){const p=_curPage;if(p==='add'||p==='request'||p==='quote')return;if(document.querySelector('.modal-overlay.open'))return;const ae=document.activeElement;if(ae&&(ae.tagName==='INPUT'||ae.tagName==='TEXTAREA'||ae.tagName==='SELECT'||ae.isContentEditable))return;if(p==='teamchat'){loadAndRenderTeamChat();return;}if(p){const sy=window.scrollY;_buildPage(p);window.scrollTo(0,sy);}}
+function refreshCurrentPage(){const p=_curPage;if(p==='add'||p==='request'||p==='quote')return;if(document.querySelector('.modal-overlay.open'))return;if(window._wfSelected&&window._wfSelected.size>0)return;const ae=document.activeElement;if(ae&&(ae.tagName==='INPUT'||ae.tagName==='TEXTAREA'||ae.tagName==='SELECT'||ae.isContentEditable))return;if(p==='teamchat'){loadAndRenderTeamChat();return;}if(p){const sy=window.scrollY;_buildPage(p);window.scrollTo(0,sy);}}
 function updateRequestsBadgeSidebar(){
   const badge=document.getElementById('requests-badge');if(!badge)return;
   const pending=Object.values(submittedRequests).filter(r=>r.status==='pending');
