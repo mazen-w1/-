@@ -3016,6 +3016,30 @@ function openUnpaidOrderSummary(key){
   `;
   openModal('order-modal');
 }
+function openOrderQuickView(key){
+  const o=orders[key];if(!o)return;
+  const total=Number(o.totalAmount||0);
+  const paid=Number(o.paidAmount||0);
+  const remaining=Number(o.remainingAmount!=null?o.remainingAmount:Math.max(0,total-paid));
+  const svc=(o.orderItems&&o.orderItems.length?o.orderItems[0].name:o.service)||'—';
+  document.getElementById('order-modal-body').innerHTML=
+    '<div class="modal-header"><div class="mh-title"><i class="ti ti-file-invoice"></i> '+(o.id||key)+'</div>'+
+    '<button class="modal-close" onclick="closeModal(\'order-modal\')"><i class="ti ti-x"></i></button></div>'+
+    '<div style="padding:16px;display:grid;gap:12px;">'+
+    '<div><div style="font-weight:800;font-size:15px;">'+(o.client||'—')+'</div>'+
+    '<div style="font-size:12px;color:var(--text-3);margin-top:2px;">'+svc+'</div></div>'+
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">'+
+    deptBadge(o.currentDept)+(o.paymentStatus?paymentBadge(o.paymentStatus):'')+
+    '<span style="font-size:12px;color:var(--text-3);"><i class="ti ti-calendar"></i> '+(o.date||'—')+'</span></div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">'+
+    '<div style="background:var(--surface-2);border-radius:var(--radius-sm);padding:10px;text-align:center;border:1px solid var(--border);"><div style="font-size:11px;color:var(--text-3);">الإجمالي</div><div style="font-weight:800;margin-top:2px;">'+total.toFixed(2)+' ر.س</div></div>'+
+    '<div style="background:#F0FDF4;border-radius:var(--radius-sm);padding:10px;text-align:center;border:1px solid #DCFCE7;"><div style="font-size:11px;color:var(--text-3);">المدفوع</div><div style="font-weight:800;margin-top:2px;color:#16A34A;">'+paid.toFixed(2)+' ر.س</div></div>'+
+    '<div style="background:#FEF2F2;border-radius:var(--radius-sm);padding:10px;text-align:center;border:1px solid #FEE2E2;"><div style="font-size:11px;color:var(--text-3);">المتبقي</div><div style="font-weight:800;margin-top:2px;color:#DC2626;">'+remaining.toFixed(2)+' ر.س</div></div>'+
+    '</div>'+
+    '<button class="btn btn-out btn-sm" style="width:100%;justify-content:center;" onclick="openOrderModal(\''+key+'\')"><i class="ti ti-file-text"></i> عرض تفاصيل الطلب كاملة</button>'+
+    '</div>';
+  openModal('order-modal');
+}
 function openOrderModal(key){
   const o=orders[key];if(!o)return;
   const t=cu.type,isMine=isMyOrder(o),canAct=t==='admin'||isMine;
@@ -3752,7 +3776,7 @@ function buildTimelinePage(){
       if(o.currentDept==='done')return`<td><span class="badge b-done" style="font-size:9px">✓</span></td>`;
       return`<td style="color:var(--text-3);font-size:10px">—</td>`;
     }).join('');
-    return`<tr onclick="openOrderModal('${o._key}')" style="cursor:pointer"><td><strong style="color:var(--maroon)">${o.id||o._key}</strong></td><td>${o.client}</td><td>${deptBadge(o.currentDept)}</td>${stagesCells}<td>${preciseTimeBadge(preciseStageHours)}</td><td><div style="width:80px;background:var(--border);border-radius:4px;height:6px"><div style="width:${pct}%;background:${col};height:6px;border-radius:4px"></div></div></td></tr>`;
+    return`<tr onclick="openOrderQuickView('${o._key}')" style="cursor:pointer"><td><strong style="color:var(--maroon)">${o.id||o._key}</strong></td><td>${o.client}</td><td>${deptBadge(o.currentDept)}</td>${stagesCells}<td>${preciseTimeBadge(preciseStageHours)}</td><td><div style="width:80px;background:var(--border);border-radius:4px;height:6px"><div style="width:${pct}%;background:${col};height:6px;border-radius:4px"></div></div></td></tr>`;
   };
   const thead=`<thead><tr><th style="width:70px">الطلب</th><th style="width:110px">العميل</th><th style="width:90px">المرحلة</th>${headerCols}<th style="width:90px">الحالي</th><th style="width:90px">الإنجاز</th></tr></thead>`;
   const activeRows=activeArr.map(makeRow).join('');
@@ -4123,7 +4147,7 @@ function buildEmpPage(){
           </div>
           ${recent.length?`<div style="border-top:1px solid var(--border-soft);padding:10px 18px 14px;">
             <div style="font-size:9px;color:var(--text-3);font-weight:800;letter-spacing:.7px;margin-bottom:7px;text-transform:uppercase;">آخر الطلبات</div>
-            ${recent.map(o=>`<div onclick="openOrderModal('${o._key}')" style="display:flex;align-items:center;justify-content:space-between;padding:6px 8px;border-radius:7px;cursor:pointer;margin-bottom:3px;transition:.12s;" onmouseover="this.style.background='var(--gold-soft)'" onmouseout="this.style.background=''">
+            ${recent.map(o=>`<div onclick="openOrderQuickView('${o._key}')" style="display:flex;align-items:center;justify-content:space-between;padding:6px 8px;border-radius:7px;cursor:pointer;margin-bottom:3px;transition:.12s;" onmouseover="this.style.background='var(--gold-soft)'" onmouseout="this.style.background=''">
               <div style="min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><span style="font-size:11px;font-weight:800;color:var(--maroon)">${o.id||o._key}</span>&nbsp;<span style="font-size:10px;color:var(--text-2)">${o.client}</span>&nbsp;<span style="font-size:9px;color:var(--text-3)">${o.date||'—'}</span></div>
               <div style="display:flex;gap:4px;align-items:center;flex-shrink:0;margin-right:8px;">${deptBadge(o.currentDept)}&nbsp;${timeBadge(hoursAgo(o.stageStartDate||o.date))}</div>
             </div>`).join('')}
@@ -4148,7 +4172,7 @@ function openEmpDetail(uname){
   else empOrds=arr.filter(o=>o.createdByUname===uname);
   const active=empOrds.filter(o=>o.currentDept!=='done');
   const done=empOrds.filter(o=>o.currentDept==='done');
-  const renderRow=o=>`<div onclick="closeModal('order-modal');setTimeout(()=>openOrderModal('${o._key}'),50)" style="display:flex;align-items:center;justify-content:space-between;padding:9px 14px;border-radius:8px;cursor:pointer;margin-bottom:4px;border:1px solid var(--border-soft);" onmouseover="this.style.background='var(--gold-soft)'" onmouseout="this.style.background=''">
+  const renderRow=o=>`<div onclick="closeModal('order-modal');setTimeout(()=>openOrderQuickView('${o._key}'),50)" style="display:flex;align-items:center;justify-content:space-between;padding:9px 14px;border-radius:8px;cursor:pointer;margin-bottom:4px;border:1px solid var(--border-soft);" onmouseover="this.style.background='var(--gold-soft)'" onmouseout="this.style.background=''">
     <div style="flex:1;min-width:0;">
       <span style="font-size:12px;font-weight:800;color:var(--maroon)">${o.id||o._key}</span>
       <span style="font-size:11px;color:var(--text-2);margin-right:8px;">${o.client}</span>
