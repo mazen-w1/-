@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>تتبع الطلب — روائع الأفكار</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/2.44.0/tabler-icons.min.css">
+  <style>
+    :root {
+      --maroon: #4A0E17;
+      --maroon-dark: #320A10;
+      --maroon-mid: #631420;
+      --gold: #D4AF37;
+      --gold-light: #F0D060;
+      --gold-soft: rgba(212,175,55,0.12);
+      --bg: #F5F3F0;
+      --surface: #FFFFFF;
+      --surface-2: #FDFBF7;
+      --border: #E8E2D9;
+      --border-soft: #F0EBE3;
+      --text-1: #1A0F0A;
+      --text-2: #5C4A3A;
+      --text-3: #9B8878;
+      --shadow-sm: 0 1px 3px rgba(74,14,23,.06), 0 1px 2px rgba(0,0,0,.04);
+      --shadow-md: 0 4px 16px rgba(74,14,23,.08), 0 2px 6px rgba(0,0,0,.04);
+      --shadow-lg: 0 10px 40px rgba(74,14,23,.12), 0 4px 12px rgba(0,0,0,.06);
+      --radius-sm: 8px;
+      --radius-md: 12px;
+      --radius-lg: 16px;
+      --radius-xl: 20px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Cairo', 'Segoe UI', Tahoma, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text-1);
+      line-height: 1.6;
+    }
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    .header {
+      background: linear-gradient(135deg, var(--maroon) 0%, var(--maroon-dark) 100%);
+      color: #fff;
+      padding: 30px 24px;
+      border-radius: var(--radius-lg);
+      margin-bottom: 30px;
+      box-shadow: var(--shadow-lg);
+      text-align: center;
+    }
+    .header h1 {
+      font-size: 28px;
+      margin-bottom: 8px;
+      font-weight: 900;
+    }
+    .header p {
+      opacity: 0.9;
+      font-size: 14px;
+    }
+    .order-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      margin-bottom: 20px;
+      box-shadow: var(--shadow-sm);
+    }
+    .order-header {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin-bottom: 24px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid var(--border-soft);
+    }
+    .order-info {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .order-info-label {
+      color: var(--text-3);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.4px;
+      text-transform: uppercase;
+    }
+    .order-info-value {
+      color: var(--text-1);
+      font-size: 16px;
+      font-weight: 600;
+    }
+    .timeline {
+      margin-bottom: 24px;
+    }
+    .timeline-title {
+      font-size: 14px;
+      font-weight: 800;
+      color: var(--maroon);
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .timeline-item {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 12px;
+      padding: 12px;
+      background: var(--surface-2);
+      border-radius: var(--radius-md);
+      border-left: 4px solid var(--maroon-mid);
+    }
+    .timeline-dot {
+      width: 24px;
+      height: 24px;
+      background: var(--maroon);
+      border-radius: 50%;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      font-size: 12px;
+    }
+    .timeline-item.active .timeline-dot {
+      background: var(--gold);
+      color: var(--maroon);
+    }
+    .timeline-content {
+      flex: 1;
+    }
+    .timeline-label {
+      font-weight: 700;
+      color: var(--text-1);
+      margin-bottom: 4px;
+    }
+    .timeline-date {
+      font-size: 12px;
+      color: var(--text-3);
+    }
+    .items-section {
+      margin-top: 24px;
+    }
+    .items-title {
+      font-size: 14px;
+      font-weight: 800;
+      color: var(--maroon);
+      margin-bottom: 12px;
+    }
+    .items-list {
+      display: grid;
+      gap: 8px;
+    }
+    .item {
+      padding: 12px;
+      background: var(--surface-2);
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border-soft);
+      font-size: 13px;
+    }
+    .error {
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      color: #991b1b;
+      padding: 16px;
+      border-radius: var(--radius-lg);
+      text-align: center;
+    }
+    .loading {
+      text-align: center;
+      padding: 40px 20px;
+      color: var(--text-3);
+    }
+    .spinner {
+      display: inline-block;
+      width: 24px;
+      height: 24px;
+      border: 3px solid var(--border-soft);
+      border-top-color: var(--maroon);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin-bottom: 12px;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    .app-header {
+      background: var(--maroon);
+      height: 64px;
+      padding: 0 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      box-shadow: 0 2px 20px rgba(0, 0, 0, 0.25);
+      border-bottom: 2px solid rgba(212, 175, 55, 0.3);
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .logo-box {
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 2px solid rgba(255, 255, 255, 0.2);
+      flex-shrink: 0;
+    }
+    .logo-box svg {
+      width: 26px;
+      height: 26px;
+    }
+    .brand-text {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .brand-ar {
+      font-size: 15px;
+      font-weight: 800;
+      color: #fff;
+      line-height: 1.2;
+    }
+    .brand-en {
+      font-size: 10px;
+      color: var(--maroon-mid);
+      font-weight: 600;
+      letter-spacing: 0.5px;
+    }
+    .home-link {
+      color: #fff;
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      transition: opacity 0.15s;
+    }
+    .home-link:hover {
+      opacity: 0.9;
+    }
+    .page-title {
+      color: rgba(255, 255, 255, 0.8);
+      font-size: 13px;
+      font-weight: 600;
+      margin-left: auto;
+    }
+    @media (max-width: 768px) {
+      .app-header {
+        padding: 0 14px;
+      }
+      .brand-ar {
+        font-size: 13px;
+      }
+      .brand-en {
+        display: none;
+      }
+      .page-title {
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-header">
+    <a href="./" class="home-link">
+      <div class="logo-box">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 60" width="32" height="32">
+          <!-- ذهبي خط رفيع متدرج -->
+          <rect x="18" y="8" width="2.5" height="32" fill="#D4AF37" opacity="0.8" rx="1.25"/>
+          <!-- حرف ر بخط Changa -->
+          <text x="35" y="42" font-family="Changa, Arial" font-size="38" font-weight="800" fill="#fff" text-anchor="middle">ر</text>
+        </svg>
+      </div>
+      <div class="brand-text">
+        <div class="brand-ar">روائع الأفكار الإعلانية</div>
+        <div class="brand-en">Rawaee Al-Afkar</div>
+      </div>
+    </a>
+    <!-- نقطة ذهبية جانب الاسم -->
+    <style>
+      .brand-ar::before {
+        content: '•';
+        color: #D4AF37;
+        margin-left: 6px;
+        font-size: 12px;
+      }
+    </style>
+    <div class="page-title">تتبع الطلب</div>
+  </div>
+
+  <div class="container">
+    <div id="content">
+      <div class="loading">
+        <div class="spinner"></div>
+        <p>جاري تحميل بيانات الطلب...</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js"></script>
+
+  <script>
+    // Firebase config
+    const firebaseConfig = {
+      apiKey: "AIzaSyBQz6BpBJzMbZKPIVN4vQvZGFl50AEp93A",
+      authDomain: "rawaee-alafkar.firebaseapp.com",
+      projectId: "rawaee-alafkar",
+      databaseURL: "https://rawaee-alafkar-default-rtdb.firebaseio.com",
+      storageBucket: "rawaee-alafkar.appspot.com",
+      messagingSenderId: "1047181597829",
+      appId: "1:1047181597829:web:8c3c37e2ae31f16f849dd7"
+    };
+
+    const app = firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth(app);
+    const db = firebase.database(app);
+
+    const depts = {
+      'design': { name: 'التصميم', color: '#3B82F6' },
+      'approval': { name: 'الموافقة', color: '#F59E0B' },
+      'print': { name: 'الطباعة', color: '#10B981' },
+      'workshop': { name: 'الورشة', color: '#8B5CF6' },
+      'delivery': { name: 'التسليم', color: '#EC4899' },
+      'done': { name: 'مكتمل', color: '#059669' }
+    };
+
+    async function loadOrder() {
+      try {
+        // Sign in anonymously
+        const result = await auth.signInAnonymously();
+        const user = result.user;
+
+        // Get order ID from URL
+        const params = new URLSearchParams(window.location.search);
+        const orderId = params.get('id');
+
+        if (!orderId) {
+          showError('معرّف الطلب مفقود. الرجاء التحقق من الرابط.');
+          return;
+        }
+
+        // Fetch order data
+        const ref = db.ref(`orders/${orderId}`);
+        const snapshot = await ref.get();
+
+        if (!snapshot.exists()) {
+          showError('لم يتم العثور على الطلب. تحقق من معرّف الطلب.');
+          return;
+        }
+
+        const order = snapshot.val();
+        displayOrder(order, orderId);
+      } catch (err) {
+        showError(`حدث خطأ: ${err.message}`);
+      }
+    }
+
+    function displayOrder(order, orderId) {
+      const currentDept = order.currentDept || 'design';
+      const deptName = depts[currentDept]?.name || currentDept;
+      const allDepts = ['design', 'approval', 'print', 'workshop', 'delivery', 'done'];
+      const progress = (allDepts.indexOf(currentDept) + 1) / allDepts.length * 100;
+
+      let html = `
+        <div class="order-card">
+          <div class="order-header">
+            <div class="order-info">
+              <div class="order-info-label">رقم الطلب</div>
+              <div class="order-info-value">${escapeHtml(orderId)}</div>
+            </div>
+            <div class="order-info">
+              <div class="order-info-label">العميل</div>
+              <div class="order-info-value">${escapeHtml(order.client || '—')}</div>
+            </div>
+            <div class="order-info">
+              <div class="order-info-label">الخدمة</div>
+              <div class="order-info-value">${escapeHtml(order.service || '—')}</div>
+            </div>
+            <div class="order-info">
+              <div class="order-info-label">الحالة الحالية</div>
+              <div class="order-info-value">${deptName}</div>
+            </div>
+          </div>
+
+          <div style="margin-bottom: 24px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+              <span style="font-weight: 700; color: var(--text-1);">التقدم</span>
+              <span style="font-size: 12px; color: var(--text-3);">${Math.round(progress)}%</span>
+            </div>
+            <div style="width: 100%; height: 8px; background: var(--border-soft); border-radius: 4px; overflow: hidden;">
+              <div style="width: ${progress}%; height: 100%; background: linear-gradient(90deg, var(--maroon) 0%, var(--maroon-mid) 100%); transition: width 0.3s;"></div>
+            </div>
+          </div>
+
+          <div class="timeline">
+            <div class="timeline-title">
+              <i class="ti ti-route-2"></i>
+              مسار الطلب
+            </div>
+      `;
+
+      allDepts.forEach((dept, idx) => {
+        const isActive = allDepts.indexOf(currentDept) >= idx;
+        const isCurrentActive = currentDept === dept;
+        const deptInfo = depts[dept];
+
+        html += `
+          <div class="timeline-item ${isCurrentActive ? 'active' : ''}">
+            <div class="timeline-dot">${isActive ? '✓' : idx + 1}</div>
+            <div class="timeline-content">
+              <div class="timeline-label">${deptInfo.name}</div>
+              <div class="timeline-date">${isCurrentActive ? 'المرحلة الحالية' : isActive ? 'مكتملة' : 'قادمة'}</div>
+            </div>
+          </div>
+        `;
+      });
+
+      if (order.items && Array.isArray(order.items)) {
+        html += `
+          <div class="items-section">
+            <div class="items-title">
+              <i class="ti ti-list"></i>
+              البنود
+            </div>
+            <div class="items-list">
+        `;
+
+        order.items.forEach(item => {
+          html += `<div class="item">${escapeHtml(item.name || '—')} ${item.qty ? `(${item.qty})` : ''}</div>`;
+        });
+
+        html += `</div></div>`;
+      }
+
+      if (order.deadline) {
+        html += `
+          <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--border-soft);">
+            <div class="order-info">
+              <div class="order-info-label">موعد التسليم</div>
+              <div class="order-info-value">${escapeHtml(order.deadline)}</div>
+            </div>
+          </div>
+        `;
+      }
+
+      html += `</div>`;
+      document.getElementById('content').innerHTML = html;
+    }
+
+    function showError(message) {
+      document.getElementById('content').innerHTML = `<div class="error">${escapeHtml(message)}</div>`;
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // Load when page is ready
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', loadOrder);
+    } else {
+      loadOrder();
+    }
+  </script>
+</body>
+</html>
