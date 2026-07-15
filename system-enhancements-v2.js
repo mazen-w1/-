@@ -1,6 +1,7 @@
 // System Enhancements v2 - Financial & Production System
 // Advanced financial tracking, production workflow, and employee statistics
 
+console.log('🚀 System Enhancements v2 Loading...');
 (function() {
   'use strict';
 
