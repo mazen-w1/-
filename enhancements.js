@@ -53,7 +53,7 @@
                                                                                                                  border: none;
                                                                                                                        cursor: pointer;
                                                                                                                              font-size: 18px;
-                                                                                                                                   padding: 5px 10px;
+leftpadding: 5px 10px;
                                                                                                                                          color: #999;
                                                                                                                                                transition: all 0.3s ease;
                                                                                                                                                    `;
