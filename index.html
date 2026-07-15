@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+    <title>روائع الأفكار الإعلانية — النظام الداخلي v3</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #4A0E17 0%, #320A10 100%);
+            color: #333;
+            min-height: 100vh;
+        }
+
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+
+        header {
+            background: #4A0E17;
+            color: #EFE3CB;
+            padding: 20px;
+            text-align: center;
+            border-bottom: 3px solid #D4AF37;
+            margin-bottom: 30px;
+            border-radius: 8px;
+        }
+
+        header h1 { font-size: 28px; margin-bottom: 5px; }
+        header p { font-size: 14px; opacity: 0.9; }
+
+        .login-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 40px;
+        }
+
+        .login-card {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+            border-top: 4px solid #D4AF37;
+        }
+
+        .login-card h2 {
+            color: #4A0E17;
+            margin-bottom: 15px;
+            font-size: 20px;
+        }
+
+        .login-card p {
+            color: #666;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+
+        .login-card ul {
+            list-style: none;
+            margin-bottom: 20px;
+            padding-right: 20px;
+        }
+
+        .login-card li {
+            color: #666;
+            margin-bottom: 8px;
+            font-size: 13px;
+            position: relative;
+        }
+
+        .login-card li:before {
+            content: "✓";
+            color: #D4AF37;
+            font-weight: bold;
+            position: absolute;
+            right: 100%;
+            margin-right: 10px;
+        }
+
+        .btn {
+            display: inline-block;
+            background: #4A0E17;
+            color: white;
+            padding: 12px 30px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            width: 100%;
+            text-align: center;
+            transition: background 0.3s ease;
+            text-decoration: none;
+        }
+
+        .btn:hover {
+            background: #320A10;
+        }
+
+        .btn-secondary {
+            background: #D4AF37;
+            color: #4A0E17;
+        }
+
+        .btn-secondary:hover {
+            background: #c49a2e;
+        }
+
+        .features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 40px;
+        }
+
+        .feature-box {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .feature-box h3 {
+            color: #4A0E17;
+            margin-bottom: 10px;
+        }
+
+        .feature-box p {
+            color: #666;
+            font-size: 13px;
+        }
+
+        footer {
+            background: #320A10;
+            color: #EFE3CB;
+            text-align: center;
+            padding: 20px;
+            margin-top: 40px;
+            border-top: 2px solid #D4AF37;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            color: #4A0E17;
+            margin-bottom: 5px;
+            font-weight: 600;
+            font-size: 13px;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            font-family: Arial;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #D4AF37;
+            box-shadow: 0 0 5px rgba(212, 175, 55, 0.3);
+        }
+
+        .logo {
+            width: 60px;
+            height: 60px;
+            margin: 0 auto 15px;
+        }
+
+        .error-message {
+            color: #d32f2f;
+            font-size: 12px;
+            margin-top: 5px;
+            display: none;
+        }
+
+        .success-message {
+            color: #388e3c;
+            font-size: 12px;
+            margin-top: 5px;
+            display: none;
+        }
+
+        @media (max-width: 768px) {
+            .login-container {
+                grid-template-columns: 1fr;
+            }
+
+            header h1 {
+                font-size: 22px;
+            }
+
+            .container {
+                padding: 10px;
+            }
+        }
+
+        /* Logo SVG */
+        .logo-svg {
+            display: inline-block;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>• روائع الأفكار الإعلانية</h1>
+            <p>Rawaee Al-Afkar For Advertising</p>
+            <p style="font-size: 12px; margin-top: 10px;">بوابة الدخول الموحد للنظام الداخلي</p>
+        </header>
+
+        <div class="login-container">
+            <!-- بطاقة دخول المدير -->
+            <div class="login-card">
+                <h2>🔐 دخول المدير</h2>
+                <p>دخول خاص بمدير النظام للتحكم الكامل</p>
+                <ul>
+                    <li>إدارة جميع الأقسام</li>
+                    <li>الصلاحيات والمستخدمين</li>
+                    <li>التقارير والإحصائيات</li>
+                </ul>
+                <form id="admin-login-form">
+                    <div class="form-group">
+                        <label>اسم المستخدم</label>
+                        <input type="text" id="admin-username" placeholder="أدخل اسم المستخدم" required>
+                    </div>
+                    <div class="form-group">
+                        <label>كلمة المرور</label>
+                        <input type="password" id="admin-password" placeholder="أدخل كلمة المرور" required>
+                    </div>
+                    <button type="submit" class="btn">تسجيل الدخول</button>
+                    <div id="admin-error" class="error-message"></div>
+                </form>
+            </div>
+
+            <!-- بطاقة دخول الأقسام -->
+            <div class="login-card">
+                <h2>👥 دخول الأقسام</h2>
+                <p>خاص بأقسام الشركة (تصميم، طباعة، ورشة)</p>
+                <ul>
+                    <li>إدارة أعمال القسم</li>
+                    <li>متابعة المهام التشغيلية</li>
+                    <li>الفرز والتنفيذ</li>
+                </ul>
+                <form id="dept-login-form">
+                    <div class="form-group">
+                        <label>اسم المستخدم</label>
+                        <input type="text" id="dept-username" placeholder="أدخل اسم المستخدم" required>
+                    </div>
+                    <div class="form-group">
+                        <label>كلمة المرور</label>
+                        <input type="password" id="dept-password" placeholder="أدخل كلمة المرور" required>
+                    </div>
+                    <button type="submit" class="btn">تسجيل الدخول</button>
+                    <div id="dept-error" class="error-message"></div>
+                </form>
+            </div>
+
+            <!-- بطاقة دخول الموظفين -->
+            <div class="login-card">
+                <h2>👤 دخول المستخدمين</h2>
+                <p>للموظفين والإداريين (استقبال، محاسبة)</p>
+                <ul>
+                    <li>الوصول للمهام الموكلة</li>
+                    <li>تسجيل ومتابعة الطلبات</li>
+                    <li>تواصل وتنسيق مالي</li>
+                </ul>
+                <form id="emp-login-form">
+                    <div class="form-group">
+                        <label>اسم المستخدم</label>
+                        <input type="text" id="emp-username" placeholder="أدخل اسم المستخدم" required>
+                    </div>
+                    <div class="form-group">
+                        <label>كلمة المرور</label>
+                        <input type="password" id="emp-password" placeholder="أدخل كلمة المرور" required>
+                    </div>
+                    <button type="submit" class="btn">تسجيل الدخول</button>
+                    <div id="emp-error" class="error-message"></div>
+                </form>
+            </div>
+        </div>
+
+        <div class="features">
+            <div class="feature-box">
+                <h3>🔒 أمان عالي</h3>
+                <p>حماية بياناتك بأعلى المعايير</p>
+            </div>
+            <div class="feature-box">
+                <h3>⚡ سهولة الوصول</h3>
+                <p>دخول سريع وآمن</p>
+            </div>
+            <div class="feature-box">
+                <h3>📞 دعم مستمر</h3>
+                <p>فريقنا معك دائماً</p>
+            </div>
+        </div>
+
+        <footer>
+            <p>جميع الحقوق محفوظة | 2026 © روائع الأفكار الإعلانية</p>
+        </footer>
+    </div>
+
+    <!-- ملفات النظام -->
+    <script src="login-system.js"></script>
+    <script src="advanced-notifications.js"></script>
+    <script src="performance-optimization.js"></script>
+
+    <!-- كود المصادقة -->
+    <script>
+        (function() {
+            // معالج دخول المدير
+            document.getElementById('admin-login-form')?.addEventListener('submit', function(e) {
+                e.preventDefault();
+                const username = document.getElementById('admin-username').value;
+                const password = document.getElementById('admin-password').value;
+
+                if (window.authSystem) {
+                    const result = window.authSystem.login(username, password);
+                    if (result.success) {
+                        window.showNotification?.('✅ تم الدخول بنجاح', 'success');
+                        setTimeout(() => {
+                            window.location.href = '/dashboard.html?role=admin';
+                        }, 1500);
+                    } else {
+                        document.getElementById('admin-error').textContent = result.message;
+                        document.getElementById('admin-error').style.display = 'block';
+                        window.showNotification?.(result.message, 'error');
+                    }
+                }
+            });
+
+            // معالج دخول الأقسام
+            document.getElementById('dept-login-form')?.addEventListener('submit', function(e) {
+                e.preventDefault();
+                const username = document.getElementById('dept-username').value;
+                const password = document.getElementById('dept-password').value;
+
+                if (window.authSystem) {
+                    const result = window.authSystem.login(username, password);
+                    if (result.success) {
+                        window.showNotification?.('✅ تم الدخول بنجاح', 'success');
+                        setTimeout(() => {
+                            window.location.href = '/dashboard.html?role=department';
+                        }, 1500);
+                    } else {
+                        document.getElementById('dept-error').textContent = result.message;
+                        document.getElementById('dept-error').style.display = 'block';
+                        window.showNotification?.(result.message, 'error');
+                    }
+                }
+            });
+
+            // معالج دخول الموظفين
+            document.getElementById('emp-login-form')?.addEventListener('submit', function(e) {
+                e.preventDefault();
+                const username = document.getElementById('emp-username').value;
+                const password = document.getElementById('emp-password').value;
+
+                if (window.authSystem) {
+                    const result = window.authSystem.login(username, password);
+                    if (result.success) {
+                        window.showNotification?.('✅ تم الدخول بنجاح', 'success');
+                        setTimeout(() => {
+                            window.location.href = '/dashboard.html?role=employee';
+                        }, 1500);
+                    } else {
+                        document.getElementById('emp-error').textContent = result.message;
+                        document.getElementById('emp-error').style.display = 'block';
+                        window.showNotification?.(result.message, 'error');
+                    }
+                }
+            });
+
+            console.log('✅ نموذج الدخول محمّل بنجاح');
+        })();
+    </script>
+</body>
+</html>
