@@ -78,7 +78,7 @@ body{font-family:'Cairo','Segoe UI',Tahoma,Arial,sans-serif;background:var(--bg)
 }
 .brand{display:flex;align-items:center;gap:12px;}
 .logo-box{width:42px;height:42px;border-radius:50%;overflow:hidden;display:flex;align-items:center;justify-content:center;border:2px solid rgba(255,255,255,.2);flex-shrink:0;}
-.logo-box svg{width:26px;height:26px;}
+.logo-box svg{width:100%;height:100%;display:block;}
 .brand-text .brand-ar{font-size:15px;font-weight:800;color:#fff;line-height:1.2;}
 .brand-text .brand-en{font-size:10px;color:var(--gold);font-weight:600;letter-spacing:.5px;}
 .header-right{display:flex;align-items:center;gap:10px;}
@@ -776,10 +776,10 @@ input[inputmode="decimal"],input[inputmode="numeric"],input[type="number"],input
      <div id="portal-main-view">
       <div class="portal-header">
         <div class="p-logo">
-          <div style="position:relative;width:100%;height:100%;display:flex;align-items:center;justify-content:center;">
-            <span style="font-family:'Changa',sans-serif;font-weight:800;font-size:48px;line-height:1;color:#fff;">ر</span>
-            <span style="position:absolute;top:11px;left:22px;width:3px;height:34px;background:#D4AF37;border-radius:2px;"></span>
-          </div>
+          <svg viewBox="0 0 100 100" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="روائع الأفكار الإعلانية">
+            <text x="50" y="50" text-anchor="middle" dominant-baseline="central" font-family="'Changa',sans-serif" font-weight="800" font-size="62" fill="#fff">ر</text>
+            <rect x="24" y="12" width="5" height="38" rx="2.5" fill="#D4AF37"/>
+          </svg>
         </div>
         <div class="p-title"><span style="color:#D4AF37;">•</span> روائع الأفكار الإعلانية</div>
         <div class="p-sub">Rawaee Al-Afkar For Advertising</div>
@@ -859,10 +859,10 @@ input[inputmode="decimal"],input[inputmode="numeric"],input[type="number"],input
         <button class="menu-toggle" onclick="toggleSidebar()"><i class="ti ti-menu-2"></i></button>
         <div class="brand">
           <div class="logo-box">
-            <div style="position:relative;width:100%;height:100%;display:flex;align-items:center;justify-content:center;">
-            <span style="font-family:'Changa',sans-serif;font-weight:800;font-size:23px;line-height:1;color:rgba(255,255,255,.92);">ر</span>
-            <span style="position:absolute;top:6px;left:10px;width:2px;height:17px;background:#D4AF37;border-radius:2px;"></span>
-          </div>
+            <svg viewBox="0 0 100 100" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="روائع الأفكار الإعلانية">
+              <text x="50" y="50" text-anchor="middle" dominant-baseline="central" font-family="'Changa',sans-serif" font-weight="800" font-size="62" fill="rgba(255,255,255,.92)">ر</text>
+              <rect x="24" y="13" width="5" height="38" rx="2.5" fill="#D4AF37"/>
+            </svg>
           </div>
           <div class="brand-text">
             <div class="brand-ar"><span style="color:#D4AF37;">•</span> روائع الأفكار الإعلانية</div>
@@ -1030,7 +1030,15 @@ input[inputmode="decimal"],input[inputmode="numeric"],input[type="number"],input
 // ============================================================
 // CORE CONFIG & STATE
 // ============================================================
-const SESSION_KEY='rawaee_session_v7';
+const SESSION_KEY='rawaee_session_v8';
+// Session token = SHA-256(uname:password). Restoring a saved session re-derives this from the
+// current USERS record and compares it, so a localStorage entry with just a username (no
+// knowledge of the password) can no longer forge a login — and changing a password invalidates
+// any session token computed against the old one.
+async function makeSessionToken(u,p){
+  const buf=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(u+':'+p));
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
 const fbUrl='https://rawaee-alafkar-default-rtdb.firebaseio.com';
 window.globalAttachedFiles=[];
 window.reqFileB64='';window.reqFileName='';
@@ -1118,7 +1126,8 @@ async function doLogin(){
     if(allowed.length>0&&!allowed.includes(USERS[u].type)){e.style.display='block';e.textContent='هذا الحساب لا ينتمي لهذا القسم';return;}
     showSaving('جاري الدخول...');
     await loadData();hideSaving();
-    localStorage.setItem(SESSION_KEY,JSON.stringify({uname:u}));
+    const tok=await makeSessionToken(u,p);
+    localStorage.setItem(SESSION_KEY,JSON.stringify({uname:u,tok}));
     enterApp(u);e.style.display='none';
   }else{e.textContent='بيانات الدخول غير صحيحة';e.style.display='block';}
 }
@@ -1256,8 +1265,13 @@ window.addEventListener('load',async()=>{
   await syncUsers();
   const sess=localStorage.getItem(SESSION_KEY);
   if(sess){
-    try{const s=JSON.parse(sess);if(USERS[s.uname]){await loadData();hideSaving();enterApp(s.uname);return;}}
-    catch(e){localStorage.removeItem(SESSION_KEY);}
+    try{
+      const s=JSON.parse(sess);
+      if(s.uname&&s.tok&&USERS[s.uname]&&s.tok===await makeSessionToken(s.uname,USERS[s.uname].pass)){
+        await loadData();hideSaving();enterApp(s.uname);return;
+      }
+    }catch(e){}
+    localStorage.removeItem(SESSION_KEY);
   }
   hideSaving();
   document.getElementById('ls').style.display='block';
@@ -3586,13 +3600,16 @@ function buildAddForm(isUrgentQuick=false){
         </div>
         <div class="fg"><label>تاريخ التسليم المتوقع *</label><input type="datetime-local" id="fd" required/></div>
       </div>
+      <!-- Total amount: auto-calculated from item prices below, read-only -->
+      <div style="padding:0 20px 16px;">
+        <div class="fg">
+          <label>المبلغ الإجمالي (ر.س) <span style="font-size:10px;color:var(--text-3);font-weight:600;">(يُحسب تلقائياً من سعر البنود أدناه)</span></label>
+          <input type="text" id="f-total-amount" placeholder="0" readonly style="background:var(--surface-2);color:var(--maroon);cursor:not-allowed;font-weight:800;font-size:15px;"/>
+        </div>
+      </div>
       <!-- Partial Payment Fields -->
       <div id="partial-payment-section" style="display:none;padding:0 20px 16px;">
-        <div class="partial-fields">
-          <div class="fg">
-            <label>المبلغ الإجمالي (ر.س) <span style="color:#EF4444">*</span></label>
-            <input type="text" inputmode="decimal" id="f-total-amount" placeholder="0" min="0" oninput="normalizeAmountInput(this)" onfocus="this.select()"/>
-          </div>
+        <div class="partial-fields" style="grid-template-columns:1fr 1fr;">
           <div class="fg">
             <label>المبلغ المدفوع (ر.س) <span style="color:#EF4444">*</span></label>
             <input type="text" inputmode="decimal" id="f-paid-amount" placeholder="0" min="0" oninput="normalizeAmountInput(this)" onfocus="this.select()"/>
@@ -3603,13 +3620,13 @@ function buildAddForm(isUrgentQuick=false){
           </div>
         </div>
       </div>
-      <!-- Simple paid amount for full payment -->
+      <!-- Full payment notice -->
       <div id="simple-amount-field" style="display:none;padding:0 20px 16px;">
-        <div class="fg"><label>المبلغ المدفوع (ر.س) <span style="color:#EF4444">*</span></label><input type="text" inputmode="decimal" id="fb2" placeholder="0" min="0" onfocus="this.select()"/></div>
+        <div style="font-size:11px;color:#065F46;background:#D1FAE5;border-radius:8px;padding:9px 12px;font-weight:700;"><i class="ti ti-check"></i> سيتم تسجيل المبلغ الإجمالي كمدفوع بالكامل</div>
       </div>
-      <!-- Total amount for pay-on-delivery -->
+      <!-- Pay on delivery notice -->
       <div id="delivery-amount-field" style="display:none;padding:0 20px 16px;">
-        <div class="fg"><label>المبلغ الإجمالي (ر.س) <span style="color:#EF4444">*</span></label><input type="text" inputmode="decimal" id="f-delivery-total" placeholder="0" min="0" onfocus="this.select()"/></div>
+        <div style="font-size:11px;color:#92400E;background:#FEF3C7;border-radius:8px;padding:9px 12px;font-weight:700;"><i class="ti ti-clock"></i> سيتم تحصيل المبلغ الإجمالي كاملاً عند التسليم</div>
       </div>
       <div style="padding:0 20px 16px;">
         <div class="fg"><label>ملاحظات وتفاصيل المواصفات</label><textarea id="fn" placeholder="اكتب الملاحظات والمقاسات هنا..."></textarea></div>
@@ -3655,11 +3672,20 @@ function buildAddForm(isUrgentQuick=false){
           <div class="fg" style="margin-top:8px;"><label style="font-size:11px;">إرفاق ملف للورشة (اختياري)</label><input type="file" id="fw-workshop-file" accept="image/*,.pdf,.doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onchange="handleWorkshopDeptFile(this.files)"/><div id="fw-workshop-file-note" style="font-size:10px;color:#10B981;margin-top:3px;font-weight:700;"></div></div>
         </div></div>
       </div>
+      <div style="padding:16px 20px 4px;border-top:1px solid var(--border-soft);margin-top:6px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
+          <span style="font-size:12px;font-weight:800;color:var(--maroon);"><i class="ti ti-git-branch"></i> خطوط إنتاج متوازية إضافية</span>
+          <button type="button" class="btn btn-out btn-xs" id="add-prod-line-btn" onclick="addProductionLine()"><i class="ti ti-plus"></i> إضافة خط موازٍ</button>
+        </div>
+        <div style="font-size:10.5px;color:var(--text-3);margin-bottom:10px;">حتى 3 خطوط إنتاج بالإجمالي (الخط الأساسي أعلاه + خطّين إضافيين). كل خط إضافي يعمل كطلب مستقل مرتبط، بحيث تعمل التصميم والطباعة في كل خط بالتوازي دون انتظار الخطوط الأخرى.</div>
+        <div id="prod-lines-wrap" style="display:flex;flex-direction:column;gap:10px;"></div>
+      </div>
     </div>
     <div style="padding:10px 0 4px;">
       <button class="btn btn-brand" onclick="submitOrder(${isUrgentQuick})"><i class="ti ti-check"></i> حفظ الطلب وإطلاق المهام</button>
     </div>`;
   window.globalAttachedFiles=[];window.externalFileB64='';window.externalFileName='';
+  window._prodLines=[];window._prodLineDesignWorkers=dw;window._prodLinePrintWorkers=pw;renderProductionLines();
   window._workshopDeptFileB64='';window._workshopDeptFileName='';
   window._orderLines=[];
   setTimeout(()=>{
@@ -3692,7 +3718,13 @@ function calcRemaining(){
   const total=parseFloat(normalizeDigits(document.getElementById('f-total-amount')?.value))||0;
   const paid=parseFloat(normalizeDigits(document.getElementById('f-paid-amount')?.value))||0;
   const rem=document.getElementById('f-remaining-amount');
-  if(rem)rem.value=Math.fmtMoney(max(0,total-paid));
+  if(rem)rem.value=fmtMoney(Math.max(0,total-paid));
+}
+function recalcOrderTotal(){
+  const sum=(window._orderLines||[]).reduce((s,l)=>s+(parseFloat(normalizeDigits(l.price))||0),0);
+  const totEl=document.getElementById('f-total-amount');
+  if(totEl)totEl.value=fmtMoney(sum);
+  calcRemaining();
 }
 function onPaymentChange(v){
   const partial=document.getElementById('partial-payment-section');
@@ -3703,6 +3735,38 @@ function onPaymentChange(v){
   if(delivery)delivery.style.display=v==='عند التسليم'?'block':'none';
 }
 function onExternalChange(v){const w=document.getElementById('external-note-wrap');if(w)w.style.display=v!=='none'?'block':'none';}
+// ── Parallel Production Lines (up to 2 extra, alongside the primary line above) ──
+function addProductionLine(){
+  if(!window._prodLines)window._prodLines=[];
+  if(window._prodLines.length>=2){toast('⚠️ الحد الأقصى 3 خطوط إنتاج (الخط الأساسي + خطّين إضافيين)');return;}
+  window._prodLines.push({id:'pl'+Date.now(),design:'none',print:'none'});
+  renderProductionLines();
+}
+function removeProductionLine(id){window._prodLines=(window._prodLines||[]).filter(x=>x.id!==id);renderProductionLines();}
+function updateProductionLine(id,f,v){const l=(window._prodLines||[]).find(x=>x.id===id);if(l)l[f]=v;}
+function renderProductionLines(){
+  const wrap=document.getElementById('prod-lines-wrap');if(!wrap)return;
+  const lines=window._prodLines||[];
+  const dOpts=sel=>`<option value="none"${sel==='none'?' selected':''}>❌ بدون تصميم</option>`+(window._prodLineDesignWorkers||[]).map(w=>`<option value="${w.uname}"${sel===w.uname?' selected':''}>${w.name}</option>`).join('');
+  const pOpts=sel=>`<option value="none"${sel==='none'?' selected':''}>❌ لا يتطلب</option>`+(window._prodLinePrintWorkers||[]).map(w=>`<option value="${w.uname}"${sel===w.uname?' selected':''}>${w.name}</option>`).join('');
+  wrap.innerHTML=lines.map((l,i)=>`
+    <div style="background:var(--surface-2);border:1.5px dashed var(--gold);border-radius:10px;padding:12px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+        <span style="font-size:11px;font-weight:800;color:var(--gold);"><i class="ti ti-git-branch"></i> خط إنتاج موازٍ #${i+2}</span>
+        <button type="button" class="btn btn-red btn-xs" onclick="removeProductionLine('${l.id}')"><i class="ti ti-trash"></i> حذف</button>
+      </div>
+      <div class="dept-grid-layout" style="padding:0;grid-template-columns:1fr 1fr;">
+        <div class="dept-section"><div class="dept-header dept-design"><i class="ti ti-brush"></i> التصميم</div><div class="dept-body">
+          <select onchange="updateProductionLine('${l.id}','design',this.value)">${dOpts(l.design)}</select>
+        </div></div>
+        <div class="dept-section"><div class="dept-header dept-print"><i class="ti ti-printer"></i> الطباعة</div><div class="dept-body">
+          <select onchange="updateProductionLine('${l.id}','print',this.value)">${pOpts(l.print)}</select>
+        </div></div>
+      </div>
+    </div>`).join('');
+  const btn=document.getElementById('add-prod-line-btn');
+  if(btn)btn.style.display=lines.length>=2?'none':'';
+}
 async function handleWorkshopDeptFile(files){
   if(!files||!files.length)return;
   showSaving('جاري تحميل الملف...');
@@ -3730,15 +3794,22 @@ function openWhatsapp(phone){if(!phone){toast('⚠️ يرجى إدخال رقم
 function addOrderLine(){
   if(!window._orderLines)window._orderLines=[];
   const id='ol'+Date.now();
-  window._orderLines.push({id,name:'',details:'',files:[]});
+  window._orderLines.push({id,name:'',details:'',price:'',files:[]});
   renderOrderLines();
 }
 function removeOrderLine(id){window._orderLines=(window._orderLines||[]).filter(x=>x.id!==id);renderOrderLines();}
 function updateOrderLine(id,f,v){const l=(window._orderLines||[]).find(x=>x.id===id);if(l)l[f]=v;}
+function updateOrderLinePrice(el,id){
+  const norm=normalizeDigits(el.value);
+  if(norm!==el.value){const pos=el.selectionStart;el.value=norm;try{el.setSelectionRange(pos,pos);}catch(e){}}
+  updateOrderLine(id,'price',norm);
+  recalcOrderTotal();
+}
 function renderOrderLines(){
   const wrap=document.getElementById('order-lines-wrap');if(!wrap)return;
   if(!window._orderLines||!window._orderLines.length){
     wrap.innerHTML='<div style="text-align:center;color:var(--text-3);padding:20px;font-size:12px;"><i class="ti ti-list" style="font-size:28px;display:block;margin-bottom:8px;color:var(--border)"></i>لم يتم إضافة بنود — اضغط "إضافة بند"</div>';
+    recalcOrderTotal();
     return;
   }
   wrap.innerHTML=window._orderLines.map((l,i)=>`
@@ -3746,6 +3817,7 @@ function renderOrderLines(){
       <div style="font-size:11px;font-weight:800;color:var(--maroon);margin-bottom:8px;">بند #${i+1}${i===0?' <span style="font-size:9px;color:var(--gold);font-weight:700">(الخدمة الرئيسية)</span>':''}</div>
       <div style="display:flex;flex-direction:column;gap:8px;">
         <div class="fg"><label>اسم البند *</label><input placeholder="مثال: لوحة إعلانية" value="${l.name.replace(/"/g,'&quot;')}" oninput="updateOrderLine('${l.id}','name',this.value)"/></div>
+        <div class="fg"><label>سعر البند (ر.س)</label><input type="text" inputmode="decimal" placeholder="0" min="0" value="${(l.price||'').toString().replace(/"/g,'&quot;')}" oninput="updateOrderLinePrice(this,'${l.id}')" onfocus="this.select()"/></div>
         <div class="fg"><label>التفاصيل والمواصفات</label><textarea placeholder="المقاسات، المواد، عدد النسخ..." style="min-height:55px;" oninput="updateOrderLine('${l.id}','details',this.value)">${l.details}</textarea></div>
         <div class="fg"><label>مرفقات البند (يمكن إرفاق أكثر من ملف)</label>
           <label style="cursor:pointer;border:1.5px dashed var(--border);border-radius:8px;padding:7px 14px;font-size:11px;display:inline-flex;align-items:center;gap:6px;">
@@ -3757,6 +3829,7 @@ function renderOrderLines(){
         ${window._orderLines.length>1?`<div style="text-align:left;"><button class="btn btn-red btn-xs" type="button" onclick="removeOrderLine('${l.id}')"><i class="ti ti-trash"></i> حذف</button></div>`:''}
       </div>
     </div>`).join('');
+  recalcOrderTotal();
 }
 async function attachOrderLineFile(id,files){
   if(!files||!files.length)return;
@@ -3788,34 +3861,29 @@ async function submitOrder(isUrgentQuick=false){
   if(!isValidSaudiPhone(phone)){toast('⚠️ رقم الجوال يجب أن يكون رقم سعودي صحيح (05XXXXXXXX)');return;}
   if(!payStatus){toast('⚠️ يرجى تحديد وضع السداد');return;}
   if(!document.getElementById('fd').value){toast('⚠️ يرجى تحديد تاريخ التسليم المتوقع');return;}
+  const _tot=normalizeDigits(document.getElementById('f-total-amount')?.value);
+  if(!_tot||parseFloat(_tot)<=0){toast('⚠️ يرجى إدخال سعر لبند واحد على الأقل لحساب المبلغ الإجمالي');return;}
   if(payStatus==='دفع جزئي'){
-    const _tot=normalizeDigits(document.getElementById('f-total-amount')?.value);
     const _paid=normalizeDigits(document.getElementById('f-paid-amount')?.value);
-    if(!_tot||parseFloat(_tot)<=0){toast('⚠️ يرجى إدخال المبلغ الإجمالي');return;}
     if(!_paid||parseFloat(_paid)<=0){toast('⚠️ يرجى إدخال المبلغ المدفوع');return;}
-  }else if(payStatus==='تم الدفع'){
-    const _paid2=normalizeDigits(document.getElementById('fb2')?.value);
-    if(!_paid2||parseFloat(_paid2)<=0){toast('⚠️ يرجى إدخال المبلغ المدفوع');return;}
-  }else if(payStatus==='عند التسليم'){
-    const _delTot=normalizeDigits(document.getElementById('f-delivery-total')?.value);
-    if(!_delTot||parseFloat(_delTot)<=0){toast('⚠️ يرجى إدخال المبلغ الإجمالي');return;}
+    if(parseFloat(_paid)>parseFloat(_tot)){toast('⚠️ المبلغ المدفوع أكبر من المبلغ الإجمالي');return;}
   }
   const dU=document.getElementById('fw-design').value,extU=document.getElementById('fw-external').value,pU=document.getElementById('fw-print').value,wU=document.getElementById('fw-workshop').value;
   if(dU==='none'&&extU==='none'&&pU==='none'&&wU==='none'){toast('⚠️ يجب اختيار قسم تنفيذي واحد');return;}
   let startDept='design';
   if(dU==='none'){if(extU!=='none')startDept='external';else if(pU!=='none')startDept='print';else startDept='workshop';}
   const today=new Date().toISOString().split('T')[0];
+  const totalAmt=parseFloat(normalizeDigits(document.getElementById('f-total-amount')?.value))||0;
   let paidAmt=0;
-  let totalAmt=0;
   let remainingAmt=0;
   if(payStatus==='دفع جزئي'){
-    totalAmt=parseFloat(document.getElementById('f-total-amount')?.value)||0;
-    paidAmt=parseFloat(document.getElementById('f-paid-amount')?.value)||0;
+    paidAmt=parseFloat(normalizeDigits(document.getElementById('f-paid-amount')?.value))||0;
     remainingAmt=Math.max(0,totalAmt-paidAmt);
   }else if(payStatus==='تم الدفع'){
-    paidAmt=parseInt(document.getElementById('fb2')?.value)||0;
+    paidAmt=totalAmt;
+    remainingAmt=0;
   }else if(payStatus==='عند التسليم'){
-    totalAmt=parseFloat(document.getElementById('f-delivery-total')?.value)||0;
+    paidAmt=0;
     remainingAmt=totalAmt;
   }
   if(!Object.values(clients).find(c2=>c2.name===c))await fbPush('clients',{name:c,phone:normalizeSaudiPhone(phone),date:today});
@@ -3843,6 +3911,32 @@ async function submitOrder(isUrgentQuick=false){
     const res=await fbPush('orders',ord);await loadData();
     const newId='ORD-'+String(ordersArr().length).padStart(3,'0');
     await fbPatch(`orders/${res.name}`,{id:newId});await loadData();
+    // Extra parallel production lines: each becomes its own linked order so design/print
+    // in that line runs independently (its own currentDept) without blocking the primary line.
+    const _extraLines=(window._prodLines||[]).filter(l=>l.design!=='none'||l.print!=='none');
+    for(let i=0;i<_extraLines.length;i++){
+      const l=_extraLines[i];
+      const lineDept=l.design!=='none'?'design':'print';
+      const lineOrd={
+        client:c,service:s+' — خط إنتاج موازٍ #'+(i+2),
+        orderItems:(window._orderLines||[]).map(x=>({name:x.name,details:x.details,files:[]})),
+        date:today,createdAt:new Date().toISOString(),stageStartDate:new Date().toISOString(),
+        priority:document.getElementById('fpr').value,phone:normalizeSaudiPhone(phone),
+        deadline:document.getElementById('fd').value||'—',notes:'خط إنتاج موازٍ مرتبط بالطلب '+newId,
+        files:[],createdBy:cu.name,createdByUname:cu._uname,isUrgentQuick:isUrgentQuick||false,
+        designTo:l.design,designName:l.design==='none'?'❌ معفى':(USERS[l.design]?.name||l.design),
+        externalTo:'none',externalName:'❌ معفى',externalNote:'',
+        printTo:l.print,printName:l.print==='none'?'❌ معفى':(USERS[l.print]?.name||l.print),
+        workshopTo:'none',workshopName:'❌ معفى',workshopDeptFile:'',workshopDeptFileName:'',
+        currentDept:lineDept,status:'قيد المتابعة',
+        approvedPrintFile:'',approvedPrintFileName:'',approvedWorkshopFile:'',approvedWorkshopFileName:'',
+        finalWorkshopDoneFile:'',finalWorkshopDoneFileName:'',
+        parentOrderKey:res.name,parentOrderId:newId,productionLineIndex:i+2,
+      };
+      const lineRes=await fbPush('orders',lineOrd);
+      await fbPatch(`orders/${lineRes.name}`,{id:newId+'-L'+(i+2)});
+    }
+    if(_extraLines.length)await loadData();
     syncOrderToSheet(newId,c,phone,payStatus,_lines.map(l=>l.name.trim()).join('، '),{totalAmount:totalAmt,paidAmount:paidAmt,remainingAmount:remainingAmt,date:today,deadline:document.getElementById('fd').value||'—',createdBy:cu.name});
     if(phone)await sendSmsNotification(phone,`مرحباً ${c}، تم استلام طلبكم رقم ${newId} وهو قيد التنفيذ. روائع الأفكار الإعلانية - 0500447999`);
     if(window._pendingQuickTaskKey){
@@ -3850,8 +3944,8 @@ async function submitOrder(isUrgentQuick=false){
       window._pendingQuickTaskKey='';
       await loadData();
     }
-    hideSaving();window.globalAttachedFiles=[];window._workshopDeptFileB64='';window._workshopDeptFileName='';
-    toast('✓ تم إنشاء الطلب: '+newId);nav('wf');
+    hideSaving();window.globalAttachedFiles=[];window._workshopDeptFileB64='';window._workshopDeptFileName='';window._prodLines=[];
+    toast('✓ تم إنشاء الطلب: '+newId+(_extraLines.length?` مع ${_extraLines.length} خط إنتاج موازٍ`:''));nav('wf');
   }catch(e){hideSaving();toast('❌ فشل الاتصال');}
 }
 // ============================================================
@@ -4156,15 +4250,61 @@ function buildRequestsPage(){
       <td><span class="badge ${o.paymentStatus==='دفع جزئي'?'b-proc':'b-new'}">${o.paymentStatus||'—'}</span></td>
       <td>${o.totalAmount?fmtMoney(Number(o.totalAmount))+' ر.س':'—'}</td>
     </tr>`).join('');
+  // ── Financial metrics: revenue totals + top revenue-generating department ──
+  // Parallel-line orders (parentOrderKey set) carry no amount of their own — the
+  // revenue is already counted on their primary order — so they're excluded here.
+  const _revOrds=ordersArr().filter(o=>!o.parentOrderKey);
+  const totalRevenue=_revOrds.reduce((s,o)=>s+(Number(o.totalAmount)||0),0);
+  const totalPaidRev=_revOrds.reduce((s,o)=>s+(Number(o.paidAmount)||0),0);
+  const totalOutstandingRev=_revOrds.reduce((s,o)=>s+(Number(o.remainingAmount)||0),0);
+  const _curMonth=new Date().toISOString().slice(0,7);
+  const revThisMonth=_revOrds.filter(o=>(o.date||'').slice(0,7)===_curMonth).reduce((s,o)=>s+(Number(o.totalAmount)||0),0);
+  const deptRevMeta={design:{label:'التصميم',color:'#6B21A8',icon:'ti-brush'},external:{label:'التنفيذ الخارجي',color:'#713F12',icon:'ti-world'},print:{label:'الطباعة',color:'#3730A3',icon:'ti-printer'},workshop:{label:'الورشة',color:'#9A3412',icon:'ti-tools'}};
+  const deptRevenue={design:0,external:0,print:0,workshop:0};
+  _revOrds.forEach(o=>{getActiveDepts(o).forEach(dk=>{deptRevenue[dk]+=(Number(o.totalAmount)||0);});});
+  const deptRevRanked=Object.entries(deptRevenue).sort((a,b)=>b[1]-a[1]);
+  const topDept=deptRevRanked[0];
+  const maxDeptRev=Math.max(1,...deptRevRanked.map(e=>e[1]));
+  const financeCardsHtml=`
+    <div class="card" style="margin-bottom:16px;">
+      <div class="card-header"><span class="card-title"><i class="ti ti-cash"></i> إجمالي الإيرادات</span></div>
+      <div class="stats-row" style="padding:16px 20px 20px;margin-bottom:0;">
+        <div class="stat-card c-gold"><div class="stat-icon i-gold"><i class="ti ti-coin"></i></div><div class="stat-label">إجمالي الإيرادات</div><div class="stat-value">${fmtMoney(totalRevenue)}</div><div class="stat-trend"><span style="color:var(--text-2)">ر.س · ${_revOrds.length} طلب</span></div></div>
+        <div class="stat-card c-green"><div class="stat-icon i-green"><i class="ti ti-checkbox"></i></div><div class="stat-label">المبالغ المحصّلة</div><div class="stat-value" style="color:#059669">${fmtMoney(totalPaidRev)}</div><div class="stat-trend"><span style="color:var(--text-2)">ر.س محصّلة فعلياً</span></div></div>
+        <div class="stat-card c-red"><div class="stat-icon i-red"><i class="ti ti-alert-triangle"></i></div><div class="stat-label">المبالغ المتبقية</div><div class="stat-value" style="color:#DC2626">${fmtMoney(totalOutstandingRev)}</div><div class="stat-trend"><span style="color:var(--text-2)">ر.س غير محصّلة</span></div></div>
+        <div class="stat-card c-blue"><div class="stat-icon i-blue"><i class="ti ti-calendar-stats"></i></div><div class="stat-label">إيرادات هذا الشهر</div><div class="stat-value" style="color:#2563EB">${fmtMoney(revThisMonth)}</div><div class="stat-trend"><span style="color:var(--text-2)">ر.س</span></div></div>
+      </div>
+    </div>
+    <div class="card" style="margin-bottom:16px;">
+      <div class="card-header"><span class="card-title"><i class="ti ti-trophy"></i> القسم الأعلى إيراداً</span></div>
+      <div style="padding:16px 20px 20px;">
+        ${topDept&&topDept[1]>0?`<div style="display:flex;align-items:center;gap:14px;background:${deptRevMeta[topDept[0]].color}14;border:1px solid ${deptRevMeta[topDept[0]].color}33;border-radius:12px;padding:14px 16px;margin-bottom:14px;">
+          <div style="width:46px;height:46px;border-radius:50%;background:${deptRevMeta[topDept[0]].color};display:flex;align-items:center;justify-content:center;flex-shrink:0;"><i class="ti ${deptRevMeta[topDept[0]].icon}" style="color:#fff;font-size:20px;"></i></div>
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:11px;color:var(--text-3);font-weight:700;">القسم الأعلى إيراداً حالياً</div>
+            <div style="font-size:16px;font-weight:900;color:${deptRevMeta[topDept[0]].color}">${deptRevMeta[topDept[0]].label}</div>
+          </div>
+          <div style="text-align:left;flex-shrink:0;">
+            <div style="font-size:18px;font-weight:900;color:${deptRevMeta[topDept[0]].color}">${fmtMoney(topDept[1])}</div>
+            <div style="font-size:10px;color:var(--text-3);">ر.س</div>
+          </div>
+        </div>`:`<div style="text-align:center;color:var(--text-3);padding:10px 0 16px;font-size:12px;">لا توجد بيانات إيرادات كافية بعد</div>`}
+        ${deptRevRanked.map(([dk,v])=>`<div style="margin-bottom:9px;">
+          <div style="display:flex;justify-content:space-between;font-size:11px;font-weight:700;margin-bottom:3px;"><span style="color:var(--text-2)"><i class="ti ${deptRevMeta[dk].icon}" style="color:${deptRevMeta[dk].color}"></i> ${deptRevMeta[dk].label}</span><span style="color:${deptRevMeta[dk].color}">${fmtMoney(v)} ر.س</span></div>
+          <div class="mini-stat-bar-track"><div class="mini-stat-bar-fill" style="width:${Math.round((v/maxDeptRev)*100)}%;background:${deptRevMeta[dk].color}"></div></div>
+        </div>`).join('')}
+      </div>
+    </div>`;
   document.getElementById('requests-content').innerHTML=`
     <div class="page-header"><div class="ptitle"><i class="ti ti-inbox"></i> صندوق طلبات المحاسبة</div></div>
+    ${financeCardsHtml}
     <div class="tab-bar">
       <button class="tab-btn active" id="req-tab-pending" onclick="showReqTab('pending')"><i class="ti ti-clock"></i> بانتظار المحاسب (${pending.length})</button>
       <button class="tab-btn" id="req-tab-accApproved" onclick="showReqTab('accApproved')"><i class="ti ti-hourglass"></i> بانتظار المدير (${accApproved.length})</button>
       <button class="tab-btn" id="req-tab-done" onclick="showReqTab('done')"><i class="ti ti-circle-check"></i> مكتملة (${done.length})</button>
       <button class="tab-btn" id="req-tab-unpaid" onclick="showReqTab('unpaid')"><i class="ti ti-coin-off"></i> غير مسددة (${unpaidOrds.length})</button>
     </div>
-    <div class="card"><div class="tbl-wrap"><table><thead><tr><th style="width:120px">العميل</th><th>طريقة الدفع</th><th style="width:100px">الموظف</th><th style="width:80px">التاريخ</th><th style="width:110px">الحالة</th><th style="width:150px">الإجراء</th></tr></thead>
+    <div class="card" id="req-main-table-card"><div class="tbl-wrap"><table><thead><tr><th style="width:120px">العميل</th><th>طريقة الدفع</th><th style="width:100px">الموظف</th><th style="width:80px">التاريخ</th><th style="width:110px">الحالة</th><th style="width:150px">الإجراء</th></tr></thead>
     <tbody id="req-tbody-pending">${makeRows(pending,'pending')}</tbody>
     <tbody id="req-tbody-accApproved" style="display:none">${makeRows(accApproved,'accApproved')}</tbody>
     <tbody id="req-tbody-done" style="display:none">${makeRows(done,'done')}</tbody>
@@ -4182,7 +4322,7 @@ function showReqTab(tab){
     const btn=document.getElementById('req-tab-'+t);if(btn)btn.classList.toggle('active',t===tab);
   });
   const upPane=document.getElementById('req-pane-unpaid');if(upPane)upPane.style.display=tab==='unpaid'?'block':'none';
-  const card=document.querySelector('#requests-content .card');if(card)card.style.display=tab==='unpaid'?'none':'';
+  const card=document.getElementById('req-main-table-card');if(card)card.style.display=tab==='unpaid'?'none':'';
   const tb2=document.getElementById('req-tab-unpaid');if(tb2)tb2.classList.toggle('active',tab==='unpaid');
 }
 async function accountantApproveRequest(key){
@@ -4231,8 +4371,49 @@ function buildEmpPage(){
     const c=orders.filter(o=>o[k]&&o.date);if(!c.length)return 0;
     return Math.round(c.reduce((s,o)=>{const h=(new Date(o[k])-new Date(o.date))/3600000;return s+(h>0?h:0);},0)/c.length);};
   const empList=Object.entries(USERS).map(([uname,u])=>({uname,...u}));
+  // ── Employee of the Month: ranked by completed tasks this calendar month ──
+  const _fullOrds=ordersArr();
+  const getEmpOrdersAll=(uname,type)=>{
+    if(type==='designer')return _fullOrds.filter(o=>o.designTo===uname||o.designTo==='all');
+    if(type==='printer') return _fullOrds.filter(o=>o.printTo===uname);
+    if(type==='workshop')return _fullOrds.filter(o=>o.workshopTo===uname||o.workshopTo==='all');
+    if(type==='external')return _fullOrds.filter(o=>o.externalTo===uname);
+    return [];
+  };
+  const _monthKey=now.toISOString().slice(0,7);
+  const empMonthStats=empList.filter(e=>doneKey[e.type]).map(e=>{
+    const k=doneKey[e.type];
+    const doneAll=getEmpOrdersAll(e.uname,e.type).filter(o=>o[k]&&o[k].slice(0,7)===_monthKey);
+    const avgHMonth=doneAll.length?Math.round(doneAll.reduce((s,o)=>{const h=(new Date(o[k])-new Date(o.date))/3600000;return s+(h>0?h:0);},0)/doneAll.length):0;
+    return{...e,doneThisMonth:doneAll.length,avgHMonth};
+  }).sort((a,b)=>b.doneThisMonth-a.doneThisMonth||a.avgHMonth-b.avgHMonth);
+  const empOfMonth=(empMonthStats[0]&&empMonthStats[0].doneThisMonth>0)?empMonthStats[0]:null;
+  const monthLabel=now.toLocaleDateString('ar-SA',{month:'long',year:'numeric'});
   document.getElementById('emp-content').innerHTML=`
     <div class="page-header"><div class="ptitle"><i class="ti ti-chart-bar"></i> تحليل أداء الموظفين</div></div>
+    ${empOfMonth?`<div class="card" style="margin-bottom:20px;background:linear-gradient(135deg,var(--maroon) 0%,var(--maroon-dark) 100%);border:none;overflow:hidden;position:relative;">
+      <div style="position:absolute;inset:0;background:radial-gradient(circle at 85% 20%,rgba(212,175,55,.25),transparent 60%);pointer-events:none;"></div>
+      <div style="position:relative;padding:22px 26px;display:flex;align-items:center;gap:18px;flex-wrap:wrap;color:#fff;">
+        <div style="width:70px;height:70px;border-radius:50%;background:${empOfMonth.color||'#D4AF37'};display:flex;align-items:center;justify-content:center;border:3px solid #D4AF37;box-shadow:0 4px 16px rgba(212,175,55,.4);flex-shrink:0;">
+          ${empOfMonth.photo?`<img src="${empOfMonth.photo}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`:`<span style="font-size:26px;font-weight:900;color:#fff">${(empOfMonth.name||empOfMonth.uname||'?').charAt(0)}</span>`}
+        </div>
+        <div style="flex:1;min-width:200px;">
+          <div style="font-size:11px;font-weight:800;color:#D4AF37;letter-spacing:.6px;margin-bottom:4px;"><i class="ti ti-trophy"></i> موظف الشهر — ${monthLabel}</div>
+          <div style="font-size:20px;font-weight:900;">${empOfMonth.name||empOfMonth.uname}</div>
+          <div style="font-size:12px;opacity:.85;margin-top:2px;">${empOfMonth.role||ROLE_LABELS[empOfMonth.type]||empOfMonth.type}</div>
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;">
+          <div style="background:rgba(255,255,255,.14);border-radius:12px;padding:10px 18px;text-align:center;min-width:84px;">
+            <div style="font-size:22px;font-weight:900;">${empOfMonth.doneThisMonth}</div>
+            <div style="font-size:9.5px;opacity:.85;font-weight:700;">مهمة مُنجزة هذا الشهر</div>
+          </div>
+          <div style="background:rgba(255,255,255,.14);border-radius:12px;padding:10px 18px;text-align:center;min-width:84px;">
+            <div style="font-size:22px;font-weight:900;">${empOfMonth.avgHMonth?fH(empOfMonth.avgHMonth):'—'}</div>
+            <div style="font-size:9.5px;opacity:.85;font-weight:700;">متوسط وقت الإنجاز</div>
+          </div>
+        </div>
+      </div>
+    </div>`:''}
     <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:20px;">
       <div class="search-bar" style="max-width:380px;flex:1;">
         <i class="ti ti-search" style="color:var(--gold)"></i>
