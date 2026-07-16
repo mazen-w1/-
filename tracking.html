@@ -555,20 +555,10 @@
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js"></script>
 
   <script>
-    const firebaseConfig = {
-      apiKey: "AIzaSyBQz6BpBJzMbZKPIVN4vQvZGFl50AEp93A",
-      authDomain: "rawaee-alafkar.firebaseapp.com",
-      projectId: "rawaee-alafkar",
-      databaseURL: "https://rawaee-alafkar-default-rtdb.firebaseio.com",
-      storageBucket: "rawaee-alafkar.appspot.com",
-      messagingSenderId: "1047181597829",
-      appId: "1:1047181597829:web:8c3c37e2ae31f16f849dd7"
-    };
+    // Firebase project details (REST API only)
+    const FIREBASE_DB_URL = "https://rawaee-alafkar-default-rtdb.firebaseio.com";
 
-    let firebaseReady = false;
-    const app = firebase.initializeApp(firebaseConfig);
-    const auth = firebase.auth(app);
-    const db = firebase.database(app);
+    // Firebase REST API mode - no SDK initialization needed
 
     var stages = [
       { id: 'design', label: 'تم استلام الطلب' },
