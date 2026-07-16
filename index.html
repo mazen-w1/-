@@ -172,31 +172,37 @@ body{font-family:'Cairo','Segoe UI',Tahoma,Arial,sans-serif;background:var(--bg)
 .ptitle i{font-size:22px;color:var(--gold);}
 .breadcrumb{font-size:12px;color:var(--text-3);font-weight:600;margin-top:2px;}
 /* ============================================================ STATS CARDS */
-.stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin-bottom:24px;}
+.stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(128px,1fr));gap:10px;margin-bottom:18px;}
 .stat-card{
-  background:var(--surface);border-radius:var(--radius-lg);
-  padding:18px 18px 14px;
+  background:var(--surface);border-radius:var(--radius-md);
+  padding:12px 12px 10px;
   box-shadow:var(--shadow-sm);border:1px solid var(--border);
   transition:.2s;cursor:pointer;position:relative;overflow:hidden;
 }
 .stat-card:hover{box-shadow:var(--shadow-md);transform:translateY(-2px);}
 .stat-card::before{content:'';position:absolute;top:0;right:0;width:3px;height:100%;}
+.stat-card.c-red{background:linear-gradient(165deg,#FEF2F2 0%,var(--surface) 65%);}
+.stat-card.c-green{background:linear-gradient(165deg,#F0FDF9 0%,var(--surface) 65%);}
+.stat-card.c-purple{background:linear-gradient(165deg,#FAF5FF 0%,var(--surface) 65%);}
+.stat-card.c-blue{background:linear-gradient(165deg,#EFF6FF 0%,var(--surface) 65%);}
+.stat-card.c-gold{background:linear-gradient(165deg,#FFFBEB 0%,var(--surface) 65%);}
+.stat-card.c-orange{background:linear-gradient(165deg,#FFF7ED 0%,var(--surface) 65%);}
 .stat-card.c-red::before{background:#EF4444;}
 .stat-card.c-green::before{background:#10B981;}
 .stat-card.c-purple::before{background:#6B21A8;}
 .stat-card.c-blue::before{background:#3B82F6;}
 .stat-card.c-gold::before{background:var(--gold);}
 .stat-card.c-orange::before{background:#F97316;}
-.stat-icon{width:40px;height:40px;border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:center;font-size:18px;margin-bottom:12px;}
+.stat-icon{width:30px;height:30px;border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:center;font-size:14px;margin-bottom:8px;}
 .stat-icon.i-red{background:#FEE2E2;color:#DC2626;}
 .stat-icon.i-green{background:#D1FAE5;color:#059669;}
 .stat-icon.i-purple{background:#F3E8FF;color:#6B21A8;}
 .stat-icon.i-blue{background:#DBEAFE;color:#2563EB;}
 .stat-icon.i-gold{background:rgba(212,175,55,.15);color:#B8962E;}
 .stat-icon.i-orange{background:#FFEDD5;color:#EA580C;}
-.stat-label{font-size:11px;color:var(--text-3);font-weight:700;margin-bottom:4px;letter-spacing:.3px;}
-.stat-value{font-size:26px;font-weight:900;color:var(--maroon);line-height:1;}
-.stat-trend{font-size:10px;margin-top:6px;display:flex;align-items:center;gap:3px;font-weight:700;}
+.stat-label{font-size:10px;color:var(--text-3);font-weight:700;margin-bottom:3px;letter-spacing:.2px;}
+.stat-value{font-size:19px;font-weight:900;color:var(--maroon);line-height:1;}
+.stat-trend{font-size:9px;margin-top:4px;display:flex;align-items:center;gap:3px;font-weight:700;}
 .trend-up{color:#10B981;}.trend-dn{color:#EF4444;}
 /* ============================================================ CARDS */
 .card{background:var(--surface);border-radius:var(--radius-lg);overflow:hidden;margin-bottom:16px;box-shadow:var(--shadow-sm);border:1px solid var(--border);}
@@ -268,15 +274,28 @@ input[inputmode="decimal"],input[inputmode="numeric"],input[type="number"],input
 .dept-workshop{background:#FFEDD5;color:#9A3412;}.dept-ext{background:#FEF9C3;color:#713F12;}
 .dept-body{padding:10px 12px;}
 .dept-body select{padding:6px 10px;font-size:12px;border-radius:6px;}
-/* ============================================================ STAGE BAR */
-.stage-bar{display:flex;gap:0;margin-bottom:20px;border-radius:var(--radius-md);overflow:hidden;border:1px solid var(--border);flex-wrap:nowrap;overflow-x:auto;}
-.stage-item{flex:1;min-width:70px;padding:10px 4px;text-align:center;font-size:10px;border-left:1px solid var(--border);color:var(--text-3);background:var(--surface);}
-.stage-item:last-child{border-left:none;}
-.stage-item.done{background:#D1FAE5;color:#065F46;}
-.stage-item.active{background:var(--maroon);color:#fff;font-weight:700;}
-.stage-item.active .stage-person{color:var(--gold);}
-.stage-item i{display:block;font-size:16px;margin-bottom:3px;}
-.stage-label{font-size:10px;}.stage-person{font-size:9px;margin-top:2px;}
+/* ============================================================ CREATE ORDER FORM — compact sizing */
+#add-content label{font-size:11px;}
+#add-content input,#add-content select,#add-content textarea{font-size:12px;padding:8px 12px;}
+#add-content .card-title{font-size:13.5px;}
+#add-content .fg{gap:4px;}
+#add-content textarea{min-height:64px;}
+#add-content .dept-header{font-size:11px;padding:7px 12px;}
+#add-content .dept-body select{font-size:11.5px;padding:5px 9px;}
+/* ============================================================ DEPT TRACK (sleek circles + thin lines) */
+.dept-track-wrap{margin-bottom:18px;}
+.dept-track-sub-label{font-size:9.5px;font-weight:800;color:var(--gold);letter-spacing:.4px;margin-bottom:6px;display:flex;align-items:center;gap:4px;}
+.dept-track-row{display:flex;align-items:flex-start;overflow-x:auto;padding:2px 2px 0;}
+.dept-track-node{display:flex;flex-direction:column;align-items:center;gap:5px;flex:0 0 auto;min-width:44px;}
+.dept-track-dot{width:11px;height:11px;border-radius:50%;background:var(--surface);border:2px solid var(--border);flex-shrink:0;box-sizing:border-box;transition:.25s;}
+.dept-track-dot.done{background:#10B981;border-color:#10B981;}
+.dept-track-dot.active{background:var(--gold);border-color:var(--gold);box-shadow:0 0 0 3px rgba(212,175,55,.28);}
+.dept-track-label{font-size:9px;font-weight:700;color:var(--text-3);white-space:nowrap;text-align:center;}
+.dept-track-label.done{color:#059669;}
+.dept-track-label.active{color:var(--maroon);font-weight:800;}
+.dept-track-person{font-size:8px;color:var(--text-3);white-space:nowrap;max-width:60px;overflow:hidden;text-overflow:ellipsis;}
+.dept-track-line{flex:1 1 16px;height:2px;background:var(--border-soft);margin-top:4.5px;min-width:10px;}
+.dept-track-line.done{background:#10B981;}
 /* ============================================================ WF CARDS */
 .wf-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px;margin-bottom:20px;}
 .wf-kanban{display:grid;grid-template-columns:repeat(5,minmax(230px,1fr));gap:14px;margin-bottom:20px;align-items:start;}
@@ -334,10 +353,10 @@ input[inputmode="decimal"],input[inputmode="numeric"],input[type="number"],input
 .modal-title i{color:var(--gold);}
 .btn-close{background:none;border:none;cursor:pointer;font-size:22px;color:var(--text-3);line-height:1;width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:50%;transition:.15s;}
 .btn-close:hover{background:#FEE2E2;color:#EF4444;}
-.dg{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
-.di{display:flex;flex-direction:column;gap:3px;}
-.dk{font-size:10px;color:var(--text-3);font-weight:800;letter-spacing:.5px;text-transform:uppercase;}
-.dv{font-size:13px;font-weight:600;color:var(--text-1);}
+.dg{display:grid;grid-template-columns:repeat(auto-fit,minmax(115px,1fr));gap:8px;}
+.di{display:flex;flex-direction:column;gap:2px;}
+.dk{font-size:9px;color:var(--text-3);font-weight:800;letter-spacing:.4px;text-transform:uppercase;}
+.dv{font-size:12px;font-weight:600;color:var(--text-1);}
 .arow{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px;border-top:1px solid var(--border-soft);padding-top:16px;}
 /* ============================================================ CHAT */
 .chat-container{background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-md);overflow:hidden;margin-top:16px;}
@@ -528,13 +547,13 @@ input[inputmode="decimal"],input[inputmode="numeric"],input[type="number"],input
 .ptitle i{background:var(--gold-soft);color:var(--maroon);width:38px;height:38px;border-radius:var(--radius-md);display:inline-flex;align-items:center;justify-content:center;font-size:17px;flex:none;}
 .breadcrumb{font-size:12.5px;}
 
-.stats-row{gap:18px;margin-bottom:30px;}
-.stat-card{padding:20px 20px 16px;border-radius:var(--radius-xl);border-color:var(--border-soft);}
-.stat-card::before{height:4px;width:100%;top:0;left:0;right:auto;border-radius:var(--radius-xl) var(--radius-xl) 0 0;}
+.stats-row{gap:10px;margin-bottom:20px;}
+.stat-card{padding:12px 12px 10px;border-radius:var(--radius-lg);border-color:var(--border-soft);}
+.stat-card::before{height:3px;width:100%;top:0;left:0;right:auto;border-radius:var(--radius-lg) var(--radius-lg) 0 0;}
 .stat-card:hover{box-shadow:var(--shadow-lg);transform:translateY(-3px);}
-.stat-icon{width:44px;height:44px;border-radius:var(--radius-md);font-size:19px;margin-bottom:14px;}
-.stat-value{font-size:27px;}
-.stat-label{font-size:11px;letter-spacing:.5px;}
+.stat-icon{width:30px;height:30px;border-radius:var(--radius-sm);font-size:14px;margin-bottom:8px;}
+.stat-value{font-size:19px;}
+.stat-label{font-size:10px;letter-spacing:.3px;}
 
 .card{border-radius:var(--radius-xl);box-shadow:var(--shadow-sm);border-color:var(--border-soft);transition:.2s;}
 .card:hover{box-shadow:var(--shadow-md);}
@@ -725,10 +744,10 @@ input[inputmode="decimal"],input[inputmode="numeric"],input[type="number"],input
 #order-modal .modal-title i{color:#fff;opacity:.9;}
 #order-modal .btn-close{color:rgba(255,255,255,.85);transition:all .2s;position:relative;z-index:1;}
 #order-modal .btn-close:hover{color:#fff;background:rgba(255,255,255,.18);transform:rotate(90deg);}
-#order-modal .di{background:var(--surface-2);border:1px solid var(--border-soft);border-radius:var(--radius-md);padding:12px 14px;transition:box-shadow .2s;}
+#order-modal .di{background:var(--surface-2);border:1px solid var(--border-soft);border-radius:var(--radius-sm);padding:7px 9px;transition:box-shadow .2s;}
 #order-modal .di:hover{box-shadow:var(--shadow-sm);}
 #order-modal .dg .di:first-child{width:fit-content;max-width:100%;justify-self:start;}
-#order-modal .dk{color:var(--maroon-mid);font-weight:800;font-size:11px;letter-spacing:.4px;}
+#order-modal .dk{color:var(--maroon-mid);font-weight:800;font-size:9px;letter-spacing:.3px;}
 #order-modal .card{border-radius:var(--radius-lg);box-shadow:var(--shadow-sm);}
 #order-modal .card-header{background:linear-gradient(180deg,var(--surface-2) 0%,var(--surface) 100%);}
 #order-modal .card-title{font-weight:800;color:var(--maroon);}
@@ -1603,15 +1622,40 @@ function preciseTimeBadge(hours){
 }
 function deadlineBadge(deadline){if(!deadline||deadline==='—')return'';const now=new Date();const dl=new Date(deadline);const hours=Math.round((dl-now)/3600000);if(hours<0)return`<div class="deadline-warn deadline-over"><i class="ti ti-alert-triangle"></i>تجاوز موعد التسليم!</div>`;if(hours<=24)return`<div class="deadline-warn"><i class="ti ti-clock"></i>التسليم خلال ${hours} ساعة</div>`;if(hours<=72)return`<div class="deadline-warn"><i class="ti ti-clock"></i>التسليم خلال ${Math.round(hours/24)} أيام</div>`;return'';}
 function formatDate(iso){if(!iso)return'—';try{return new Date(iso).toLocaleDateString('ar-SA');}catch{return iso;}}
-function stageBar(o){
+function renderDeptTrackRow(o){
   const activeDepts=getActiveDepts(o);const stages=[];
-  if(activeDepts.includes('design'))stages.push({key:'design',label:'تصميم',icon:'ti-brush',person:o.designName||'—'});
-  if(activeDepts.includes('external'))stages.push({key:'external',label:'خارجي',icon:'ti-world',person:o.externalName||'خارجي'});
-  if(activeDepts.includes('print'))stages.push({key:'print',label:'طباعة',icon:'ti-printer',person:o.printName||'—'});
-  if(activeDepts.includes('workshop'))stages.push({key:'workshop',label:'ورشة',icon:'ti-tools',person:o.workshopName||'—'});
-  stages.push({key:'done',label:'تسليم',icon:'ti-circle-check',person:''});
-  const cur=o.currentDept||'design';const curIdx=stages.findIndex(s=>s.key===cur);
-  return`<div class="stage-bar">${stages.map((s,i)=>{let cls='';if(cur==='done'){cls='done';}else{if(i<curIdx)cls='done';else if(s.key===cur)cls='active';}return`<div class="stage-item ${cls}"><i class="ti ${s.icon}"></i><div class="stage-label">${s.label}</div>${s.person?`<div class="stage-person">${s.person}</div>`:''}</div>`}).join('')}</div>`;
+  if(activeDepts.includes('design'))stages.push({key:'design',label:'تصميم',person:o.designName||'—'});
+  if(activeDepts.includes('external'))stages.push({key:'external',label:'خارجي',person:o.externalName||'خارجي'});
+  if(activeDepts.includes('print'))stages.push({key:'print',label:'طباعة',person:o.printName||'—'});
+  if(activeDepts.includes('workshop'))stages.push({key:'workshop',label:'ورشة',person:o.workshopName||'—'});
+  stages.push({key:'done',label:'تسليم',person:''});
+  const cur=o.currentDept||stages[0].key;const curIdx=cur==='done'?stages.length-1:stages.findIndex(s=>s.key===cur);
+  let html='<div class="dept-track-row">';
+  stages.forEach((s,i)=>{
+    let st='';if(cur==='done'){st='done';}else{if(i<curIdx)st='done';else if(s.key===cur)st='active';}
+    html+=`<div class="dept-track-node">
+      <div class="dept-track-dot ${st}"></div>
+      <div class="dept-track-label ${st}">${s.label}</div>
+      ${s.person&&s.key!=='done'?`<div class="dept-track-person">${s.person}</div>`:''}
+    </div>`;
+    if(i<stages.length-1)html+=`<div class="dept-track-line ${st==='done'?'done':''}"></div>`;
+  });
+  html+='</div>';
+  return html;
+}
+function stageBar(o,key){
+  const children=key?Object.entries(orders).filter(([k,v])=>v.parentOrderKey===key).sort((a,b)=>(a[1].productionLineIndex||0)-(b[1].productionLineIndex||0)):[];
+  let html='<div class="dept-track-wrap">';
+  html+=children.length?`<div class="dept-track-sub-label"><i class="ti ti-flag-3"></i> الخط الرئيسي</div>`:'';
+  html+=renderDeptTrackRow(o);
+  children.forEach(([ck,cv])=>{
+    html+=`<div style="margin-top:12px;padding-top:10px;border-top:1px dashed var(--border-soft);">
+      <div class="dept-track-sub-label"><i class="ti ti-git-branch"></i> خط إنتاج موازٍ #${cv.productionLineIndex||'?'} — ${cv.id||ck}</div>
+      ${renderDeptTrackRow(cv)}
+    </div>`;
+  });
+  html+='</div>';
+  return html;
 }
 function controlsRow(showSearch=false,searchId='',searchPlaceholder='بحث...'){
   const searchHtml=showSearch?`<div class="search-bar"><i class="ti ti-search"></i><input id="${searchId}" placeholder="${searchPlaceholder}" oninput="filterWf(this.value)"/></div>`:'';
@@ -3180,28 +3224,6 @@ function openOrderStageView(key){
 function openOrderTimelineView(key){
   const o=orders[key];if(!o)return;
   const svc=(o.orderItems&&o.orderItems.length?o.orderItems[0].name:o.service)||'—';
-  const deptLabels={design:'التصميم',external:'الخارجي',print:'الطباعة',workshop:'الورشة'};
-  const depts=getActiveDepts(o);
-  const doneAtMap={design:o.designDoneAt,external:o.externalDoneAt,print:o.printDoneAt,workshop:o.workshopDoneAt};
-  const startAtMap={design:o.designStartAt||o.date,external:o.externalStartAt||o.designDoneAt||o.date,print:o.printStartAt||o.designDoneAt||o.externalDoneAt||o.date,workshop:o.workshopStartAt||o.printDoneAt||o.externalDoneAt||o.designDoneAt||o.date};
-  const rows=depts.map(function(dk){
-    const doneAt=doneAtMap[dk],startAt=startAtMap[dk]||o.date;
-    let timeHtml;
-    if(doneAt){
-      const h=Math.max(0,(new Date(doneAt)-new Date(startAt))/3600000);
-      timeHtml=preciseTimeBadge(h);
-    } else if(o.currentDept===dk){
-      const h=(new Date()-new Date(o.stageStartDate||o.date))/3600000;
-      timeHtml=preciseTimeBadge(h);
-    } else if(o.currentDept==='done'){
-      timeHtml='<span class="badge b-done" style="font-size:9px">✓</span>';
-    } else {
-      timeHtml='<span style="color:var(--text-3);font-size:10px">—</span>';
-    }
-    const isCurrent=o.currentDept===dk;
-    return '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border-radius:8px;background:'+(isCurrent?'var(--surface-2)':'transparent')+';border:1px solid '+(isCurrent?'var(--border)':'transparent')+';margin-bottom:4px;">'+
-      '<span style="font-size:12px;font-weight:'+(isCurrent?'800':'600')+';">'+(deptLabels[dk]||dk)+'</span>'+timeHtml+'</div>';
-  }).join('');
   const statusHtml=o.currentDept==='done'?'<span class="badge b-done">تم الإنجاز</span>':deptBadge(o.currentDept);
   document.getElementById('order-modal-body').innerHTML=
     '<div class="modal-header"><div class="mh-title"><i class="ti ti-file-invoice"></i> '+(o.id||key)+'</div>'+
@@ -3212,10 +3234,7 @@ function openOrderTimelineView(key){
     '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">'+
     statusHtml+
     '<span style="font-size:12px;color:var(--text-3);"><i class="ti ti-calendar"></i> '+(o.date||'—')+'</span></div>'+
-    '<div>'+
-    '<div style="font-size:10px;color:var(--text-3);font-weight:800;letter-spacing:.5px;margin-bottom:6px;">مراحل العمل</div>'+
-    rows+
-    '</div>'+
+    stageBar(o,key)+
     '<button class="btn btn-out btn-sm" style="width:100%;justify-content:center;" onclick="openOrderModal(\''+key+'\')"><i class="ti ti-file-text"></i> عرض تفاصيل الطلب كاملة</button>'+
     '</div>';
   openModal('order-modal');
@@ -3255,6 +3274,7 @@ function openOrderModal(key){
           return`<div style="background:${it.addedLater?'#FFFBEB':'var(--surface-2)'};border:1px solid ${it.addedLater?'#FDE68A':'var(--border)'};border-radius:8px;padding:10px 12px;">
             <div style="font-size:12px;font-weight:800;color:var(--maroon);margin-bottom:3px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
               <span style="flex:1;">بند ${i+1}: ${it.name||'—'}</span>
+              ${it.price?`<span style="background:var(--gold-soft);color:var(--maroon);font-size:10px;font-weight:800;padding:2px 8px;border-radius:20px;">${fmtMoney(Number(it.price))} ر.س</span>`:''}
               ${it.addedLater?`<span style="background:#C89A4A;color:#fff;font-size:9px;font-weight:800;padding:2px 7px;border-radius:20px;"><i class="ti ti-sparkles"></i> جديد</span>`:''}
               ${it.edited?`<span style="background:#2563EB;color:#fff;font-size:9px;font-weight:800;padding:2px 7px;border-radius:20px;"><i class="ti ti-pencil"></i> معدّل</span>`:''}
               ${deptRestricted?'':`<button class="btn btn-out btn-xs" style="padding:2px 8px;" onclick="openAddItemModal('${key}',${i})" title="تعديل البند"><i class="ti ti-pencil"></i></button>`}
@@ -3338,7 +3358,7 @@ function openOrderModal(key){
     </div>
     ${fromQuoteHtml}
     ${updateBannerHtml}
-    ${stageBar(o)}
+    ${stageBar(o,key)}
     <div class="dg" style="margin-bottom:14px;">
       <div class="di"><span class="dk">اسم العميل</span><span class="dv">${o.client}</span></div>
       <div class="di"><span class="dk">تاريخ ووقت الطلب</span><span class="dv">${orderDateTime(o)}</span></div>
@@ -3393,6 +3413,7 @@ function openAddItemModal(key,editIdx){
     </div>
     <div style="display:flex;flex-direction:column;gap:10px;">
       <div class="fg"><label>اسم البند *</label><input id="new-item-name" placeholder="مثال: لوحة إعلانية إضافية" value="${nameVal}"/></div>
+      <div class="fg"><label>سعر البند (ر.س) <span style="color:#EF4444">*</span></label><input type="text" inputmode="decimal" id="new-item-price" placeholder="0" min="0" value="${isEdit?(existing.price||''):''}" oninput="normalizeAmountInput(this)" onfocus="this.select()"/></div>
       <div class="fg"><label>التفاصيل والمواصفات</label><textarea id="new-item-details" placeholder="المقاسات، المواد..." style="min-height:60px;">${detailsVal}</textarea></div>
       <div class="fg"><label>إرفاق ملف (اختياري)</label>
         <div class="dept-upload-box" onclick="document.getElementById('new-item-file-input').click()"><i class="ti ti-upload" style="font-size:20px;color:var(--gold);"></i><br>اضغط لإرفاق ملف أو أكثر</div>
@@ -3419,8 +3440,11 @@ async function handleNewItemFiles(files,orderKey){
 }
 async function submitNewOrderItem(key){
   const name=document.getElementById('new-item-name').value.trim();
+  const priceRaw=normalizeDigits(document.getElementById('new-item-price').value);
   const details=document.getElementById('new-item-details').value.trim();
   if(!name){toast('⚠️ يرجى إدخال اسم البند');return;}
+  if(!priceRaw||parseFloat(priceRaw)<=0){toast('⚠️ سعر البند إلزامي — يرجى إدخال سعر صحيح أكبر من صفر');return;}
+  const price=parseFloat(priceRaw);
   const editIdx=window._editingItemIndex;
   const isEdit=(editIdx!==undefined&&editIdx!==null);
   showSaving(isEdit?'جاري حفظ التعديلات...':'جاري الإضافة...');
@@ -3429,11 +3453,20 @@ async function submitNewOrderItem(key){
     const items=Array.isArray(o.orderItems)?[...o.orderItems]:[];
     if(isEdit){
       const prev=items[editIdx]||{};
-      items[editIdx]={...prev,name,details,files:window._newItemFiles||[],edited:true,editedAt:new Date().toISOString(),editedBy:cu.name};
+      items[editIdx]={...prev,name,details,price,files:window._newItemFiles||[],edited:true,editedAt:new Date().toISOString(),editedBy:cu.name};
     }else{
-      items.push({name,details,files:window._newItemFiles||[],addedLater:true,addedAt:new Date().toISOString(),addedBy:cu.name});
+      items.push({name,details,price,files:window._newItemFiles||[],addedLater:true,addedAt:new Date().toISOString(),addedBy:cu.name});
     }
-    await fbPatch(`orders/${key}`,{orderItems:items,lastItemUpdateAt:new Date().toISOString(),lastItemUpdateBy:cu.name,lastItemUpdateType:isEdit?'edit':'add'});
+    // Keep order-level totals in sync with item prices whenever the order already tracks payment.
+    const newTotal=items.reduce((s,it)=>s+(parseFloat(it.price)||0),0);
+    const upd={orderItems:items,lastItemUpdateAt:new Date().toISOString(),lastItemUpdateBy:cu.name,lastItemUpdateType:isEdit?'edit':'add'};
+    if(o.paymentStatus){
+      upd.totalAmount=newTotal;
+      if(o.paymentStatus==='تم الدفع'){upd.paidAmount=newTotal;upd.remainingAmount=0;}
+      else if(o.paymentStatus==='دفع جزئي'){upd.remainingAmount=Math.max(0,newTotal-(Number(o.paidAmount)||0));}
+      else if(o.paymentStatus==='عند التسليم'){upd.remainingAmount=newTotal;}
+    }
+    await fbPatch(`orders/${key}`,upd);
     await loadData();
     hideSaving();closeModal('add-item-modal');
     toast(isEdit?'✓ تم حفظ التعديلات — تم تحديث الطلب':'✓ تم إضافة البند الجديد — تم تحديث الطلب');
@@ -3677,7 +3710,7 @@ function buildAddForm(isUrgentQuick=false){
           <span style="font-size:12px;font-weight:800;color:var(--maroon);"><i class="ti ti-git-branch"></i> خطوط إنتاج متوازية إضافية</span>
           <button type="button" class="btn btn-out btn-xs" id="add-prod-line-btn" onclick="addProductionLine()"><i class="ti ti-plus"></i> إضافة خط موازٍ</button>
         </div>
-        <div style="font-size:10.5px;color:var(--text-3);margin-bottom:10px;">حتى 3 خطوط إنتاج بالإجمالي (الخط الأساسي أعلاه + خطّين إضافيين). كل خط إضافي يعمل كطلب مستقل مرتبط، بحيث تعمل التصميم والطباعة في كل خط بالتوازي دون انتظار الخطوط الأخرى.</div>
+        <div style="font-size:10.5px;color:var(--text-3);margin-bottom:10px;">حتى 3 خطوط إنتاج بالإجمالي (الخط الأساسي أعلاه + خطّين إضافيين). كل خط إضافي يعمل كطلب مستقل مرتبط، بحيث تعمل جميع الأقسام (تصميم، تنفيذ خارجي، طباعة، ورشة) في كل خط بالتوازي دون انتظار الخطوط الأخرى.</div>
         <div id="prod-lines-wrap" style="display:flex;flex-direction:column;gap:10px;"></div>
       </div>
     </div>
@@ -3685,7 +3718,7 @@ function buildAddForm(isUrgentQuick=false){
       <button class="btn btn-brand" onclick="submitOrder(${isUrgentQuick})"><i class="ti ti-check"></i> حفظ الطلب وإطلاق المهام</button>
     </div>`;
   window.globalAttachedFiles=[];window.externalFileB64='';window.externalFileName='';
-  window._prodLines=[];window._prodLineDesignWorkers=dw;window._prodLinePrintWorkers=pw;renderProductionLines();
+  window._prodLines=[];window._prodLineDesignWorkers=dw;window._prodLinePrintWorkers=pw;window._prodLineExternalWorkers=ew;window._prodLineWorkshopWorkers=ww;renderProductionLines();
   window._workshopDeptFileB64='';window._workshopDeptFileName='';
   window._orderLines=[];
   setTimeout(()=>{
@@ -3739,7 +3772,7 @@ function onExternalChange(v){const w=document.getElementById('external-note-wrap
 function addProductionLine(){
   if(!window._prodLines)window._prodLines=[];
   if(window._prodLines.length>=2){toast('⚠️ الحد الأقصى 3 خطوط إنتاج (الخط الأساسي + خطّين إضافيين)');return;}
-  window._prodLines.push({id:'pl'+Date.now(),design:'none',print:'none'});
+  window._prodLines.push({id:'pl'+Date.now(),design:'none',external:'none',print:'none',workshop:'none'});
   renderProductionLines();
 }
 function removeProductionLine(id){window._prodLines=(window._prodLines||[]).filter(x=>x.id!==id);renderProductionLines();}
@@ -3747,20 +3780,29 @@ function updateProductionLine(id,f,v){const l=(window._prodLines||[]).find(x=>x.
 function renderProductionLines(){
   const wrap=document.getElementById('prod-lines-wrap');if(!wrap)return;
   const lines=window._prodLines||[];
-  const dOpts=sel=>`<option value="none"${sel==='none'?' selected':''}>❌ بدون تصميم</option>`+(window._prodLineDesignWorkers||[]).map(w=>`<option value="${w.uname}"${sel===w.uname?' selected':''}>${w.name}</option>`).join('');
-  const pOpts=sel=>`<option value="none"${sel==='none'?' selected':''}>❌ لا يتطلب</option>`+(window._prodLinePrintWorkers||[]).map(w=>`<option value="${w.uname}"${sel===w.uname?' selected':''}>${w.name}</option>`).join('');
+  const mkDeptOpts=(workers,noneLabel)=>sel=>`<option value="none"${sel==='none'?' selected':''}>${noneLabel}</option>`+(workers||[]).map(w=>`<option value="${w.uname}"${sel===w.uname?' selected':''}>${w.name}</option>`).join('');
+  const dOpts=mkDeptOpts(window._prodLineDesignWorkers,'❌ بدون تصميم');
+  const eOpts=mkDeptOpts(window._prodLineExternalWorkers,'❌ لا يوجد');
+  const pOpts=mkDeptOpts(window._prodLinePrintWorkers,'❌ لا يتطلب');
+  const wOpts=mkDeptOpts(window._prodLineWorkshopWorkers,'❌ لا يتطلب');
   wrap.innerHTML=lines.map((l,i)=>`
     <div style="background:var(--surface-2);border:1.5px dashed var(--gold);border-radius:10px;padding:12px;">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
         <span style="font-size:11px;font-weight:800;color:var(--gold);"><i class="ti ti-git-branch"></i> خط إنتاج موازٍ #${i+2}</span>
         <button type="button" class="btn btn-red btn-xs" onclick="removeProductionLine('${l.id}')"><i class="ti ti-trash"></i> حذف</button>
       </div>
-      <div class="dept-grid-layout" style="padding:0;grid-template-columns:1fr 1fr;">
+      <div class="dept-grid-layout" style="padding:0;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));">
         <div class="dept-section"><div class="dept-header dept-design"><i class="ti ti-brush"></i> التصميم</div><div class="dept-body">
           <select onchange="updateProductionLine('${l.id}','design',this.value)">${dOpts(l.design)}</select>
         </div></div>
+        <div class="dept-section"><div class="dept-header dept-ext"><i class="ti ti-world"></i> تنفيذ خارجي</div><div class="dept-body">
+          <select onchange="updateProductionLine('${l.id}','external',this.value)">${eOpts(l.external)}</select>
+        </div></div>
         <div class="dept-section"><div class="dept-header dept-print"><i class="ti ti-printer"></i> الطباعة</div><div class="dept-body">
           <select onchange="updateProductionLine('${l.id}','print',this.value)">${pOpts(l.print)}</select>
+        </div></div>
+        <div class="dept-section"><div class="dept-header dept-workshop"><i class="ti ti-tools"></i> الورشة</div><div class="dept-body">
+          <select onchange="updateProductionLine('${l.id}','workshop',this.value)">${wOpts(l.workshop)}</select>
         </div></div>
       </div>
     </div>`).join('');
@@ -3913,10 +3955,11 @@ async function submitOrder(isUrgentQuick=false){
     await fbPatch(`orders/${res.name}`,{id:newId});await loadData();
     // Extra parallel production lines: each becomes its own linked order so design/print
     // in that line runs independently (its own currentDept) without blocking the primary line.
-    const _extraLines=(window._prodLines||[]).filter(l=>l.design!=='none'||l.print!=='none');
+    const _extraLines=(window._prodLines||[]).filter(l=>l.design!=='none'||l.external!=='none'||l.print!=='none'||l.workshop!=='none');
     for(let i=0;i<_extraLines.length;i++){
       const l=_extraLines[i];
-      const lineDept=l.design!=='none'?'design':'print';
+      let lineDept='design';
+      if(l.design==='none'){if(l.external!=='none')lineDept='external';else if(l.print!=='none')lineDept='print';else lineDept='workshop';}
       const lineOrd={
         client:c,service:s+' — خط إنتاج موازٍ #'+(i+2),
         orderItems:(window._orderLines||[]).map(x=>({name:x.name,details:x.details,files:[]})),
@@ -3925,9 +3968,9 @@ async function submitOrder(isUrgentQuick=false){
         deadline:document.getElementById('fd').value||'—',notes:'خط إنتاج موازٍ مرتبط بالطلب '+newId,
         files:[],createdBy:cu.name,createdByUname:cu._uname,isUrgentQuick:isUrgentQuick||false,
         designTo:l.design,designName:l.design==='none'?'❌ معفى':(USERS[l.design]?.name||l.design),
-        externalTo:'none',externalName:'❌ معفى',externalNote:'',
+        externalTo:l.external,externalName:l.external==='none'?'❌ معفى':(USERS[l.external]?.name||l.external),externalNote:'',
         printTo:l.print,printName:l.print==='none'?'❌ معفى':(USERS[l.print]?.name||l.print),
-        workshopTo:'none',workshopName:'❌ معفى',workshopDeptFile:'',workshopDeptFileName:'',
+        workshopTo:l.workshop,workshopName:l.workshop==='none'?'❌ معفى':(USERS[l.workshop]?.name||l.workshop),workshopDeptFile:'',workshopDeptFileName:'',
         currentDept:lineDept,status:'قيد المتابعة',
         approvedPrintFile:'',approvedPrintFileName:'',approvedWorkshopFile:'',approvedWorkshopFileName:'',
         finalWorkshopDoneFile:'',finalWorkshopDoneFileName:'',
