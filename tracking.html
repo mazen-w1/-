@@ -367,18 +367,20 @@
     }
 
     .spinner {
-      width: 40px;
-      height: 40px;
-      border: 4px solid rgba(74, 14, 23, 0.1);
+      width: 30px;
+      height: 30px;
+      border: 3.5px solid rgba(74, 14, 23, 0.1);
       border-top-color: #4A0E17;
       border-radius: 50%;
       animation: spin 0.8s linear infinite;
+      display: inline-block;
+      vertical-align: middle;
+      margin-left: 8px;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
   </style>
 </head>
 <body>
-  <!-- PAGE 1: SEARCH ORDER -->
   <div id="searchPage" class="page active">
     <div class="container">
       <div class="header-brand">
@@ -410,13 +412,12 @@
         </div>
       </div>
 
-      <button class="btn btn-primary" onclick="searchOrder()">تتبع الطلب</button>
+      <button class="btn btn-primary" id="submitBtn" onclick="searchOrder()">تتبع الطلب</button>
 
       <p class="privacy-note">لن يتم استخدام بياناتك إلا لعرض حالة الطلب.</p>
     </div>
   </div>
 
-  <!-- PAGE 2: ORDER STATUS -->
   <div id="statusPage" class="page">
     <div class="container">
       <div class="header-brand" style="margin-bottom: 40px;">
@@ -478,7 +479,7 @@
               <div class="detail-value" id="detailCustomer">—</div>
             </div>
             <div class="detail-row">
-              <div class="detail-label">المشرف المسؤول</div>
+              <div class="detail-label">منشئ الطلب</div>
               <div class="detail-value" id="detailRepresentative">—</div>
             </div>
             <div class="detail-row">
@@ -509,10 +510,10 @@
   </div>
 
   <script>
-    // رابط السيرفر المباشر من النظام الأصلي لروائع الأفكار الإعلانية
+    // رابط السيرفر المباشر لـ Realtime Database الخاص بروائع الأفكار الإعلانية
     const fbUrl = "https://rawaee-alafkar-default-rtdb.firebaseio.com";
 
-    // مراحل خط الإنتاج وتتبع العميل المتوافقة مع النظام الداخلي
+    // مراحل خط الإنتاج المعتمدة بالكامل في نظام روائع v3 الداخلي
     const stages = [
       { id: 'design', label: 'التصميم' },
       { id: 'external', label: 'التنفيذ الخارجي' },
@@ -523,7 +524,7 @@
 
     let currentOrder = null;
 
-    // دالة تحويل أرقام المدخلات تلقائياً للإنجليزية لتفادي أخطاء البحث
+    // تحويل الأرقام تلقائياً للإنجليزية لضمان الفرز البرمي الموثوق
     function toEnglishDigits(str) {
       const ar = '٠١٢٣٤٥٦٧٨٩', fa = '۰۱۲۳۴۵۶۷۸۹';
       return String(str).replace(/[٠-٩۰-۹]/g, d => {
@@ -545,7 +546,7 @@
       showLoading(true);
 
       try {
-        // الاتصال بقاعدة البيانات المباشرة
+        // سحب البيانات المباشر عبر طلب الـ REST API لفايربيس
         const response = await fetch(`${fbUrl}/orders.json`);
         if (!response.ok) throw new Error('تعذر الاتصال بخادم قاعدة البيانات');
         
@@ -557,10 +558,15 @@
           return;
         }
 
-        // الفحص الذكي عن طريق التطابق مع رقم الجوال (أو احتوائه) أو معرف الطلب الأساسي
+        // الفرز الشامل المتكامل والذكي للمطابقة مع المعرف البشري، الجوال، أو الاسم
         const found = Object.entries(orders)
           .map(([key, v]) => ({ ...v, _key: key }))
-          .find(o => o.id === cleanInput || o.phone === cleanInput || String(o.phone || '').includes(cleanInput) || o._key === cleanInput);
+          .find(o => 
+            (o.id && String(o.id).toLowerCase() === cleanInput.toLowerCase()) || 
+            (o.phone && String(o.phone).includes(cleanInput)) || 
+            (o.client && String(o.client).toLowerCase().includes(cleanInput.toLowerCase())) ||
+            (o._key && o._key === cleanInput)
+          );
 
         if (!found) {
           showError('لم يتم العثور على طلب مطابق. تحقق من رقم الطلب أو الجوال المكتوب.');
@@ -575,44 +581,26 @@
       }
     }
 
-    function getActiveDepts(o) {
-      const seq = [];
-      if (o.designTo && o.designTo !== 'none') seq.push('design');
-      if (o.externalTo && o.externalTo !== 'none') seq.push('external');
-      if (o.printTo && o.printTo !== 'none') seq.push('print');
-      if (o.workshopTo && o.workshopTo !== 'none') seq.push('workshop');
-      return seq;
-    }
-
-    function currentPersonName(o) {
-      if (!o.currentDept || o.currentDept === 'design') return o.designName || '—';
-      if (o.currentDept === 'external') return o.externalName || 'تنفيذ خارجي';
-      if (o.currentDept === 'print') return o.printName || '—';
-      if (o.currentDept === 'workshop') return o.workshopName || '—';
-      if (o.currentDept === 'done') return '✓ مكتمل وتم التسليم';
-      return '—';
-    }
-
     function displayOrder() {
       const order = currentOrder;
-      const deptSequence = getActiveDepts(order);
       const curDept = order.currentDept || 'design';
 
-      // تعبئة البيانات في الشاشات
+      // دمج وتعبئة الحقول من قاعدة بيانات النظام الداخلي حرفياً
       document.getElementById('orderNumber').textContent = order.id || order._key || '—';
       document.getElementById('customerName').textContent = order.client || '—';
       document.getElementById('orderDate').textContent = formatDate(order.createdAt || order.date) || '—';
       document.getElementById('estimatedDelivery').textContent = formatDate(order.deadline) || '—';
 
       document.getElementById('detailCustomer').textContent = order.client || '—';
-      document.getElementById('detailRepresentative').textContent = currentPersonName(order);
+      document.getElementById('detailRepresentative').textContent = order.createdBy || '—';
       document.getElementById('detailService').textContent = order.service || '—';
       document.getElementById('detailDeliveryDate').textContent = formatDate(order.deadline) || '—';
       document.getElementById('detailNotes').textContent = order.notes || 'لا توجد ملاحظات خاصة على التنفيذ';
 
-      // حساب المسار وحالة شريط التقدم برمجياً
+      // حساب وتمثيل شريط المؤشر الحركي
       let currentStageIndex = stages.findIndex(s => s.id === curDept);
-      if (curDept === 'done') currentStageIndex = stages.length - 1;
+      if (curDept === 'done' || order.status === 'مكتمل') currentStageIndex = stages.length - 1;
+      if (currentStageIndex === -1) currentStageIndex = 0;
 
       const progressPercent = ((currentStageIndex) / (stages.length - 1)) * 100;
       document.getElementById('progressFill').style.width = progressPercent + '%';
@@ -621,14 +609,13 @@
         let statusClass = 'upcoming';
         let indicator = index + 1;
 
-        if (index < currentStageIndex || curDept === 'done') {
+        if (index < currentStageIndex || curDept === 'done' || order.status === 'مكتمل') {
           statusClass = 'completed';
           indicator = '✓';
         } else if (index === currentStageIndex) {
           statusClass = 'active';
         }
 
-        // فلترة الخطوات: إذا كانت المرحلة معفاة من الطلب وليست المرحلة الحالية أو الأخيرة، لا نلغيها بل نوضح سريانها السلس
         return `
           <div class="progress-step ${statusClass}">
             <div class="step-indicator">${indicator}</div>
@@ -642,10 +629,10 @@
     }
 
     function showLoading(status) {
-      const searchBtn = document.querySelector('#searchPage .btn-primary');
+      const searchBtn = document.getElementById('submitBtn');
       if (status) {
         searchBtn.disabled = true;
-        searchBtn.innerHTML = '<div class="spinner" style="width:20px;height:24px;border-width:2.5px;"></div> جاري البحث...';
+        searchBtn.innerHTML = '<div class="spinner"></div> جاري البحث عن الطلب...';
       } else {
         searchBtn.disabled = false;
         searchBtn.textContent = 'تتبع الطلب';
@@ -676,15 +663,16 @@
     function formatDate(dateStr) {
       if (!dateStr) return '—';
       try {
-        const date = new Date(dateStr);
-        if (isNaN(date.getTime())) return dateStr.split('T')[0];
+        const cleanDate = dateStr.includes('T') ? dateStr.split('T')[0] : dateStr;
+        const date = new Date(cleanDate);
+        if (isNaN(date.getTime())) return cleanDate;
         return date.toLocaleDateString('ar-SA', { year: 'numeric', month: 'long', day: 'numeric' });
       } catch {
         return dateStr;
       }
     }
 
-    // التحقق التلقائي إذا تم تمرير رقم الطلب في الرابط (Query URL Parameter)
+    // لقطة القراءة المباشرة من روابط الـ QR المرفقة في عروض الأسعار ونظام العملاء
     const params = new URLSearchParams(window.location.search);
     const orderId = params.get('id');
 
@@ -695,7 +683,7 @@
       });
     }
 
-    // دعم زر الـ Enter للبحث الفوري
+    // دعم مفتاح الـ Enter للبحث الفوري السريع
     document.getElementById('searchInput').addEventListener('keypress', (e) => {
       if (e.key === 'Enter') searchOrder();
     });
