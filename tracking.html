@@ -570,7 +570,7 @@
     const auth = firebase.auth(app);
     const db = firebase.database(app);
 
-    const stages = [
+    var stages = [
       { id: 'design', label: 'تم استلام الطلب' },
       { id: 'approval', label: 'التصميم' },
       { id: 'print', label: 'الطباعة' },
@@ -578,7 +578,7 @@
       { id: 'done', label: 'تم التسليم' }
     ];
 
-    let currentOrder = null;
+    var currentOrder = null;
 
     async function initFirebase() {
       // REST API mode - no Firebase SDK initialization needed
