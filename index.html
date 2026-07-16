@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
-<title>روائع الأفكار الإعلانية — النظام الداخلي </title>
+<title>روائع الأفكار الإعلانية — النظام الداخلي v3</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&family=Tajawal:wght@400;500;700;800;900&family=Changa:wght@700;800&display=swap" rel="stylesheet"/>
@@ -1183,10 +1183,6 @@ async function syncUsers(){
   try{const r=await fbGet('users');if(!r||Object.keys(r).length===0){await fbSet('users',INITIAL_USERS);USERS={...INITIAL_USERS};}else USERS=r;}
   catch(e){USERS={...INITIAL_USERS};}
 }
-// Sync orders to localStorage for tracking.html
-function syncOrdersToLocalStorage(){
-  try{localStorage.setItem('rawaee_orders',JSON.stringify(orders));}catch(e){console.error('LocalStorage sync error:',e);}
-}
 async function loadData(){
   try{
     const [ord,cli,req,cht,sqt,wrt,tch]=await Promise.all([
@@ -1207,7 +1203,7 @@ async function loadData(){
     teamChat=(tch&&typeof tch==='object')?tch:{};
     updateNotifBell();updateRequestsBadgeSidebar();updateTeamChatBadge();
     checkNewAssignments();
-    cleanExpiredWarranties();syncOrdersToLocalStorage();
+    cleanExpiredWarranties();
   }catch(e){orders={};clients={};submittedRequests={};chats={};standaloneQuotes={};warranties={};teamChat={};}
 }
 // ============================================================
