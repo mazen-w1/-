@@ -2935,11 +2935,17 @@ async function convertSavedQuoteToOrder(key,preloadedData=null){
 function addCoProductionLine(){
   if(!window._coProdLines)window._coProdLines=[];
   if(window._coProdLines.length>=2){toast('⚠️ الحد الأقصى 3 خطوط إنتاج (الخط الأساسي + خطّين إضافيين)');return;}
-  window._coProdLines.push({id:'cpl'+Date.now(),design:'none',external:'none',print:'none',workshop:'none'});
+  window._coProdLines.push({id:'cpl'+Date.now(),design:'none',external:'none',print:'none',workshop:'none',itemIdxs:[]});
   renderCoProductionLines();
 }
 function removeCoProductionLine(id){window._coProdLines=(window._coProdLines||[]).filter(x=>x.id!==id);renderCoProductionLines();}
 function updateCoProductionLine(id,f,v){const l=(window._coProdLines||[]).find(x=>x.id===id);if(l)l[f]=v;}
+function toggleCoProductionLineItem(id,idx,checked){
+  const l=(window._coProdLines||[]).find(x=>x.id===id);if(!l)return;
+  if(!l.itemIdxs)l.itemIdxs=[];
+  if(checked){if(!l.itemIdxs.includes(idx))l.itemIdxs.push(idx);}
+  else{l.itemIdxs=l.itemIdxs.filter(x=>x!==idx);}
+}
 function renderCoProductionLines(){
   const wrap=document.getElementById('co-prod-lines-wrap');if(!wrap)return;
   const lines=window._coProdLines||[];
@@ -2947,7 +2953,13 @@ function renderCoProductionLines(){
   const mkOpts=(workers,noneLabel)=>sel=>`<option value="none"${sel==='none'?' selected':''}>${noneLabel}</option>`+(workers||[]).map(w=>`<option value="${w.uname}"${sel===w.uname?' selected':''}>${w.name}</option>`).join('');
   const dOpts=mkOpts(dw,'❌ بدون تصميم'),eOpts=mkOpts(ew,'❌ لا يوجد'),pOpts=mkOpts(pw,'❌ لا يتطلب'),wOpts=mkOpts(ww,'❌ لا يتطلب');
   const quoteLines=window._coQuoteLines||[];
-  const itemOpts=sel=>`<option value="">— اختر نوع البند —</option>`+quoteLines.map((x,idx)=>(x.lbl||'').trim()?`<option value="${idx}"${String(sel)===String(idx)?' selected':''}>${x.lbl}</option>`:'').join('');
+  const itemCheckboxes=(l)=>{
+    const avail=quoteLines.map((x,idx)=>({x,idx})).filter(({x})=>(x.lbl||'').trim());
+    if(!avail.length)return'<div style="font-size:10px;color:var(--text-3);">لا توجد بنود في هذا العرض</div>';
+    return avail.map(({x,idx})=>`<label style="display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:700;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:4px 8px;margin:0 4px 4px 0;cursor:pointer;">
+      <input type="checkbox" value="${idx}" ${((l.itemIdxs)||[]).includes(idx)?'checked':''} onchange="toggleCoProductionLineItem('${l.id}',${idx},this.checked)" style="width:13px;height:13px;accent-color:var(--gold);"/> ${x.lbl}
+    </label>`).join('');
+  };
   wrap.innerHTML=lines.map((l,i)=>`
     <div class="prod-line-row" style="background:var(--surface-2);border:1.5px dashed var(--gold);border-radius:10px;padding:10px;">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
@@ -2955,8 +2967,8 @@ function renderCoProductionLines(){
         <button type="button" class="btn btn-red btn-xs" onclick="removeCoProductionLine('${l.id}')"><i class="ti ti-trash"></i> حذف</button>
       </div>
       <div class="fg" style="margin-bottom:8px;">
-        <label style="font-size:9.5px;">نوع البند (بماذا يبدأ هذا الخط) *</label>
-        <select onchange="updateCoProductionLine('${l.id}','itemIdx',this.value)" style="width:100%;font-size:10px;padding:5px 7px;border-radius:6px;">${itemOpts(l.itemIdx)}</select>
+        <label style="font-size:9.5px;">البنود التي يبدأ بها هذا الخط (الاختيار مفتوح — يمكن اختيار أكثر من بند) *</label>
+        <div style="display:flex;flex-wrap:wrap;">${itemCheckboxes(l)}</div>
       </div>
       <div class="dept-grid-layout" style="padding:0;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:6px;">
         <div class="dept-section"><div class="dept-header dept-design"><i class="ti ti-brush"></i> التصميم</div><div class="dept-body">
@@ -3014,12 +3026,13 @@ async function finalizeConvertToOrder(quoteKey){
   if(!phone){toast('⚠️ يرجى إدخال رقم الجوال');return;}
   if(!isValidSaudiPhone(phone)){toast('⚠️ رقم الجوال يجب أن يكون رقم سعودي صحيح (05XXXXXXXX)');return;}
   if(dU==='none'&&eU==='none'&&pU==='none'&&wU==='none'){toast('⚠️ يجب اختيار قسم واحد على الأقل');return;}
-  // Parallel lines each take over ONE specific quote line-item; that item must be
-  // identified up front so it can be excluded from the primary order's items
-  // (no duplication) and used as the parallel line's own single item.
+  // Parallel lines each freely take over one, two, or more quote line-items (open
+  // multi-select); those items must be identified up front so they can be excluded
+  // from the primary order's items (no duplication) and used as the parallel line's
+  // own items.
   const _extraLines=(window._coProdLines||[]).filter(l=>l.design!=='none'||l.external!=='none'||l.print!=='none'||l.workshop!=='none');
-  if(_extraLines.some(l=>l.itemIdx===undefined||l.itemIdx===''||l.itemIdx===null)){toast('⚠️ يرجى تحديد نوع البند لكل خط إنتاج موازٍ');return;}
-  const claimedIdxs=new Set(_extraLines.map(l=>String(l.itemIdx)));
+  if(_extraLines.some(l=>!l.itemIdxs||!l.itemIdxs.length)){toast('⚠️ يرجى تحديد بند واحد على الأقل لكل خط إنتاج موازٍ');return;}
+  const claimedIdxs=new Set(_extraLines.flatMap(l=>l.itemIdxs).map(String));
   const q=standaloneQuotes[quoteKey]||await fbGet(`standalone_quotes/${quoteKey}`);
   if(!q)return;
   const primaryQLines=(q.lines||[]).filter((l,i)=>!claimedIdxs.has(String(i)));
@@ -3053,17 +3066,17 @@ async function finalizeConvertToOrder(quoteKey){
   await fbPatch(`standalone_quotes/${quoteKey}`,{convertedToOrder:newId,convertedAt:new Date().toISOString()});
   // Extra parallel production lines: same linked-child-order mechanism as the
   // main order registration form, so a converted quote can also run several
-  // concurrent jobs across departments. Each line owns exactly the ONE quote
-  // line-item selected as its "نوع البند" — already excluded from the primary
-  // order's items above, so it never duplicates.
+  // concurrent jobs across departments. Each line owns whichever quote line-item(s)
+  // were freely selected as its "البنود" (open, multi-select) — already excluded
+  // from the primary order's items above, so they never duplicate.
   for(let i=0;i<_extraLines.length;i++){
     const l=_extraLines[i];
-    const lineItem=(q.lines||[])[Number(l.itemIdx)];
+    const lineItems=(l.itemIdxs||[]).map(idx=>(q.lines||[])[Number(idx)]).filter(Boolean);
     let lineDept='design';
     if(l.design==='none'){if(l.external!=='none')lineDept='external';else if(l.print!=='none')lineDept='print';else lineDept='workshop';}
     const lineOrd={
-      client:q.client,service:(lineItem?lineItem.lbl:service)+' — خط إنتاج موازٍ #'+(i+2),
-      orderItems:lineItem?[{name:lineItem.lbl||'بند',details:`الكمية: ${lineItem.q||1}`,files:[]}]:[],
+      client:q.client,service:(lineItems.length?lineItems.map(x=>x.lbl).join(' + '):service)+' — خط إنتاج موازٍ #'+(i+2),
+      orderItems:lineItems.map(x=>({name:x.lbl||'بند',details:`الكمية: ${x.q||1}`,files:[]})),
       date:today,createdAt:new Date().toISOString(),stageStartDate:new Date().toISOString(),
       priority,phone:normalizeSaudiPhone(phone),
       deadline,notes:'خط إنتاج موازٍ مرتبط بالطلب '+newId,
@@ -4073,11 +4086,17 @@ function onExternalChange(v){const w=document.getElementById('external-note-wrap
 function addProductionLine(){
   if(!window._prodLines)window._prodLines=[];
   if(window._prodLines.length>=2){toast('⚠️ الحد الأقصى 3 خطوط إنتاج (الخط الأساسي + خطّين إضافيين)');return;}
-  window._prodLines.push({id:'pl'+Date.now(),design:'none',external:'none',print:'none',workshop:'none'});
+  window._prodLines.push({id:'pl'+Date.now(),design:'none',external:'none',print:'none',workshop:'none',itemIds:[]});
   renderProductionLines();
 }
 function removeProductionLine(id){window._prodLines=(window._prodLines||[]).filter(x=>x.id!==id);renderProductionLines();}
 function updateProductionLine(id,f,v){const l=(window._prodLines||[]).find(x=>x.id===id);if(l)l[f]=v;}
+function toggleProductionLineItem(id,itemId,checked){
+  const l=(window._prodLines||[]).find(x=>x.id===id);if(!l)return;
+  if(!l.itemIds)l.itemIds=[];
+  if(checked){if(!l.itemIds.includes(itemId))l.itemIds.push(itemId);}
+  else{l.itemIds=l.itemIds.filter(x=>x!==itemId);}
+}
 function renderProductionLines(){
   const wrap=document.getElementById('prod-lines-wrap');if(!wrap)return;
   const lines=window._prodLines||[];
@@ -4086,7 +4105,13 @@ function renderProductionLines(){
   const eOpts=mkDeptOpts(window._prodLineExternalWorkers,'❌ لا يوجد');
   const pOpts=mkDeptOpts(window._prodLinePrintWorkers,'❌ لا يتطلب');
   const wOpts=mkDeptOpts(window._prodLineWorkshopWorkers,'❌ لا يتطلب');
-  const itemOpts=sel=>`<option value="">— اختر نوع البند —</option>`+(window._orderLines||[]).filter(x=>(x.name||'').trim()).map(x=>`<option value="${x.id}"${sel===x.id?' selected':''}>${x.name}</option>`).join('');
+  const itemCheckboxes=(l)=>{
+    const avail=(window._orderLines||[]).filter(x=>(x.name||'').trim());
+    if(!avail.length)return'<div style="font-size:10px;color:var(--text-3);">أضف بنود الطلب أولاً</div>';
+    return avail.map(x=>`<label style="display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:700;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:4px 8px;margin:0 4px 4px 0;cursor:pointer;">
+      <input type="checkbox" value="${x.id}" ${((l.itemIds)||[]).includes(x.id)?'checked':''} onchange="toggleProductionLineItem('${l.id}','${x.id}',this.checked)" style="width:13px;height:13px;accent-color:var(--gold);"/> ${x.name}
+    </label>`).join('');
+  };
   wrap.innerHTML=lines.map((l,i)=>`
     <div class="prod-line-row" style="background:var(--surface-2);border:1.5px dashed var(--gold);border-radius:10px;padding:10px;">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
@@ -4094,8 +4119,8 @@ function renderProductionLines(){
         <button type="button" class="btn btn-red btn-xs" onclick="removeProductionLine('${l.id}')"><i class="ti ti-trash"></i> حذف</button>
       </div>
       <div class="fg" style="margin-bottom:8px;">
-        <label style="font-size:9.5px;">نوع البند (بماذا يبدأ هذا الخط) *</label>
-        <select onchange="updateProductionLine('${l.id}','itemId',this.value)" style="width:100%;font-size:10px;padding:5px 7px;border-radius:6px;">${itemOpts(l.itemId)}</select>
+        <label style="font-size:9.5px;">البنود التي يبدأ بها هذا الخط (الاختيار مفتوح — يمكن اختيار أكثر من بند) *</label>
+        <div style="display:flex;flex-wrap:wrap;">${itemCheckboxes(l)}</div>
       </div>
       <div class="dept-grid-layout" style="padding:0;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;">
         <div class="dept-section"><div class="dept-header dept-design"><i class="ti ti-brush"></i> التصميم</div><div class="dept-body">
@@ -4235,8 +4260,8 @@ async function submitOrder(isUrgentQuick=false){
   // front so it can be excluded from the primary line's items (no duplication) and
   // used as the parallel line's own single item.
   const _extraLines=(window._prodLines||[]).filter(l=>l.design!=='none'||l.external!=='none'||l.print!=='none'||l.workshop!=='none');
-  if(_extraLines.some(l=>!l.itemId)){toast('⚠️ يرجى تحديد نوع البند لكل خط إنتاج موازٍ');return;}
-  const claimedItemIds=new Set(_extraLines.map(l=>l.itemId));
+  if(_extraLines.some(l=>!l.itemIds||!l.itemIds.length)){toast('⚠️ يرجى تحديد بند واحد على الأقل لكل خط إنتاج موازٍ');return;}
+  const claimedItemIds=new Set(_extraLines.flatMap(l=>l.itemIds));
   let startDept='design';
   if(dU==='none'){if(extU!=='none')startDept='external';else if(pU!=='none')startDept='print';else startDept='workshop';}
   const today=new Date().toISOString().split('T')[0];
@@ -4289,16 +4314,17 @@ async function submitOrder(isUrgentQuick=false){
     await fbPatch(`orders/${res.name}`,{id:newId});await loadData();
     // Extra parallel production lines: each becomes its own linked order so design/print
     // in that line runs independently (its own currentDept) without blocking the primary line.
-    // Each line owns exactly the ONE item selected as its "نوع البند" — that item was
-    // already excluded from the primary order's items above, so it never duplicates.
+    // Each line owns whichever item(s) were freely selected as its "البنود" (open,
+    // multi-select — one, two, or more) — those items were already excluded from the
+    // primary order's items above, so they never duplicate.
     for(let i=0;i<_extraLines.length;i++){
       const l=_extraLines[i];
-      const lineItem=(window._orderLines||[]).find(x=>x.id===l.itemId);
+      const lineItems=(window._orderLines||[]).filter(x=>(l.itemIds||[]).includes(x.id));
       let lineDept='design';
       if(l.design==='none'){if(l.external!=='none')lineDept='external';else if(l.print!=='none')lineDept='print';else lineDept='workshop';}
       const lineOrd={
-        client:c,service:(lineItem?lineItem.name:s)+' — خط إنتاج موازٍ #'+(i+2),
-        orderItems:lineItem?[{name:lineItem.name,details:lineItem.details,files:lineItem.files||[]}]:[],
+        client:c,service:(lineItems.length?lineItems.map(x=>x.name).join(' + '):s)+' — خط إنتاج موازٍ #'+(i+2),
+        orderItems:lineItems.map(x=>({name:x.name,details:x.details,files:x.files||[]})),
         date:today,createdAt:new Date().toISOString(),stageStartDate:new Date().toISOString(),
         priority:document.getElementById('fpr').value,phone:normalizeSaudiPhone(phone),
         deadline:document.getElementById('fd').value||'—',notes:'خط إنتاج موازٍ مرتبط بالطلب '+newId,
