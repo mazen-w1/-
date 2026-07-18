@@ -2074,9 +2074,10 @@ function buildWfGrid(tab){
     } else {
       cardsHtml=list.length?list.map(cardHtml).join(''):'<div style="color:var(--text-3);padding:20px 10px;text-align:center;font-size:12px;"><i class="ti ti-inbox" style="font-size:26px;display:block;margin-bottom:6px;"></i>لا توجد أعمال</div>';
     }
-    const isStageLink=['design','external','print','workshop','done'].includes(c.key);
+    const isStageLink=['design','external','print','workshop','done','completed'].includes(c.key);
+    const stageLinkKey=c.key==='completed'?'done':c.key;
     return `<div class="wf-kanban-col">
-      <div class="wf-kanban-col-header"${isStageLink?` onclick="openDeptStagePage('${c.key}')" style="cursor:pointer;" title="عرض صفحة مستقلة لهذه المرحلة"`:''}><span class="badge ${c.cls}"><i class="ti ${c.icon}"></i> ${c.label}</span><span class="wf-kanban-count">${list.length}</span></div>
+      <div class="wf-kanban-col-header"${isStageLink?` onclick="openDeptStagePage('${stageLinkKey}')" style="cursor:pointer;" title="عرض صفحة مستقلة كاملة للطلبات المكتملة"`:''}><span class="badge ${c.cls}"><i class="ti ${c.icon}"></i> ${c.label}</span><span class="wf-kanban-count">${list.length}</span></div>
       <div class="wf-kanban-list">${cardsHtml}</div>
     </div>`;
   }).join('');
