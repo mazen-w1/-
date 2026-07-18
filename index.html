@@ -279,6 +279,13 @@ input[type="password"]{direction:rtl;text-align:right;padding-left:40px;padding-
 .dept-workshop{background:#FFEDD5;color:#9A3412;}.dept-ext{background:#FEF9C3;color:#713F12;}
 .dept-body{padding:10px 12px;}
 .dept-body select{padding:6px 10px;font-size:12px;border-radius:6px;}
+/* Parallel production line tracks — ultra-compact sizing */
+.prod-line-row .dept-header{font-size:9.5px;padding:5px 8px;gap:4px;}
+.prod-line-row .dept-header i{font-size:11px;}
+.prod-line-row .dept-body{padding:6px 8px;}
+.prod-line-row .dept-body select{font-size:10px;padding:4px 6px;border-radius:5px;width:100%;}
+.prod-line-file-btn{margin-top:6px;font-size:9.5px;font-weight:700;color:var(--maroon);background:var(--surface);border:1px dashed var(--border);border-radius:6px;padding:5px 6px;text-align:center;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:.15s;}
+.prod-line-file-btn:hover{border-color:var(--gold);background:var(--gold-soft);}
 /* ============================================================ CREATE ORDER FORM — compact sizing */
 #add-content label{font-size:11px;}
 #add-content input,#add-content select,#add-content textarea{font-size:12px;padding:8px 12px;}
@@ -430,10 +437,6 @@ input[type="password"]{direction:rtl;text-align:right;padding-left:40px;padding-
 .quote-action-item{display:flex;align-items:center;gap:8px;width:100%;padding:10px 14px;background:none;border:none;border-bottom:1px solid var(--border-soft);text-align:right;font-size:13px;font-weight:700;color:var(--text-1);cursor:pointer;font-family:inherit;}
 .quote-action-item:last-child{border-bottom:none;}
 .quote-action-item:hover{background:var(--surface-2);}
-.quote-success-box{width:110px;height:100px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;background:var(--surface);border:1px solid var(--border);border-radius:14px;cursor:pointer;transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease;text-align:center;}
-.quote-success-box i{font-size:24px;color:var(--maroon);}
-.quote-success-box span{font-size:12px;font-weight:800;color:var(--text-2);}
-.quote-success-box:hover{transform:translateY(-3px);box-shadow:0 8px 18px rgba(0,0,0,.08);border-color:var(--gold);}
 .quote-a4{width:100%;max-width:794px;margin:0 auto;background:#fff;font-family:'Cairo','Segoe UI',Tahoma,sans-serif;direction:rtl;}
 /* ============================================================ LOGIN PORTAL */
 .portal-bg{position:fixed;top:0;left:0;width:100%;height:100%;background:radial-gradient(ellipse at 30% 40%,#3a1016 0%,#1a0a0c 60%,#0d0507 100%);z-index:0;}
@@ -1543,7 +1546,7 @@ function renderFloatingTeamChat(){
 // ============================================================
 async function nav(p,skipHistory=false){
   if(p==='export'){exportExcel();return;}
-  if(p==='quote'&&_curPage!==p)window._quoteJustSavedKey='';
+  if(p==='quote'&&_curPage!==p)window._editingQuoteKey=null;
   if(!skipHistory&&_curPage&&_curPage!==p)_navHistory.push(_curPage);
   _curPage=p;
   if(cu&&cu._uname){try{localStorage.setItem('rawaee_last_page_'+cu._uname,p);}catch(e){}}
@@ -2330,24 +2333,6 @@ function quoteArchiveSectionHtml(){
 }
 function buildQuotePage(){
   window._quoteLines=[];
-  if(window._quoteJustSavedKey&&standaloneQuotes[window._quoteJustSavedKey]){
-    const savedKey=window._quoteJustSavedKey;
-    const q=standaloneQuotes[savedKey];
-    document.getElementById('page-quote').innerHTML=`
-      <div class="page-header"><div class="ptitle"><i class="ti ti-receipt-2"></i> إصدار عرض سعر رسمي</div></div>
-      <div class="card" style="text-align:center;padding:30px 16px;">
-        <i class="ti ti-circle-check" style="font-size:42px;color:#10B981;display:block;margin-bottom:10px;"></i>
-        <div style="font-weight:800;font-size:15px;margin-bottom:2px;">✓ تم حفظ عرض السعر بنجاح</div>
-        <div style="font-size:12px;color:var(--text-3);margin-bottom:20px;">${q.ref||savedKey} — ${q.client||'—'}</div>
-        <div style="display:flex;gap:14px;justify-content:center;flex-wrap:wrap;">
-          <div class="quote-success-box" onclick="goToQuoteRegistry('${savedKey}')"><i class="ti ti-archive"></i><span>حفظ في السجلات</span></div>
-          <div class="quote-success-box" onclick="downloadQuotePDF('${savedKey}')"><i class="ti ti-download"></i><span>تنزيل</span></div>
-        </div>
-        <button class="btn btn-out btn-sm" style="margin-top:22px;" onclick="startNewQuote()"><i class="ti ti-plus"></i> إنشاء عرض سعر جديد</button>
-      </div>
-      ${quoteArchiveSectionHtml()}`;
-    return;
-  }
   const cArr=Object.values(clients);
   // Auto-generate quote number (RA-0001 format, locked)
   const autoRef='RA-'+(Object.keys(standaloneQuotes).length+1).toString().padStart(4,'0');
@@ -2420,15 +2405,21 @@ function buildQuotePage(){
             <option value="دفعة واحدة">دفعة واحدة</option>
           </select>
         </div>
+        ${window._editingQuoteKey?`
         <div style="position:relative;display:inline-block;margin-top:16px;">
           <button class="btn btn-brand" onclick="toggleQuoteActionsMenu(event)"><i class="ti ti-list-check"></i> إجراءات العرض <i class="ti ti-chevron-down"></i></button>
           <div id="quote-actions-menu" style="display:none;position:absolute;top:calc(100% + 6px);right:0;background:var(--surface);border:1px solid var(--border);border-radius:10px;box-shadow:0 12px 30px rgba(0,0,0,.15);min-width:230px;z-index:50;overflow:hidden;">
             <button type="button" class="quote-action-item" onclick="closeQuoteActionsMenu();saveAndPreviewQuote()"><i class="ti ti-eye"></i> معاينة وطباعة A4</button>
             <button type="button" class="quote-action-item" onclick="closeQuoteActionsMenu();downloadQuotePDF()"><i class="ti ti-download"></i> تنزيل PDF</button>
-            <button type="button" class="quote-action-item" onclick="closeQuoteActionsMenu();saveQuoteToDb()"><i class="ti ti-device-floppy"></i> ${window._editingQuoteKey?'حفظ التعديلات':'حفظ في السجلات'}</button>
+            <button type="button" class="quote-action-item" onclick="closeQuoteActionsMenu();saveQuoteToDb()"><i class="ti ti-device-floppy"></i> حفظ التعديلات</button>
             <button type="button" class="quote-action-item" onclick="closeQuoteActionsMenu();convertQuoteToOrder()"><i class="ti ti-transfer"></i> تحويل لأمر تشغيل</button>
+            <button type="button" class="quote-action-item" style="color:#DC2626;" onclick="closeQuoteActionsMenu();deleteQuoteFromForm()"><i class="ti ti-trash"></i> حذف العرض</button>
           </div>
-        </div>
+        </div>`:`
+        <div style="display:flex;gap:10px;margin-top:16px;">
+          <button class="btn btn-brand btn-sm" onclick="saveQuoteToDb()"><i class="ti ti-device-floppy"></i> حفظ العرض</button>
+          <button class="btn btn-teal btn-sm" onclick="downloadQuotePDF()"><i class="ti ti-download"></i> تنزيل العرض</button>
+        </div>`}
       </div>
     </div>
     ${quoteArchiveSectionHtml()}`;
@@ -2467,14 +2458,6 @@ document.addEventListener('click',e=>{
   const menu=document.getElementById('quote-actions-menu');
   if(menu&&menu.style.display==='block'&&!menu.contains(e.target)&&!e.target.closest('button[onclick*="toggleQuoteActionsMenu"]'))menu.style.display='none';
 });
-function startNewQuote(){window._quoteJustSavedKey='';window._editingQuoteKey=null;buildQuotePage();}
-function goToQuoteRegistry(key){
-  window._quoteJustSavedKey='';buildQuotePage();
-  setTimeout(()=>{
-    const row=document.querySelector(`#quotes-archive-tbody tr[data-key="${key}"]`);
-    if(row){row.scrollIntoView({behavior:'smooth',block:'center'});row.style.transition='background .3s';const orig=row.style.background;row.style.background='#FEF3C7';setTimeout(()=>{row.style.background=orig;},1600);}
-  },80);
-}
 function buildQuoteArchiveRows(){
   const arr=Object.entries(standaloneQuotes).map(([k,v])=>({...v,_key:k})).sort((a,b)=>new Date(b.date)-new Date(a.date));
   if(!arr.length)return'<tr><td colspan="5" style="text-align:center;color:var(--text-3);padding:24px">لا يوجد عروض أسعار محفوظة</td></tr>';
@@ -2499,7 +2482,6 @@ async function editQuote(key){
   const q=standaloneQuotes[key]||await fbGet(`standalone_quotes/${key}`);
   if(!q){toast('⚠️ تعذر العثور على العرض');return;}
   window._editingQuoteKey=key;
-  window._quoteJustSavedKey='';
   buildQuotePage();
   const setVal=(id,v)=>{const el=document.getElementById(id);if(el)el.value=v||'';};
   setVal('q-client',q.client);setVal('q-phone',q.phone);setVal('q-ref',q.ref||key);
@@ -2627,13 +2609,22 @@ async function saveQuoteToDb(){
   showSaving('جاري الحفظ...');
   if(window._editingQuoteKey){
     await fbPatch('standalone_quotes/'+window._editingQuoteKey,data);
-    window._editingQuoteKey=null;
     await loadData();hideSaving();toast('✓ تم تحديث عرض السعر');buildQuotePage();
   }else{
     const res=await fbPush('standalone_quotes',data);
-    window._quoteJustSavedKey=res.name;
+    window._editingQuoteKey=res.name;
     await loadData();hideSaving();toast('✓ تم حفظ عرض السعر');buildQuotePage();
   }
+}
+async function deleteQuoteFromForm(){
+  if(!window._editingQuoteKey)return;
+  if(!confirm('حذف عرض السعر هذا نهائياً؟'))return;
+  showSaving('جاري الحذف...');
+  try{
+    await fbDelete('standalone_quotes/'+window._editingQuoteKey);
+    window._editingQuoteKey=null;
+    await loadData();hideSaving();toast('✓ تم حذف عرض السعر');buildQuotePage();
+  }catch(e){hideSaving();toast('❌ فشل الحذف');}
 }
 function saveAndPreviewQuote(){
   const data=getQuoteData();
@@ -2891,8 +2882,9 @@ async function convertSavedQuoteToOrder(key,preloadedData=null){
   showSaving('جاري التحضير...');
   const data=preloadedData||(standaloneQuotes[key]||await fbGet(`standalone_quotes/${key}`));
   if(!data){hideSaving();toast('خطأ: لم يتم العثور على العرض');return;}
-  const dw=getDeptWorkers('design');const pw=getDeptWorkers('print');const ww=getDeptWorkers('workshop');
+  const dw=getDeptWorkers('design');const pw=getDeptWorkers('print');const ww=getDeptWorkers('workshop');const ew=getDeptWorkers('external');
   window._coItemFiles={};
+  window._coProdLines=[];
   (data.lines||[]).forEach((l,i)=>{if(l.img)window._coItemFiles[i]={data:l.img,name:(l.lbl||'بند')+'.jpg'};});
   hideSaving();
   document.getElementById('order-modal-body').innerHTML=`
@@ -2925,11 +2917,57 @@ async function convertSavedQuoteToOrder(key,preloadedData=null){
       <div class="fg"><label>الأولوية</label><select id="co-priority"><option>عادية</option><option>متوسطة</option><option>عاجلة</option></select></div>
       <div class="fg"><label>تاريخ التسليم *</label><input type="datetime-local" id="co-deadline" required/></div>
       <div class="fg"><label>مسؤول التصميم</label><select id="co-design"><option value="none">❌ بدون تصميم</option>${dw.map(w=>`<option value="${w.uname}">${w.name}</option>`).join('')}</select></div>
+      <div class="fg"><label>مسؤول التنفيذ الخارجي</label><select id="co-external"><option value="none">❌ بدون تنفيذ خارجي</option>${ew.map(w=>`<option value="${w.uname}">${w.name}</option>`).join('')}</select></div>
       <div class="fg"><label>مسؤول الطباعة</label><select id="co-print"><option value="none">❌ بدون طباعة</option>${pw.map(w=>`<option value="${w.uname}">${w.name}</option>`).join('')}</select></div>
       <div class="fg"><label>مسؤول الورشة</label><select id="co-workshop"><option value="none">❌ بدون ورشة</option>${ww.map(w=>`<option value="${w.uname}">${w.name}</option>`).join('')}</select></div>
+      <div class="fg">
+        <div style="display:flex;align-items:center;justify-content:space-between;">
+          <label style="margin:0;">خطوط إنتاج موازية (طلبات متزامنة إضافية)</label>
+          <button type="button" id="co-add-prod-line-btn" class="btn btn-out btn-xs" onclick="addCoProductionLine()"><i class="ti ti-plus"></i> إضافة خط</button>
+        </div>
+        <div id="co-prod-lines-wrap" style="display:flex;flex-direction:column;gap:8px;margin-top:8px;"></div>
+      </div>
       <button class="btn btn-brand" style="width:100%;justify-content:center;" onclick="finalizeConvertToOrder('${key}')"><i class="ti ti-rocket"></i> إطلاق أمر التشغيل</button>
     </div>`;
   openModal('order-modal');
+}
+function addCoProductionLine(){
+  if(!window._coProdLines)window._coProdLines=[];
+  if(window._coProdLines.length>=2){toast('⚠️ الحد الأقصى 3 خطوط إنتاج (الخط الأساسي + خطّين إضافيين)');return;}
+  window._coProdLines.push({id:'cpl'+Date.now(),design:'none',external:'none',print:'none',workshop:'none'});
+  renderCoProductionLines();
+}
+function removeCoProductionLine(id){window._coProdLines=(window._coProdLines||[]).filter(x=>x.id!==id);renderCoProductionLines();}
+function updateCoProductionLine(id,f,v){const l=(window._coProdLines||[]).find(x=>x.id===id);if(l)l[f]=v;}
+function renderCoProductionLines(){
+  const wrap=document.getElementById('co-prod-lines-wrap');if(!wrap)return;
+  const lines=window._coProdLines||[];
+  const dw=getDeptWorkers('design'),ew=getDeptWorkers('external'),pw=getDeptWorkers('print'),ww=getDeptWorkers('workshop');
+  const mkOpts=(workers,noneLabel)=>sel=>`<option value="none"${sel==='none'?' selected':''}>${noneLabel}</option>`+(workers||[]).map(w=>`<option value="${w.uname}"${sel===w.uname?' selected':''}>${w.name}</option>`).join('');
+  const dOpts=mkOpts(dw,'❌ بدون تصميم'),eOpts=mkOpts(ew,'❌ لا يوجد'),pOpts=mkOpts(pw,'❌ لا يتطلب'),wOpts=mkOpts(ww,'❌ لا يتطلب');
+  wrap.innerHTML=lines.map((l,i)=>`
+    <div class="prod-line-row" style="background:var(--surface-2);border:1.5px dashed var(--gold);border-radius:10px;padding:10px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+        <span style="font-size:10px;font-weight:800;color:var(--gold);"><i class="ti ti-git-branch"></i> خط إنتاج موازٍ #${i+2}</span>
+        <button type="button" class="btn btn-red btn-xs" onclick="removeCoProductionLine('${l.id}')"><i class="ti ti-trash"></i> حذف</button>
+      </div>
+      <div class="dept-grid-layout" style="padding:0;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:6px;">
+        <div class="dept-section"><div class="dept-header dept-design"><i class="ti ti-brush"></i> التصميم</div><div class="dept-body">
+          <select onchange="updateCoProductionLine('${l.id}','design',this.value)">${dOpts(l.design)}</select>
+        </div></div>
+        <div class="dept-section"><div class="dept-header dept-ext"><i class="ti ti-world"></i> تنفيذ خارجي</div><div class="dept-body">
+          <select onchange="updateCoProductionLine('${l.id}','external',this.value)">${eOpts(l.external)}</select>
+        </div></div>
+        <div class="dept-section"><div class="dept-header dept-print"><i class="ti ti-printer"></i> الطباعة</div><div class="dept-body">
+          <select onchange="updateCoProductionLine('${l.id}','print',this.value)">${pOpts(l.print)}</select>
+        </div></div>
+        <div class="dept-section"><div class="dept-header dept-workshop"><i class="ti ti-tools"></i> الورشة</div><div class="dept-body">
+          <select onchange="updateCoProductionLine('${l.id}','workshop',this.value)">${wOpts(l.workshop)}</select>
+        </div></div>
+      </div>
+    </div>`).join('');
+  const btn=document.getElementById('co-add-prod-line-btn');
+  if(btn)btn.style.display=lines.length>=2?'none':'';
 }
 async function attachCoItemFile(idx,files,orderKey){
   if(!files||!files.length)return;
@@ -2950,16 +2988,17 @@ async function finalizeConvertToOrder(quoteKey){
   const deadline=document.getElementById('co-deadline').value||'—';
   if(!document.getElementById('co-deadline').value){toast('⚠️ يرجى تحديد تاريخ التسليم');return;}
   const dU=document.getElementById('co-design').value;
+  const eU=document.getElementById('co-external').value;
   const pU=document.getElementById('co-print').value;
   const wU=document.getElementById('co-workshop').value;
   if(!phone){toast('⚠️ يرجى إدخال رقم الجوال');return;}
   if(!isValidSaudiPhone(phone)){toast('⚠️ رقم الجوال يجب أن يكون رقم سعودي صحيح (05XXXXXXXX)');return;}
-  if(dU==='none'&&pU==='none'&&wU==='none'){toast('⚠️ يجب اختيار قسم واحد على الأقل');return;}
+  if(dU==='none'&&eU==='none'&&pU==='none'&&wU==='none'){toast('⚠️ يجب اختيار قسم واحد على الأقل');return;}
   const q=standaloneQuotes[quoteKey]||await fbGet(`standalone_quotes/${quoteKey}`);
   if(!q)return;
   const service=(q.lines||[]).map(l=>l.lbl).filter(Boolean).join(' + ')||'—';
   let startDept='design';
-  if(dU==='none'){if(pU!=='none')startDept='print';else startDept='workshop';}
+  if(dU==='none'){if(eU!=='none')startDept='external';else if(pU!=='none')startDept='print';else startDept='workshop';}
   const today=new Date().toISOString().split('T')[0];
   const itemFiles=window._coItemFiles||{};
   const ord={
@@ -2973,7 +3012,7 @@ async function finalizeConvertToOrder(quoteKey){
     })),
     createdBy:cu.name,createdByUname:cu._uname,fromQuoteKey:quoteKey,fromQuoteRef:q.ref||quoteKey,
     designTo:dU,designName:dU==='none'?'❌ معفى':(USERS[dU]?.name||dU),
-    externalTo:'none',externalName:'❌ معفى',
+    externalTo:eU,externalName:eU==='none'?'❌ معفى':(USERS[eU]?.name||eU),externalNote:'',
     printTo:pU,printName:pU==='none'?'❌ معفى':(USERS[pU]?.name||pU),
     workshopTo:wU,workshopName:wU==='none'?'❌ معفى':(USERS[wU]?.name||wU),
     currentDept:startDept,status:'قيد التشغيل',
@@ -2984,9 +3023,36 @@ async function finalizeConvertToOrder(quoteKey){
   const newId='ORD-'+String(Object.keys(orders).length+1).padStart(3,'0');
   await fbPatch(`orders/${res.name}`,{id:newId});
   await fbPatch(`standalone_quotes/${quoteKey}`,{convertedToOrder:newId,convertedAt:new Date().toISOString()});
+  // Extra parallel production lines: same linked-child-order mechanism as the
+  // main order registration form, so a converted quote can also run several
+  // concurrent jobs across departments.
+  const _extraLines=(window._coProdLines||[]).filter(l=>l.design!=='none'||l.external!=='none'||l.print!=='none'||l.workshop!=='none');
+  for(let i=0;i<_extraLines.length;i++){
+    const l=_extraLines[i];
+    let lineDept='design';
+    if(l.design==='none'){if(l.external!=='none')lineDept='external';else if(l.print!=='none')lineDept='print';else lineDept='workshop';}
+    const lineOrd={
+      client:q.client,service:service+' — خط إنتاج موازٍ #'+(i+2),
+      orderItems:(q.lines||[]).map(x=>({name:x.lbl||'بند',details:`الكمية: ${x.q||1}`,files:[]})),
+      date:today,createdAt:new Date().toISOString(),stageStartDate:new Date().toISOString(),
+      priority,phone:normalizeSaudiPhone(phone),
+      deadline,notes:'خط إنتاج موازٍ مرتبط بالطلب '+newId,
+      files:[],createdBy:cu.name,createdByUname:cu._uname,
+      designTo:l.design,designName:l.design==='none'?'❌ معفى':(USERS[l.design]?.name||l.design),
+      externalTo:l.external,externalName:l.external==='none'?'❌ معفى':(USERS[l.external]?.name||l.external),externalNote:'',
+      printTo:l.print,printName:l.print==='none'?'❌ معفى':(USERS[l.print]?.name||l.print),
+      workshopTo:l.workshop,workshopName:l.workshop==='none'?'❌ معفى':(USERS[l.workshop]?.name||l.workshop),
+      currentDept:lineDept,status:'قيد المتابعة',
+      approvedPrintFile:'',approvedPrintFileName:'',approvedWorkshopFile:'',approvedWorkshopFileName:'',
+      finalWorkshopDoneFile:'',finalWorkshopDoneFileName:'',
+      parentOrderKey:res.name,parentOrderId:newId,productionLineIndex:i+2,
+    };
+    const lineRes=await fbPush('orders',lineOrd);
+    await fbPatch(`orders/${lineRes.name}`,{id:newId+'-L'+(i+2)});
+  }
   syncOrderToSheet(newId,q.client,phone,'عند التسليم',service,{totalAmount:Number(q.totalWithVat||0),paidAmount:0,remainingAmount:Number(q.totalWithVat||0),date:today,deadline,createdBy:cu.name});
   if(phone&&phone!=='—')await sendSmsNotification(phone,`مرحباً ${q.client}، تم استلام طلبكم رقم ${newId} وهو قيد التنفيذ. روائع الأفكار الإعلانية.`);
-  window._coItemFiles={};
+  window._coItemFiles={};window._coProdLines=[];
   await loadData();hideSaving();closeModal('order-modal');
   toast('✓ تم إنشاء أمر التشغيل: '+newId);nav('wf');
 }
@@ -3990,12 +4056,12 @@ function renderProductionLines(){
   const pOpts=mkDeptOpts(window._prodLinePrintWorkers,'❌ لا يتطلب');
   const wOpts=mkDeptOpts(window._prodLineWorkshopWorkers,'❌ لا يتطلب');
   wrap.innerHTML=lines.map((l,i)=>`
-    <div style="background:var(--surface-2);border:1.5px dashed var(--gold);border-radius:10px;padding:12px;">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-        <span style="font-size:11px;font-weight:800;color:var(--gold);"><i class="ti ti-git-branch"></i> خط إنتاج موازٍ #${i+2}</span>
+    <div class="prod-line-row" style="background:var(--surface-2);border:1.5px dashed var(--gold);border-radius:10px;padding:10px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+        <span style="font-size:10px;font-weight:800;color:var(--gold);"><i class="ti ti-git-branch"></i> خط إنتاج موازٍ #${i+2}</span>
         <button type="button" class="btn btn-red btn-xs" onclick="removeProductionLine('${l.id}')"><i class="ti ti-trash"></i> حذف</button>
       </div>
-      <div class="dept-grid-layout" style="padding:0;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));">
+      <div class="dept-grid-layout" style="padding:0;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;">
         <div class="dept-section"><div class="dept-header dept-design"><i class="ti ti-brush"></i> التصميم</div><div class="dept-body">
           <select onchange="updateProductionLine('${l.id}','design',this.value)">${dOpts(l.design)}</select>
         </div></div>
@@ -4007,11 +4073,24 @@ function renderProductionLines(){
         </div></div>
         <div class="dept-section"><div class="dept-header dept-workshop"><i class="ti ti-tools"></i> الورشة</div><div class="dept-body">
           <select onchange="updateProductionLine('${l.id}','workshop',this.value)">${wOpts(l.workshop)}</select>
+          <div class="prod-line-file-btn" onclick="document.getElementById('pl-file-${l.id}').click()"><i class="ti ti-paperclip"></i> ${l.workshopDeptFileName?('✓ '+l.workshopDeptFileName):'إرفاق ملف'}</div>
+          <input type="file" id="pl-file-${l.id}" style="display:none" onchange="handleProdLineWorkshopFile('${l.id}',this.files)"/>
         </div></div>
       </div>
     </div>`).join('');
   const btn=document.getElementById('add-prod-line-btn');
   if(btn)btn.style.display=lines.length>=2?'none':'';
+}
+async function handleProdLineWorkshopFile(id,files){
+  if(!files||!files.length)return;
+  const l=(window._prodLines||[]).find(x=>x.id===id);if(!l)return;
+  showSaving('جاري تحميل الملف...');
+  try{
+    l.workshopDeptFile=await convertFileToBase64(files[0]);
+    l.workshopDeptFileName=files[0].name;
+    renderProductionLines();
+  }catch(e){toast(e&&e.message?e.message:'⚠️ فشل تحميل الملف');}
+  hideSaving();
 }
 async function handleWorkshopDeptFile(files){
   if(!files||!files.length)return;
@@ -4181,7 +4260,7 @@ async function submitOrder(isUrgentQuick=false){
         designTo:l.design,designName:l.design==='none'?'❌ معفى':(USERS[l.design]?.name||l.design),
         externalTo:l.external,externalName:l.external==='none'?'❌ معفى':(USERS[l.external]?.name||l.external),externalNote:'',
         printTo:l.print,printName:l.print==='none'?'❌ معفى':(USERS[l.print]?.name||l.print),
-        workshopTo:l.workshop,workshopName:l.workshop==='none'?'❌ معفى':(USERS[l.workshop]?.name||l.workshop),workshopDeptFile:'',workshopDeptFileName:'',
+        workshopTo:l.workshop,workshopName:l.workshop==='none'?'❌ معفى':(USERS[l.workshop]?.name||l.workshop),workshopDeptFile:l.workshopDeptFile||'',workshopDeptFileName:l.workshopDeptFileName||'',
         currentDept:lineDept,status:'قيد المتابعة',
         approvedPrintFile:'',approvedPrintFileName:'',approvedWorkshopFile:'',approvedWorkshopFileName:'',
         finalWorkshopDoneFile:'',finalWorkshopDoneFileName:'',
