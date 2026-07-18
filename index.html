@@ -1734,9 +1734,27 @@ async function syncOrderToSheet(orderNo,clientName,clientPhone,paymentStatus,ite
     await fetch('https://script.google.com/macros/s/AKfycbyfV3KMj8lJuHK5-JHrcbBTXILf7cVfZV8Lsg19YFJb8tCCKfWX_cQp_Ua-Pq7yLscaUA/exec',{
       method:'POST',
       mode:'no-cors',
-      body:JSON.stringify({orderNo,clientName,clientPhone,paymentStatus,items,totalAmount:(extra&&extra.totalAmount)||0,paidAmount:(extra&&extra.paidAmount)||0,remainingAmount:(extra&&extra.remainingAmount)||0,date:(extra&&extra.date)||'',deadline:(extra&&extra.deadline)||'',createdBy:(extra&&extra.createdBy)||''})
+      body:JSON.stringify({orderNo,clientName,clientPhone,paymentStatus,items,totalAmount:(extra&&extra.totalAmount)||0,paidAmount:(extra&&extra.paidAmount)||0,remainingAmount:(extra&&extra.remainingAmount)||0,date:(extra&&extra.date)||'',deadline:(extra&&extra.deadline)||'',createdBy:(extra&&extra.createdBy)||'',rowColor:(extra&&extra.rowColor)||'red'})
     });
   }catch(e){console.warn('syncOrderToSheet failed',e);}
+}
+// Business-sheet row coloring: green = fully done + fully paid, orange = partial
+// payment, red = anything still unpaid. The Apps Script endpoint above must read
+// this rowColor field and apply it as the row background for it to actually
+// paint the sheet — this call only supplies the up-to-date status.
+function computeOrderSheetColor(o){
+  if(!o)return'red';
+  if(o.currentDept==='done'&&o.paymentStatus==='تم الدفع')return'green';
+  if(o.paymentStatus==='دفع جزئي')return'orange';
+  return'red';
+}
+async function resyncOrderToSheet(key){
+  const o=orders[key];if(!o)return;
+  const svc=(o.orderItems&&o.orderItems.length?o.orderItems[0].name:o.service)||'';
+  await syncOrderToSheet(o.id||key,o.client,o.phone,o.paymentStatus,svc,{
+    totalAmount:o.totalAmount||0,paidAmount:o.paidAmount||0,remainingAmount:o.remainingAmount||0,
+    date:o.date||'',deadline:o.deadline||'',createdBy:o.createdBy||'',rowColor:computeOrderSheetColor(o)
+  });
 }
 
 // ============================================================
@@ -3237,20 +3255,7 @@ function openUnpaidOrderSummary(key){
         <span class="badge ${o.paymentStatus==='دفع جزئي'?'b-proc':'b-new'}">${o.paymentStatus||'—'}</span>
         <span style="font-size:12px;color:var(--text-3);"><i class="ti ti-calendar"></i> ${o.date||'—'}</span>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
-        <div style="background:var(--surface-2);border-radius:var(--radius-sm);padding:10px;text-align:center;border:1px solid var(--border);">
-          <div style="font-size:11px;color:var(--text-3);">الإجمالي</div>
-          <div style="font-weight:800;margin-top:2px;">${fmtMoney(total)} ر.س</div>
-        </div>
-        <div style="background:#F0FDF4;border-radius:var(--radius-sm);padding:10px;text-align:center;border:1px solid #DCFCE7;">
-          <div style="font-size:11px;color:var(--text-3);">المدفوع</div>
-          <div style="font-weight:800;margin-top:2px;color:#16A34A;">${fmtMoney(paid)} ر.س</div>
-        </div>
-        <div style="background:#FEF2F2;border-radius:var(--radius-sm);padding:10px;text-align:center;border:1px solid #FEE2E2;">
-          <div style="font-size:11px;color:var(--text-3);">المتبقي</div>
-          <div style="font-weight:800;margin-top:2px;color:#DC2626;">${fmtMoney(remaining)} ر.س</div>
-        </div>
-      </div>
+      ${orderPaymentBreakdownHtml(o)}
       <button class="btn btn-out btn-sm" style="width:100%;justify-content:center;" onclick="openOrderModal('${key}')"><i class="ti ti-file-text"></i> عرض تفاصيل الطلب كاملة</button>
     </div>
   `;
@@ -3280,6 +3285,41 @@ function openOrderStageView(key){
     '</div>';
   openModal('order-modal');
 }
+function orderPaymentBreakdownHtml(o){
+  const total=Number(o.totalAmount||0);
+  const paid=Number(o.paidAmount||0);
+  const remaining=Number(o.remainingAmount!=null?o.remainingAmount:Math.max(0,total-paid));
+  const isPartial=o.paymentStatus==='دفع جزئي';
+  const isPaidFull=o.paymentStatus==='تم الدفع';
+  let box='';
+  if(isPartial){
+    box=`<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+      <div style="background:var(--surface-2);border-radius:var(--radius-sm);padding:10px;text-align:center;border:1px solid var(--border);">
+        <div style="font-size:11px;color:var(--text-3);">الإجمالي</div><div style="font-weight:800;margin-top:2px;">${fmtMoney(total)} ر.س</div>
+      </div>
+      <div style="background:#F0FDF4;border-radius:var(--radius-sm);padding:10px;text-align:center;border:1px solid #DCFCE7;">
+        <div style="font-size:11px;color:var(--text-3);">المبلغ المدفوع</div><div style="font-weight:800;margin-top:2px;color:#16A34A;">${fmtMoney(paid)} ر.س</div>
+      </div>
+      <div style="background:#FEF2F2;border-radius:var(--radius-sm);padding:10px;text-align:center;border:1px solid #FEE2E2;">
+        <div style="font-size:11px;color:var(--text-3);">المبلغ المتبقي</div><div style="font-weight:800;margin-top:2px;color:#DC2626;">${fmtMoney(remaining)} ر.س</div>
+      </div>
+    </div>`;
+  }else if(isPaidFull){
+    box=`<div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <div style="background:#F0FDF4;border-radius:var(--radius-sm);padding:10px 14px;text-align:center;border:1px solid #DCFCE7;flex:1;min-width:120px;">
+        <div style="font-size:11px;color:var(--text-3);">إجمالي المبلغ</div><div style="font-weight:800;margin-top:2px;color:#16A34A;">${fmtMoney(total)} ر.س</div>
+      </div>
+      <div style="background:var(--surface-2);border-radius:var(--radius-sm);padding:10px 14px;text-align:center;border:1px solid var(--border);flex:1;min-width:120px;">
+        <div style="font-size:11px;color:var(--text-3);">طريقة الدفع</div><div style="font-weight:800;margin-top:2px;">${o.paymentMethod||'—'}</div>
+      </div>
+    </div>`;
+  }else{
+    box=`<div style="background:var(--surface-2);border-radius:var(--radius-sm);padding:10px;text-align:center;border:1px solid var(--border);">
+      <div style="font-size:11px;color:var(--text-3);">إجمالي المبلغ المستحق</div><div style="font-weight:800;margin-top:2px;">${fmtMoney(total)} ر.س</div>
+    </div>`;
+  }
+  return box;
+}
 function openOrderTimelineView(key){
   const o=orders[key];if(!o)return;
   const svc=(o.orderItems&&o.orderItems.length?o.orderItems[0].name:o.service)||'—';
@@ -3292,7 +3332,9 @@ function openOrderTimelineView(key){
     '<div style="font-size:12px;color:var(--text-3);margin-top:2px;">'+svc+'</div></div>'+
     '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">'+
     statusHtml+
+    '<span class="badge '+(o.paymentStatus==='دفع جزئي'?'b-proc':(o.paymentStatus==='تم الدفع'?'b-done':'b-new'))+'">'+(o.paymentStatus||'—')+'</span>'+
     '<span style="font-size:12px;color:var(--text-3);"><i class="ti ti-calendar"></i> '+(o.date||'—')+'</span></div>'+
+    orderPaymentBreakdownHtml(o)+
     stageBar(o,key)+
     '<button class="btn btn-out btn-sm" style="width:100%;justify-content:center;" onclick="openOrderModal(\''+key+'\')"><i class="ti ti-file-text"></i> عرض تفاصيل الطلب كاملة</button>'+
     '</div>';
@@ -3636,6 +3678,7 @@ async function finishOrder(key){
     window.open(`https://wa.me/${full}?text=${waMsg}`,'_blank');
   }
   await loadData();hideSaving();closeModal('order-modal');
+  resyncOrderToSheet(key);
   toast('✓ تم إغلاق الطلب');refreshCurrentPage();
 }
 async function archiveOrder(key){
@@ -3646,6 +3689,7 @@ async function archiveOrder(key){
   await createWarrantyIfNeeded(key,o);
   if(o?.phone&&o.phone!=='—')await sendSmsNotification(o.phone,`مرحباً ${o.client}، طلبكم ${o.id||key} تم إغلاقه. روائع الأفكار الإعلانية.`);
   await loadData();hideSaving();closeModal('order-modal');
+  resyncOrderToSheet(key);
   toast('✓ تم إنهاء الطلب وأرشفته');refreshCurrentPage();
 }
 async function markAsIncomplete(key){
@@ -3654,6 +3698,7 @@ async function markAsIncomplete(key){
   showSaving('جاري التحديث...');
   await fbPatch(`orders/${key}`,{incompleteClient:true,incompleteAt:new Date().toISOString(),currentDept:'done',status:'غير مكتمل'});
   await loadData();hideSaving();closeModal('order-modal');
+  resyncOrderToSheet(key);
   toast('✓ تم نقل الطلب لقائمة غير المكتملة');refreshCurrentPage();
 }
 // ============================================================
@@ -4039,7 +4084,7 @@ async function submitOrder(isUrgentQuick=false){
       await fbPatch(`orders/${lineRes.name}`,{id:newId+'-L'+(i+2)});
     }
     if(_extraLines.length)await loadData();
-    syncOrderToSheet(newId,c,phone,payStatus,_lines.map(l=>l.name.trim()).join('، '),{totalAmount:totalAmt,paidAmount:paidAmt,remainingAmount:remainingAmt,date:today,deadline:document.getElementById('fd').value||'—',createdBy:cu.name});
+    syncOrderToSheet(newId,c,phone,payStatus,_lines.map(l=>l.name.trim()).join('، '),{totalAmount:totalAmt,paidAmount:paidAmt,remainingAmount:remainingAmt,date:today,deadline:document.getElementById('fd').value||'—',createdBy:cu.name,rowColor:payStatus==='دفع جزئي'?'orange':'red'});
     if(phone)await sendSmsNotification(phone,`مرحباً ${c}، تم استلام طلبكم رقم ${newId} وهو قيد التنفيذ. روائع الأفكار الإعلانية - 0500447999`);
     if(window._pendingQuickTaskKey){
       try{await fbDelete('orders/'+window._pendingQuickTaskKey);}catch(e2){}
@@ -4338,7 +4383,12 @@ function buildRequestPage(){
     <div class="card">
       <div class="form-grid">
         <div class="fg ff"><label>اختيار الطلب *</label><select id="req-order"><option value="">— اختر الطلب —</option>${orderOptions||'<option disabled>لا توجد طلبات</option>'}</select></div>
-        <div class="fg ff"><label>طريقة السداد *</label><select id="req-pay-method" onchange="onReqPayTypeChange(this.value)"><option value="">— اختر —</option><option>كاش</option><option>شبكة</option><option>تحويل بنكي</option></select></div>
+        <div class="fg ff"><label>طريقة الدفع *</label><select id="req-pay-method" onchange="onReqPayTypeChange(this.value)"><option value="">— اختر —</option><option>كاش</option><option>شبكة</option><option>حوالة</option></select></div>
+        <div class="fg ff"><label>حالة الدفعة *</label><select id="req-pay-status" onchange="onReqPayStatusChange(this.value)"><option value="كاملة">دفعة كاملة</option><option value="جزئية">دفع جزئي</option></select></div>
+        <div class="fg ff" id="req-amount-wrap" style="display:none;">
+          <label>المبلغ المدفوع *</label>
+          <input type="number" id="req-amount-paid" min="0" step="0.01" placeholder="أدخل المبلغ المدفوع"/>
+        </div>
         <div class="fg ff" id="req-file-wrap" style="display:none;">
           <label>إرفاق إثبات التحويل *</label>
           <div class="dept-upload-box" onclick="document.getElementById('req-file-input').click()"><i class="ti ti-upload" style="font-size:22px;display:block;margin-bottom:6px;color:var(--gold);"></i>اضغط لإرفاق الملف</div>
@@ -4357,20 +4407,24 @@ function buildMyRequestsRows(){
   const statusBadge=s=>s==='pending'?'<span class="badge b-proc">قيد المراجعة</span>':s==='done'?'<span class="badge b-done">تمت المعالجة</span>':'<span class="badge b-new">جديد</span>';
   return mine.map(([k,r])=>`<tr><td><strong>${r.client||'—'}</strong></td><td>${r.payMethod||'—'}${r.fileData?`<div style="margin-top:3px;"><a href="${r.fileData}" download class="file-download-link"><i class="ti ti-download"></i> المرفق</a></div>`:''}</td><td>${gpbadge(r.priority)}</td><td>${statusBadge(r.status)}</td><td style="font-size:11px">${r.date||'—'}</td></tr>`).join('');
 }
-function onReqPayTypeChange(v){const w=document.getElementById('req-file-wrap');if(w)w.style.display=(v==='تحويل بنكي')?'block':'none';}
+function onReqPayTypeChange(v){const w=document.getElementById('req-file-wrap');if(w)w.style.display=(v==='حوالة')?'block':'none';}
+function onReqPayStatusChange(v){const w=document.getElementById('req-amount-wrap');if(w)w.style.display=(v==='جزئية')?'block':'none';}
 async function handleReqFile(files){if(!files||!files.length)return;showSaving('جاري تجهيز الملف...');try{window.reqFileB64=await convertFileToBase64(files[0]);window.reqFileName=files[0].name;document.getElementById('req-file-note').textContent='✓ تم: '+files[0].name;}catch(e){toast(e&&e.message?e.message:'⚠️ فشل');}hideSaving();}
 async function submitRequest(){
   const orderKey=document.getElementById('req-order')?.value,payMethod=document.getElementById('req-pay-method')?.value,priority='عادية';
+  const payStatus=document.getElementById('req-pay-status')?.value||'كاملة';
+  const amountPaid=Number(document.getElementById('req-amount-paid')?.value||0);
   if(!orderKey){toast('⚠️ يرجى اختيار الطلب');return;}
-  if(!payMethod){toast('⚠️ يرجى اختيار طريقة السداد');return;}
-  if(payMethod==='تحويل بنكي'&&!window.reqFileB64){toast('⚠️ يرجى إرفاق إثبات التحويل');return;}
+  if(!payMethod){toast('⚠️ يرجى اختيار طريقة الدفع');return;}
+  if(payMethod==='حوالة'&&!window.reqFileB64){toast('⚠️ يرجى إرفاق إثبات التحويل');return;}
+  if(payStatus==='جزئية'&&(!amountPaid||amountPaid<=0)){toast('⚠️ يرجى إدخال المبلغ المدفوع');return;}
   // ── prevent duplicate submissions ──
   const dup=Object.values(submittedRequests).find(r=>r.orderKey===orderKey&&(r.status==='pending'||r.status==='accountant_approved'));
   if(dup){toast('⚠️ هذا الطلب مرفوع مسبقاً وبانتظار المراجعة');return;}
   const relatedOrder=orders[orderKey],clientName=relatedOrder?relatedOrder.client:'—';
   showSaving('جاري الإرسال...');
   try{
-    await fbPush('requests',{orderKey,client:clientName,payMethod,priority,status:'pending',fileData:window.reqFileB64||'',fileName:window.reqFileName||'',createdBy:cu.name,createdByUname:cu._uname,createdByRole:cu.role||cu.type,date:new Date().toISOString().split('T')[0],createdAt:new Date().toISOString()});
+    await fbPush('requests',{orderKey,client:clientName,payMethod,payStatus,amountPaid:payStatus==='جزئية'?amountPaid:0,priority,status:'pending',fileData:window.reqFileB64||'',fileName:window.reqFileName||'',createdBy:cu.name,createdByUname:cu._uname,createdByRole:cu.role||cu.type,date:new Date().toISOString().split('T')[0],createdAt:new Date().toISOString()});
     await loadData();hideSaving();toast('✓ تم إرسال الطلب للمحاسب');buildRequestPage();
   }catch(e){hideSaving();toast('❌ فشل الإرسال');}
 }
@@ -4525,8 +4579,22 @@ async function managerApproveRequest(key){
   try{
     await fbPatch('requests/'+key,{status:'done',paymentStatusResult:chosenStatus,managerApprovedAt:new Date().toISOString(),managerName:cu.name});
     const reqData=submittedRequests[key];
-    if(reqData&&reqData.orderKey&&orders[reqData.orderKey])await fbPatch('orders/'+reqData.orderKey,{paymentStatus:chosenStatus});
-    await loadData();hideSaving();toast('✓ تمت الموافقة النهائية — الحالة: '+chosenStatus);buildRequestsPage();
+    if(reqData&&reqData.orderKey&&orders[reqData.orderKey]){
+      const ord=orders[reqData.orderKey];
+      const patch={paymentStatus:chosenStatus,paymentMethod:reqData.payMethod||ord.paymentMethod||''};
+      if(chosenStatus==='دفع جزئي'){
+        const newPaid=(Number(ord.paidAmount)||0)+(Number(reqData.amountPaid)||0);
+        patch.paidAmount=newPaid;
+        patch.remainingAmount=Math.max(0,(Number(ord.totalAmount)||0)-newPaid);
+      }else if(chosenStatus==='تم الدفع'){
+        patch.paidAmount=Number(ord.totalAmount)||0;
+        patch.remainingAmount=0;
+      }
+      await fbPatch('orders/'+reqData.orderKey,patch);
+    }
+    await loadData();hideSaving();
+    if(reqData&&reqData.orderKey)resyncOrderToSheet(reqData.orderKey);
+    toast('✓ تمت الموافقة النهائية — الحالة: '+chosenStatus);buildRequestsPage();
   }catch(e){hideSaving();toast('❌ خطأ');}
 }
 async function deleteRequest(key){if(!confirm('شطب هذا الطلب؟'))return;showSaving('جاري الحذف...');await fbDelete(`requests/${key}`);await loadData();hideSaving();toast('تم الحذف');buildRequestsPage();}
@@ -4853,6 +4921,9 @@ const GOV_REGISTRY_CATS={
   civil_defense:{label:'الدفاع المدني',icon:'ti-fire-extinguisher'}
 };
 function govDaysUntil(dateStr){if(!dateStr)return null;return Math.ceil((new Date(dateStr)-new Date())/86400000);}
+// Records stay in Firebase forever (the "archive"); once 365 days pass the expiry
+// date they simply stop being rendered in the local view layer.
+function govNotPurged(r){const d=govDaysUntil(r.expiryDate);return d===null||d>-365;}
 function govExpiryBadge(dateStr){
   const days=govDaysUntil(dateStr);
   if(days===null)return'<span style="font-size:9px;color:var(--text-3);">—</span>';
@@ -4869,25 +4940,42 @@ async function deleteGovRecord(key){
   try{await fbDelete('govRecords/'+key);await loadData();hideSaving();toast('✓ تم الحذف');buildGovObligationsPage();}
   catch(e){hideSaving();toast('❌ فشل الحذف');}
 }
+function openGovEmployeeModal(){
+  document.getElementById('gov-modal-body').innerHTML=`
+    <div class="modal-header"><span class="modal-title"><i class="ti ti-user-plus"></i> تسجيل بيانات موظف</span><button class="btn-close" onclick="closeModal('gov-modal')">×</button></div>
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <div class="fg"><label>اسم الموظف <span style="color:#EF4444">*</span></label><input id="gov-emp-name" placeholder="اسم الموظف"/></div>
+      <div class="fg"><label>رقم جوال الموظف</label><input id="gov-emp-phone" inputmode="tel" placeholder="05XXXXXXXX"/></div>
+      <div class="fg"><label>البنود <span style="color:#EF4444">*</span> (يمكن اختيار أكثر من بند)</label>
+        <div style="display:flex;flex-direction:column;gap:8px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;">
+          ${Object.entries(GOV_EMP_CATS).map(([catKey,meta])=>`<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:700;">
+            <input type="checkbox" class="gov-emp-type-cb" value="${catKey}"/> <i class="ti ${meta.icon}"></i> ${meta.label}
+          </label>`).join('')}
+        </div>
+      </div>
+      <div class="fg"><label>تاريخ التجديد</label><input type="date" id="gov-emp-renewal"/></div>
+      <div class="fg"><label>تاريخ الانتهاء <span style="color:#EF4444">*</span></label><input type="date" id="gov-emp-expiry"/></div>
+      <div class="fg"><label>المبلغ (ر.س)</label><input type="text" inputmode="decimal" id="gov-emp-amount" placeholder="0" oninput="normalizeAmountInput(this)"/></div>
+      <button class="btn btn-brand" style="width:100%;justify-content:center;" onclick="submitGovEmployeeRecord()"><i class="ti ti-check"></i> حفظ البيانات</button>
+    </div>`;
+  openModal('gov-modal');
+}
 async function submitGovEmployeeRecord(){
   const name=document.getElementById('gov-emp-name').value.trim();
   const phone=document.getElementById('gov-emp-phone').value.trim();
   const renewal=document.getElementById('gov-emp-renewal').value;
   const expiry=document.getElementById('gov-emp-expiry').value;
-  const itemType=document.getElementById('gov-emp-type').value;
+  const cats=[...document.querySelectorAll('.gov-emp-type-cb:checked')].map(cb=>cb.value);
   const amount=parseFloat(normalizeDigits(document.getElementById('gov-emp-amount').value))||0;
   if(!name){toast('⚠️ يرجى إدخال اسم الموظف');return;}
-  if(!itemType){toast('⚠️ يرجى اختيار نوع البند');return;}
+  if(!cats.length){toast('⚠️ يرجى اختيار بند واحد على الأقل');return;}
   if(!expiry){toast('⚠️ يرجى تحديد تاريخ الانتهاء');return;}
-  const cats=itemType==='all'?['residence','work_permit','medical_insurance']:[itemType];
   showSaving('جاري الحفظ...');
   try{
     for(const cat of cats){
       await fbPush('govRecords',{section:'employees',category:cat,employeeName:name,employeePhone:phone,renewalDate:renewal,expiryDate:expiry,amount,createdAt:new Date().toISOString(),createdBy:cu.name});
     }
-    await loadData();hideSaving();toast('✓ تم تسجيل بيانات الموظف');
-    ['gov-emp-name','gov-emp-phone','gov-emp-renewal','gov-emp-expiry','gov-emp-amount'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
-    const typeEl=document.getElementById('gov-emp-type');if(typeEl)typeEl.value='';
+    await loadData();hideSaving();closeModal('gov-modal');toast('✓ تم تسجيل بيانات الموظف');
     buildGovObligationsPage();
   }catch(e){hideSaving();toast('❌ فشل الحفظ');}
 }
@@ -4944,7 +5032,7 @@ async function submitGovContract(){
 }
 function buildGovObligationsPage(){
   const tab=window._govTab||'employees';
-  const allRecs=Object.entries(govRecords).map(([k,v])=>({...v,_key:k}));
+  const allRecs=Object.entries(govRecords).map(([k,v])=>({...v,_key:k})).filter(govNotPurged);
   const totalCost=allRecs.reduce((s,r)=>s+(Number(r.amount)||0),0);
   const empRecs=allRecs.filter(r=>r.section==='employees');
   const regRecs=allRecs.filter(r=>r.section==='registries');
@@ -5000,31 +5088,20 @@ function buildGovObligationsPage(){
     <button class="tab-btn ${tab==='contracts'?'active':''}" onclick="switchGovTab('contracts')"><i class="ti ti-file-description"></i> العقود (${conRecs.length})</button>
   </div>`;
 
+  const govEmpMetricCards=`<div class="stats-row" style="margin-bottom:14px;">
+    ${Object.entries(GOV_EMP_CATS).map(([catKey,meta])=>`<div class="stat-card ${empCatFilter===catKey?'c-gold':'c-blue'}" style="cursor:pointer;${empCatFilter===catKey?'outline:2.5px solid var(--gold);':''}" onclick="filterGovEmpCategory('${catKey}')">
+      <div class="stat-icon ${empCatFilter===catKey?'i-gold':'i-blue'}"><i class="ti ${meta.icon}"></i></div>
+      <div class="stat-label">${meta.label}</div>
+      <div class="stat-value">${empCatCounts[catKey]}</div>
+      <div class="stat-trend"><span style="color:var(--text-2)">${empCatFilter===catKey?'مُفعّل — اضغط للإلغاء':'اضغط للتصفية'}</span></div>
+    </div>`).join('')}
+  </div>`;
   const employeesSection=`
-    <div class="card" style="margin-bottom:16px;">
-      <div class="card-header"><span class="card-title"><i class="ti ti-user-plus"></i> تسجيل بيانات موظف</span></div>
-      <div class="form-grid">
-        <div class="fg"><label>اسم الموظف *</label><input id="gov-emp-name" placeholder="اسم الموظف"/></div>
-        <div class="fg"><label>رقم جوال الموظف</label><input id="gov-emp-phone" inputmode="tel" placeholder="05XXXXXXXX"/></div>
-        <div class="fg"><label>نوع البند *</label>
-          <select id="gov-emp-type">
-            <option value="">— اختر —</option>
-            <option value="residence">إقامة</option>
-            <option value="work_permit">رخصة عمل</option>
-            <option value="medical_insurance">تأمين طبي</option>
-            <option value="all">الكل (الثلاثة معاً)</option>
-          </select>
-        </div>
-        <div class="fg"><label>تاريخ التجديد</label><input type="date" id="gov-emp-renewal"/></div>
-        <div class="fg"><label>تاريخ الانتهاء *</label><input type="date" id="gov-emp-expiry"/></div>
-        <div class="fg"><label>المبلغ (ر.س)</label><input type="text" inputmode="decimal" id="gov-emp-amount" placeholder="0" oninput="normalizeAmountInput(this)"/></div>
-      </div>
-      <div style="padding:0 20px 16px;"><button class="btn btn-brand" onclick="submitGovEmployeeRecord()"><i class="ti ti-device-floppy"></i> حفظ البيانات</button></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+      <div style="font-weight:800;font-size:14px;"><i class="ti ti-users"></i> بنود الموظفين</div>
+      <button class="btn btn-brand" onclick="openGovEmployeeModal()"><i class="ti ti-user-plus"></i> تسجيل بيانات موظف</button>
     </div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
-      ${Object.entries(GOV_EMP_CATS).map(([catKey,meta])=>`<button class="btn ${empCatFilter===catKey?'btn-brand':'btn-out'} btn-sm" onclick="filterGovEmpCategory('${catKey}')"><i class="ti ${meta.icon}"></i> ${meta.label} (${empCatCounts[catKey]})</button>`).join('')}
-      ${empCatFilter?`<button class="btn btn-out btn-sm" onclick="filterGovEmpCategory('')"><i class="ti ti-x"></i> إلغاء التصفية</button>`:''}
-    </div>
+    ${govEmpMetricCards}
     <div class="card"><div class="tbl-wrap"><table><thead><tr><th>الموظف</th><th style="width:120px">النوع</th><th style="width:100px">تاريخ التجديد</th><th style="width:100px">تاريخ الانتهاء</th><th style="width:120px">الحالة</th><th style="width:100px">المبلغ</th><th style="width:50px"></th></tr></thead>
     <tbody>${empRows||'<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text-3)">لا توجد سجلات بعد</td></tr>'}</tbody></table></div></div>`;
 
