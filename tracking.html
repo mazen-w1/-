@@ -227,13 +227,16 @@
           return;
         }
         const normalizedPhone = normalizeSaudiPhone(raw);
-        const found = Object.entries(orders).find(([key, order]) =>
+        // Public tracking only surfaces active/ongoing orders — completed ones are
+        // intentionally excluded from search results entirely.
+        const activeOrders = Object.entries(orders).filter(([, order]) => order.currentDept !== 'done');
+        const found = activeOrders.find(([key, order]) =>
           key === raw ||
           (order.id && order.id === raw) ||
           (order.phone && (order.phone === raw || order.phone === normalizedPhone)) ||
           (order.client && order.client.trim() === raw)
         );
-        if(!found){ setSearchError('لم يتم العثور على طلب مطابق. تحقق من رقم الطلب أو الجوال.'); return; }
+        if(!found){ setSearchError('لم يتم العثور على طلب جارٍ مطابق. تحقق من رقم الطلب أو الجوال.'); return; }
         currentOrder = { _key: found[0], ...found[1] };
         displayOrder();
       }catch(e){
@@ -304,12 +307,13 @@
       window.addEventListener('load', async () => {
         try{
           const orders = await fetchOrders();
-          const found = Object.entries(orders || {}).find(([key, o]) => key === orderId || o.id === orderId);
+          const activeOrders = Object.entries(orders || {}).filter(([, o]) => o.currentDept !== 'done');
+          const found = activeOrders.find(([key, o]) => key === orderId || o.id === orderId);
           if(found){
             currentOrder = { _key: found[0], ...found[1] };
             displayOrder();
           }else{
-            setSearchError('لم يتم العثور على الطلب المطلوب.');
+            setSearchError('لم يتم العثور على طلب جارٍ بهذا الرقم.');
           }
         }catch(e){
           setSearchError('تعذّر الاتصال بقاعدة البيانات، حاول مرة أخرى.');

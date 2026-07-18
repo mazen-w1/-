@@ -948,6 +948,7 @@ input[type="password"]{direction:rtl;text-align:right;padding-left:40px;padding-
         <div class="page" id="page-warranty"><div id="warranty-content"></div></div>
         <div class="page" id="page-revenue"><div id="revenue-content"></div></div>
         <div class="page" id="page-deptstage"><div id="deptstage-content"></div></div>
+        <div class="page" id="page-govobligations"><div id="govobligations-content"></div></div>
       </div>
     </div>
   </div>
@@ -969,6 +970,7 @@ input[type="password"]{direction:rtl;text-align:right;padding-left:40px;padding-
 <div class="modal-overlay" id="order-modal"><div class="modal-box" dir="rtl" id="order-modal-body" style="max-width:740px;"></div></div>
 <div class="modal-overlay" id="timeline-modal"><div class="modal-box" dir="rtl" id="timeline-modal-body" style="max-width:480px;"></div></div>
 <div class="modal-overlay" id="add-item-modal"><div class="modal-box" dir="rtl" id="add-item-modal-body" style="max-width:480px;"></div></div>
+<div class="modal-overlay" id="gov-modal"><div class="modal-box" dir="rtl" id="gov-modal-body" style="max-width:480px;"></div></div>
 <div class="modal-overlay" id="notif-modal">
   <div class="modal-box" dir="rtl" style="max-width:480px;">
     <div class="modal-header"><span class="modal-title"><i class="ti ti-bell"></i> التنبيهات</span><button class="btn-close" onclick="closeModal('notif-modal')">×</button></div>
@@ -1115,7 +1117,7 @@ const INITIAL_USERS={
   external1:{pass:'1234',name:'منفذ خارجي',role:'تنفيذ خارجي',color:'#713F12',type:'external',photo:''},
 };
 let cu=null,orders={},clients={},USERS={},currentSortMode='date-desc',_pendingPortalType=null;
-let submittedRequests={},chats={},standaloneQuotes={},warranties={},teamChat={};
+let submittedRequests={},chats={},standaloneQuotes={},warranties={},teamChat={},govRecords={};
 let _lastAssignSnapshot=null,_audioCtx=null,_audioUnlocked=false;
 let _navHistory=[];
 let _nuPhotoB64='',_euPhotoB64='',_euSelectedColor='',_nuSelectedColor='';
@@ -1223,14 +1225,15 @@ async function syncUsers(){
 }
 async function loadData(){
   try{
-    const [ord,cli,req,cht,sqt,wrt,tch]=await Promise.all([
+    const [ord,cli,req,cht,sqt,wrt,tch,gov]=await Promise.all([
       fbGet('orders').catch(()=>null),
       fbGet('clients').catch(()=>null),
       fbGet('requests').catch(()=>null),
       fbGet('chats').catch(()=>null),
       fbGet('standalone_quotes').catch(()=>null),
       fbGet('warranties').catch(()=>null),
-      fbGet('team_chat').catch(()=>null)
+      fbGet('team_chat').catch(()=>null),
+      fbGet('govRecords').catch(()=>null)
     ]);
     orders=(ord&&typeof ord==='object')?ord:{};
     clients=(cli&&typeof cli==='object')?cli:{};
@@ -1239,10 +1242,11 @@ async function loadData(){
     standaloneQuotes=(sqt&&typeof sqt==='object')?sqt:{};
     warranties=(wrt&&typeof wrt==='object')?wrt:{};
     teamChat=(tch&&typeof tch==='object')?tch:{};
+    govRecords=(gov&&typeof gov==='object')?gov:{};
     updateNotifBell();updateRequestsBadgeSidebar();updateTeamChatBadge();
     checkNewAssignments();
     cleanExpiredWarranties();
-  }catch(e){orders={};clients={};submittedRequests={};chats={};standaloneQuotes={};warranties={};teamChat={};}
+  }catch(e){orders={};clients={};submittedRequests={};chats={};standaloneQuotes={};warranties={};teamChat={};govRecords={};}
 }
 // ============================================================
 // NOTIFICATION SOUND (new-assignment beep)
@@ -1485,11 +1489,13 @@ function buildSidebar(){
       ni('timeline','ti-clock','إحصائيات المراحل'),
       ni('emp','ti-chart-bar','أداء الموظفين'),
       ni('warranty','ti-shield-check','ضمان اللوحات'),
+      ni('govobligations','ti-building-bank','الالتزامات الحكومية والتشغيلية'),
       ni('export','ti-table-export','تصدير Excel'),
     ]);
   }else if(t==='accountant'){
     h+=navGroup('المحاسبة',[
       ni('requests','ti-inbox','الطلبات الواردة','','requests-badge'),
+      ni('govobligations','ti-building-bank','الالتزامات الحكومية والتشغيلية'),
       ni('export','ti-table-export','تصدير Excel'),
     ]);
   }
@@ -2171,8 +2177,16 @@ function buildDeptStagePage(){
     done:{label:'التسليم',icon:'ti-circle-check',color:'#10B981'}
   };
   const meta=deptMeta[deptKey]||deptMeta.design;
+  const isCompleted=deptKey==='done';
   const arr=ordersArr().filter(o=>(o.currentDept||'design')===deptKey).sort((a,b)=>new Date(b.date)-new Date(a.date));
-  const rows=arr.map(o=>`<tr onclick="openOrderTimelineView('${o._key}')" style="cursor:pointer;">
+  const rows=arr.map(o=>isCompleted?`<tr onclick="openOrderTimelineView('${o._key}')" style="cursor:pointer;">
+    <td><strong style="color:var(--maroon)">${o.id||o._key}</strong></td>
+    <td><strong style="font-size:13px;">${o.client||'—'}</strong></td>
+    <td style="font-weight:800;">${o.totalAmount?fmtMoney(Number(o.totalAmount))+' ر.س':'—'}</td>
+    <td style="font-size:12px;">${o.service||'—'}</td>
+    <td style="font-size:12px;">${o.createdBy||'—'}</td>
+    <td style="font-size:11px;">${o.date||'—'}</td>
+  </tr>`:`<tr onclick="openOrderTimelineView('${o._key}')" style="cursor:pointer;">
     <td><strong style="color:var(--maroon)">${o.id||o._key}</strong></td>
     <td><strong style="font-size:13px;">${o.client||'—'}</strong></td>
     <td style="font-size:12px;">${o.service||'—'}</td>
@@ -2180,10 +2194,13 @@ function buildDeptStagePage(){
     <td>${gpbadge(o.priority)}</td>
     <td>${timeBadge(hoursAgo(o.stageStartDate||o.date))}</td>
   </tr>`).join('');
+  const thead=isCompleted
+    ?`<th style="width:80px">رقم الطلب</th><th>العميل</th><th style="width:100px">المبلغ</th><th>الخدمة</th><th style="width:120px">منشئ الطلب</th><th style="width:90px">التاريخ</th>`
+    :`<th style="width:80px">رقم الطلب</th><th>العميل</th><th>الخدمة</th><th style="width:90px">التاريخ</th><th style="width:90px">الأولوية</th><th style="width:90px">المدة</th>`;
   document.getElementById('deptstage-content').innerHTML=`
     ${backBtnHtml()}
-    <div class="page-header"><div class="ptitle"><i class="ti ${meta.icon}" style="color:${meta.color}"></i> مرحلة ${meta.label} — الطلبات النشطة (${arr.length})</div></div>
-    <div class="card"><div class="tbl-wrap"><table><thead><tr><th style="width:80px">رقم الطلب</th><th>العميل</th><th>الخدمة</th><th style="width:90px">التاريخ</th><th style="width:90px">الأولوية</th><th style="width:90px">المدة</th></tr></thead>
+    <div class="page-header"><div class="ptitle"><i class="ti ${meta.icon}" style="color:${meta.color}"></i> مرحلة ${meta.label} — ${isCompleted?'أرشيف الطلبات المكتملة':'الطلبات النشطة'} (${arr.length})</div></div>
+    <div class="card"><div class="tbl-wrap"><table><thead><tr>${thead}</tr></thead>
     <tbody>${rows||'<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text-3)">لا توجد طلبات في هذه المرحلة حالياً</td></tr>'}</tbody></table></div></div>`;
 }
 function toggleWfSelect(key,checked){
@@ -4821,6 +4838,214 @@ async function cleanExpiredWarranties(){
     delete warranties[k];
   }
 }
+// ============================================================
+// GOVERNMENT & OPERATIONAL OBLIGATIONS MODULE
+// ============================================================
+const GOV_EMP_CATS={
+  residence:{label:'الإقامة',icon:'ti-id-badge-2'},
+  work_permit:{label:'رخصة العمل',icon:'ti-license'},
+  medical_insurance:{label:'التأمين الطبي',icon:'ti-heartbeat'}
+};
+const GOV_REGISTRY_CATS={
+  commercial_register:{label:'السجل التجاري',icon:'ti-building-store'},
+  media_license:{label:'رخصة الإعلام',icon:'ti-news'},
+  balady:{label:'بلدي',icon:'ti-building-community'},
+  civil_defense:{label:'الدفاع المدني',icon:'ti-fire-extinguisher'}
+};
+function govDaysUntil(dateStr){if(!dateStr)return null;return Math.ceil((new Date(dateStr)-new Date())/86400000);}
+function govExpiryBadge(dateStr){
+  const days=govDaysUntil(dateStr);
+  if(days===null)return'<span style="font-size:9px;color:var(--text-3);">—</span>';
+  if(days<0)return`<span class="badge" style="background:#FEE2E2;color:#991B1B;"><i class="ti ti-alert-circle"></i> منتهي منذ ${Math.abs(days)} يوم</span>`;
+  if(days<=30)return`<span class="badge" style="background:#FEF3C7;color:#92400E;"><i class="ti ti-alert-triangle"></i> ينتهي خلال ${days} يوم</span>`;
+  return`<span class="badge" style="background:#D1FAE5;color:#065F46;">ساري</span>`;
+}
+function switchGovTab(tab){window._govTab=tab;buildGovObligationsPage();}
+function filterGovEmpCategory(cat){window._govEmpCatFilter=(window._govEmpCatFilter===cat)?'':cat;buildGovObligationsPage();}
+async function deleteGovRecord(key){
+  if(cu.type!=='admin'&&cu.type!=='accountant'){toast('⚠️ الحذف غير متاح لهذا الدور');return;}
+  if(!confirm('حذف هذا السجل؟'))return;
+  showSaving('جاري الحذف...');
+  try{await fbDelete('govRecords/'+key);await loadData();hideSaving();toast('✓ تم الحذف');buildGovObligationsPage();}
+  catch(e){hideSaving();toast('❌ فشل الحذف');}
+}
+async function submitGovEmployeeRecord(){
+  const name=document.getElementById('gov-emp-name').value.trim();
+  const phone=document.getElementById('gov-emp-phone').value.trim();
+  const renewal=document.getElementById('gov-emp-renewal').value;
+  const expiry=document.getElementById('gov-emp-expiry').value;
+  const itemType=document.getElementById('gov-emp-type').value;
+  const amount=parseFloat(normalizeDigits(document.getElementById('gov-emp-amount').value))||0;
+  if(!name){toast('⚠️ يرجى إدخال اسم الموظف');return;}
+  if(!itemType){toast('⚠️ يرجى اختيار نوع البند');return;}
+  if(!expiry){toast('⚠️ يرجى تحديد تاريخ الانتهاء');return;}
+  const cats=itemType==='all'?['residence','work_permit','medical_insurance']:[itemType];
+  showSaving('جاري الحفظ...');
+  try{
+    for(const cat of cats){
+      await fbPush('govRecords',{section:'employees',category:cat,employeeName:name,employeePhone:phone,renewalDate:renewal,expiryDate:expiry,amount,createdAt:new Date().toISOString(),createdBy:cu.name});
+    }
+    await loadData();hideSaving();toast('✓ تم تسجيل بيانات الموظف');
+    ['gov-emp-name','gov-emp-phone','gov-emp-renewal','gov-emp-expiry','gov-emp-amount'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+    const typeEl=document.getElementById('gov-emp-type');if(typeEl)typeEl.value='';
+    buildGovObligationsPage();
+  }catch(e){hideSaving();toast('❌ فشل الحفظ');}
+}
+function openGovRegistryModal(category){
+  const meta=GOV_REGISTRY_CATS[category];
+  document.getElementById('gov-modal-body').innerHTML=`
+    <div class="modal-header"><span class="modal-title"><i class="ti ${meta.icon}"></i> إضافة سجل — ${meta.label}</span><button class="btn-close" onclick="closeModal('gov-modal')">×</button></div>
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <div class="fg"><label>رقم الرخصة / السجل</label><input id="gov-reg-number" placeholder="رقم الرخصة أو السجل"/></div>
+      <div class="fg"><label>نوع النشاط / تفاصيل</label><input id="gov-reg-activity" placeholder="نوع النشاط أو تفاصيل إضافية"/></div>
+      <div class="fg"><label>المبلغ (ر.س)</label><input type="text" inputmode="decimal" id="gov-reg-amount" placeholder="0" oninput="normalizeAmountInput(this)"/></div>
+      <div class="fg"><label>تاريخ الانتهاء <span style="color:#EF4444">*</span></label><input type="date" id="gov-reg-expiry"/></div>
+      <button class="btn btn-brand" style="width:100%;justify-content:center;" onclick="submitGovRegistryRecord('${category}')"><i class="ti ti-check"></i> حفظ السجل</button>
+    </div>`;
+  openModal('gov-modal');
+}
+async function submitGovRegistryRecord(category){
+  const number=document.getElementById('gov-reg-number').value.trim();
+  const activity=document.getElementById('gov-reg-activity').value.trim();
+  const amount=parseFloat(normalizeDigits(document.getElementById('gov-reg-amount').value))||0;
+  const expiry=document.getElementById('gov-reg-expiry').value;
+  if(!expiry){toast('⚠️ يرجى تحديد تاريخ الانتهاء');return;}
+  showSaving('جاري الحفظ...');
+  try{
+    await fbPush('govRecords',{section:'registries',category,detail:[number,activity].filter(Boolean).join(' — ')||'—',amount,expiryDate:expiry,createdAt:new Date().toISOString(),createdBy:cu.name});
+    await loadData();hideSaving();closeModal('gov-modal');toast('✓ تم حفظ السجل');buildGovObligationsPage();
+  }catch(e){hideSaving();toast('❌ فشل الحفظ');}
+}
+function openGovContractModal(){
+  document.getElementById('gov-modal-body').innerHTML=`
+    <div class="modal-header"><span class="modal-title"><i class="ti ti-file-description"></i> إنشاء عقد</span><button class="btn-close" onclick="closeModal('gov-modal')">×</button></div>
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <div class="fg"><label>الالتزام <span style="color:#EF4444">*</span></label><textarea id="gov-con-desc" placeholder="وصف الالتزام / العقد" style="min-height:60px;"></textarea></div>
+      <div class="fg"><label>المبلغ (ر.س) <span style="color:#EF4444">*</span></label><input type="text" inputmode="decimal" id="gov-con-amount" placeholder="0" oninput="normalizeAmountInput(this)"/></div>
+      <div class="fg"><label>تاريخ السداد</label><input type="date" id="gov-con-due"/></div>
+      <div class="fg"><label>تاريخ الانتهاء <span style="color:#EF4444">*</span></label><input type="date" id="gov-con-expiry"/></div>
+      <button class="btn btn-brand" style="width:100%;justify-content:center;" onclick="submitGovContract()"><i class="ti ti-check"></i> حفظ العقد</button>
+    </div>`;
+  openModal('gov-modal');
+}
+async function submitGovContract(){
+  const desc=document.getElementById('gov-con-desc').value.trim();
+  const amount=parseFloat(normalizeDigits(document.getElementById('gov-con-amount').value))||0;
+  const due=document.getElementById('gov-con-due').value;
+  const expiry=document.getElementById('gov-con-expiry').value;
+  if(!desc){toast('⚠️ يرجى إدخال الالتزام');return;}
+  if(!amount){toast('⚠️ يرجى إدخال المبلغ');return;}
+  if(!expiry){toast('⚠️ يرجى تحديد تاريخ الانتهاء');return;}
+  showSaving('جاري الحفظ...');
+  try{
+    await fbPush('govRecords',{section:'contracts',category:'contract',detail:desc,amount,dueDate:due,expiryDate:expiry,createdAt:new Date().toISOString(),createdBy:cu.name});
+    await loadData();hideSaving();closeModal('gov-modal');toast('✓ تم إنشاء العقد');buildGovObligationsPage();
+  }catch(e){hideSaving();toast('❌ فشل الحفظ');}
+}
+function buildGovObligationsPage(){
+  const tab=window._govTab||'employees';
+  const allRecs=Object.entries(govRecords).map(([k,v])=>({...v,_key:k}));
+  const totalCost=allRecs.reduce((s,r)=>s+(Number(r.amount)||0),0);
+  const empRecs=allRecs.filter(r=>r.section==='employees');
+  const regRecs=allRecs.filter(r=>r.section==='registries');
+  const conRecs=allRecs.filter(r=>r.section==='contracts');
+  const expSoonCount=allRecs.filter(r=>{const d=govDaysUntil(r.expiryDate);return d!==null&&d<=30;}).length;
+
+  const empCatFilter=window._govEmpCatFilter||'';
+  const empCatCounts={residence:empRecs.filter(r=>r.category==='residence').length,work_permit:empRecs.filter(r=>r.category==='work_permit').length,medical_insurance:empRecs.filter(r=>r.category==='medical_insurance').length};
+  const empFiltered=(empCatFilter?empRecs.filter(r=>r.category===empCatFilter):empRecs).slice().sort((a,b)=>new Date(a.expiryDate||'9999-12-31')-new Date(b.expiryDate||'9999-12-31'));
+  const empRows=empFiltered.map(r=>`<tr>
+    <td><strong>${r.employeeName||'—'}</strong><div style="font-size:10px;color:var(--text-3)">${r.employeePhone||'—'}</div></td>
+    <td><span class="badge" style="background:var(--gold-soft);color:var(--maroon);"><i class="ti ${GOV_EMP_CATS[r.category]?.icon||'ti-file'}"></i> ${GOV_EMP_CATS[r.category]?.label||r.category}</span></td>
+    <td style="font-size:11px;">${r.renewalDate||'—'}</td>
+    <td style="font-size:11px;">${r.expiryDate||'—'}</td>
+    <td>${govExpiryBadge(r.expiryDate)}</td>
+    <td style="font-weight:800;">${r.amount?fmtMoney(Number(r.amount))+' ر.س':'—'}</td>
+    <td><button class="btn btn-red btn-xs" onclick="deleteGovRecord('${r._key}')"><i class="ti ti-trash"></i></button></td>
+  </tr>`).join('');
+
+  const registryCards=Object.entries(GOV_REGISTRY_CATS).map(([catKey,meta])=>{
+    const recs=regRecs.filter(r=>r.category===catKey).sort((a,b)=>new Date(a.expiryDate||'9999-12-31')-new Date(b.expiryDate||'9999-12-31'));
+    return`<div class="card" style="margin-bottom:14px;">
+      <div class="card-header" style="display:flex;align-items:center;justify-content:space-between;">
+        <span class="card-title"><i class="ti ${meta.icon}"></i> ${meta.label}</span>
+        <button class="btn btn-out btn-xs" onclick="openGovRegistryModal('${catKey}')"><i class="ti ti-plus"></i> إضافة</button>
+      </div>
+      <div style="padding:${recs.length?'0':'16px'};">
+        ${recs.length?`<div class="tbl-wrap"><table><thead><tr><th>التفاصيل</th><th style="width:100px">تاريخ الانتهاء</th><th style="width:110px">الحالة</th><th style="width:100px">المبلغ</th><th style="width:50px"></th></tr></thead>
+        <tbody>${recs.map(r=>`<tr>
+          <td style="font-size:12px;">${r.detail||'—'}</td>
+          <td style="font-size:11px;">${r.expiryDate||'—'}</td>
+          <td>${govExpiryBadge(r.expiryDate)}</td>
+          <td style="font-weight:800;font-size:12px;">${r.amount?fmtMoney(Number(r.amount))+' ر.س':'—'}</td>
+          <td><button class="btn btn-red btn-xs" onclick="deleteGovRecord('${r._key}')"><i class="ti ti-trash"></i></button></td>
+        </tr>`).join('')}</tbody></table></div>`
+        :`<div style="text-align:center;color:var(--text-3);font-size:12px;"><i class="ti ti-inbox" style="font-size:22px;display:block;margin-bottom:6px;"></i>لا توجد سجلات بعد</div>`}
+      </div>
+    </div>`;
+  }).join('');
+
+  const conRows=conRecs.slice().sort((a,b)=>new Date(a.expiryDate||'9999-12-31')-new Date(b.expiryDate||'9999-12-31')).map(r=>`<tr>
+    <td style="font-size:12px;max-width:220px;">${r.detail||'—'}</td>
+    <td style="font-weight:800;">${r.amount?fmtMoney(Number(r.amount))+' ر.س':'—'}</td>
+    <td style="font-size:11px;">${r.dueDate||'—'}</td>
+    <td style="font-size:11px;">${r.expiryDate||'—'}</td>
+    <td>${govExpiryBadge(r.expiryDate)}</td>
+    <td><button class="btn btn-red btn-xs" onclick="deleteGovRecord('${r._key}')"><i class="ti ti-trash"></i></button></td>
+  </tr>`).join('');
+
+  const tabHtml=`<div class="tab-bar">
+    <button class="tab-btn ${tab==='employees'?'active':''}" onclick="switchGovTab('employees')"><i class="ti ti-users"></i> الموظفين (${empRecs.length})</button>
+    <button class="tab-btn ${tab==='registries'?'active':''}" onclick="switchGovTab('registries')"><i class="ti ti-building-bank"></i> السجلات الحكومية (${regRecs.length})</button>
+    <button class="tab-btn ${tab==='contracts'?'active':''}" onclick="switchGovTab('contracts')"><i class="ti ti-file-description"></i> العقود (${conRecs.length})</button>
+  </div>`;
+
+  const employeesSection=`
+    <div class="card" style="margin-bottom:16px;">
+      <div class="card-header"><span class="card-title"><i class="ti ti-user-plus"></i> تسجيل بيانات موظف</span></div>
+      <div class="form-grid">
+        <div class="fg"><label>اسم الموظف *</label><input id="gov-emp-name" placeholder="اسم الموظف"/></div>
+        <div class="fg"><label>رقم جوال الموظف</label><input id="gov-emp-phone" inputmode="tel" placeholder="05XXXXXXXX"/></div>
+        <div class="fg"><label>نوع البند *</label>
+          <select id="gov-emp-type">
+            <option value="">— اختر —</option>
+            <option value="residence">إقامة</option>
+            <option value="work_permit">رخصة عمل</option>
+            <option value="medical_insurance">تأمين طبي</option>
+            <option value="all">الكل (الثلاثة معاً)</option>
+          </select>
+        </div>
+        <div class="fg"><label>تاريخ التجديد</label><input type="date" id="gov-emp-renewal"/></div>
+        <div class="fg"><label>تاريخ الانتهاء *</label><input type="date" id="gov-emp-expiry"/></div>
+        <div class="fg"><label>المبلغ (ر.س)</label><input type="text" inputmode="decimal" id="gov-emp-amount" placeholder="0" oninput="normalizeAmountInput(this)"/></div>
+      </div>
+      <div style="padding:0 20px 16px;"><button class="btn btn-brand" onclick="submitGovEmployeeRecord()"><i class="ti ti-device-floppy"></i> حفظ البيانات</button></div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
+      ${Object.entries(GOV_EMP_CATS).map(([catKey,meta])=>`<button class="btn ${empCatFilter===catKey?'btn-brand':'btn-out'} btn-sm" onclick="filterGovEmpCategory('${catKey}')"><i class="ti ${meta.icon}"></i> ${meta.label} (${empCatCounts[catKey]})</button>`).join('')}
+      ${empCatFilter?`<button class="btn btn-out btn-sm" onclick="filterGovEmpCategory('')"><i class="ti ti-x"></i> إلغاء التصفية</button>`:''}
+    </div>
+    <div class="card"><div class="tbl-wrap"><table><thead><tr><th>الموظف</th><th style="width:120px">النوع</th><th style="width:100px">تاريخ التجديد</th><th style="width:100px">تاريخ الانتهاء</th><th style="width:120px">الحالة</th><th style="width:100px">المبلغ</th><th style="width:50px"></th></tr></thead>
+    <tbody>${empRows||'<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text-3)">لا توجد سجلات بعد</td></tr>'}</tbody></table></div></div>`;
+
+  const registriesSection=registryCards;
+
+  const contractsSection=`
+    <div style="margin-bottom:14px;"><button class="btn btn-brand" onclick="openGovContractModal()"><i class="ti ti-plus"></i> إنشاء عقد</button></div>
+    <div class="card"><div class="tbl-wrap"><table><thead><tr><th>الالتزام</th><th style="width:100px">المبلغ</th><th style="width:100px">تاريخ السداد</th><th style="width:100px">تاريخ الانتهاء</th><th style="width:120px">الحالة</th><th style="width:50px"></th></tr></thead>
+    <tbody>${conRows||'<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text-3)">لا توجد عقود بعد</td></tr>'}</tbody></table></div></div>`;
+
+  document.getElementById('govobligations-content').innerHTML=`
+    <div class="page-header"><div class="ptitle"><i class="ti ti-building-bank"></i> الالتزامات الحكومية والتشغيلية</div></div>
+    <div class="stats-row" style="margin-bottom:18px;">
+      <div class="stat-card c-gold"><div class="stat-icon i-gold"><i class="ti ti-coins"></i></div><div class="stat-label">التكلفة كاملة</div><div class="stat-value">${fmtMoney(totalCost)}</div><div class="stat-trend"><span style="color:var(--text-2)">ر.س عبر كل البنود</span></div></div>
+      <div class="stat-card c-red"><div class="stat-icon i-red"><i class="ti ti-alert-triangle"></i></div><div class="stat-label">تنتهي خلال 30 يوم</div><div class="stat-value" style="color:#DC2626">${expSoonCount}</div><div class="stat-trend"><span style="color:var(--text-2)">بند يحتاج تجديداً</span></div></div>
+      <div class="stat-card c-blue"><div class="stat-icon i-blue"><i class="ti ti-users"></i></div><div class="stat-label">بنود الموظفين</div><div class="stat-value" style="color:#2563EB">${empRecs.length}</div><div class="stat-trend"><span style="color:var(--text-2)">إقامة / رخصة / تأمين</span></div></div>
+      <div class="stat-card c-purple"><div class="stat-icon i-purple"><i class="ti ti-building-bank"></i></div><div class="stat-label">السجلات والعقود</div><div class="stat-value" style="color:#6B21A8">${regRecs.length+conRecs.length}</div><div class="stat-trend"><span style="color:var(--text-2)">سجل حكومي / عقد</span></div></div>
+    </div>
+    ${tabHtml}
+    <div style="margin-top:16px;">${tab==='employees'?employeesSection:tab==='registries'?registriesSection:contractsSection}</div>`;
+}
 function buildWarrantyPage(){
   const arr=Object.entries(warranties).map(([k,w])=>({...w,_key:k})).sort((a,b)=>new Date(a.expiryAt)-new Date(b.expiryAt));
   const now=Date.now();
@@ -4894,6 +5119,7 @@ function _buildPage(p){
   else if(p==='teamchat') buildTeamChatPage();
   else if(p==='revenue') buildRevenuePage();
   else if(p==='deptstage') buildDeptStagePage();
+  else if(p==='govobligations') buildGovObligationsPage();
 }
    </script>
 <script>
