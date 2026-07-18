@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
-<title>روائع الأفكار الإعلانية — النظام الداخلي </title>
+<title>روائع الأفكار الإعلانية — النظام الداخلي v3</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&family=Tajawal:wght@400;500;700;800;900&family=Changa:wght@700;800&display=swap" rel="stylesheet"/>
@@ -427,6 +427,13 @@ input[type="password"]{direction:rtl;text-align:right;padding-left:40px;padding-
   @page{size:A4;margin:6mm;}
 }
 #print-area{display:none;}
+.quote-action-item{display:flex;align-items:center;gap:8px;width:100%;padding:10px 14px;background:none;border:none;border-bottom:1px solid var(--border-soft);text-align:right;font-size:13px;font-weight:700;color:var(--text-1);cursor:pointer;font-family:inherit;}
+.quote-action-item:last-child{border-bottom:none;}
+.quote-action-item:hover{background:var(--surface-2);}
+.quote-success-box{width:110px;height:100px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;background:var(--surface);border:1px solid var(--border);border-radius:14px;cursor:pointer;transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease;text-align:center;}
+.quote-success-box i{font-size:24px;color:var(--maroon);}
+.quote-success-box span{font-size:12px;font-weight:800;color:var(--text-2);}
+.quote-success-box:hover{transform:translateY(-3px);box-shadow:0 8px 18px rgba(0,0,0,.08);border-color:var(--gold);}
 .quote-a4{width:100%;max-width:794px;margin:0 auto;background:#fff;font-family:'Cairo','Segoe UI',Tahoma,sans-serif;direction:rtl;}
 /* ============================================================ LOGIN PORTAL */
 .portal-bg{position:fixed;top:0;left:0;width:100%;height:100%;background:radial-gradient(ellipse at 30% 40%,#3a1016 0%,#1a0a0c 60%,#0d0507 100%);z-index:0;}
@@ -805,7 +812,7 @@ input[type="password"]{direction:rtl;text-align:right;padding-left:40px;padding-
         <div class="p-logo">
           <svg viewBox="0 0 100 100" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="روائع الأفكار الإعلانية">
             <text x="50" y="50" text-anchor="middle" dominant-baseline="central" font-family="'Changa',sans-serif" font-weight="800" font-size="62" fill="#fff">ر</text>
-            <rect x="24" y="12" width="5" height="38" rx="2.5" fill="#D4AF37"/>
+            <rect x="24" y="31" width="5" height="38" rx="2.5" fill="#D4AF37"/>
           </svg>
         </div>
         <div class="p-title"><span style="color:#D4AF37;">•</span> روائع الأفكار الإعلانية</div>
@@ -888,7 +895,7 @@ input[type="password"]{direction:rtl;text-align:right;padding-left:40px;padding-
           <div class="logo-box">
             <svg viewBox="0 0 100 100" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="روائع الأفكار الإعلانية">
               <text x="50" y="50" text-anchor="middle" dominant-baseline="central" font-family="'Changa',sans-serif" font-weight="800" font-size="62" fill="rgba(255,255,255,.92)">ر</text>
-              <rect x="24" y="13" width="5" height="38" rx="2.5" fill="#D4AF37"/>
+              <rect x="24" y="31" width="5" height="38" rx="2.5" fill="#D4AF37"/>
             </svg>
           </div>
           <div class="brand-text">
@@ -1536,6 +1543,7 @@ function renderFloatingTeamChat(){
 // ============================================================
 async function nav(p,skipHistory=false){
   if(p==='export'){exportExcel();return;}
+  if(p==='quote'&&_curPage!==p)window._quoteJustSavedKey='';
   if(!skipHistory&&_curPage&&_curPage!==p)_navHistory.push(_curPage);
   _curPage=p;
   if(cu&&cu._uname){try{localStorage.setItem('rawaee_last_page_'+cu._uname,p);}catch(e){}}
@@ -2156,10 +2164,14 @@ async function downloadQuotePDF(savedKey){
   }
   if(typeof html2canvas==='undefined'||!window.jspdf){toast('الأدوات اللازمة للتنزيل لم تُحمّل بعد، حاول مجدداً بعد ثوانٍ');return;}
   showSaving('جاري تجهيز ملف PDF...');
+  const el=document.getElementById('print-area');
   try{
     renderA4Quote(data,savedKey||'');
+    // #print-area is display:none outside of window.print()'s @media print rule, so
+    // html2canvas would otherwise capture a blank/zero-size element — force it
+    // visible off-screen just for the capture, then restore.
+    el.style.cssText='display:block;position:fixed;top:0;left:-99999px;z-index:-1;background:#fff;';
     await new Promise(r=>setTimeout(r,500));
-    const el=document.getElementById('print-area');
     const canvas=await html2canvas(el,{scale:2,useCORS:true});
     const imgData=canvas.toDataURL('image/jpeg',0.95);
     const {jsPDF}=window.jspdf;
@@ -2178,6 +2190,7 @@ async function downloadQuotePDF(savedKey){
     }
     pdf.save('عرض_سعر_'+(data.client||'')+'_'+(data.ref||'')+'.pdf');
   }catch(e){console.error(e);toast('حدث خطأ أثناء إنشاء ملف PDF');}
+  finally{if(el)el.style.cssText='display:none;';}
   hideSaving();
 }
 function fmtMoney(n){n=Number(n)||0;var s=n.toFixed(2);if(s.slice(-3)===".00")return s.slice(0,-3);return s;}
@@ -2289,8 +2302,52 @@ function buildMyWork(){
 // ============================================================
 // QUOTE PAGE
 // ============================================================
+function quoteArchiveSectionHtml(){
+  return `
+    <!-- Archive -->
+    <div class="page-header" style="margin-top:24px;"><div class="ptitle"><i class="ti ti-archive"></i> أرشيف عروض الأسعار</div></div>
+    <div class="controls-row" style="flex-wrap:wrap;gap:10px;">
+      <div class="search-bar"><i class="ti ti-search"></i><input id="q-arch-search" placeholder="بحث بالعميل أو رقم العرض..." oninput="filterQuotesArchiveCombined()"/></div>
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+        <label style="font-size:11px;color:var(--text-3);white-space:nowrap;">الحالة</label>
+        <select id="q-arch-status" onchange="filterQuotesArchiveCombined()" style="padding:6px 10px;border:1px solid var(--border);border-radius:8px;font-size:12px;">
+          <option value="">كل الحالات</option>
+          <option value="converted">محوّل لأمر عمل</option>
+          <option value="not">غير محوّل</option>
+        </select>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+        <label style="font-size:11px;color:var(--text-3);white-space:nowrap;">من تاريخ</label>
+        <input type="date" id="q-arch-from" onchange="filterQuotesArchiveCombined()" style="padding:6px 10px;border:1px solid var(--border);border-radius:8px;"/>
+        <label style="font-size:11px;color:var(--text-3);white-space:nowrap;">إلى تاريخ</label>
+        <input type="date" id="q-arch-to" onchange="filterQuotesArchiveCombined()" style="padding:6px 10px;border:1px solid var(--border);border-radius:8px;"/>
+        <button class="btn btn-out btn-sm" onclick="document.getElementById('q-arch-from').value='';document.getElementById('q-arch-to').value='';document.getElementById('q-arch-search').value='';document.getElementById('q-arch-status').value='';filterQuotesArchiveCombined();"><i class="ti ti-x"></i> مسح</button>
+      </div>
+    </div><div class="card"><div class="tbl-wrap"><table id="quotes-archive-table">
+      <thead><tr><th>العميل</th><th>رقم العرض</th><th>الإجمالي</th><th style="width:90px">التاريخ</th><th style="width:180px">إجراء</th></tr></thead>
+      <tbody id="quotes-archive-tbody">${buildQuoteArchiveRows()}</tbody>
+    </table></div></div>`;
+}
 function buildQuotePage(){
   window._quoteLines=[];
+  if(window._quoteJustSavedKey&&standaloneQuotes[window._quoteJustSavedKey]){
+    const savedKey=window._quoteJustSavedKey;
+    const q=standaloneQuotes[savedKey];
+    document.getElementById('page-quote').innerHTML=`
+      <div class="page-header"><div class="ptitle"><i class="ti ti-receipt-2"></i> إصدار عرض سعر رسمي</div></div>
+      <div class="card" style="text-align:center;padding:30px 16px;">
+        <i class="ti ti-circle-check" style="font-size:42px;color:#10B981;display:block;margin-bottom:10px;"></i>
+        <div style="font-weight:800;font-size:15px;margin-bottom:2px;">✓ تم حفظ عرض السعر بنجاح</div>
+        <div style="font-size:12px;color:var(--text-3);margin-bottom:20px;">${q.ref||savedKey} — ${q.client||'—'}</div>
+        <div style="display:flex;gap:14px;justify-content:center;flex-wrap:wrap;">
+          <div class="quote-success-box" onclick="goToQuoteRegistry('${savedKey}')"><i class="ti ti-archive"></i><span>حفظ في السجلات</span></div>
+          <div class="quote-success-box" onclick="downloadQuotePDF('${savedKey}')"><i class="ti ti-download"></i><span>تنزيل</span></div>
+        </div>
+        <button class="btn btn-out btn-sm" style="margin-top:22px;" onclick="startNewQuote()"><i class="ti ti-plus"></i> إنشاء عرض سعر جديد</button>
+      </div>
+      ${quoteArchiveSectionHtml()}`;
+    return;
+  }
   const cArr=Object.values(clients);
   // Auto-generate quote number (RA-0001 format, locked)
   const autoRef='RA-'+(Object.keys(standaloneQuotes).length+1).toString().padStart(4,'0');
@@ -2363,37 +2420,18 @@ function buildQuotePage(){
             <option value="دفعة واحدة">دفعة واحدة</option>
           </select>
         </div>
-        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:16px;">
-          <button class="btn btn-brand" onclick="saveAndPreviewQuote()"><i class="ti ti-eye"></i> معاينة وطباعة A4</button>
-          <button class="btn btn-teal" onclick="downloadQuotePDF()"><i class="ti ti-download"></i> تنزيل PDF</button>
-          <button class="btn btn-gold" onclick="saveQuoteToDb()"><i class="ti ti-device-floppy"></i> ${window._editingQuoteKey?'حفظ التعديلات':'حفظ في السجلات'}</button>
-          <button class="btn btn-purple" onclick="convertQuoteToOrder()"><i class="ti ti-transfer"></i> تحويل لأمر تشغيل</button>
+        <div style="position:relative;display:inline-block;margin-top:16px;">
+          <button class="btn btn-brand" onclick="toggleQuoteActionsMenu(event)"><i class="ti ti-list-check"></i> إجراءات العرض <i class="ti ti-chevron-down"></i></button>
+          <div id="quote-actions-menu" style="display:none;position:absolute;top:calc(100% + 6px);right:0;background:var(--surface);border:1px solid var(--border);border-radius:10px;box-shadow:0 12px 30px rgba(0,0,0,.15);min-width:230px;z-index:50;overflow:hidden;">
+            <button type="button" class="quote-action-item" onclick="closeQuoteActionsMenu();saveAndPreviewQuote()"><i class="ti ti-eye"></i> معاينة وطباعة A4</button>
+            <button type="button" class="quote-action-item" onclick="closeQuoteActionsMenu();downloadQuotePDF()"><i class="ti ti-download"></i> تنزيل PDF</button>
+            <button type="button" class="quote-action-item" onclick="closeQuoteActionsMenu();saveQuoteToDb()"><i class="ti ti-device-floppy"></i> ${window._editingQuoteKey?'حفظ التعديلات':'حفظ في السجلات'}</button>
+            <button type="button" class="quote-action-item" onclick="closeQuoteActionsMenu();convertQuoteToOrder()"><i class="ti ti-transfer"></i> تحويل لأمر تشغيل</button>
+          </div>
         </div>
       </div>
     </div>
-    <!-- Archive -->
-    <div class="page-header" style="margin-top:24px;"><div class="ptitle"><i class="ti ti-archive"></i> أرشيف عروض الأسعار</div></div>
-    <div class="controls-row" style="flex-wrap:wrap;gap:10px;">
-      <div class="search-bar"><i class="ti ti-search"></i><input id="q-arch-search" placeholder="بحث بالعميل أو رقم العرض..." oninput="filterQuotesArchiveCombined()"/></div>
-      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-        <label style="font-size:11px;color:var(--text-3);white-space:nowrap;">الحالة</label>
-        <select id="q-arch-status" onchange="filterQuotesArchiveCombined()" style="padding:6px 10px;border:1px solid var(--border);border-radius:8px;font-size:12px;">
-          <option value="">كل الحالات</option>
-          <option value="converted">محوّل لأمر عمل</option>
-          <option value="not">غير محوّل</option>
-        </select>
-      </div>
-      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-        <label style="font-size:11px;color:var(--text-3);white-space:nowrap;">من تاريخ</label>
-        <input type="date" id="q-arch-from" onchange="filterQuotesArchiveCombined()" style="padding:6px 10px;border:1px solid var(--border);border-radius:8px;"/>
-        <label style="font-size:11px;color:var(--text-3);white-space:nowrap;">إلى تاريخ</label>
-        <input type="date" id="q-arch-to" onchange="filterQuotesArchiveCombined()" style="padding:6px 10px;border:1px solid var(--border);border-radius:8px;"/>
-        <button class="btn btn-out btn-sm" onclick="document.getElementById('q-arch-from').value='';document.getElementById('q-arch-to').value='';document.getElementById('q-arch-search').value='';document.getElementById('q-arch-status').value='';filterQuotesArchiveCombined();"><i class="ti ti-x"></i> مسح</button>
-      </div>
-    </div><div class="card"><div class="tbl-wrap"><table id="quotes-archive-table">
-      <thead><tr><th>العميل</th><th>رقم العرض</th><th>الإجمالي</th><th style="width:90px">التاريخ</th><th style="width:180px">إجراء</th></tr></thead>
-      <tbody id="quotes-archive-tbody">${buildQuoteArchiveRows()}</tbody>
-    </table></div></div>`;
+    ${quoteArchiveSectionHtml()}`;
   addQuoteLine();
 }
 function filterQuotesArchiveCombined(){
@@ -2423,12 +2461,26 @@ function onClientInputQuote(val){
   }
 }
 function onQuotePaymentChange(v){}
+function toggleQuoteActionsMenu(e){if(e)e.stopPropagation();const m=document.getElementById('quote-actions-menu');if(!m)return;m.style.display=m.style.display==='none'?'block':'none';}
+function closeQuoteActionsMenu(){const m=document.getElementById('quote-actions-menu');if(m)m.style.display='none';}
+document.addEventListener('click',e=>{
+  const menu=document.getElementById('quote-actions-menu');
+  if(menu&&menu.style.display==='block'&&!menu.contains(e.target)&&!e.target.closest('button[onclick*="toggleQuoteActionsMenu"]'))menu.style.display='none';
+});
+function startNewQuote(){window._quoteJustSavedKey='';window._editingQuoteKey=null;buildQuotePage();}
+function goToQuoteRegistry(key){
+  window._quoteJustSavedKey='';buildQuotePage();
+  setTimeout(()=>{
+    const row=document.querySelector(`#quotes-archive-tbody tr[data-key="${key}"]`);
+    if(row){row.scrollIntoView({behavior:'smooth',block:'center'});row.style.transition='background .3s';const orig=row.style.background;row.style.background='#FEF3C7';setTimeout(()=>{row.style.background=orig;},1600);}
+  },80);
+}
 function buildQuoteArchiveRows(){
   const arr=Object.entries(standaloneQuotes).map(([k,v])=>({...v,_key:k})).sort((a,b)=>new Date(b.date)-new Date(a.date));
   if(!arr.length)return'<tr><td colspan="5" style="text-align:center;color:var(--text-3);padding:24px">لا يوجد عروض أسعار محفوظة</td></tr>';
   return arr.map(q=>{
     const conv=q.convertedToOrder;
-    return `<tr data-date="${q.date||''}" data-converted="${conv?'1':'0'}" style="${conv?'background:#F0FDF4;':''}">
+    return `<tr data-key="${q._key}" data-date="${q.date||''}" data-converted="${conv?'1':'0'}" style="${conv?'background:#F0FDF4;':''}">
     <td><strong>${q.client}</strong></td>
     <td><span class="badge b-new">${q.ref||'—'}</span></td>
     <td><span class="badge b-proc" style="font-size:12px;">${fmtMoney(Number(q.totalWithVat||q.total||0))} ر.س</span></td>
@@ -2447,6 +2499,7 @@ async function editQuote(key){
   const q=standaloneQuotes[key]||await fbGet(`standalone_quotes/${key}`);
   if(!q){toast('⚠️ تعذر العثور على العرض');return;}
   window._editingQuoteKey=key;
+  window._quoteJustSavedKey='';
   buildQuotePage();
   const setVal=(id,v)=>{const el=document.getElementById(id);if(el)el.value=v||'';};
   setVal('q-client',q.client);setVal('q-phone',q.phone);setVal('q-ref',q.ref||key);
@@ -2577,7 +2630,8 @@ async function saveQuoteToDb(){
     window._editingQuoteKey=null;
     await loadData();hideSaving();toast('✓ تم تحديث عرض السعر');buildQuotePage();
   }else{
-    await fbPush('standalone_quotes',data);
+    const res=await fbPush('standalone_quotes',data);
+    window._quoteJustSavedKey=res.name;
     await loadData();hideSaving();toast('✓ تم حفظ عرض السعر');buildQuotePage();
   }
 }
@@ -3423,7 +3477,7 @@ function openOrderModal(key){
   }
   const paymentRow=canSeePayment?`<div class="di" style="grid-column:1/-1;border-top:1px solid var(--border-soft);padding-top:10px;">
     <span class="dk">💳 الموقف المالي</span>
-    <span class="dv">${paymentBadge(o.paymentStatus)||'—'} ${(o.paymentStatus==='تم الدفع'||o.paymentStatus==='دفع جزئي')?`<span style="font-size:12px;color:#065F46">(${fmtMoney(Number(o.paidAmount||0))} ر.س)</span>`:''}</span>
+    <span class="dv">${paymentBadge(o.paymentStatus)||'—'} ${(o.paymentStatus==='تم الدفع'||o.paymentStatus==='دفع جزئي')?`<span style="font-size:12px;color:#065F46">(${fmtMoney(Number(o.paidAmount||0))} ر.س)</span>`:''}${orderPaymentChannelsHtml(o)}</span>
   </div>`:'';
   const canLogMaintenance=['admin','receiver','workshop'].includes(t);
   const _lastVisit=(o.maintenanceVisits&&o.maintenanceVisits.length)?o.maintenanceVisits[o.maintenanceVisits.length-1]:null;const _lastVisitDate=_lastVisit?(typeof _lastVisit==='object'?_lastVisit.date:_lastVisit):null;const _visitsHistory=(o.maintenanceVisits||[]).slice().reverse().map(v=>{const vd=typeof v==='object'?v:{date:v,reason:'',photo:''};return `<div style="border:1px solid var(--border-soft);border-radius:8px;padding:8px;margin-top:4px;width:100%;"><div style="font-size:11px;color:var(--text-3);">${vd.date?new Date(vd.date).toLocaleDateString('ar-SA'):'—'}</div>${vd.reason?`<div style="font-size:13px;margin-top:4px;">${vd.reason}</div>`:''}${vd.photo?`<a href="${vd.photo}" target="_blank" style="font-size:12px;color:var(--maroon);display:inline-block;margin-top:4px;"><i class="ti ti-photo"></i> عرض الصورة</a>`:''}</div>`;}).join('');
@@ -3754,22 +3808,22 @@ function buildAddForm(isUrgentQuick=false){
           <input type="text" id="f-total-amount" placeholder="0" readonly style="background:var(--surface-2);color:var(--maroon);cursor:not-allowed;font-weight:800;font-size:15px;"/>
         </div>
       </div>
-      <!-- Partial Payment Fields -->
-      <div id="partial-payment-section" style="display:none;padding:0 20px 16px;">
-        <div class="partial-fields" style="grid-template-columns:1fr 1fr;">
-          <div class="fg">
-            <label>المبلغ المدفوع (ر.س) <span style="color:#EF4444">*</span></label>
-            <input type="text" inputmode="decimal" id="f-paid-amount" placeholder="0" min="0" oninput="normalizeAmountInput(this)" onfocus="this.select()"/>
-          </div>
-          <div class="fg partial-field-ro">
-            <label>المبلغ المتبقي (ر.س)</label>
-            <input type="text" inputmode="decimal" id="f-remaining-amount" placeholder="0" readonly/>
-          </div>
+      <!-- Multi-Channel Payment Matrix (partial or full payment) -->
+      <div id="payment-channels-section" style="display:none;padding:0 20px 16px;">
+        <div style="font-size:12px;font-weight:800;color:var(--text-2);margin-bottom:8px;"><i class="ti ti-credit-card"></i> مصفوفة الدفع — أدخل المبلغ حسب كل وسيلة دفع مستخدمة</div>
+        <div class="form-grid">
+          <div class="fg"><label>المبلغ المدفوع شبكة</label><input type="text" inputmode="decimal" id="f-amt-network" placeholder="0" oninput="onPayChannelInput(this)" onfocus="this.select()"/></div>
+          <div class="fg"><label>المبلغ المدفوع كاش</label><input type="text" inputmode="decimal" id="f-amt-cash" placeholder="0" oninput="onPayChannelInput(this)" onfocus="this.select()"/></div>
+          <div class="fg"><label>المبلغ المدفوع تحويل</label><input type="text" inputmode="decimal" id="f-amt-transfer" placeholder="0" oninput="onPayChannelInput(this)" onfocus="this.select()"/></div>
+          <div class="fg partial-field-ro"><label>إجمالي المبلغ المدفوع (ر.س)</label><input type="text" id="f-paid-amount" readonly style="background:var(--surface-2);color:var(--maroon);font-weight:800;"/></div>
         </div>
       </div>
-      <!-- Full payment notice -->
-      <div id="simple-amount-field" style="display:none;padding:0 20px 16px;">
-        <div style="font-size:11px;color:#065F46;background:#D1FAE5;border-radius:8px;padding:9px 12px;font-weight:700;"><i class="ti ti-check"></i> سيتم تسجيل المبلغ الإجمالي كمدفوع بالكامل</div>
+      <!-- Remaining amount (partial payment only) -->
+      <div id="partial-remaining-wrap" style="display:none;padding:0 20px 16px;">
+        <div class="fg partial-field-ro" style="max-width:260px;">
+          <label>المبلغ المتبقي (ر.س)</label>
+          <input type="text" inputmode="decimal" id="f-remaining-amount" placeholder="0" readonly/>
+        </div>
       </div>
       <!-- Pay on delivery notice -->
       <div id="delivery-amount-field" style="display:none;padding:0 20px 16px;">
@@ -3867,19 +3921,55 @@ function calcRemaining(){
   const rem=document.getElementById('f-remaining-amount');
   if(rem)rem.value=fmtMoney(Math.max(0,total-paid));
 }
+function recalcOrderPaidChannels(){
+  const network=parseFloat(normalizeDigits(document.getElementById('f-amt-network')?.value))||0;
+  const cash=parseFloat(normalizeDigits(document.getElementById('f-amt-cash')?.value))||0;
+  const transfer=parseFloat(normalizeDigits(document.getElementById('f-amt-transfer')?.value))||0;
+  const total=network+cash+transfer;
+  const paidEl=document.getElementById('f-paid-amount');if(paidEl)paidEl.value=fmtMoney(total);
+  calcRemaining();
+  return{network,cash,transfer,total};
+}
+function onPayChannelInput(el){
+  if(!el)return;
+  const norm=normalizeDigits(el.value);
+  if(norm!==el.value){
+    const pos=el.selectionStart;
+    el.value=norm;
+    try{el.setSelectionRange(pos,pos);}catch(e){}
+  }
+  recalcOrderPaidChannels();
+}
 function recalcOrderTotal(){
   const sum=(window._orderLines||[]).reduce((s,l)=>s+(parseFloat(normalizeDigits(l.price))||0),0);
   const totEl=document.getElementById('f-total-amount');
   if(totEl)totEl.value=fmtMoney(sum);
-  calcRemaining();
+  if(document.getElementById('fpay')?.value==='تم الدفع'){
+    const netEl=document.getElementById('f-amt-network');if(netEl)netEl.value=sum?fmtMoney(sum):'';
+    recalcOrderPaidChannels();
+  }else{
+    calcRemaining();
+  }
 }
 function onPaymentChange(v){
-  const partial=document.getElementById('partial-payment-section');
-  const simple=document.getElementById('simple-amount-field');
+  const channels=document.getElementById('payment-channels-section');
+  const remaining=document.getElementById('partial-remaining-wrap');
   const delivery=document.getElementById('delivery-amount-field');
-  if(partial)partial.style.display=v==='دفع جزئي'?'block':'none';
-  if(simple)simple.style.display=v==='تم الدفع'?'block':'none';
+  const showChannels=v==='دفع جزئي'||v==='تم الدفع';
+  if(channels)channels.style.display=showChannels?'block':'none';
+  if(remaining)remaining.style.display=v==='دفع جزئي'?'block':'none';
   if(delivery)delivery.style.display=v==='عند التسليم'?'block':'none';
+  if(showChannels){
+    ['f-amt-network','f-amt-cash','f-amt-transfer'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+    recalcOrderPaidChannels();
+  }
+  if(v==='تم الدفع'){
+    // Full payment: prefill the network channel with the full order total so the
+    // matrix always sums to it by default, while still letting the user re-split it.
+    const total=parseFloat(normalizeDigits(document.getElementById('f-total-amount')?.value))||0;
+    const netEl=document.getElementById('f-amt-network');if(netEl)netEl.value=total?fmtMoney(total):'';
+    recalcOrderPaidChannels();
+  }
 }
 function onExternalChange(v){const w=document.getElementById('external-note-wrap');if(w)w.style.display=v!=='none'?'block':'none';}
 // ── Parallel Production Lines (up to 2 extra, alongside the primary line above) ──
@@ -4032,21 +4122,28 @@ async function submitOrder(isUrgentQuick=false){
   const totalAmt=parseFloat(normalizeDigits(document.getElementById('f-total-amount')?.value))||0;
   let paidAmt=0;
   let remainingAmt=0;
+  let paidNetwork=0,paidCash=0,paidTransfer=0;
+  if(payStatus==='دفع جزئي'||payStatus==='تم الدفع'){
+    paidNetwork=parseFloat(normalizeDigits(document.getElementById('f-amt-network')?.value))||0;
+    paidCash=parseFloat(normalizeDigits(document.getElementById('f-amt-cash')?.value))||0;
+    paidTransfer=parseFloat(normalizeDigits(document.getElementById('f-amt-transfer')?.value))||0;
+    paidAmt=paidNetwork+paidCash+paidTransfer;
+  }
   if(payStatus==='دفع جزئي'){
-    paidAmt=parseFloat(normalizeDigits(document.getElementById('f-paid-amount')?.value))||0;
     remainingAmt=Math.max(0,totalAmt-paidAmt);
   }else if(payStatus==='تم الدفع'){
-    paidAmt=totalAmt;
     remainingAmt=0;
   }else if(payStatus==='عند التسليم'){
     paidAmt=0;
     remainingAmt=totalAmt;
   }
+  const payChannelsText=[paidNetwork?('شبكة: '+fmtMoney(paidNetwork)+' ر.س'):'',paidCash?('كاش: '+fmtMoney(paidCash)+' ر.س'):'',paidTransfer?('تحويل: '+fmtMoney(paidTransfer)+' ر.س'):''].filter(Boolean).join(' | ');
   if(!Object.values(clients).find(c2=>c2.name===c))await fbPush('clients',{name:c,phone:normalizeSaudiPhone(phone),date:today});
   const ord={
     client:c,service:s,orderItems:(window._orderLines||[]).map(l=>({name:l.name,details:l.details,files:l.files||[]})),date:today,createdAt:new Date().toISOString(),stageStartDate:new Date().toISOString(),
     priority:document.getElementById('fpr').value,phone:normalizeSaudiPhone(phone),
     paymentStatus:payStatus,paidAmount:paidAmt,
+    paidNetwork,paidCash,paidTransfer,paymentMethod:payChannelsText,
     totalAmount:totalAmt,remainingAmount:remainingAmt,
     deadline:document.getElementById('fd').value||'—',notes:document.getElementById('fn').value||'—',
     files:window.globalAttachedFiles||[],createdBy:cu.name,createdByUname:cu._uname,
