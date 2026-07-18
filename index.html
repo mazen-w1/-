@@ -264,9 +264,11 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--gold);bo
 input[inputmode="decimal"],input[inputmode="numeric"],input[type="number"],input[type="tel"]{
   direction:ltr;text-align:right;
 }
-/* Password field: align/edit left-to-right like the username field above it, instead of
-   inheriting the page's RTL alignment which pushes the dots/caret to the right edge. */
-input[type="password"]{direction:ltr;text-align:left;}
+/* Password field: type/align right-to-left like the username field above it (the page's
+   natural RTL flow); the show/hide eye button (added by enhancements.js) is repositioned
+   to the left side of the field by the cleanup script at the end of the document, with
+   matching padding so typed text never runs under the icon. */
+input[type="password"]{direction:rtl;text-align:right;padding-left:40px;padding-right:14px;}
 .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:20px;}
 .ff{grid-column:1/-1;}
 /* ============================================================ DEPT SECTIONS */
@@ -721,9 +723,11 @@ input[type="password"]{direction:ltr;text-align:left;}
   transform:translateY(-3px);
   transition:.22s cubic-bezier(.22,1,.36,1);
 }
-.wf-card:hover{
-  box-shadow:0 16px 40px rgba(74,14,23,.14)!important;
-  transform:translateY(-5px)!important;
+.wf-card{transition:transform .25s cubic-bezier(.22,1,.36,1),box-shadow .25s cubic-bezier(.22,1,.36,1)!important;}
+.wf-card:hover,.wf-card:focus-within,.wf-card:active{
+  box-shadow:0 20px 46px rgba(74,14,23,.2)!important;
+  transform:translateY(-5px) scale(1.07)!important;
+  z-index:5;
 }
 .stat-card:hover{
   box-shadow:0 14px 34px rgba(74,14,23,.13)!important;
@@ -1979,7 +1983,12 @@ function buildDash(){
     </div>`;
 }
 async function dashGoto(mode){
-  _currentWfTab=mode==='done'?'done':'active';
+  if(mode==='done'){
+    await nav('timeline');
+    setTimeout(()=>{document.getElementById('timeline-done-section')?.scrollIntoView({behavior:'smooth',block:'start'});},80);
+    return;
+  }
+  _currentWfTab='active';
   await nav('wf');
   if(mode==='print'){
     filterWfDept('print');
@@ -4143,7 +4152,7 @@ function buildTimelinePage(){
     <div class="ro-notice" style="background:#EFF6FF;border-color:#BFDBFE;color:#1E40AF"><i class="ti ti-clock"></i> أخضر &lt;24س · أصفر 1-3 أيام · أحمر &gt;3 أيام</div>
     ${activeArr.length?`<div style="font-size:12px;font-weight:800;color:var(--maroon);margin:14px 0 6px;"><i class="ti ti-loader"></i> الطلبات الجارية (${activeArr.length})</div>
     <div class="card"><div class="tbl-wrap"><table>${thead}<tbody>${activeRows}</tbody></table></div></div>`:''}
-    ${doneArr.length?`<div style="font-size:12px;font-weight:800;color:#10B981;margin:18px 0 6px;"><i class="ti ti-circle-check"></i> الطلبات المنتهية (${doneArr.length})</div>
+    ${doneArr.length?`<div id="timeline-done-section" style="font-size:12px;font-weight:800;color:#10B981;margin:18px 0 6px;scroll-margin-top:var(--header-h);"><i class="ti ti-circle-check"></i> الطلبات المنتهية (${doneArr.length})</div>
     <div class="card"><div class="tbl-wrap"><table>${thead}<tbody>${doneRows}</tbody></table></div></div>`:''}
     ${!arr.length?'<div style="text-align:center;padding:40px;color:var(--text-3);">لا توجد سجلات</div>':''}`;
 }
@@ -4345,54 +4354,33 @@ function buildRequestsPage(){
       <td><span class="badge ${o.paymentStatus==='دفع جزئي'?'b-proc':'b-new'}">${o.paymentStatus||'—'}</span></td>
       <td>${o.totalAmount?fmtMoney(Number(o.totalAmount))+' ر.س':'—'}</td>
     </tr>`).join('');
-  // ── Financial metrics: revenue totals + top revenue-generating department ──
+  // ── Financial metrics: revenue + top department, restricted to admin/accountant,
+  // recomputed against whichever month is selected in the unpaid-tab month filter.
   // Parallel-line orders (parentOrderKey set) carry no amount of their own — the
   // revenue is already counted on their primary order — so they're excluded here.
-  const _revOrds=ordersArr().filter(o=>!o.parentOrderKey);
+  const canSeeFinance=['admin','accountant'].includes(cu.type);
+  const _revOrdsAll=ordersArr().filter(o=>!o.parentOrderKey);
+  const _selMonth=window._reqMonthFilter||'all';
+  const _revOrds=_selMonth==='all'?_revOrdsAll:_revOrdsAll.filter(o=>(o.date||'').slice(0,7)===_selMonth);
   const totalRevenue=_revOrds.reduce((s,o)=>s+(Number(o.totalAmount)||0),0);
-  const totalPaidRev=_revOrds.reduce((s,o)=>s+(Number(o.paidAmount)||0),0);
-  const totalOutstandingRev=_revOrds.reduce((s,o)=>s+(Number(o.remainingAmount)||0),0);
-  const _curMonth=new Date().toISOString().slice(0,7);
-  const revThisMonth=_revOrds.filter(o=>(o.date||'').slice(0,7)===_curMonth).reduce((s,o)=>s+(Number(o.totalAmount)||0),0);
   const deptRevMeta={design:{label:'التصميم',color:'#6B21A8',icon:'ti-brush'},external:{label:'التنفيذ الخارجي',color:'#713F12',icon:'ti-world'},print:{label:'الطباعة',color:'#3730A3',icon:'ti-printer'},workshop:{label:'الورشة',color:'#9A3412',icon:'ti-tools'}};
   const deptRevenue={design:0,external:0,print:0,workshop:0};
   _revOrds.forEach(o=>{getActiveDepts(o).forEach(dk=>{deptRevenue[dk]+=(Number(o.totalAmount)||0);});});
   const deptRevRanked=Object.entries(deptRevenue).sort((a,b)=>b[1]-a[1]);
   const topDept=deptRevRanked[0];
-  const maxDeptRev=Math.max(1,...deptRevRanked.map(e=>e[1]));
-  const financeCardsHtml=`
-    <div class="card" style="margin-bottom:16px;">
-      <div class="card-header"><span class="card-title"><i class="ti ti-cash"></i> إجمالي الإيرادات</span></div>
-      <div class="stats-row" style="padding:16px 20px 20px;margin-bottom:0;">
-        <div class="stat-card c-gold"><div class="stat-icon i-gold"><i class="ti ti-coin"></i></div><div class="stat-label">إجمالي الإيرادات</div><div class="stat-value">${fmtMoney(totalRevenue)}</div><div class="stat-trend"><span style="color:var(--text-2)">ر.س · ${_revOrds.length} طلب</span></div></div>
-        <div class="stat-card c-green"><div class="stat-icon i-green"><i class="ti ti-checkbox"></i></div><div class="stat-label">المبالغ المحصّلة</div><div class="stat-value" style="color:#059669">${fmtMoney(totalPaidRev)}</div><div class="stat-trend"><span style="color:var(--text-2)">ر.س محصّلة فعلياً</span></div></div>
-        <div class="stat-card c-red"><div class="stat-icon i-red"><i class="ti ti-alert-triangle"></i></div><div class="stat-label">المبالغ المتبقية</div><div class="stat-value" style="color:#DC2626">${fmtMoney(totalOutstandingRev)}</div><div class="stat-trend"><span style="color:var(--text-2)">ر.س غير محصّلة</span></div></div>
-        <div class="stat-card c-blue"><div class="stat-icon i-blue"><i class="ti ti-calendar-stats"></i></div><div class="stat-label">إيرادات هذا الشهر</div><div class="stat-value" style="color:#2563EB">${fmtMoney(revThisMonth)}</div><div class="stat-trend"><span style="color:var(--text-2)">ر.س</span></div></div>
-      </div>
-    </div>
-    <div class="card" style="margin-bottom:16px;">
-      <div class="card-header"><span class="card-title"><i class="ti ti-trophy"></i> القسم الأعلى إيراداً</span></div>
-      <div style="padding:16px 20px 20px;">
-        ${topDept&&topDept[1]>0?`<div style="display:flex;align-items:center;gap:14px;background:${deptRevMeta[topDept[0]].color}14;border:1px solid ${deptRevMeta[topDept[0]].color}33;border-radius:12px;padding:14px 16px;margin-bottom:14px;">
-          <div style="width:46px;height:46px;border-radius:50%;background:${deptRevMeta[topDept[0]].color};display:flex;align-items:center;justify-content:center;flex-shrink:0;"><i class="ti ${deptRevMeta[topDept[0]].icon}" style="color:#fff;font-size:20px;"></i></div>
-          <div style="flex:1;min-width:0;">
-            <div style="font-size:11px;color:var(--text-3);font-weight:700;">القسم الأعلى إيراداً حالياً</div>
-            <div style="font-size:16px;font-weight:900;color:${deptRevMeta[topDept[0]].color}">${deptRevMeta[topDept[0]].label}</div>
-          </div>
-          <div style="text-align:left;flex-shrink:0;">
-            <div style="font-size:18px;font-weight:900;color:${deptRevMeta[topDept[0]].color}">${fmtMoney(topDept[1])}</div>
-            <div style="font-size:10px;color:var(--text-3);">ر.س</div>
-          </div>
-        </div>`:`<div style="text-align:center;color:var(--text-3);padding:10px 0 16px;font-size:12px;">لا توجد بيانات إيرادات كافية بعد</div>`}
-        ${deptRevRanked.map(([dk,v])=>`<div style="margin-bottom:9px;">
-          <div style="display:flex;justify-content:space-between;font-size:11px;font-weight:700;margin-bottom:3px;"><span style="color:var(--text-2)"><i class="ti ${deptRevMeta[dk].icon}" style="color:${deptRevMeta[dk].color}"></i> ${deptRevMeta[dk].label}</span><span style="color:${deptRevMeta[dk].color}">${fmtMoney(v)} ر.س</span></div>
-          <div class="mini-stat-bar-track"><div class="mini-stat-bar-fill" style="width:${Math.round((v/maxDeptRev)*100)}%;background:${deptRevMeta[dk].color}"></div></div>
-        </div>`).join('')}
-      </div>
-    </div>`;
+  const unpaidOutstanding=unpaidOrds.reduce((s,o)=>s+(Number(o.remainingAmount)||0),0);
+  const periodLabel=_selMonth==='all'?'كل الفترات':new Date(_selMonth+'-01').toLocaleDateString('ar-SA',{month:'long',year:'numeric'});
+  const monthOptions=(()=>{
+    const opts=[];const now=new Date();
+    for(let i=0;i<12;i++){
+      const d=new Date(now.getFullYear(),now.getMonth()-i,1);
+      const val=d.toISOString().slice(0,7);
+      opts.push(`<option value="${val}"${_selMonth===val?' selected':''}>${d.toLocaleDateString('ar-SA',{month:'long',year:'numeric'})}</option>`);
+    }
+    return opts.join('');
+  })();
   document.getElementById('requests-content').innerHTML=`
     <div class="page-header"><div class="ptitle"><i class="ti ti-inbox"></i> صندوق طلبات المحاسبة</div></div>
-    ${financeCardsHtml}
     <div class="tab-bar">
       <button class="tab-btn active" id="req-tab-pending" onclick="showReqTab('pending')"><i class="ti ti-clock"></i> بانتظار المحاسب (${pending.length})</button>
       <button class="tab-btn" id="req-tab-accApproved" onclick="showReqTab('accApproved')"><i class="ti ti-hourglass"></i> بانتظار المدير (${accApproved.length})</button>
@@ -4406,10 +4394,20 @@ function buildRequestsPage(){
     </table></div></div>
     <!-- unpaid tab uses different columns -->
     <div id="req-pane-unpaid" style="display:none">
-      <div class="stats-row" style="margin-bottom:14px;">
-        <div class="stat-card c-gold"><div class="stat-icon i-gold"><i class="ti ti-cash"></i></div><div class="stat-label">إجمالي الإيرادات</div><div class="stat-value">${fmtMoney(totalRevenue)}</div><div class="stat-trend"><span style="color:var(--text-2)">ر.س عبر جميع الطلبات</span></div></div>
-        <div class="stat-card c-purple"><div class="stat-icon i-purple"><i class="ti ti-crown"></i></div><div class="stat-label">أفضل قسم</div><div class="stat-value" style="font-size:15px;color:#6B21A8">${topDept&&topDept[1]>0?deptRevMeta[topDept[0]].label:'—'}</div><div class="stat-trend"><span style="color:var(--text-2)">${topDept&&topDept[1]>0?fmtMoney(topDept[1])+' ر.س':'لا توجد بيانات كافية'}</span></div></div>
+      ${canSeeFinance?`
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
+        <span style="font-size:11px;font-weight:800;color:var(--text-2);"><i class="ti ti-calendar"></i> فلترة الأشهر (للإيرادات وأفضل قسم)</span>
+        <select id="req-month-filter" onchange="applyReqMonthFilter(this.value)" style="border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:7px 12px;font-size:12px;font-weight:700;color:var(--maroon);background:var(--surface);font-family:inherit;">
+          <option value="all"${_selMonth==='all'?' selected':''}>كل الفترات</option>
+          ${monthOptions}
+        </select>
       </div>
+      <div class="stats-row" style="margin-bottom:14px;">
+        <div class="stat-card c-red"><div class="stat-icon i-red"><i class="ti ti-coin-off"></i></div><div class="stat-label">طلبات غير مسددة</div><div class="stat-value">${unpaidOrds.length}</div><div class="stat-trend"><span style="color:var(--text-2)">طلب حالياً</span></div></div>
+        <div class="stat-card c-orange"><div class="stat-icon i-orange"><i class="ti ti-alert-triangle"></i></div><div class="stat-label">إجمالي المتبقي</div><div class="stat-value" style="color:#EA580C">${fmtMoney(unpaidOutstanding)}</div><div class="stat-trend"><span style="color:var(--text-2)">ر.س غير محصّلة</span></div></div>
+        <div class="stat-card c-gold"><div class="stat-icon i-gold"><i class="ti ti-cash"></i></div><div class="stat-label">إجمالي الإيرادات</div><div class="stat-value">${fmtMoney(totalRevenue)}</div><div class="stat-trend"><span style="color:var(--text-2)">${periodLabel}</span></div></div>
+        <div class="stat-card c-purple"><div class="stat-icon i-purple"><i class="ti ti-crown"></i></div><div class="stat-label">أفضل قسم</div><div class="stat-value" style="font-size:15px;color:#6B21A8">${topDept&&topDept[1]>0?deptRevMeta[topDept[0]].label:'—'}</div><div class="stat-trend"><span style="color:var(--text-2)">${topDept&&topDept[1]>0?fmtMoney(topDept[1])+' ر.س · '+periodLabel:'لا توجد بيانات كافية'}</span></div></div>
+      </div>`:''}
       <div class="card"><div class="tbl-wrap"><table><thead><tr><th>رقم الطلب</th><th>العميل</th><th>الخدمة</th><th style="width:100px">حالة الدفع</th><th style="width:110px">الإجمالي</th></tr></thead>
       <tbody>${makeUnpaidRows(unpaidOrds)}</tbody></table></div></div>
     </div>`;
@@ -4424,6 +4422,7 @@ function showReqTab(tab){
   const card=document.getElementById('req-main-table-card');if(card)card.style.display=tab==='unpaid'?'none':'';
   const tb2=document.getElementById('req-tab-unpaid');if(tb2)tb2.classList.toggle('active',tab==='unpaid');
 }
+function applyReqMonthFilter(v){window._reqMonthFilter=v;buildRequestsPage();showReqTab('unpaid');}
 async function accountantApproveRequest(key){
   showSaving('جاري الموافقة المبدئية...');
   try{await fbPatch('requests/'+key,{status:'accountant_approved',accountantApprovedAt:new Date().toISOString(),accountantName:cu.name});await loadData();hideSaving();toast('✓ تمت الموافقة المبدئية');buildRequestsPage();}
@@ -4790,6 +4789,16 @@ document.addEventListener('DOMContentLoaded',function(){
   if(sb)sb.classList.remove('active');
   window.toggleSidebar=function(){document.getElementById('sidebar-wrap').classList.toggle('open');document.getElementById('sidebar-overlay').classList.toggle('show');};
   window.closeSidebar=function(){document.getElementById('sidebar-wrap').classList.remove('open');document.getElementById('sidebar-overlay').classList.remove('show');};
+  // enhancements.js's addPasswordToggle() anchors its show/hide eye button at right:10px
+  // with matching paddingRight on the input — move it to the left side instead so it
+  // doesn't collide with the right-aligned typed text.
+  document.querySelectorAll('input[type="password"]').forEach(function(inp){
+    inp.style.paddingRight='14px';
+    inp.style.paddingLeft='40px';
+    var wrapper=inp.parentNode;
+    var btn=wrapper?wrapper.querySelector('button'):null;
+    if(btn){btn.style.right='auto';btn.style.left='10px';}
+  });
 });
 </script>
 </body>
