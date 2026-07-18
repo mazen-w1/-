@@ -4354,31 +4354,10 @@ function buildRequestsPage(){
       <td><span class="badge ${o.paymentStatus==='دفع جزئي'?'b-proc':'b-new'}">${o.paymentStatus||'—'}</span></td>
       <td>${o.totalAmount?fmtMoney(Number(o.totalAmount))+' ر.س':'—'}</td>
     </tr>`).join('');
-  // ── Financial metrics: revenue + top department, restricted to admin/accountant,
-  // recomputed against whichever month is selected in the unpaid-tab month filter.
   // Parallel-line orders (parentOrderKey set) carry no amount of their own — the
   // revenue is already counted on their primary order — so they're excluded here.
-  const canSeeFinance=['admin','accountant'].includes(cu.type);
-  const _revOrdsAll=ordersArr().filter(o=>!o.parentOrderKey);
-  const _selMonth=window._reqMonthFilter||'all';
-  const _revOrds=_selMonth==='all'?_revOrdsAll:_revOrdsAll.filter(o=>(o.date||'').slice(0,7)===_selMonth);
-  const totalRevenue=_revOrds.reduce((s,o)=>s+(Number(o.totalAmount)||0),0);
-  const deptRevMeta={design:{label:'التصميم',color:'#6B21A8',icon:'ti-brush'},external:{label:'التنفيذ الخارجي',color:'#713F12',icon:'ti-world'},print:{label:'الطباعة',color:'#3730A3',icon:'ti-printer'},workshop:{label:'الورشة',color:'#9A3412',icon:'ti-tools'}};
-  const deptRevenue={design:0,external:0,print:0,workshop:0};
-  _revOrds.forEach(o=>{getActiveDepts(o).forEach(dk=>{deptRevenue[dk]+=(Number(o.totalAmount)||0);});});
-  const deptRevRanked=Object.entries(deptRevenue).sort((a,b)=>b[1]-a[1]);
-  const topDept=deptRevRanked[0];
+  const totalRevenue=ordersArr().filter(o=>!o.parentOrderKey).reduce((s,o)=>s+(Number(o.totalAmount)||0),0);
   const unpaidOutstanding=unpaidOrds.reduce((s,o)=>s+(Number(o.remainingAmount)||0),0);
-  const periodLabel=_selMonth==='all'?'كل الفترات':new Date(_selMonth+'-01').toLocaleDateString('ar-SA',{month:'long',year:'numeric'});
-  const monthOptions=(()=>{
-    const opts=[];const now=new Date();
-    for(let i=0;i<12;i++){
-      const d=new Date(now.getFullYear(),now.getMonth()-i,1);
-      const val=d.toISOString().slice(0,7);
-      opts.push(`<option value="${val}"${_selMonth===val?' selected':''}>${d.toLocaleDateString('ar-SA',{month:'long',year:'numeric'})}</option>`);
-    }
-    return opts.join('');
-  })();
   document.getElementById('requests-content').innerHTML=`
     <div class="page-header"><div class="ptitle"><i class="ti ti-inbox"></i> صندوق طلبات المحاسبة</div></div>
     <div class="tab-bar">
@@ -4394,20 +4373,11 @@ function buildRequestsPage(){
     </table></div></div>
     <!-- unpaid tab uses different columns -->
     <div id="req-pane-unpaid" style="display:none">
-      ${canSeeFinance?`
-      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
-        <span style="font-size:11px;font-weight:800;color:var(--text-2);"><i class="ti ti-calendar"></i> فلترة الأشهر (للإيرادات وأفضل قسم)</span>
-        <select id="req-month-filter" onchange="applyReqMonthFilter(this.value)" style="border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:7px 12px;font-size:12px;font-weight:700;color:var(--maroon);background:var(--surface);font-family:inherit;">
-          <option value="all"${_selMonth==='all'?' selected':''}>كل الفترات</option>
-          ${monthOptions}
-        </select>
-      </div>
       <div class="stats-row" style="margin-bottom:14px;">
         <div class="stat-card c-red"><div class="stat-icon i-red"><i class="ti ti-coin-off"></i></div><div class="stat-label">طلبات غير مسددة</div><div class="stat-value">${unpaidOrds.length}</div><div class="stat-trend"><span style="color:var(--text-2)">طلب حالياً</span></div></div>
         <div class="stat-card c-orange"><div class="stat-icon i-orange"><i class="ti ti-alert-triangle"></i></div><div class="stat-label">إجمالي المتبقي</div><div class="stat-value" style="color:#EA580C">${fmtMoney(unpaidOutstanding)}</div><div class="stat-trend"><span style="color:var(--text-2)">ر.س غير محصّلة</span></div></div>
-        <div class="stat-card c-gold"><div class="stat-icon i-gold"><i class="ti ti-cash"></i></div><div class="stat-label">إجمالي الإيرادات</div><div class="stat-value">${fmtMoney(totalRevenue)}</div><div class="stat-trend"><span style="color:var(--text-2)">${periodLabel}</span></div></div>
-        <div class="stat-card c-purple"><div class="stat-icon i-purple"><i class="ti ti-crown"></i></div><div class="stat-label">أفضل قسم</div><div class="stat-value" style="font-size:15px;color:#6B21A8">${topDept&&topDept[1]>0?deptRevMeta[topDept[0]].label:'—'}</div><div class="stat-trend"><span style="color:var(--text-2)">${topDept&&topDept[1]>0?fmtMoney(topDept[1])+' ر.س · '+periodLabel:'لا توجد بيانات كافية'}</span></div></div>
-      </div>`:''}
+        <div class="stat-card c-gold"><div class="stat-icon i-gold"><i class="ti ti-cash"></i></div><div class="stat-label">إجمالي الإيرادات</div><div class="stat-value">${fmtMoney(totalRevenue)}</div><div class="stat-trend"><span style="color:var(--text-2)">ر.س عبر جميع الطلبات</span></div></div>
+      </div>
       <div class="card"><div class="tbl-wrap"><table><thead><tr><th>رقم الطلب</th><th>العميل</th><th>الخدمة</th><th style="width:100px">حالة الدفع</th><th style="width:110px">الإجمالي</th></tr></thead>
       <tbody>${makeUnpaidRows(unpaidOrds)}</tbody></table></div></div>
     </div>`;
@@ -4422,7 +4392,6 @@ function showReqTab(tab){
   const card=document.getElementById('req-main-table-card');if(card)card.style.display=tab==='unpaid'?'none':'';
   const tb2=document.getElementById('req-tab-unpaid');if(tb2)tb2.classList.toggle('active',tab==='unpaid');
 }
-function applyReqMonthFilter(v){window._reqMonthFilter=v;buildRequestsPage();showReqTab('unpaid');}
 async function accountantApproveRequest(key){
   showSaving('جاري الموافقة المبدئية...');
   try{await fbPatch('requests/'+key,{status:'accountant_approved',accountantApprovedAt:new Date().toISOString(),accountantName:cu.name});await loadData();hideSaving();toast('✓ تمت الموافقة المبدئية');buildRequestsPage();}
