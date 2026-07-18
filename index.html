@@ -949,6 +949,7 @@ input[type="password"]{direction:rtl;text-align:right;padding-left:40px;padding-
         <div class="page" id="page-revenue"><div id="revenue-content"></div></div>
         <div class="page" id="page-deptstage"><div id="deptstage-content"></div></div>
         <div class="page" id="page-govobligations"><div id="govobligations-content"></div></div>
+        <div class="page" id="page-govcat"><div id="govcat-content"></div></div>
       </div>
     </div>
   </div>
@@ -3285,12 +3286,21 @@ function openOrderStageView(key){
     '</div>';
   openModal('order-modal');
 }
+function orderPaymentChannelsHtml(o){
+  const chips=[];
+  if(Number(o.paidNetwork)>0)chips.push(`<span class="badge" style="background:#EFF6FF;color:#1D4ED8;"><i class="ti ti-credit-card"></i> شبكة: ${fmtMoney(Number(o.paidNetwork))} ر.س</span>`);
+  if(Number(o.paidCash)>0)chips.push(`<span class="badge" style="background:#F0FDF4;color:#15803D;"><i class="ti ti-cash"></i> كاش: ${fmtMoney(Number(o.paidCash))} ر.س</span>`);
+  if(Number(o.paidTransfer)>0)chips.push(`<span class="badge" style="background:#FEF3C7;color:#92400E;"><i class="ti ti-building-bank"></i> تحويل: ${fmtMoney(Number(o.paidTransfer))} ر.س</span>`);
+  if(!chips.length)return'';
+  return`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:2px;">${chips.join('')}</div>`;
+}
 function orderPaymentBreakdownHtml(o){
   const total=Number(o.totalAmount||0);
   const paid=Number(o.paidAmount||0);
   const remaining=Number(o.remainingAmount!=null?o.remainingAmount:Math.max(0,total-paid));
   const isPartial=o.paymentStatus==='دفع جزئي';
   const isPaidFull=o.paymentStatus==='تم الدفع';
+  const channelsHtml=orderPaymentChannelsHtml(o);
   let box='';
   if(isPartial){
     box=`<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
@@ -3303,7 +3313,7 @@ function orderPaymentBreakdownHtml(o){
       <div style="background:#FEF2F2;border-radius:var(--radius-sm);padding:10px;text-align:center;border:1px solid #FEE2E2;">
         <div style="font-size:11px;color:var(--text-3);">المبلغ المتبقي</div><div style="font-weight:800;margin-top:2px;color:#DC2626;">${fmtMoney(remaining)} ر.س</div>
       </div>
-    </div>`;
+    </div>${channelsHtml?`<div style="grid-column:1/-1;">${channelsHtml}</div>`:''}`;
   }else if(isPaidFull){
     box=`<div style="display:flex;gap:8px;flex-wrap:wrap;">
       <div style="background:#F0FDF4;border-radius:var(--radius-sm);padding:10px 14px;text-align:center;border:1px solid #DCFCE7;flex:1;min-width:120px;">
@@ -3312,7 +3322,7 @@ function orderPaymentBreakdownHtml(o){
       <div style="background:var(--surface-2);border-radius:var(--radius-sm);padding:10px 14px;text-align:center;border:1px solid var(--border);flex:1;min-width:120px;">
         <div style="font-size:11px;color:var(--text-3);">طريقة الدفع</div><div style="font-weight:800;margin-top:2px;">${o.paymentMethod||'—'}</div>
       </div>
-    </div>`;
+    </div>${channelsHtml}`;
   }else{
     box=`<div style="background:var(--surface-2);border-radius:var(--radius-sm);padding:10px;text-align:center;border:1px solid var(--border);">
       <div style="font-size:11px;color:var(--text-3);">إجمالي المبلغ المستحق</div><div style="font-weight:800;margin-top:2px;">${fmtMoney(total)} ر.س</div>
@@ -4383,12 +4393,18 @@ function buildRequestPage(){
     <div class="card">
       <div class="form-grid">
         <div class="fg ff"><label>اختيار الطلب *</label><select id="req-order"><option value="">— اختر الطلب —</option>${orderOptions||'<option disabled>لا توجد طلبات</option>'}</select></div>
-        <div class="fg ff"><label>طريقة الدفع *</label><select id="req-pay-method" onchange="onReqPayTypeChange(this.value)"><option value="">— اختر —</option><option>كاش</option><option>شبكة</option><option>حوالة</option></select></div>
-        <div class="fg ff"><label>حالة الدفعة *</label><select id="req-pay-status" onchange="onReqPayStatusChange(this.value)"><option value="كاملة">دفعة كاملة</option><option value="جزئية">دفع جزئي</option></select></div>
-        <div class="fg ff" id="req-amount-wrap" style="display:none;">
-          <label>المبلغ المدفوع *</label>
-          <input type="number" id="req-amount-paid" min="0" step="0.01" placeholder="أدخل المبلغ المدفوع"/>
+        <div class="fg ff"><label>حالة الدفعة *</label><select id="req-pay-status"><option value="كاملة">دفعة كاملة</option><option value="جزئية">دفع جزئي</option></select></div>
+      </div>
+      <div style="padding:0 20px;">
+        <div style="font-size:12px;font-weight:800;color:var(--text-2);margin-bottom:8px;"><i class="ti ti-credit-card"></i> مصفوفة الدفع — أدخل المبلغ حسب كل وسيلة دفع مستخدمة</div>
+        <div class="form-grid">
+          <div class="fg ff"><label>المبلغ المدفوع شبكة</label><input type="number" id="req-amt-network" min="0" step="0.01" placeholder="0" oninput="recalcReqAmounts()"/></div>
+          <div class="fg ff"><label>المبلغ المدفوع كاش</label><input type="number" id="req-amt-cash" min="0" step="0.01" placeholder="0" oninput="recalcReqAmounts()"/></div>
+          <div class="fg ff"><label>المبلغ المدفوع تحويل</label><input type="number" id="req-amt-transfer" min="0" step="0.01" placeholder="0" oninput="recalcReqAmounts()"/></div>
+          <div class="fg ff"><label>إجمالي المبلغ المدفوع</label><input type="text" id="req-amt-total" readonly style="font-weight:800;background:var(--surface-2);" value="0"/></div>
         </div>
+      </div>
+      <div class="form-grid" style="padding:0 20px;">
         <div class="fg ff" id="req-file-wrap" style="display:none;">
           <label>إرفاق إثبات التحويل *</label>
           <div class="dept-upload-box" onclick="document.getElementById('req-file-input').click()"><i class="ti ti-upload" style="font-size:22px;display:block;margin-bottom:6px;color:var(--gold);"></i>اضغط لإرفاق الملف</div>
@@ -4396,35 +4412,49 @@ function buildRequestPage(){
           <div id="req-file-note" style="font-size:12px;color:#10B981;margin-top:8px;font-weight:700;"></div>
         </div>
       </div>
-      <div style="padding:0 20px 20px"><button class="btn btn-brand" onclick="submitRequest()"><i class="ti ti-send"></i> إرسال للمراجعة</button></div>
+      <div style="padding:16px 20px 20px"><button class="btn btn-brand" onclick="submitRequest()"><i class="ti ti-send"></i> إرسال للمراجعة</button></div>
     </div>
     <div class="page-header" style="margin-top:20px;"><div class="ptitle" style="font-size:16px;"><i class="ti ti-history"></i> طلباتي السابقة</div></div>
     <div class="card"><div class="tbl-wrap"><table><thead><tr><th>العميل</th><th>طريقة الدفع</th><th style="width:80px">الأولوية</th><th style="width:100px">الحالة</th><th style="width:100px">التاريخ</th></tr></thead><tbody>${buildMyRequestsRows()}</tbody></table></div></div>`;
+}
+function reqChannelsSummary(r){
+  const parts=[];
+  if(r.paidNetwork)parts.push('شبكة: '+fmtMoney(Number(r.paidNetwork))+' ر.س');
+  if(r.paidCash)parts.push('كاش: '+fmtMoney(Number(r.paidCash))+' ر.س');
+  if(r.paidTransfer)parts.push('تحويل: '+fmtMoney(Number(r.paidTransfer))+' ر.س');
+  if(parts.length)return parts.join(' | ');
+  return r.payMethod||'—';
 }
 function buildMyRequestsRows(){
   const mine=Object.entries(submittedRequests).filter(([,r])=>r.createdByUname===cu._uname).sort((a,b)=>new Date(b[1].date)-new Date(a[1].date));
   if(!mine.length)return'<tr><td colspan="5" style="text-align:center;color:var(--text-3);padding:24px">لم تقم برفع أي طلب</td></tr>';
   const statusBadge=s=>s==='pending'?'<span class="badge b-proc">قيد المراجعة</span>':s==='done'?'<span class="badge b-done">تمت المعالجة</span>':'<span class="badge b-new">جديد</span>';
-  return mine.map(([k,r])=>`<tr><td><strong>${r.client||'—'}</strong></td><td>${r.payMethod||'—'}${r.fileData?`<div style="margin-top:3px;"><a href="${r.fileData}" download class="file-download-link"><i class="ti ti-download"></i> المرفق</a></div>`:''}</td><td>${gpbadge(r.priority)}</td><td>${statusBadge(r.status)}</td><td style="font-size:11px">${r.date||'—'}</td></tr>`).join('');
+  return mine.map(([k,r])=>`<tr><td><strong>${r.client||'—'}</strong></td><td style="font-size:11px;">${reqChannelsSummary(r)}${r.fileData?`<div style="margin-top:3px;"><a href="${r.fileData}" download class="file-download-link"><i class="ti ti-download"></i> المرفق</a></div>`:''}</td><td>${gpbadge(r.priority)}</td><td>${statusBadge(r.status)}</td><td style="font-size:11px">${r.date||'—'}</td></tr>`).join('');
 }
-function onReqPayTypeChange(v){const w=document.getElementById('req-file-wrap');if(w)w.style.display=(v==='حوالة')?'block':'none';}
-function onReqPayStatusChange(v){const w=document.getElementById('req-amount-wrap');if(w)w.style.display=(v==='جزئية')?'block':'none';}
+function recalcReqAmounts(){
+  const network=Number(document.getElementById('req-amt-network')?.value||0);
+  const cash=Number(document.getElementById('req-amt-cash')?.value||0);
+  const transfer=Number(document.getElementById('req-amt-transfer')?.value||0);
+  const total=network+cash+transfer;
+  const totalEl=document.getElementById('req-amt-total');if(totalEl)totalEl.value=fmtMoney(total);
+  const w=document.getElementById('req-file-wrap');if(w)w.style.display=(transfer>0)?'block':'none';
+  return{network,cash,transfer,total};
+}
 async function handleReqFile(files){if(!files||!files.length)return;showSaving('جاري تجهيز الملف...');try{window.reqFileB64=await convertFileToBase64(files[0]);window.reqFileName=files[0].name;document.getElementById('req-file-note').textContent='✓ تم: '+files[0].name;}catch(e){toast(e&&e.message?e.message:'⚠️ فشل');}hideSaving();}
 async function submitRequest(){
-  const orderKey=document.getElementById('req-order')?.value,payMethod=document.getElementById('req-pay-method')?.value,priority='عادية';
+  const orderKey=document.getElementById('req-order')?.value,priority='عادية';
   const payStatus=document.getElementById('req-pay-status')?.value||'كاملة';
-  const amountPaid=Number(document.getElementById('req-amount-paid')?.value||0);
+  const{network:paidNetwork,cash:paidCash,transfer:paidTransfer,total:amountPaid}=recalcReqAmounts();
   if(!orderKey){toast('⚠️ يرجى اختيار الطلب');return;}
-  if(!payMethod){toast('⚠️ يرجى اختيار طريقة الدفع');return;}
-  if(payMethod==='حوالة'&&!window.reqFileB64){toast('⚠️ يرجى إرفاق إثبات التحويل');return;}
-  if(payStatus==='جزئية'&&(!amountPaid||amountPaid<=0)){toast('⚠️ يرجى إدخال المبلغ المدفوع');return;}
+  if(!amountPaid||amountPaid<=0){toast('⚠️ يرجى إدخال المبلغ المدفوع في وسيلة دفع واحدة على الأقل');return;}
+  if(paidTransfer>0&&!window.reqFileB64){toast('⚠️ يرجى إرفاق إثبات التحويل');return;}
   // ── prevent duplicate submissions ──
   const dup=Object.values(submittedRequests).find(r=>r.orderKey===orderKey&&(r.status==='pending'||r.status==='accountant_approved'));
   if(dup){toast('⚠️ هذا الطلب مرفوع مسبقاً وبانتظار المراجعة');return;}
   const relatedOrder=orders[orderKey],clientName=relatedOrder?relatedOrder.client:'—';
   showSaving('جاري الإرسال...');
   try{
-    await fbPush('requests',{orderKey,client:clientName,payMethod,payStatus,amountPaid:payStatus==='جزئية'?amountPaid:0,priority,status:'pending',fileData:window.reqFileB64||'',fileName:window.reqFileName||'',createdBy:cu.name,createdByUname:cu._uname,createdByRole:cu.role||cu.type,date:new Date().toISOString().split('T')[0],createdAt:new Date().toISOString()});
+    await fbPush('requests',{orderKey,client:clientName,payStatus,paidNetwork,paidCash,paidTransfer,amountPaid,priority,status:'pending',fileData:window.reqFileB64||'',fileName:window.reqFileName||'',createdBy:cu.name,createdByUname:cu._uname,createdByRole:cu.role||cu.type,date:new Date().toISOString().split('T')[0],createdAt:new Date().toISOString()});
     await loadData();hideSaving();toast('✓ تم إرسال الطلب للمحاسب');buildRequestPage();
   }catch(e){hideSaving();toast('❌ فشل الإرسال');}
 }
@@ -4444,7 +4474,7 @@ function buildRequestsPage(){
   const makeRows=(list,mode)=>list.length===0?`<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text-3)">لا توجد طلبات</td></tr>`
     :list.map(r=>`<tr>
       <td><strong>${r.client||'—'}</strong>${r.orderKey&&orders[r.orderKey]?`<div style="font-size:10px;color:var(--text-3)">${orders[r.orderKey].id||r.orderKey}</div>`:''}</td>
-      <td><strong>${r.payMethod||'—'}</strong>${r.fileData?`<div style="margin-top:4px;"><a href="${r.fileData}" download class="file-download-link"><i class="ti ti-download"></i> تنزيل</a></div>`:''}</td>
+      <td style="font-size:11.5px;"><strong>${reqChannelsSummary(r)}</strong>${r.fileData?`<div style="margin-top:4px;"><a href="${r.fileData}" download class="file-download-link"><i class="ti ti-download"></i> تنزيل</a></div>`:''}</td>
       <td>${r.createdBy||'—'}<div style="font-size:10px;color:var(--text-3)">${r.createdByRole||''}</div></td>
       <td style="font-size:11px">${r.date||'—'}</td>
       <td>${statusLabel(r.status)}</td>
@@ -4581,7 +4611,13 @@ async function managerApproveRequest(key){
     const reqData=submittedRequests[key];
     if(reqData&&reqData.orderKey&&orders[reqData.orderKey]){
       const ord=orders[reqData.orderKey];
-      const patch={paymentStatus:chosenStatus,paymentMethod:reqData.payMethod||ord.paymentMethod||''};
+      const patch={
+        paymentStatus:chosenStatus,
+        paidNetwork:(Number(ord.paidNetwork)||0)+(Number(reqData.paidNetwork)||0),
+        paidCash:(Number(ord.paidCash)||0)+(Number(reqData.paidCash)||0),
+        paidTransfer:(Number(ord.paidTransfer)||0)+(Number(reqData.paidTransfer)||0),
+        paymentMethod:reqChannelsSummary(reqData)
+      };
       if(chosenStatus==='دفع جزئي'){
         const newPaid=(Number(ord.paidAmount)||0)+(Number(reqData.amountPaid)||0);
         patch.paidAmount=newPaid;
@@ -4931,13 +4967,12 @@ function govExpiryBadge(dateStr){
   if(days<=30)return`<span class="badge" style="background:#FEF3C7;color:#92400E;"><i class="ti ti-alert-triangle"></i> ينتهي خلال ${days} يوم</span>`;
   return`<span class="badge" style="background:#D1FAE5;color:#065F46;">ساري</span>`;
 }
-function switchGovTab(tab){window._govTab=tab;buildGovObligationsPage();}
-function filterGovEmpCategory(cat){window._govEmpCatFilter=(window._govEmpCatFilter===cat)?'':cat;buildGovObligationsPage();}
+function filterGovEmpCategory(cat){window._govEmpCatFilter=(window._govEmpCatFilter===cat)?'':cat;buildGovCategoryPage();}
 async function deleteGovRecord(key){
   if(cu.type!=='admin'&&cu.type!=='accountant'){toast('⚠️ الحذف غير متاح لهذا الدور');return;}
   if(!confirm('حذف هذا السجل؟'))return;
   showSaving('جاري الحذف...');
-  try{await fbDelete('govRecords/'+key);await loadData();hideSaving();toast('✓ تم الحذف');buildGovObligationsPage();}
+  try{await fbDelete('govRecords/'+key);await loadData();hideSaving();toast('✓ تم الحذف');buildGovCategoryPage();}
   catch(e){hideSaving();toast('❌ فشل الحذف');}
 }
 function openGovEmployeeModal(){
@@ -4976,7 +5011,7 @@ async function submitGovEmployeeRecord(){
       await fbPush('govRecords',{section:'employees',category:cat,employeeName:name,employeePhone:phone,renewalDate:renewal,expiryDate:expiry,amount,createdAt:new Date().toISOString(),createdBy:cu.name});
     }
     await loadData();hideSaving();closeModal('gov-modal');toast('✓ تم تسجيل بيانات الموظف');
-    buildGovObligationsPage();
+    buildGovCategoryPage();
   }catch(e){hideSaving();toast('❌ فشل الحفظ');}
 }
 function openGovRegistryModal(category){
@@ -5001,7 +5036,7 @@ async function submitGovRegistryRecord(category){
   showSaving('جاري الحفظ...');
   try{
     await fbPush('govRecords',{section:'registries',category,detail:[number,activity].filter(Boolean).join(' — ')||'—',amount,expiryDate:expiry,createdAt:new Date().toISOString(),createdBy:cu.name});
-    await loadData();hideSaving();closeModal('gov-modal');toast('✓ تم حفظ السجل');buildGovObligationsPage();
+    await loadData();hideSaving();closeModal('gov-modal');toast('✓ تم حفظ السجل');buildGovCategoryPage();
   }catch(e){hideSaving();toast('❌ فشل الحفظ');}
 }
 function openGovContractModal(){
@@ -5027,18 +5062,16 @@ async function submitGovContract(){
   showSaving('جاري الحفظ...');
   try{
     await fbPush('govRecords',{section:'contracts',category:'contract',detail:desc,amount,dueDate:due,expiryDate:expiry,createdAt:new Date().toISOString(),createdBy:cu.name});
-    await loadData();hideSaving();closeModal('gov-modal');toast('✓ تم إنشاء العقد');buildGovObligationsPage();
+    await loadData();hideSaving();closeModal('gov-modal');toast('✓ تم إنشاء العقد');buildGovCategoryPage();
   }catch(e){hideSaving();toast('❌ فشل الحفظ');}
 }
-function buildGovObligationsPage(){
-  const tab=window._govTab||'employees';
+function govAllRecsFiltered(){
   const allRecs=Object.entries(govRecords).map(([k,v])=>({...v,_key:k})).filter(govNotPurged);
-  const totalCost=allRecs.reduce((s,r)=>s+(Number(r.amount)||0),0);
-  const empRecs=allRecs.filter(r=>r.section==='employees');
-  const regRecs=allRecs.filter(r=>r.section==='registries');
-  const conRecs=allRecs.filter(r=>r.section==='contracts');
-  const expSoonCount=allRecs.filter(r=>{const d=govDaysUntil(r.expiryDate);return d!==null&&d<=30;}).length;
-
+  return window._govHubFilter==='expiring'?allRecs.filter(r=>{const d=govDaysUntil(r.expiryDate);return d!==null&&d<=30;}):allRecs;
+}
+function applyGovHubFilter(f){window._govHubFilter=(window._govHubFilter===f)?'':f;buildGovObligationsPage();}
+function openGovCategoryPage(section){window._govCatSection=section;nav('govcat');}
+function buildGovEmployeesSectionHtml(empRecs){
   const empCatFilter=window._govEmpCatFilter||'';
   const empCatCounts={residence:empRecs.filter(r=>r.category==='residence').length,work_permit:empRecs.filter(r=>r.category==='work_permit').length,medical_insurance:empRecs.filter(r=>r.category==='medical_insurance').length};
   const empFiltered=(empCatFilter?empRecs.filter(r=>r.category===empCatFilter):empRecs).slice().sort((a,b)=>new Date(a.expiryDate||'9999-12-31')-new Date(b.expiryDate||'9999-12-31'));
@@ -5051,8 +5084,25 @@ function buildGovObligationsPage(){
     <td style="font-weight:800;">${r.amount?fmtMoney(Number(r.amount))+' ر.س':'—'}</td>
     <td><button class="btn btn-red btn-xs" onclick="deleteGovRecord('${r._key}')"><i class="ti ti-trash"></i></button></td>
   </tr>`).join('');
-
-  const registryCards=Object.entries(GOV_REGISTRY_CATS).map(([catKey,meta])=>{
+  const govEmpMetricCards=`<div class="stats-row" style="margin-bottom:14px;">
+    ${Object.entries(GOV_EMP_CATS).map(([catKey,meta])=>`<div class="stat-card ${empCatFilter===catKey?'c-gold':'c-blue'}" style="cursor:pointer;${empCatFilter===catKey?'outline:2.5px solid var(--gold);':''}" onclick="filterGovEmpCategory('${catKey}')">
+      <div class="stat-icon ${empCatFilter===catKey?'i-gold':'i-blue'}"><i class="ti ${meta.icon}"></i></div>
+      <div class="stat-label">${meta.label}</div>
+      <div class="stat-value">${empCatCounts[catKey]}</div>
+      <div class="stat-trend"><span style="color:var(--text-2)">${empCatFilter===catKey?'مُفعّل — اضغط للإلغاء':'اضغط للتصفية'}</span></div>
+    </div>`).join('')}
+  </div>`;
+  return `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+      <div style="font-weight:800;font-size:14px;"><i class="ti ti-users"></i> بنود الموظفين</div>
+      <button class="btn btn-brand" onclick="openGovEmployeeModal()"><i class="ti ti-user-plus"></i> تسجيل بيانات موظف</button>
+    </div>
+    ${govEmpMetricCards}
+    <div class="card"><div class="tbl-wrap"><table><thead><tr><th>الموظف</th><th style="width:120px">النوع</th><th style="width:100px">تاريخ التجديد</th><th style="width:100px">تاريخ الانتهاء</th><th style="width:120px">الحالة</th><th style="width:100px">المبلغ</th><th style="width:50px"></th></tr></thead>
+    <tbody>${empRows||'<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text-3)">لا توجد سجلات بعد</td></tr>'}</tbody></table></div></div>`;
+}
+function buildGovRegistriesSectionHtml(regRecs){
+  return Object.entries(GOV_REGISTRY_CATS).map(([catKey,meta])=>{
     const recs=regRecs.filter(r=>r.category===catKey).sort((a,b)=>new Date(a.expiryDate||'9999-12-31')-new Date(b.expiryDate||'9999-12-31'));
     return`<div class="card" style="margin-bottom:14px;">
       <div class="card-header" style="display:flex;align-items:center;justify-content:space-between;">
@@ -5072,7 +5122,8 @@ function buildGovObligationsPage(){
       </div>
     </div>`;
   }).join('');
-
+}
+function buildGovContractsSectionHtml(conRecs){
   const conRows=conRecs.slice().sort((a,b)=>new Date(a.expiryDate||'9999-12-31')-new Date(b.expiryDate||'9999-12-31')).map(r=>`<tr>
     <td style="font-size:12px;max-width:220px;">${r.detail||'—'}</td>
     <td style="font-weight:800;">${r.amount?fmtMoney(Number(r.amount))+' ر.س':'—'}</td>
@@ -5081,47 +5132,61 @@ function buildGovObligationsPage(){
     <td>${govExpiryBadge(r.expiryDate)}</td>
     <td><button class="btn btn-red btn-xs" onclick="deleteGovRecord('${r._key}')"><i class="ti ti-trash"></i></button></td>
   </tr>`).join('');
-
-  const tabHtml=`<div class="tab-bar">
-    <button class="tab-btn ${tab==='employees'?'active':''}" onclick="switchGovTab('employees')"><i class="ti ti-users"></i> الموظفين (${empRecs.length})</button>
-    <button class="tab-btn ${tab==='registries'?'active':''}" onclick="switchGovTab('registries')"><i class="ti ti-building-bank"></i> السجلات الحكومية (${regRecs.length})</button>
-    <button class="tab-btn ${tab==='contracts'?'active':''}" onclick="switchGovTab('contracts')"><i class="ti ti-file-description"></i> العقود (${conRecs.length})</button>
-  </div>`;
-
-  const govEmpMetricCards=`<div class="stats-row" style="margin-bottom:14px;">
-    ${Object.entries(GOV_EMP_CATS).map(([catKey,meta])=>`<div class="stat-card ${empCatFilter===catKey?'c-gold':'c-blue'}" style="cursor:pointer;${empCatFilter===catKey?'outline:2.5px solid var(--gold);':''}" onclick="filterGovEmpCategory('${catKey}')">
-      <div class="stat-icon ${empCatFilter===catKey?'i-gold':'i-blue'}"><i class="ti ${meta.icon}"></i></div>
-      <div class="stat-label">${meta.label}</div>
-      <div class="stat-value">${empCatCounts[catKey]}</div>
-      <div class="stat-trend"><span style="color:var(--text-2)">${empCatFilter===catKey?'مُفعّل — اضغط للإلغاء':'اضغط للتصفية'}</span></div>
-    </div>`).join('')}
-  </div>`;
-  const employeesSection=`
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
-      <div style="font-weight:800;font-size:14px;"><i class="ti ti-users"></i> بنود الموظفين</div>
-      <button class="btn btn-brand" onclick="openGovEmployeeModal()"><i class="ti ti-user-plus"></i> تسجيل بيانات موظف</button>
-    </div>
-    ${govEmpMetricCards}
-    <div class="card"><div class="tbl-wrap"><table><thead><tr><th>الموظف</th><th style="width:120px">النوع</th><th style="width:100px">تاريخ التجديد</th><th style="width:100px">تاريخ الانتهاء</th><th style="width:120px">الحالة</th><th style="width:100px">المبلغ</th><th style="width:50px"></th></tr></thead>
-    <tbody>${empRows||'<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text-3)">لا توجد سجلات بعد</td></tr>'}</tbody></table></div></div>`;
-
-  const registriesSection=registryCards;
-
-  const contractsSection=`
+  return `
     <div style="margin-bottom:14px;"><button class="btn btn-brand" onclick="openGovContractModal()"><i class="ti ti-plus"></i> إنشاء عقد</button></div>
     <div class="card"><div class="tbl-wrap"><table><thead><tr><th>الالتزام</th><th style="width:100px">المبلغ</th><th style="width:100px">تاريخ السداد</th><th style="width:100px">تاريخ الانتهاء</th><th style="width:120px">الحالة</th><th style="width:50px"></th></tr></thead>
     <tbody>${conRows||'<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text-3)">لا توجد عقود بعد</td></tr>'}</tbody></table></div></div>`;
+}
+function buildGovObligationsPage(){
+  const allRecsUnfiltered=Object.entries(govRecords).map(([k,v])=>({...v,_key:k})).filter(govNotPurged);
+  const totalCost=allRecsUnfiltered.reduce((s,r)=>s+(Number(r.amount)||0),0);
+  const expSoonCount=allRecsUnfiltered.filter(r=>{const d=govDaysUntil(r.expiryDate);return d!==null&&d<=30;}).length;
+  const hubFilter=window._govHubFilter||'';
+  const shownRecs=govAllRecsFiltered();
+  const secLabel={employees:'موظفين',registries:'سجلات حكومية',contracts:'عقود'};
+  const gridRows=shownRecs.slice().sort((a,b)=>new Date(a.expiryDate||'9999-12-31')-new Date(b.expiryDate||'9999-12-31')).map(r=>{
+    const name=r.section==='employees'?(r.employeeName||'—'):(r.section==='contracts'?(r.detail||'—').slice(0,40):(GOV_REGISTRY_CATS[r.category]?.label||r.category));
+    return`<tr>
+      <td><span class="badge" style="background:var(--gold-soft);color:var(--maroon);">${secLabel[r.section]||r.section}</span></td>
+      <td style="font-size:12px;">${name}</td>
+      <td style="font-size:11px;">${r.expiryDate||'—'}</td>
+      <td>${govExpiryBadge(r.expiryDate)}</td>
+      <td style="font-weight:800;">${r.amount?fmtMoney(Number(r.amount))+' ر.س':'—'}</td>
+    </tr>`;
+  }).join('');
+
+  const catBoxes=`<div style="display:flex;gap:10px;flex-wrap:wrap;margin:18px 0;">
+    <div class="gov-cat-box" onclick="openGovCategoryPage('employees')"><i class="ti ti-users"></i><span>الموظفين</span></div>
+    <div class="gov-cat-box" onclick="openGovCategoryPage('registries')"><i class="ti ti-building-bank"></i><span>السجلات الحكومية</span></div>
+    <div class="gov-cat-box" onclick="openGovCategoryPage('contracts')"><i class="ti ti-file-description"></i><span>العقود</span></div>
+  </div>
+  <style>.gov-cat-box{width:96px;height:96px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;background:var(--surface);border:1px solid var(--border);border-radius:14px;cursor:pointer;transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease;text-align:center;}
+  .gov-cat-box i{font-size:22px;color:var(--maroon);}
+  .gov-cat-box span{font-size:11px;font-weight:800;color:var(--text-2);}
+  .gov-cat-box:hover{transform:translateY(-3px);box-shadow:0 8px 18px rgba(0,0,0,.08);border-color:var(--gold);}</style>`;
 
   document.getElementById('govobligations-content').innerHTML=`
     <div class="page-header"><div class="ptitle"><i class="ti ti-building-bank"></i> الالتزامات الحكومية والتشغيلية</div></div>
-    <div class="stats-row" style="margin-bottom:18px;">
-      <div class="stat-card c-gold"><div class="stat-icon i-gold"><i class="ti ti-coins"></i></div><div class="stat-label">التكلفة كاملة</div><div class="stat-value">${fmtMoney(totalCost)}</div><div class="stat-trend"><span style="color:var(--text-2)">ر.س عبر كل البنود</span></div></div>
-      <div class="stat-card c-red"><div class="stat-icon i-red"><i class="ti ti-alert-triangle"></i></div><div class="stat-label">تنتهي خلال 30 يوم</div><div class="stat-value" style="color:#DC2626">${expSoonCount}</div><div class="stat-trend"><span style="color:var(--text-2)">بند يحتاج تجديداً</span></div></div>
-      <div class="stat-card c-blue"><div class="stat-icon i-blue"><i class="ti ti-users"></i></div><div class="stat-label">بنود الموظفين</div><div class="stat-value" style="color:#2563EB">${empRecs.length}</div><div class="stat-trend"><span style="color:var(--text-2)">إقامة / رخصة / تأمين</span></div></div>
-      <div class="stat-card c-purple"><div class="stat-icon i-purple"><i class="ti ti-building-bank"></i></div><div class="stat-label">السجلات والعقود</div><div class="stat-value" style="color:#6B21A8">${regRecs.length+conRecs.length}</div><div class="stat-trend"><span style="color:var(--text-2)">سجل حكومي / عقد</span></div></div>
+    <div class="stats-row" style="margin-bottom:8px;">
+      <div class="stat-card c-gold" style="cursor:pointer;${hubFilter===''?'outline:2.5px solid var(--gold);':''}" onclick="applyGovHubFilter('')"><div class="stat-icon i-gold"><i class="ti ti-coins"></i></div><div class="stat-label">التكلفة كاملة</div><div class="stat-value">${fmtMoney(totalCost)}</div><div class="stat-trend"><span style="color:var(--text-2)">ر.س عبر كل البنود — اضغط لعرض الكل</span></div></div>
+      <div class="stat-card c-red" style="cursor:pointer;${hubFilter==='expiring'?'outline:2.5px solid var(--gold);':''}" onclick="applyGovHubFilter('expiring')"><div class="stat-icon i-red"><i class="ti ti-alert-triangle"></i></div><div class="stat-label">تنتهي خلال 30 يوم</div><div class="stat-value" style="color:#DC2626">${expSoonCount}</div><div class="stat-trend"><span style="color:var(--text-2)">اضغط لتصفية البنود القريبة من الانتهاء</span></div></div>
     </div>
-    ${tabHtml}
-    <div style="margin-top:16px;">${tab==='employees'?employeesSection:tab==='registries'?registriesSection:contractsSection}</div>`;
+    ${catBoxes}
+    <div class="card"><div class="tbl-wrap"><table><thead><tr><th style="width:110px">القسم</th><th>البند</th><th style="width:100px">تاريخ الانتهاء</th><th style="width:130px">الحالة</th><th style="width:100px">المبلغ</th></tr></thead>
+    <tbody>${gridRows||'<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--text-3)">لا توجد بنود بعد</td></tr>'}</tbody></table></div></div>`;
+}
+function buildGovCategoryPage(){
+  const section=window._govCatSection||'employees';
+  const allRecs=Object.entries(govRecords).map(([k,v])=>({...v,_key:k})).filter(govNotPurged);
+  const empRecs=allRecs.filter(r=>r.section==='employees');
+  const regRecs=allRecs.filter(r=>r.section==='registries');
+  const conRecs=allRecs.filter(r=>r.section==='contracts');
+  const meta={employees:{label:'الموظفين',icon:'ti-users'},registries:{label:'السجلات الحكومية',icon:'ti-building-bank'},contracts:{label:'العقود',icon:'ti-file-description'}}[section];
+  const body=section==='employees'?buildGovEmployeesSectionHtml(empRecs):section==='registries'?buildGovRegistriesSectionHtml(regRecs):buildGovContractsSectionHtml(conRecs);
+  document.getElementById('govcat-content').innerHTML=`
+    ${backBtnHtml()}
+    <div class="page-header"><div class="ptitle"><i class="ti ${meta.icon}"></i> ${meta.label}</div></div>
+    ${body}`;
 }
 function buildWarrantyPage(){
   const arr=Object.entries(warranties).map(([k,w])=>({...w,_key:k})).sort((a,b)=>new Date(a.expiryAt)-new Date(b.expiryAt));
@@ -5197,6 +5262,7 @@ function _buildPage(p){
   else if(p==='revenue') buildRevenuePage();
   else if(p==='deptstage') buildDeptStagePage();
   else if(p==='govobligations') buildGovObligationsPage();
+  else if(p==='govcat') buildGovCategoryPage();
 }
    </script>
 <script>
