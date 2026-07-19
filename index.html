@@ -82,6 +82,8 @@ body{font-family:'Cairo','Segoe UI',Tahoma,Arial,sans-serif;background:var(--bg)
 .brand{display:flex;align-items:center;gap:12px;}
 .logo-box{width:42px;height:42px;border-radius:50%;overflow:hidden;display:flex;align-items:center;justify-content:center;border:2px solid rgba(255,255,255,.2);flex-shrink:0;}
 .logo-box svg{width:100%;height:100%;display:block;}
+.brand-text .brand-ar{font-size:15px;font-weight:800;color:#fff;line-height:1.2;}
+.brand-text .brand-en{font-size:10px;color:var(--gold);font-weight:600;letter-spacing:.5px;}
 .header-right{display:flex;align-items:center;gap:10px;}
 .clock-chip{color:var(--gold);font-size:13px;font-weight:700;letter-spacing:1px;font-variant-numeric:tabular-nums;}
 .notif-bell{
@@ -452,6 +454,8 @@ input[type="password"]{direction:rtl;text-align:right;padding-left:40px;padding-
 .portal-wrap{position:relative;z-index:1;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 20px;}
 .portal-header{text-align:center;margin-bottom:36px;}
 .p-logo{width:90px;height:90px;margin:0 auto 16px;border-radius:50%;border:2px solid rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;}
+.p-title{font-size:30px;font-weight:900;color:#fff;text-shadow:0 2px 14px rgba(0,0,0,.5);}
+.p-sub{font-size:12px;color:var(--gold);font-weight:700;letter-spacing:1.5px;margin:4px 0 14px;}
 .p-badge{display:inline-block;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.2);color:rgba(255,255,255,.8);padding:6px 22px;border-radius:30px;font-size:12px;font-weight:700;backdrop-filter:blur(8px);}
 .login-cards-container{display:flex;flex-wrap:wrap;justify-content:center;gap:22px;width:100%;max-width:1050px;}
 .l-card{flex:1;min-width:280px;max-width:320px;border-radius:24px;padding:32px 24px;text-align:center;transition:.3s;position:relative;overflow:hidden;}
@@ -503,6 +507,7 @@ input[type="password"]{direction:rtl;text-align:right;padding-left:40px;padding-
 /* ============================================================ MOBILE */
 @media(max-width:768px){
   :root{--sidebar-w:220px;}
+  .brand-text .brand-en{display:none;}
   .form-grid{grid-template-columns:1fr;}
   .ff{grid-column:1;}
   .dg{grid-template-columns:1fr;}
@@ -516,6 +521,7 @@ input[type="password"]{direction:rtl;text-align:right;padding-left:40px;padding-
   .sidebar.open{right:0;}
   .main{padding:14px;}
   .header{padding:0 14px;}
+  .brand-text .brand-ar{font-size:13px;}
   th,td{padding:10px 8px;font-size:11px;}
   .wf-grid{grid-template-columns:1fr;}
   table{table-layout:auto;}
@@ -834,6 +840,8 @@ input[type="password"]{direction:rtl;text-align:right;padding-left:40px;padding-
             <rect x="24" y="31" width="5" height="38" rx="2.5" fill="#D4AF37"/>
           </svg>
         </div>
+        <div class="p-title"><span style="color:#D4AF37;">•</span> روائع الأفكار الإعلانية</div>
+        <div class="p-sub">Rawaee Al-Afkar For Advertising</div>
         <div class="p-badge">بوابة الدخول الموحد للنظام الداخلي</div>
       </div>
       <div class="login-cards-container">
@@ -914,6 +922,10 @@ input[type="password"]{direction:rtl;text-align:right;padding-left:40px;padding-
               <text x="50" y="50" text-anchor="middle" dominant-baseline="central" font-family="'Changa',sans-serif" font-weight="800" font-size="62" fill="rgba(255,255,255,.92)">ر</text>
               <rect x="24" y="31" width="5" height="38" rx="2.5" fill="#D4AF37"/>
             </svg>
+          </div>
+          <div class="brand-text">
+            <div class="brand-ar"><span style="color:#D4AF37;">•</span> روائع الأفكار الإعلانية</div>
+            <div class="brand-en">Rawaee Al-Afkar For Advertising</div>
           </div>
         </div>
       </div>
@@ -2445,14 +2457,14 @@ function buildMyWork(){
 function maintOrderItemNames(o){
   return(o.orderItems&&o.orderItems.length)?o.orderItems.map(i=>i.name).filter(Boolean):(o.service?[o.service]:[]);
 }
-function maintOrderOptionsHtml(warrantyOnly){
+function maintOrderOptionsData(warrantyOnly){
   let list=ordersArr().filter(o=>o.orderKind!=='maintenance');
   if(warrantyOnly){
     const warrantyClients=new Set(Object.values(warranties).map(w=>w.client));
     list=list.filter(o=>warrantyClients.has(o.client));
   }
   return list.sort((a,b)=>new Date(b.date)-new Date(a.date))
-    .map(o=>`<option value="${o._key}">${o.id||o._key} — ${o.client}</option>`).join('');
+    .map(o=>({key:o._key,label:(o.id||o._key)+' — '+o.client}));
 }
 // Both maintenance forms (Warranty Registration / General Maintenance) are entirely
 // independent, parallel inputs — separate element-id prefixes, separate submit
@@ -2467,16 +2479,16 @@ function onMaintOrderChange(prefix){
   itemSel.innerHTML='<option value="">— اختر البند —</option>'+items.map(n=>`<option value="${n}">${n}</option>`).join('');
   if(infoEl)infoEl.innerHTML=`<i class="ti ti-user"></i> ${o.client||'—'} &nbsp; <i class="ti ti-phone"></i> ${o.phone||'—'}`;
 }
-// Lightweight searchable combo-box: filters the order <select>'s own option list
-// live against the full option set stored on the element, without any external UI library.
-function filterMaintOrderSelect(prefix,query){
-  const sel=document.getElementById('mnt'+prefix+'-order');if(!sel)return;
-  if(!sel.dataset.fullOptions)sel.dataset.fullOptions=sel.innerHTML;
-  const q=(query||'').trim().toLowerCase();
-  if(!q){sel.innerHTML=sel.dataset.fullOptions;return;}
-  const tmp=document.createElement('div');tmp.innerHTML=sel.dataset.fullOptions;
-  const opts=[...tmp.querySelectorAll('option')].filter(o=>!o.value||o.textContent.toLowerCase().includes(q));
-  sel.innerHTML=opts.map(o=>o.outerHTML).join('');
+// Single merged search+select combo (input+datalist): typing filters the native
+// datalist suggestions, picking one resolves the display label back to the real
+// order key via the map built in buildMaintRequestPage, then drives the same
+// onMaintOrderChange cascade the old separate <select> used.
+function onMaintOrderPick(prefix,label){
+  const map=window['_maintOrderMap'+prefix.toUpperCase()]||{};
+  const hidden=document.getElementById('mnt'+prefix+'-order');
+  if(!hidden)return;
+  hidden.value=map[label]||'';
+  onMaintOrderChange(prefix);
 }
 async function handleMaintFile(prefix,files){
   if(!files||!files.length)return;
@@ -2490,8 +2502,10 @@ async function handleMaintFile(prefix,files){
   hideSaving();
 }
 function buildMaintRequestPage(){
-  const warrantyOrderOpts=maintOrderOptionsHtml(true);
-  const generalOrderOpts=maintOrderOptionsHtml(false);
+  const warrantyOrderData=maintOrderOptionsData(true);
+  const generalOrderData=maintOrderOptionsData(false);
+  window._maintOrderMapW={};warrantyOrderData.forEach(d=>{window._maintOrderMapW[d.label]=d.key;});
+  window._maintOrderMapG={};generalOrderData.forEach(d=>{window._maintOrderMapG[d.label]=d.key;});
   window._mntwFileB64='';window._mntwFileName='';window._mntgFileB64='';window._mntgFileName='';
   document.getElementById('maintreq-content').innerHTML=`
     <div class="page-header"><div class="ptitle"><i class="ti ti-tool"></i> تسجيل الصيانة</div></div>
@@ -2500,8 +2514,11 @@ function buildMaintRequestPage(){
       <div class="card">
         <div class="card-header" style="background:#FEF3C7;"><span class="card-title" style="color:#92400E;"><i class="ti ti-shield-check"></i> تسجيل الضمان</span></div>
         <div style="padding:16px;display:flex;flex-direction:column;gap:12px;">
-          <div class="fg"><label>بحث عن رقم الطلب</label><input placeholder="اكتب للبحث والتصفية..." oninput="filterMaintOrderSelect('w',this.value)"/></div>
-          <div class="fg"><label>رقم الطلب * <span style="font-size:10px;color:var(--text-3);font-weight:600;">(عملاء الضمان المسجّلين فقط)</span></label><select id="mntw-order" onchange="onMaintOrderChange('w')"><option value="">— اختر رقم الطلب —</option>${warrantyOrderOpts}</select></div>
+          <div class="fg"><label>رقم الطلب / اسم العميل * <span style="font-size:10px;color:var(--text-3);font-weight:600;">(اكتب للبحث ثم اختر — عملاء الضمان المسجّلين فقط)</span></label>
+            <datalist id="mntw-order-list">${warrantyOrderData.map(d=>`<option value="${d.label}">`).join('')}</datalist>
+            <input id="mntw-order-input" list="mntw-order-list" autocomplete="off" placeholder="اكتب رقم الطلب أو اسم العميل..." oninput="onMaintOrderPick('w',this.value)"/>
+            <input type="hidden" id="mntw-order"/>
+          </div>
           <div class="fg"><label>البند الذي يحتاج تعديل *</label><select id="mntw-item"><option value="">— اختر رقم الطلب أولاً —</option></select></div>
           <div id="mntw-client-info" style="font-size:11.5px;color:var(--text-3);font-weight:700;"></div>
           <div class="fg"><label>الأولوية</label><select id="mntw-priority"><option value="عادية">عادية</option><option value="متوسطة">متوسطة</option><option value="عاجلة">عاجلة</option></select></div>
@@ -2517,8 +2534,11 @@ function buildMaintRequestPage(){
       <div class="card">
         <div class="card-header"><span class="card-title"><i class="ti ti-tool"></i> الصيانة الباقية</span></div>
         <div style="padding:16px;display:flex;flex-direction:column;gap:12px;">
-          <div class="fg"><label>بحث عن رقم الطلب</label><input placeholder="اكتب للبحث والتصفية..." oninput="filterMaintOrderSelect('g',this.value)"/></div>
-          <div class="fg"><label>رقم الطلب *</label><select id="mntg-order" onchange="onMaintOrderChange('g')"><option value="">— اختر رقم الطلب —</option>${generalOrderOpts}</select></div>
+          <div class="fg"><label>رقم الطلب / اسم العميل * <span style="font-size:10px;color:var(--text-3);font-weight:600;">(اكتب للبحث ثم اختر)</span></label>
+            <datalist id="mntg-order-list">${generalOrderData.map(d=>`<option value="${d.label}">`).join('')}</datalist>
+            <input id="mntg-order-input" list="mntg-order-list" autocomplete="off" placeholder="اكتب رقم الطلب أو اسم العميل..." oninput="onMaintOrderPick('g',this.value)"/>
+            <input type="hidden" id="mntg-order"/>
+          </div>
           <div class="fg"><label>البند الذي يحتاج تعديل *</label><select id="mntg-item"><option value="">— اختر رقم الطلب أولاً —</option></select></div>
           <div id="mntg-client-info" style="font-size:11.5px;color:var(--text-3);font-weight:700;"></div>
           <div class="fg"><label>الأولوية</label><select id="mntg-priority"><option value="عادية">عادية</option><option value="متوسطة">متوسطة</option><option value="عاجلة">عاجلة</option></select></div>
@@ -5025,14 +5045,23 @@ function buildRequestPage(){
         <div class="fg ff"><label>المبلغ المتبقي (ر.س)</label><input type="text" id="req-order-remaining" readonly style="background:var(--surface-2);color:#DC2626;font-weight:800;" value="—"/></div>
       </div>
       <div style="padding:0 20px;">
-        <div class="fg ff"><label>طريقة الدفع * <span style="font-size:10px;color:var(--text-3);font-weight:600;">(يمكن اختيار أكثر من خيار)</span></label>
-          <div style="display:flex;gap:16px;flex-wrap:wrap;padding:6px 0;">
-            <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:700;cursor:pointer;"><input type="checkbox" class="req-pay-method-cb" value="شبكة" onchange="onReqPayMethodChange()"/> شبكة</label>
-            <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:700;cursor:pointer;"><input type="checkbox" class="req-pay-method-cb" value="كاش" onchange="onReqPayMethodChange()"/> كاش</label>
-            <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:700;cursor:pointer;"><input type="checkbox" class="req-pay-method-cb" value="حوالة" onchange="onReqPayMethodChange()"/> حوالة</label>
+        <div class="fg ff"><label>طريقة الدفع * <span style="font-size:10px;color:var(--text-3);font-weight:600;">(يمكن اختيار أكثر من خيار — وضّح مبلغ كل خيار على حدة)</span></label>
+          <div style="display:flex;flex-direction:column;gap:8px;padding:6px 0;">
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+              <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:700;cursor:pointer;min-width:70px;"><input type="checkbox" class="req-pay-method-cb" value="شبكة" onchange="onReqPayMethodChange()"/> شبكة</label>
+              <input type="text" inputmode="decimal" id="req-amt-network" placeholder="0" style="display:none;max-width:140px;" oninput="onReqPayChannelInput(this)" onfocus="this.select()"/>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+              <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:700;cursor:pointer;min-width:70px;"><input type="checkbox" class="req-pay-method-cb" value="كاش" onchange="onReqPayMethodChange()"/> كاش</label>
+              <input type="text" inputmode="decimal" id="req-amt-cash" placeholder="0" style="display:none;max-width:140px;" oninput="onReqPayChannelInput(this)" onfocus="this.select()"/>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+              <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:700;cursor:pointer;min-width:70px;"><input type="checkbox" class="req-pay-method-cb" value="حوالة" onchange="onReqPayMethodChange()"/> حوالة</label>
+              <input type="text" inputmode="decimal" id="req-amt-transfer" placeholder="0" style="display:none;max-width:140px;" oninput="onReqPayChannelInput(this)" onfocus="this.select()"/>
+            </div>
           </div>
         </div>
-        <div class="fg ff" style="max-width:260px;"><label>المبلغ المدفوع (ر.س) *</label><input type="text" inputmode="decimal" id="req-amount-paid" placeholder="0" oninput="normalizeAmountInput(this)"/></div>
+        <div class="fg ff" style="max-width:260px;"><label>إجمالي المبلغ المدفوع (ر.س)</label><input type="text" id="req-amount-paid" readonly style="background:var(--surface-2);color:var(--maroon);font-weight:800;" value="0"/></div>
       </div>
       <div class="form-grid" style="padding:0 20px;">
         <div class="fg ff" id="req-file-wrap" style="display:none;">
@@ -5119,17 +5148,43 @@ function onReqOrderChange(key){
   if(remEl)remEl.value=fmtMoney(Number(o.remainingAmount!=null?o.remainingAmount:Math.max(0,(o.totalAmount||0)-(o.paidAmount||0))));
 }
 function onReqPayMethodChange(){
+  const map={'شبكة':'req-amt-network','كاش':'req-amt-cash','حوالة':'req-amt-transfer'};
+  document.querySelectorAll('.req-pay-method-cb').forEach(cb=>{
+    const inp=document.getElementById(map[cb.value]);
+    if(!inp)return;
+    inp.style.display=cb.checked?'inline-block':'none';
+    if(!cb.checked)inp.value='';
+  });
   const methods=[...document.querySelectorAll('.req-pay-method-cb:checked')].map(cb=>cb.value);
   const w=document.getElementById('req-file-wrap');if(w)w.style.display=methods.includes('حوالة')?'block':'none';
+  recalcReqPaidChannels();
+}
+function recalcReqPaidChannels(){
+  const network=parseFloat(normalizeDigits(document.getElementById('req-amt-network')?.value))||0;
+  const cash=parseFloat(normalizeDigits(document.getElementById('req-amt-cash')?.value))||0;
+  const transfer=parseFloat(normalizeDigits(document.getElementById('req-amt-transfer')?.value))||0;
+  const total=network+cash+transfer;
+  const paidEl=document.getElementById('req-amount-paid');if(paidEl)paidEl.value=fmtMoney(total);
+  return{network,cash,transfer,total};
+}
+function onReqPayChannelInput(el){
+  if(!el)return;
+  const norm=normalizeDigits(el.value);
+  if(norm!==el.value){
+    const pos=el.selectionStart;
+    el.value=norm;
+    try{el.setSelectionRange(pos,pos);}catch(e){}
+  }
+  recalcReqPaidChannels();
 }
 async function handleReqFile(files){if(!files||!files.length)return;showSaving('جاري تجهيز الملف...');try{window.reqFileB64=await convertFileToBase64(files[0]);window.reqFileName=files[0].name;document.getElementById('req-file-note').textContent='✓ تم: '+files[0].name;}catch(e){toast(e&&e.message?e.message:'⚠️ فشل');}hideSaving();}
 async function submitRequest(){
   const orderKey=document.getElementById('req-order')?.value,priority='عادية';
   const payMethods=[...document.querySelectorAll('.req-pay-method-cb:checked')].map(cb=>cb.value);
-  const amountPaid=parseFloat(normalizeDigits(document.getElementById('req-amount-paid')?.value))||0;
+  const {network,cash,transfer,total:amountPaid}=recalcReqPaidChannels();
   if(!orderKey){toast('⚠️ يرجى اختيار الطلب');return;}
   if(!payMethods.length){toast('⚠️ يرجى اختيار طريقة دفع واحدة على الأقل');return;}
-  if(!amountPaid||amountPaid<=0){toast('⚠️ يرجى إدخال المبلغ المدفوع');return;}
+  if(!amountPaid||amountPaid<=0){toast('⚠️ يرجى إدخال مبلغ كل وسيلة دفع محددة');return;}
   if(payMethods.includes('حوالة')&&!window.reqFileB64){toast('⚠️ يرجى إرفاق إثبات التحويل');return;}
   // ── prevent duplicate submissions ──
   const dup=Object.values(submittedRequests).find(r=>r.orderKey===orderKey&&(r.status==='pending'||r.status==='accountant_approved'));
@@ -5137,7 +5192,7 @@ async function submitRequest(){
   const relatedOrder=orders[orderKey],clientName=relatedOrder?relatedOrder.client:'—';
   showSaving('جاري الإرسال...');
   try{
-    await fbPush('requests',{orderKey,client:clientName,payMethod:payMethods.join('، '),amountPaid,priority,status:'pending',fileData:window.reqFileB64||'',fileName:window.reqFileName||'',createdBy:cu.name,createdByUname:cu._uname,createdByRole:cu.role||cu.type,date:new Date().toISOString().split('T')[0],createdAt:new Date().toISOString()});
+    await fbPush('requests',{orderKey,client:clientName,payMethod:payMethods.join('، '),paidNetwork:network,paidCash:cash,paidTransfer:transfer,amountPaid,priority,status:'pending',fileData:window.reqFileB64||'',fileName:window.reqFileName||'',createdBy:cu.name,createdByUname:cu._uname,createdByRole:cu.role||cu.type,date:new Date().toISOString().split('T')[0],createdAt:new Date().toISOString()});
     await loadData();hideSaving();toast('✓ تم إرسال الطلب للمحاسب');buildRequestPage();
   }catch(e){hideSaving();toast('❌ فشل الإرسال');}
 }
