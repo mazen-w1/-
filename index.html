@@ -288,6 +288,10 @@ input[type="password"]{direction:rtl;text-align:right;padding-left:40px;padding-
 .prod-line-file-btn:hover{border-color:var(--gold);background:var(--gold-soft);}
 .pay-channels-compact .fg label{font-size:10px;}
 .pay-channels-compact .fg input{font-size:11px;padding:5px 8px;height:30px;}
+.row-menu-wrap{position:relative;display:inline-block;}
+.row-menu{position:absolute;top:100%;left:0;background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,.14);z-index:60;min-width:160px;padding:4px;}
+.row-menu button{display:flex;align-items:center;gap:6px;width:100%;text-align:right;padding:7px 9px;font-size:11px;font-weight:700;color:var(--text-1);background:none;border:none;cursor:pointer;border-radius:6px;font-family:inherit;}
+.row-menu button:hover{background:var(--surface-2);color:var(--maroon);}
 /* ============================================================ CREATE ORDER FORM — compact sizing */
 #add-content label{font-size:11px;}
 #add-content input,#add-content select,#add-content textarea{font-size:12px;padding:8px 12px;}
@@ -624,6 +628,19 @@ input[type="password"]{direction:rtl;text-align:right;padding-left:40px;padding-
 #page-quote .tbl-wrap tbody td{padding:8px 12px;font-size:12px;}
 
 #page-quote #q-arch-from,#page-quote #q-arch-to{width:150px!important;flex:none!important;}
+
+/* ================================================================
+   GLOBAL DENSITY TIGHTENING — تقليل المسافات في كامل الموقع لتقليل التمرير
+   ================================================================ */
+.page-header{margin-bottom:16px;padding-bottom:12px;}
+.stats-row{gap:8px;margin-bottom:12px;}
+.stat-card{padding:9px 10px 8px;}
+.stat-value{font-size:17px;}
+.card{margin-bottom:10px;}
+.card-header{padding:10px 16px;}
+.tbl-wrap thead th{padding:9px 10px;}
+.tbl-wrap tbody td{padding:8px 10px;}
+.wf-grid{gap:12px;}
 
 /* ================================================================
    EMPLOYEE PERFORMANCE DASHBOARD — تصميم SaaS فاخر (Burgundy/Gold)
@@ -963,6 +980,7 @@ input[type="password"]{direction:rtl;text-align:right;padding-left:40px;padding-
         <div class="page" id="page-govobligations"><div id="govobligations-content"></div></div>
         <div class="page" id="page-govcat"><div id="govcat-content"></div></div>
         <div class="page" id="page-maintreq"><div id="maintreq-content"></div></div>
+        <div class="page" id="page-urgent"><div id="urgent-content"></div></div>
       </div>
     </div>
   </div>
@@ -1131,7 +1149,7 @@ const INITIAL_USERS={
   external1:{pass:'1234',name:'منفذ خارجي',role:'تنفيذ خارجي',color:'#713F12',type:'external',photo:''},
 };
 let cu=null,orders={},clients={},USERS={},currentSortMode='date-desc',_pendingPortalType=null;
-let submittedRequests={},chats={},standaloneQuotes={},warranties={},teamChat={},govRecords={};
+let submittedRequests={},chats={},standaloneQuotes={},warranties={},teamChat={},govRecords={},urgentRequests={};
 let _lastAssignSnapshot=null,_audioCtx=null,_audioUnlocked=false;
 let _navHistory=[];
 let _nuPhotoB64='',_euPhotoB64='',_euSelectedColor='',_nuSelectedColor='';
@@ -1239,7 +1257,7 @@ async function syncUsers(){
 }
 async function loadData(){
   try{
-    const [ord,cli,req,cht,sqt,wrt,tch,gov]=await Promise.all([
+    const [ord,cli,req,cht,sqt,wrt,tch,gov,urg]=await Promise.all([
       fbGet('orders').catch(()=>null),
       fbGet('clients').catch(()=>null),
       fbGet('requests').catch(()=>null),
@@ -1247,7 +1265,8 @@ async function loadData(){
       fbGet('standalone_quotes').catch(()=>null),
       fbGet('warranties').catch(()=>null),
       fbGet('team_chat').catch(()=>null),
-      fbGet('govRecords').catch(()=>null)
+      fbGet('govRecords').catch(()=>null),
+      fbGet('urgentRequests').catch(()=>null)
     ]);
     orders=(ord&&typeof ord==='object')?ord:{};
     clients=(cli&&typeof cli==='object')?cli:{};
@@ -1257,10 +1276,11 @@ async function loadData(){
     warranties=(wrt&&typeof wrt==='object')?wrt:{};
     teamChat=(tch&&typeof tch==='object')?tch:{};
     govRecords=(gov&&typeof gov==='object')?gov:{};
+    urgentRequests=(urg&&typeof urg==='object')?urg:{};
     updateNotifBell();updateRequestsBadgeSidebar();updateTeamChatBadge();
     checkNewAssignments();
     cleanExpiredWarranties();
-  }catch(e){orders={};clients={};submittedRequests={};chats={};standaloneQuotes={};warranties={};teamChat={};govRecords={};}
+  }catch(e){orders={};clients={};submittedRequests={};chats={};standaloneQuotes={};warranties={};teamChat={};govRecords={};urgentRequests={};}
 }
 // ============================================================
 // NOTIFICATION SOUND (new-assignment beep)
@@ -1473,20 +1493,22 @@ function buildSidebar(){
       ni('clients','ti-address-book','العملاء'),
       ni('timeline','ti-clock','توقيت المراحل'),
       ni('warranty','ti-shield-check','ضمان اللوحات'),
+      ni('urgent','ti-bolt','طلب عاجل'),
       ni('request','ti-send','رفع طلب'),
     ]);
   }else if(t==='external'){
     h+=navGroup('أعمالي',[ni('my','ti-user-check','أعمالي الحالية')]);
     h+=navGroup('إدارة الطلبات',[
       ni('add','ti-plus','تسجيل طلب'),
+      ni('maintreq','ti-tool','طلب صيانة'),
       ni('quote','ti-receipt-2','عرض سعر رسمي'),
       ni('wf','ti-grid-dots','سير العمل'),
     ]);
-    h+=navGroup('إضافي',[ni('request','ti-send','رفع طلب')]);
+    h+=navGroup('إضافي',[ni('urgent','ti-bolt','طلب عاجل')]);
   }else if(['designer','printer','workshop'].includes(t)){
     h+=navGroup('الأعمال',[ni('my','ti-user-check','أعمالي الحالية')]);
-    if(t==='designer'){h+=navGroup('إضافي',[ni('add','ti-bolt','طلب مستعجل'),ni('request','ti-send','رفع طلب')]);}
-    if(t==='workshop'){h+=navGroup('إضافي',[ni('maintreq','ti-tool','طلب صيانة'),ni('warranty','ti-shield-check','ضمان اللوحات'),ni('request','ti-send','رفع طلب')]);}
+    if(t==='designer'){h+=navGroup('إضافي',[ni('urgent','ti-bolt','طلب عاجل')]);}
+    if(t==='workshop'){h+=navGroup('إضافي',[ni('maintreq','ti-tool','طلب صيانة'),ni('warranty','ti-shield-check','ضمان اللوحات'),ni('urgent','ti-bolt','طلب عاجل')]);}
   }else if(t==='follower'){
     h+=navGroup('المتابعة',[ni('wf','ti-grid-dots','متابعة الأعمال')]);
   }else if(t==='admin'){
@@ -1498,14 +1520,15 @@ function buildSidebar(){
       ni('wf','ti-grid-dots','سير العمل'),
     ]);
     h+=navGroup('الإدارة',[
+      ni('urgent','ti-bolt','طلب عاجل'),
       ni('request','ti-file-upload','رفع طلب'),
       ni('requests','ti-inbox','الالتمامات المالية','','requests-badge'),
       ni('clients','ti-address-book','العملاء'),
-      ni('users','ti-users','الموظفين'),
-      ni('emp','ti-chart-bar','أداء الموظفين وإحصائيات المراحل'),
+      ni('emp','ti-chart-bar','الاحصائيات'),
       ni('warranty','ti-shield-check','ضمان اللوحات'),
       ni('govobligations','ti-building-bank','الالتزامات الحكومية والتشغيلية'),
       ni('export','ti-table-export','تصدير Excel'),
+      ni('users','ti-users','الموظفين'),
     ]);
   }else if(t==='accountant'){
     h+=navGroup('المحاسبة',[
@@ -1570,7 +1593,24 @@ async function nav(p,skipHistory=false){
 }
 function navBack(){if(_navHistory.length===0)return;const prev=_navHistory.pop();nav(prev,true);}
 function backBtnHtml(){return`<div style="margin-bottom:16px;"><button class="btn btn-out btn-sm" onclick="navBack()"><i class="ti ti-arrow-right"></i> رجوع</button></div>`;}
-function refreshCurrentPage(){const p=_curPage;if(p==='add'||p==='request'||p==='quote')return;if(document.querySelector('.modal-overlay.open'))return;if(window._wfSelected&&window._wfSelected.size>0)return;const ae=document.activeElement;if(ae&&(ae.tagName==='INPUT'||ae.tagName==='TEXTAREA'||ae.tagName==='SELECT'||ae.isContentEditable))return;if(p==='teamchat'){loadAndRenderTeamChat();return;}if(p){const sy=window.scrollY;_buildPage(p);window.scrollTo(0,sy);}}
+function refreshCurrentPage(){
+  const p=_curPage;
+  if(p==='add'||p==='request'||p==='quote')return;
+  if(document.querySelector('.modal-overlay.open'))return;
+  if(window._wfSelected&&window._wfSelected.size>0)return;
+  // Skip while the user has an in-page dropdown/menu open, an ongoing save
+  // operation, or an expanded interactive detail row — a background rebuild
+  // mid-interaction would silently close/collapse it under them.
+  if(document.querySelector('.row-menu[style*="block"]'))return;
+  const _qam=document.getElementById('quote-actions-menu');if(_qam&&_qam.style.display==='block')return;
+  const _saving=document.getElementById('saving-overlay');if(_saving&&_saving.classList.contains('show'))return;
+  if(document.querySelector('[id^="pay-hist-"][style*="table-row"]'))return;
+  if(document.querySelector('[id^="my-req-"][style*="table-row"]'))return;
+  const ae=document.activeElement;
+  if(ae&&(ae.tagName==='INPUT'||ae.tagName==='TEXTAREA'||ae.tagName==='SELECT'||ae.isContentEditable))return;
+  if(p==='teamchat'){loadAndRenderTeamChat();return;}
+  if(p){const sx=window.scrollX,sy=window.scrollY;_buildPage(p);window.scrollTo(sx,sy);}
+}
 function updateRequestsBadgeSidebar(){
   const badge=document.getElementById('requests-badge');if(!badge)return;
   const pending=Object.values(submittedRequests).filter(r=>r.status==='pending');
@@ -1828,7 +1868,7 @@ function openQuickTask(type){
       </div>
       <div style="text-align:center;margin:8px 0;font-size:11px;color:var(--text-3);">— أو —</div>
       <button class="btn btn-out" style="width:100%;justify-content:center;" onclick="closeModal('quick-task-modal');nav('add')"><i class="ti ti-transfer"></i> تسجيل كأمر تشغيل كامل</button>
-      <button class="btn" style="width:100%;justify-content:center;background:linear-gradient(135deg,#78350F,#C89A4A);color:#fff;" onclick="closeModal('quick-task-modal');nav('quote')"><i class="ti ti-receipt-2"></i> إنشاء عرض سعر</button>
+      <button class="btn" style="width:100%;justify-content:center;background:linear-gradient(135deg,#78350F,#C89A4A);color:#fff;" onclick="closeModal('quick-task-modal');goToQuoteWithPrefill(document.getElementById('qt-client').value.trim(),document.getElementById('qt-phone')?.value.trim())"><i class="ti ti-receipt-2"></i> إنشاء عرض سعر</button>
     </div>`;
   window._qtFileB64='';window._qtFileName='';window._qtLinkedOrderKey='';
   openModal('quick-task-modal');
@@ -2091,7 +2131,7 @@ function buildWfGrid(tab){
     const showQtActions=o.isQuickTask&&!o.incompleteClient&&o.currentDept!=='done'&&(cu.type==='admin'||cu.type==='receiver');
     const qtActions=showQtActions?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;" onclick="event.stopPropagation();">
         <button class="btn btn-brand btn-xs" onclick="transferQuickTaskToOrder('${o._key}')"><i class="ti ti-transfer"></i> تحويل لأمر تشغيل</button>
-        <button class="btn btn-xs" style="background:linear-gradient(135deg,#78350F,#C89A4A);color:#fff;" onclick="nav('quote')"><i class="ti ti-receipt-2"></i> إنشاء عرض سعر</button>
+        <button class="btn btn-xs" style="background:linear-gradient(135deg,#78350F,#C89A4A);color:#fff;" onclick="goToQuoteWithPrefill('${(o.client||'').replace(/'/g,"\\'")}','${o.phone||''}')"><i class="ti ti-receipt-2"></i> إنشاء عرض سعر</button>
       </div>`:'';
     return `<div class="wf-card" data-dept="${o.currentDept||'design'}" data-name="${(o.client||'').toLowerCase()}" data-key="${o._key}" onclick="wfCardClick(event,'${o._key}')">${hasOrderUpdate(o)?'<span class="order-update-dot" title="تم تحديث بيانات الطلب"></span>':''}<input type="checkbox" class="wf-check" data-key="${o._key}" onchange="toggleWfSelect('${o._key}',this.checked)"/><div class="wf-card-top">
         <div style="display:flex;justify-content:center;margin-bottom:4px;"><div style="width:22px;height:22px;border-radius:50%;background:var(--maroon);display:flex;align-items:center;justify-content:center;position:relative;flex-shrink:0;box-shadow:0 1px 3px rgba(0,0,0,.25);"><span style="font-family:'Changa',sans-serif;font-weight:800;font-size:12px;line-height:1;color:rgba(255,255,255,.92);">ر</span><span style="position:absolute;top:3px;left:5px;width:1px;height:9px;background:#D4AF37;border-radius:1px;"></span></div></div>
@@ -2205,8 +2245,13 @@ async function downloadQuotePDF(savedKey){
     // html2canvas would otherwise capture a blank/zero-size element — force it
     // visible off-screen just for the capture, then restore.
     el.style.cssText='display:block;position:fixed;top:0;left:-99999px;z-index:-1;background:#fff;';
+    // html2canvas's default canvas-glyph renderer draws Arabic character-by-character
+    // in logical order with no bidi/shaping support, which is what produces mirrored,
+    // disconnected letterforms. foreignObjectRendering delegates text layout to the
+    // browser's native (correctly-shaping) text engine instead.
+    try{if(document.fonts&&document.fonts.ready)await document.fonts.ready;}catch(e){}
     await new Promise(r=>setTimeout(r,500));
-    const canvas=await html2canvas(el,{scale:2,useCORS:true});
+    const canvas=await html2canvas(el,{scale:2,useCORS:true,foreignObjectRendering:true});
     const imgData=canvas.toDataURL('image/jpeg',0.95);
     const {jsPDF}=window.jspdf;
     const pdf=new jsPDF('p','mm','a4');
@@ -2248,14 +2293,25 @@ function buildDeptStagePage(){
   };
   const meta=deptMeta[deptKey]||deptMeta.design;
   const isCompleted=deptKey==='done';
+  const canDelete=isCompleted&&cu.type==='admin';
   const arr=ordersArr().filter(o=>(o.currentDept||'design')===deptKey).sort((a,b)=>new Date(b.date)-new Date(a.date));
+  window._deptStageSelected=new Set();
   const rows=arr.map(o=>isCompleted?`<tr onclick="openOrderTimelineView('${o._key}')" style="cursor:pointer;">
+    ${canDelete?`<td style="width:34px;" onclick="event.stopPropagation()"><input type="checkbox" class="deptstage-check" data-key="${o._key}" onchange="toggleDeptStageSelect('${o._key}',this.checked)"/></td>`:''}
     <td><strong style="color:var(--maroon)">${o.id||o._key}</strong></td>
     <td><strong style="font-size:13px;">${o.client||'—'}</strong>${hasLaterMaintenanceForOrder(o)?' <span class="badge" style="background:#FEE2E2;color:#991B1B;font-size:9px;"><i class="ti ti-tool"></i> طلب صيانة لاحق</span>':''}</td>
     <td style="font-weight:800;">${o.totalAmount?fmtMoney(Number(o.totalAmount))+' ر.س':'—'}</td>
     <td style="font-size:12px;">${o.service||'—'}</td>
     <td style="font-size:12px;">${o.createdBy||'—'}</td>
     <td style="font-size:11px;">${o.date||'—'}</td>
+    ${canDelete?`<td style="width:40px;" onclick="event.stopPropagation()">
+      <div class="row-menu-wrap">
+        <button class="btn btn-out btn-xs" style="padding:3px 7px;" onclick="toggleRowMenu('drm-${o._key}')" title="إجراءات سريعة"><i class="ti ti-dots-vertical"></i></button>
+        <div class="row-menu" id="drm-${o._key}" style="display:none;">
+          <button onclick="closeAllRowMenus();revertOrderToPrevDept('${o._key}')"><i class="ti ti-arrow-right"></i> إرجاع لمرحلة سابقة</button>
+        </div>
+      </div>
+    </td>`:''}
   </tr>`:`<tr onclick="openOrderTimelineView('${o._key}')" style="cursor:pointer;">
     <td><strong style="color:var(--maroon)">${o.id||o._key}</strong></td>
     <td><strong style="font-size:13px;">${o.client||'—'}</strong></td>
@@ -2265,13 +2321,44 @@ function buildDeptStagePage(){
     <td>${timeBadge(hoursAgo(o.stageStartDate||o.date))}</td>
   </tr>`).join('');
   const thead=isCompleted
-    ?`<th style="width:80px">رقم الطلب</th><th>العميل</th><th style="width:100px">المبلغ</th><th>الخدمة</th><th style="width:120px">منشئ الطلب</th><th style="width:90px">التاريخ</th>`
+    ?`${canDelete?'<th style="width:34px;"></th>':''}<th style="width:80px">رقم الطلب</th><th>العميل</th><th style="width:100px">المبلغ</th><th>الخدمة</th><th style="width:120px">منشئ الطلب</th><th style="width:90px">التاريخ</th>${canDelete?'<th style="width:40px;"></th>':''}`
     :`<th style="width:80px">رقم الطلب</th><th>العميل</th><th>الخدمة</th><th style="width:90px">التاريخ</th><th style="width:90px">الأولوية</th><th style="width:90px">المدة</th>`;
   document.getElementById('deptstage-content').innerHTML=`
     ${backBtnHtml()}
-    <div class="page-header"><div class="ptitle"><i class="ti ${meta.icon}" style="color:${meta.color}"></i> مرحلة ${meta.label} — ${isCompleted?'أرشيف الطلبات المكتملة':'الطلبات النشطة'} (${arr.length})</div></div>
+    <div class="page-header"><div class="ptitle"><i class="ti ${meta.icon}" style="color:${meta.color}"></i> مرحلة ${meta.label} — ${isCompleted?'أرشيف الطلبات المكتملة':'الطلبات النشطة'} (${arr.length})</div>
+    ${canDelete?`<button class="btn btn-red btn-sm" id="deptstage-bulk-del-btn" style="display:none;" onclick="bulkDeleteDeptStage()"><i class="ti ti-trash"></i> حذف المحدد (<span id="deptstage-sel-count">0</span>)</button>`:''}</div>
     <div class="card"><div class="tbl-wrap"><table><thead><tr>${thead}</tr></thead>
     <tbody>${rows||'<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text-3)">لا توجد طلبات في هذه المرحلة حالياً</td></tr>'}</tbody></table></div></div>`;
+}
+function toggleRowMenu(id){
+  document.querySelectorAll('.row-menu').forEach(m=>{if(m.id!==id)m.style.display='none';});
+  const el=document.getElementById(id);if(!el)return;
+  el.style.display=el.style.display==='block'?'none':'block';
+}
+function closeAllRowMenus(){document.querySelectorAll('.row-menu').forEach(m=>m.style.display='none');}
+document.addEventListener('click',function(e){
+  if(!e.target.closest('.row-menu-wrap'))closeAllRowMenus();
+});
+function toggleDeptStageSelect(key,checked){
+  if(!window._deptStageSelected)window._deptStageSelected=new Set();
+  if(checked)window._deptStageSelected.add(key);else window._deptStageSelected.delete(key);
+  const n=window._deptStageSelected.size;
+  const btn=document.getElementById('deptstage-bulk-del-btn');const cnt=document.getElementById('deptstage-sel-count');
+  if(cnt)cnt.textContent=n;
+  if(btn)btn.style.display=n>0?'inline-flex':'none';
+}
+async function bulkDeleteDeptStage(){
+  if(cu.type!=='admin'){toast('⚠️ الحذف متاح للمدير فقط');return;}
+  const keys=[...(window._deptStageSelected||[])];
+  if(!keys.length)return;
+  if(!confirm(`حذف ${keys.length} طلب نهائياً؟ لا يمكن التراجع عن هذا الإجراء.`))return;
+  showSaving('جاري الحذف...');
+  for(const key of keys){
+    try{await fbDelete('orders/'+key);await deleteWarrantyForOrder(key);}catch(e){console.error(e);}
+  }
+  await loadData();hideSaving();
+  window._deptStageSelected=new Set();
+  toast('✓ تم حذف الطلبات المحددة');buildDeptStagePage();
 }
 function toggleWfSelect(key,checked){
   if(checked)window._wfSelected.add(key);else window._wfSelected.delete(key);
@@ -2510,6 +2597,71 @@ async function _createMaintenanceOrder(prefix,warrantyRequested){
 async function submitWarrantyMaintenance(){await _createMaintenanceOrder('w',true);}
 async function submitGeneralMaintenance(){await _createMaintenanceOrder('g',false);}
 // ============================================================
+// URGENT REQUEST ("طلب عاجل") — replaces the old طلب مستعجل/رفع الطلب
+// shortcuts on individual department pages. Dept staff submit only the
+// client name + a brief work description; مستقبل العميل / المدير then
+// pick it up and complete the full order details later.
+// ============================================================
+function buildUrgentPage(){
+  const isProcessor=cu.type==='admin'||cu.type==='receiver';
+  const arr=Object.entries(urgentRequests).map(([k,v])=>({...v,_key:k})).sort((a,b)=>new Date(b.createdAt||b.date)-new Date(a.createdAt||a.date));
+  if(isProcessor){
+    const pending=arr.filter(r=>r.status!=='done');
+    const done=arr.filter(r=>r.status==='done');
+    document.getElementById('urgent-content').innerHTML=`
+      <div class="page-header"><div class="ptitle"><i class="ti ti-bolt"></i> طلبات عاجلة (${pending.length})</div></div>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        ${pending.length?pending.map(r=>`
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--surface);border:1.5px solid #FCA5A5;border-radius:10px;padding:10px 14px;">
+            <i class="ti ti-bolt" style="color:#DC2626;font-size:18px;"></i>
+            <div style="flex:1;min-width:160px;">
+              <div style="font-weight:800;font-size:13px;">${r.client||'—'}</div>
+              <div style="font-size:11.5px;color:var(--text-2);">${r.workDesc||'—'}</div>
+              <div style="font-size:10px;color:var(--text-3);margin-top:2px;"><i class="ti ti-user"></i> ${r.createdBy||'—'} &nbsp; <i class="ti ti-clock"></i> ${(r.createdAt||'').replace('T',' ').slice(0,16)}</div>
+            </div>
+            <button class="btn btn-brand btn-sm" onclick="startProcessUrgent('${r._key}')"><i class="ti ti-arrow-left"></i> بدء المعالجة</button>
+          </div>`).join(''):`<div class="card" style="padding:24px;text-align:center;color:var(--text-3);font-size:12px;">لا توجد طلبات عاجلة بانتظار المعالجة</div>`}
+      </div>
+      <div class="page-header" style="margin-top:18px;"><div class="ptitle" style="font-size:14px;"><i class="ti ti-history"></i> تمت معالجتها (${done.length})</div></div>
+      <div class="card"><div class="tbl-wrap"><table><thead><tr><th>العميل</th><th>مختصر الأعمال</th><th style="width:110px">عولجت بواسطة</th><th style="width:90px">التاريخ</th></tr></thead>
+      <tbody>${done.length?done.map(r=>`<tr><td><strong>${r.client||'—'}</strong></td><td style="font-size:11.5px;">${r.workDesc||'—'}</td><td style="font-size:11px;">${r.processedBy||'—'}</td><td style="font-size:11px;">${(r.date||'').slice(0,10)}</td></tr>`).join(''):'<tr><td colspan="4" style="text-align:center;padding:18px;color:var(--text-3)">لا يوجد سجل بعد</td></tr>'}</tbody></table></div></div>`;
+    return;
+  }
+  const mine=arr.filter(r=>r.createdByUname===cu._uname);
+  const statusBadge=s=>s==='done'?'<span class="badge b-done">تمت المعالجة</span>':'<span class="badge b-proc">بانتظار المعالجة</span>';
+  document.getElementById('urgent-content').innerHTML=`
+    <div class="page-header"><div class="ptitle"><i class="ti ti-bolt"></i> طلب عاجل</div></div>
+    <div class="ro-notice" style="background:#FFF5F5;border-color:#FCA5A5;color:#991B1B"><i class="ti ti-info-circle"></i> نموذج سريع لتسجيل اسم العميل ومختصر الأعمال فقط — سيتم استكمال بيانات الطلب كاملة من قبل مستقبل العميل.</div>
+    <div class="card">
+      <div style="padding:16px;display:flex;flex-direction:column;gap:12px;">
+        <div class="fg"><label>اسم العميل *</label><input id="urg-client" placeholder="اسم العميل"/></div>
+        <div class="fg"><label>مختصر الأعمال *</label><textarea id="urg-desc" placeholder="وصف مختصر للأعمال المطلوبة..." style="min-height:70px;"></textarea></div>
+        <button class="btn btn-brand" onclick="submitUrgentRequest()"><i class="ti ti-send"></i> إرسال</button>
+      </div>
+    </div>
+    <div class="page-header" style="margin-top:20px;"><div class="ptitle" style="font-size:14px;"><i class="ti ti-history"></i> طلباتي العاجلة السابقة</div></div>
+    <div class="card"><div class="tbl-wrap"><table><thead><tr><th>العميل</th><th>مختصر الأعمال</th><th style="width:110px">الحالة</th><th style="width:90px">التاريخ</th></tr></thead>
+    <tbody>${mine.length?mine.map(r=>`<tr><td><strong>${r.client||'—'}</strong></td><td style="font-size:11.5px;">${r.workDesc||'—'}</td><td>${statusBadge(r.status)}</td><td style="font-size:11px;">${(r.date||'').slice(0,10)}</td></tr>`).join(''):'<tr><td colspan="4" style="text-align:center;padding:18px;color:var(--text-3)">لم تقم برفع أي طلب عاجل بعد</td></tr>'}</tbody></table></div></div>`;
+}
+async function submitUrgentRequest(){
+  const client=document.getElementById('urg-client').value.trim();
+  const workDesc=document.getElementById('urg-desc').value.trim();
+  if(!client){toast('⚠️ يرجى كتابة اسم العميل');return;}
+  if(!workDesc){toast('⚠️ يرجى كتابة مختصر الأعمال');return;}
+  showSaving('جاري الإرسال...');
+  try{
+    await fbPush('urgentRequests',{client,workDesc,status:'pending',createdBy:cu.name,createdByUname:cu._uname,createdByRole:cu.role||cu.type,date:new Date().toISOString().split('T')[0],createdAt:new Date().toISOString()});
+    await loadData();hideSaving();toast('✓ تم إرسال الطلب العاجل لمستقبل العميل');buildUrgentPage();
+  }catch(e){hideSaving();toast('❌ فشل الإرسال');}
+}
+async function startProcessUrgent(key){
+  const r=urgentRequests[key];if(!r)return;
+  try{await fbPatch('urgentRequests/'+key,{status:'done',processedBy:cu.name,processedAt:new Date().toISOString()});}catch(e){}
+  window._prefillClient=r.client||'';
+  nav('add');
+  toast('✓ استكمل بيانات الطلب الآن');
+}
+// ============================================================
 // QUOTE PAGE
 // ============================================================
 function quoteArchiveSectionHtml(){
@@ -2537,6 +2689,10 @@ function quoteArchiveSectionHtml(){
       <thead><tr><th>العميل</th><th>رقم العرض</th><th>الإجمالي</th><th style="width:90px">التاريخ</th><th style="width:180px">إجراء</th></tr></thead>
       <tbody id="quotes-archive-tbody">${buildQuoteArchiveRows()}</tbody>
     </table></div></div>`;
+}
+function goToQuoteWithPrefill(client,phone){
+  window._quotePrefillClient=client||'';window._quotePrefillPhone=phone||'';
+  nav('quote');
 }
 function buildQuotePage(){
   window._quoteLines=[];
@@ -2631,6 +2787,11 @@ function buildQuotePage(){
     </div>
     ${quoteArchiveSectionHtml()}`;
   addQuoteLine();
+  if(window._quotePrefillClient||window._quotePrefillPhone){
+    const ce=document.getElementById('q-client');if(ce)ce.value=window._quotePrefillClient||'';
+    const pe=document.getElementById('q-phone');if(pe)pe.value=window._quotePrefillPhone||'';
+    window._quotePrefillClient='';window._quotePrefillPhone='';
+  }
 }
 function filterQuotesArchiveCombined(){
   const q=(document.getElementById('q-arch-search')?.value||'').toLowerCase();
@@ -3825,7 +3986,7 @@ function openOrderModal(key){
   const _measureBtns=(k,cl,ph)=>`
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
       <button class="btn btn-brand btn-sm" onclick="transferQuickTaskToOrder('${k}')"><i class="ti ti-transfer"></i> تحويل لأمر تشغيل</button>
-      <button class="btn btn-sm" style="background:linear-gradient(135deg,#78350F,#C89A4A);color:#fff;" onclick="closeModal('order-modal');nav('quote')"><i class="ti ti-receipt-2"></i> إنشاء عرض سعر</button>
+      <button class="btn btn-sm" style="background:linear-gradient(135deg,#78350F,#C89A4A);color:#fff;" onclick="closeModal('order-modal');goToQuoteWithPrefill('${(cl||'').replace(/'/g,"\\'")}','${ph||''}')"><i class="ti ti-receipt-2"></i> إنشاء عرض سعر</button>
       <button class="btn btn-out btn-sm" onclick="markAsIncomplete('${k}')"><i class="ti ti-user-off"></i> العميل لم يرغب</button>
     </div>`;
   const _measureDone=o.isQuickTask&&o.workshopFeedbackDone&&o.currentDept!=='done'&&!o.incompleteClient&&(cu.type==='admin'||cu.type==='receiver');
@@ -4631,9 +4792,10 @@ async function buildClientsPage(){
     return{...g,ordersCount:ords.length,totalBilled:ords.reduce((s,o)=>s+(Number(o.totalAmount)||0),0)};
   }).sort((a,b)=>new Date(b.date)-new Date(a.date));
   const isAdmin=cu.type==='admin';
+  const employeeNames=new Set(Object.values(USERS).map(u=>normCustomerName(u.name)));
   const rows=arr.map(c=>`<tr style="cursor:pointer;" onclick="openCustomerProfile('${encodeURIComponent(c.name)}')">
     ${isAdmin?`<td style="width:34px;" onclick="event.stopPropagation()"><input type="checkbox" class="client-check" data-keys="${c.keys.join(',')}" onchange="toggleClientSelect(this.dataset.keys,this.checked)"/></td>`:''}
-    <td><strong>${c.name}</strong>${c.keys.length>1?`<span class="badge b-proc" style="margin-right:6px;font-size:9px;">${c.keys.length} سجلات مدمجة</span>`:''}</td>
+    <td><strong>${c.name}</strong>${c.keys.length>1?`<span class="badge b-proc" style="margin-right:6px;font-size:9px;">${c.keys.length} سجلات مدمجة</span>`:''}${employeeNames.has(normCustomerName(c.name))?`<span class="badge" style="margin-right:6px;font-size:9px;background:#E0E7FF;color:#3730A3;"><i class="ti ti-id-badge-2"></i> عميل موظف</span>`:''}</td>
     <td onclick="event.stopPropagation()">${c.phone||'—'} ${c.phone?`<button class="btn btn-whatsapp btn-xs" style="margin-right:4px" onclick="openWhatsapp('${c.phone}')"><i class="ti ti-brand-whatsapp"></i></button>`:''}</td>
     <td style="font-size:11px;">${c.date||'—'}</td>
     <td style="font-size:11px;"><strong style="color:var(--maroon)">${c.ordersCount}</strong> طلب${c.totalBilled?` · ${fmtMoney(c.totalBilled)} ر.س`:''}</td>
@@ -4868,7 +5030,6 @@ function buildRequestPage(){
     <div class="card">
       <div class="form-grid">
         <div class="fg ff"><label>اختيار الطلب *</label><select id="req-order" onchange="onReqOrderChange(this.value)"><option value="">— اختر الطلب —</option>${orderOptions||'<option disabled>لا توجد طلبات</option>'}</select></div>
-        <div class="fg ff"><label>حالة الدفعة *</label><select id="req-pay-status"><option value="كاملة">دفعة كاملة</option><option value="جزئية">دفع جزئي</option></select></div>
         <div class="fg ff"><label>المبلغ الإجمالي (ر.س)</label><input type="text" id="req-order-total" readonly style="background:var(--surface-2);color:var(--maroon);font-weight:800;" value="—"/></div>
         <div class="fg ff"><label>المبلغ المتبقي (ر.س)</label><input type="text" id="req-order-remaining" readonly style="background:var(--surface-2);color:#DC2626;font-weight:800;" value="—"/></div>
       </div>
@@ -4903,11 +5064,60 @@ function reqChannelsSummary(r){
   if(parts.length)return parts.join(' | ');
   return r.payMethod||'—';
 }
+function buildPaymentHistoryPanel(orderKey){
+  if(!orderKey)return'<div style="padding:12px;font-size:11px;color:var(--text-3)">لا يوجد طلب مرتبط بهذه الدفعة</div>';
+  const recs=Object.entries(submittedRequests).filter(([,r])=>r.orderKey===orderKey).sort((a,b)=>new Date(a[1].createdAt||a[1].date)-new Date(b[1].createdAt||b[1].date));
+  if(!recs.length)return'<div style="padding:12px;font-size:11px;color:var(--text-3)">لا يوجد سجل دفعات لهذا الطلب</div>';
+  return'<div style="display:flex;flex-direction:column;gap:6px;padding:10px 14px;">'+
+    '<div style="font-size:10.5px;font-weight:800;color:var(--text-3);"><i class="ti ti-receipt"></i> سجل جميع الدفعات المرتبطة بهذا الطلب مع طرق الدفع وتاريخ كل دفعة</div>'+
+    recs.map(([k,r])=>{
+      const chans=[];
+      if(r.paidNetwork)chans.push('<span class="badge b-new" style="font-size:10px;">شبكة '+fmtMoney(Number(r.paidNetwork))+' ر.س</span>');
+      if(r.paidCash)chans.push('<span class="badge b-new" style="font-size:10px;">كاش '+fmtMoney(Number(r.paidCash))+' ر.س</span>');
+      if(r.paidTransfer)chans.push('<span class="badge b-new" style="font-size:10px;">تحويل '+fmtMoney(Number(r.paidTransfer))+' ر.س</span>');
+      if(!chans.length)chans.push('<span class="badge b-new" style="font-size:10px;">'+(r.payMethod||'—')+'</span>');
+      return'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:var(--surface);border:1px solid var(--border-soft);border-radius:8px;padding:7px 10px;">'+
+        '<span style="font-size:11px;font-weight:800;color:var(--maroon);min-width:82px;"><i class="ti ti-calendar"></i> '+(r.date||'—')+'</span>'+
+        chans.join(' ')+
+        '<span style="font-size:10.5px;font-weight:800;color:var(--text-1);margin-inline-start:auto;">'+fmtMoney(Number(r.amountPaid||0))+' ر.س</span>'+
+        '<span style="font-size:10px;color:var(--text-3);">'+(r.createdBy||'—')+'</span>'+
+      '</div>';
+    }).join('')+
+  '</div>';
+}
+function togglePaymentHistoryRow(reqKey){
+  const row=document.getElementById('pay-hist-'+reqKey);if(!row)return;
+  const isOpen=row.style.display!=='none';
+  document.querySelectorAll('[id^="pay-hist-"]').forEach(r=>{r.style.display='none';});
+  row.style.display=isOpen?'none':'table-row';
+}
 function buildMyRequestsRows(){
   const mine=Object.entries(submittedRequests).filter(([,r])=>r.createdByUname===cu._uname).sort((a,b)=>new Date(b[1].date)-new Date(a[1].date));
   if(!mine.length)return'<tr><td colspan="5" style="text-align:center;color:var(--text-3);padding:24px">لم تقم برفع أي طلب</td></tr>';
   const statusBadge=s=>s==='pending'?'<span class="badge b-proc">قيد المراجعة</span>':s==='done'?'<span class="badge b-done">تمت المعالجة</span>':'<span class="badge b-new">جديد</span>';
-  return mine.map(([k,r])=>`<tr><td><strong>${r.client||'—'}</strong></td><td style="font-size:11px;">${reqChannelsSummary(r)}${r.fileData?`<div style="margin-top:3px;"><a href="${r.fileData}" download class="file-download-link"><i class="ti ti-download"></i> المرفق</a></div>`:''}</td><td>${gpbadge(r.priority)}</td><td>${statusBadge(r.status)}</td><td style="font-size:11px">${r.date||'—'}</td></tr>`).join('');
+  return mine.map(([k,r])=>{
+    const o=r.orderKey?orders[r.orderKey]:null;
+    return`<tr onclick="toggleMyRequestRow('${k}')" style="cursor:pointer;" title="اضغط لعرض التفاصيل الكاملة">
+      <td><strong>${r.client||'—'}</strong> <i class="ti ti-chevron-down" style="font-size:11px;color:var(--text-3);"></i></td>
+      <td style="font-size:11px;">${reqChannelsSummary(r)}${r.fileData?`<div style="margin-top:3px;"><a href="${r.fileData}" download class="file-download-link" onclick="event.stopPropagation()"><i class="ti ti-download"></i> المرفق</a></div>`:''}</td>
+      <td>${gpbadge(r.priority)}</td>
+      <td>${statusBadge(r.status)}</td>
+      <td style="font-size:11px">${r.date||'—'}</td>
+    </tr>
+    <tr id="my-req-${k}" style="display:none;"><td colspan="5" style="padding:0;background:var(--surface-2);">
+      <div style="display:flex;flex-direction:column;gap:6px;padding:10px 14px;font-size:11.5px;">
+        ${o?`<div><strong>رقم الطلب:</strong> ${o.id||r.orderKey} &nbsp; <strong>الخدمة:</strong> ${o.service||'—'}</div>`:'<div style="color:var(--text-3)">لا يوجد طلب مرتبط</div>'}
+        <div><strong>المبلغ المدفوع في هذه الدفعة:</strong> ${fmtMoney(Number(r.amountPaid||0))} ر.س</div>
+        ${o?`<div><strong>إجمالي الطلب:</strong> ${fmtMoney(Number(o.totalAmount||0))} ر.س &nbsp; <strong>المتبقي:</strong> ${fmtMoney(Number(o.remainingAmount!=null?o.remainingAmount:Math.max(0,(o.totalAmount||0)-(o.paidAmount||0))))} ر.س</div>`:''}
+      </div>
+    </td></tr>`;
+  }).join('');
+}
+function toggleMyRequestRow(key){
+  const row=document.getElementById('my-req-'+key);if(!row)return;
+  const isOpen=row.style.display!=='none';
+  document.querySelectorAll('[id^="my-req-"]').forEach(r=>{r.style.display='none';});
+  row.style.display=isOpen?'none':'table-row';
 }
 function onReqOrderChange(key){
   const totalEl=document.getElementById('req-order-total');
@@ -4924,7 +5134,6 @@ function onReqPayMethodChange(){
 async function handleReqFile(files){if(!files||!files.length)return;showSaving('جاري تجهيز الملف...');try{window.reqFileB64=await convertFileToBase64(files[0]);window.reqFileName=files[0].name;document.getElementById('req-file-note').textContent='✓ تم: '+files[0].name;}catch(e){toast(e&&e.message?e.message:'⚠️ فشل');}hideSaving();}
 async function submitRequest(){
   const orderKey=document.getElementById('req-order')?.value,priority='عادية';
-  const payStatus=document.getElementById('req-pay-status')?.value||'كاملة';
   const payMethods=[...document.querySelectorAll('.req-pay-method-cb:checked')].map(cb=>cb.value);
   const amountPaid=parseFloat(normalizeDigits(document.getElementById('req-amount-paid')?.value))||0;
   if(!orderKey){toast('⚠️ يرجى اختيار الطلب');return;}
@@ -4937,7 +5146,7 @@ async function submitRequest(){
   const relatedOrder=orders[orderKey],clientName=relatedOrder?relatedOrder.client:'—';
   showSaving('جاري الإرسال...');
   try{
-    await fbPush('requests',{orderKey,client:clientName,payStatus,payMethod:payMethods.join('، '),amountPaid,priority,status:'pending',fileData:window.reqFileB64||'',fileName:window.reqFileName||'',createdBy:cu.name,createdByUname:cu._uname,createdByRole:cu.role||cu.type,date:new Date().toISOString().split('T')[0],createdAt:new Date().toISOString()});
+    await fbPush('requests',{orderKey,client:clientName,payMethod:payMethods.join('، '),amountPaid,priority,status:'pending',fileData:window.reqFileB64||'',fileName:window.reqFileName||'',createdBy:cu.name,createdByUname:cu._uname,createdByRole:cu.role||cu.type,date:new Date().toISOString().split('T')[0],createdAt:new Date().toISOString()});
     await loadData();hideSaving();toast('✓ تم إرسال الطلب للمحاسب');buildRequestPage();
   }catch(e){hideSaving();toast('❌ فشل الإرسال');}
 }
@@ -4956,19 +5165,19 @@ function buildRequestsPage(){
   const partialOrds=ordersArr().filter(o=>o.paymentStatus==='دفع جزئي'&&!o.isQuickTask&&o.orderKind!=='maintenance');
   const statusLabel=s=>s==='pending'?'<span class="badge b-proc">بانتظار المحاسب</span>':s==='accountant_approved'?'<span class="badge b-new" style="background:#7C3AED20;color:#7C3AED">موافقة مبدئية</span>':'<span class="badge b-done">تمت</span>';
   const makeRows=(list,mode)=>list.length===0?`<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text-3)">لا توجد طلبات</td></tr>`
-    :list.map(r=>`<tr>
-      <td><strong>${r.client||'—'}</strong>${r.orderKey&&orders[r.orderKey]?`<div style="font-size:10px;color:var(--text-3)">${orders[r.orderKey].id||r.orderKey}</div>`:''}</td>
-      <td style="font-size:11.5px;"><strong>${reqChannelsSummary(r)}</strong>${r.fileData?`<div style="margin-top:4px;"><a href="${r.fileData}" download class="file-download-link"><i class="ti ti-download"></i> تنزيل</a></div>`:''}</td>
+    :list.map(r=>`<tr${mode==='done'?` onclick="togglePaymentHistoryRow('${r._key}')" style="cursor:pointer;" title="اضغط لعرض سجل الدفعات كاملاً"`:''}>
+      <td><strong>${r.client||'—'}</strong>${r.orderKey&&orders[r.orderKey]?`<div style="font-size:10px;color:var(--text-3)">${orders[r.orderKey].id||r.orderKey}</div>`:''}${mode==='done'?` <i class="ti ti-chevron-down" style="font-size:11px;color:var(--text-3);"></i>`:''}</td>
+      <td style="font-size:11.5px;"><strong>${reqChannelsSummary(r)}</strong>${r.fileData?`<div style="margin-top:4px;"><a href="${r.fileData}" download class="file-download-link" onclick="event.stopPropagation()"><i class="ti ti-download"></i> تنزيل</a></div>`:''}</td>
       <td>${r.createdBy||'—'}<div style="font-size:10px;color:var(--text-3)">${r.createdByRole||''}</div></td>
       <td style="font-size:11px">${r.date||'—'}</td>
       <td>${statusLabel(r.status)}</td>
-      <td>
+      <td onclick="${mode==='done'?'event.stopPropagation()':''}">
         ${mode==='pending'?`<button class="btn btn-green btn-xs" onclick="accountantApproveRequest('${r._key}')"><i class="ti ti-check"></i> موافقة مبدئية</button>`:
           mode==='accApproved'&&isAdmin?`<div style="display:flex;flex-direction:column;gap:5px;"><select id="us-${r._key}" style="font-size:11px;padding:4px;border-radius:5px;border:1px solid var(--border);"><option value="تم الدفع">تم الدفع</option><option value="دفع جزئي">دفع جزئي</option></select><button class="btn btn-brand btn-xs" onclick="managerApproveRequest('${r._key}')"><i class="ti ti-circle-check"></i> موافقة نهائية</button></div>`:
           mode==='accApproved'?`<span style="font-size:11px;color:var(--text-3)">بانتظار مدير</span>`:''}
         <button class="btn btn-red btn-xs" style="margin-top:4px" onclick="deleteRequest('${r._key}')"><i class="ti ti-trash"></i></button>
       </td>
-    </tr>`).join('');
+    </tr>${mode==='done'?`<tr id="pay-hist-${r._key}" style="display:none;"><td colspan="6" style="padding:0;background:var(--surface-2);">${buildPaymentHistoryPanel(r.orderKey)}</td></tr>`:''}`).join('');
   const makeUnpaidRows=(list)=>list.length===0?`<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--text-3)">لا توجد طلبات غير مسددة</td></tr>`
     :list.map(o=>`<tr onclick="openUnpaidOrderSummary('${o._key}')" style="cursor:pointer">
       <td><strong style="color:var(--maroon)">${o.id||o._key}</strong></td>
@@ -5833,6 +6042,7 @@ function _buildPage(p){
   else if(p==='govobligations') buildGovObligationsPage();
   else if(p==='maintreq') buildMaintRequestPage();
   else if(p==='govcat') buildGovCategoryPage();
+  else if(p==='urgent') buildUrgentPage();
 }
    </script>
 <script>
