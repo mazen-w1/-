@@ -2332,141 +2332,89 @@ function buildMyWork(){
 // customer repair/maintenance issues, separate from the generic multi-item
 // order-registration flow. Routed straight to the workshop for resolution.
 // ============================================================
-const MAINT_DEPT_LABELS={design:'التصميم',external:'تنفيذ خارجي',print:'الطباعة',workshop:'الورشة'};
 function maintOrderItemNames(o){
   return(o.orderItems&&o.orderItems.length)?o.orderItems.map(i=>i.name).filter(Boolean):(o.service?[o.service]:[]);
 }
-function maintDeptItemsMap(){
-  const map={design:new Set(),external:new Set(),print:new Set(),workshop:new Set()};
-  ordersArr().forEach(o=>{
-    if(o.orderKind==='maintenance')return;
-    const items=maintOrderItemNames(o);
-    ['design','external','print','workshop'].forEach(dk=>{
-      if(o[dk+'To']&&o[dk+'To']!=='none')items.forEach(n=>map[dk].add(n));
-    });
-  });
-  return map;
+function maintOrderOptionsHtml(){
+  return ordersArr().filter(o=>o.orderKind!=='maintenance').sort((a,b)=>new Date(b.date)-new Date(a.date))
+    .map(o=>`<option value="${o._key}">${o.id||o._key} — ${o.client}</option>`).join('');
 }
-function maintClientsForDeptItem(dept,item){
-  const set=new Set();
-  ordersArr().forEach(o=>{
-    if(o.orderKind==='maintenance'||!o.client)return;
-    if(dept&&!(o[dept+'To']&&o[dept+'To']!=='none'))return;
-    if(item&&!maintOrderItemNames(o).includes(item))return;
-    set.add(o.client);
-  });
-  return[...set];
-}
-function findMatchingOrderForMaint(client,dept,item){
-  return ordersArr().find(o=>{
-    if(o.orderKind==='maintenance'||o.client!==client)return false;
-    if(dept&&!(o[dept+'To']&&o[dept+'To']!=='none'))return false;
-    if(item&&!maintOrderItemNames(o).includes(item))return false;
-    return true;
-  })||null;
+// Both maintenance forms (Warranty Registration / General Maintenance) are entirely
+// independent, parallel inputs — separate element-id prefixes, separate submit
+// functions, no shared form state — so filling one never affects the other.
+function onMaintOrderChange(prefix){
+  const orderKey=document.getElementById('mnt'+prefix+'-order').value;
+  const itemSel=document.getElementById('mnt'+prefix+'-item');
+  const infoEl=document.getElementById('mnt'+prefix+'-client-info');
+  const o=orders[orderKey];
+  if(!o){itemSel.innerHTML='<option value="">— اختر رقم الطلب أولاً —</option>';if(infoEl)infoEl.textContent='';return;}
+  const items=maintOrderItemNames(o);
+  itemSel.innerHTML='<option value="">— اختر البند —</option>'+items.map(n=>`<option value="${n}">${n}</option>`).join('');
+  if(infoEl)infoEl.innerHTML=`<i class="ti ti-user"></i> ${o.client||'—'} &nbsp; <i class="ti ti-phone"></i> ${o.phone||'—'}`;
 }
 function buildMaintRequestPage(){
-  const cArr=Object.values(clients);
+  const orderOpts=maintOrderOptionsHtml();
   document.getElementById('maintreq-content').innerHTML=`
-    <div class="page-header"><div class="ptitle"><i class="ti ti-tool"></i> تسجيل طلب صيانة</div></div>
-    <div class="ro-notice" style="background:#FFF7ED;border-color:#FDBA74;color:#9A3412;"><i class="ti ti-info-circle"></i> نموذج مستقل ومبسّط لتسجيل طلبات الصيانة — يُحال مباشرة لفريق الورشة دون المرور بمسار تسجيل الطلبات الاعتيادي.</div>
-    <div class="card">
-      <div class="card-header"><span class="card-title"><i class="ti ti-sitemap"></i> ربط الطلب بالقسم والبند (اختياري)</span></div>
-      <div class="form-grid">
-        <div class="fg"><label>القسم المطلوب</label>
-          <select id="mnt-dept" onchange="onMaintDeptChange(this.value)">
-            <option value="">— أي قسم —</option>
-            ${Object.entries(MAINT_DEPT_LABELS).map(([k,l])=>`<option value="${k}">${l}</option>`).join('')}
-          </select>
-        </div>
-        <div class="fg"><label>البند المرتبط</label>
-          <select id="mnt-item" onchange="onMaintItemChange(this.value)"><option value="">— اختر القسم أولاً —</option></select>
-        </div>
-      </div>
-      <div style="padding:0 20px 4px;">
-        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:700;color:var(--maroon);">
-          <input type="checkbox" id="mnt-warranty-req" style="width:18px;height:18px;accent-color:var(--gold);"/>
-          <i class="ti ti-shield-check"></i> طلب صيانة تحت الضمان
-        </label>
-      </div>
-    </div>
-    <div class="card">
-      <div class="card-header"><span class="card-title"><i class="ti ti-user"></i> بيانات العميل والمشكلة</span></div>
-      <div class="form-grid">
-        <div class="fg"><label>اسم العميل * <span style="font-size:10px;color:var(--text-3);font-weight:600;">(اختر عميلاً موجوداً أو اكتب اسماً جديداً)</span></label>
-          <datalist id="mnt-cl-list">${cArr.map(c=>`<option value="${c.name}">`).join('')}</datalist>
-          <input id="mnt-client" list="mnt-cl-list" placeholder="اسم العميل" oninput="onMaintClientInput(this.value)" autocomplete="off"/>
-        </div>
-        <div class="fg"><label>رقم الجوال *</label><input id="mnt-phone" inputmode="tel" placeholder="05XXXXXXXX" maxlength="20"/></div>
-        <div class="fg"><label>الأولوية</label>
-          <select id="mnt-priority"><option value="عادية">عادية</option><option value="متوسطة">متوسطة</option><option value="عاجلة">عاجلة</option></select>
+    <div class="page-header"><div class="ptitle"><i class="ti ti-tool"></i> تسجيل الصيانة</div></div>
+    <div class="ro-notice" style="background:#FFF7ED;border-color:#FDBA74;color:#9A3412;"><i class="ti ti-info-circle"></i> نموذجان مستقلان تماماً — كل نموذج يُحدَّد ببداية رقم الطلب، ثم يُختار البند المطلوب تعديله من داخل ذلك الطلب تحديداً.</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start;">
+      <div class="card">
+        <div class="card-header" style="background:#FEF3C7;"><span class="card-title" style="color:#92400E;"><i class="ti ti-shield-check"></i> تسجيل الضمان</span></div>
+        <div style="padding:16px;display:flex;flex-direction:column;gap:12px;">
+          <div class="fg"><label>رقم الطلب *</label><select id="mntw-order" onchange="onMaintOrderChange('w')"><option value="">— اختر رقم الطلب —</option>${orderOpts}</select></div>
+          <div class="fg"><label>البند الذي يحتاج تعديل *</label><select id="mntw-item"><option value="">— اختر رقم الطلب أولاً —</option></select></div>
+          <div id="mntw-client-info" style="font-size:11.5px;color:var(--text-3);font-weight:700;"></div>
+          <div class="fg"><label>الأولوية</label><select id="mntw-priority"><option value="عادية">عادية</option><option value="متوسطة">متوسطة</option><option value="عاجلة">عاجلة</option></select></div>
+          <div class="fg"><label>وصف المشكلة *</label><textarea id="mntw-desc" placeholder="اشرح المشكلة المطلوب حلها تحت الضمان..." style="min-height:80px;"></textarea></div>
+          <button class="btn btn-brand" onclick="submitWarrantyMaintenance()"><i class="ti ti-shield-check"></i> تسجيل ضمن الضمان</button>
         </div>
       </div>
-      <div style="padding:0 20px 16px;">
-        <div class="fg"><label>وصف المشكلة / طلب الصيانة *</label><textarea id="mnt-desc" placeholder="اشرح المشكلة أو المطلوب صيانته..." style="min-height:90px;"></textarea></div>
-      </div>
-      <div style="padding:0 20px 20px;">
-        <button class="btn btn-brand" onclick="submitMaintenanceRequest()"><i class="ti ti-tool"></i> تسجيل طلب الصيانة</button>
+      <div class="card">
+        <div class="card-header"><span class="card-title"><i class="ti ti-tool"></i> الصيانة الباقية</span></div>
+        <div style="padding:16px;display:flex;flex-direction:column;gap:12px;">
+          <div class="fg"><label>رقم الطلب *</label><select id="mntg-order" onchange="onMaintOrderChange('g')"><option value="">— اختر رقم الطلب —</option>${orderOpts}</select></div>
+          <div class="fg"><label>البند الذي يحتاج تعديل *</label><select id="mntg-item"><option value="">— اختر رقم الطلب أولاً —</option></select></div>
+          <div id="mntg-client-info" style="font-size:11.5px;color:var(--text-3);font-weight:700;"></div>
+          <div class="fg"><label>الأولوية</label><select id="mntg-priority"><option value="عادية">عادية</option><option value="متوسطة">متوسطة</option><option value="عاجلة">عاجلة</option></select></div>
+          <div class="fg"><label>وصف المشكلة *</label><textarea id="mntg-desc" placeholder="اشرح المشكلة أو الصيانة المطلوبة..." style="min-height:80px;"></textarea></div>
+          <button class="btn btn-teal" onclick="submitGeneralMaintenance()"><i class="ti ti-tool"></i> تسجيل الصيانة</button>
+        </div>
       </div>
     </div>
     <div class="page-header" style="margin-top:20px;"><div class="ptitle" style="font-size:16px;"><i class="ti ti-history"></i> طلبات الصيانة الأخيرة</div></div>
-    <div class="card"><div class="tbl-wrap"><table><thead><tr><th>العميل</th><th>الوصف</th><th style="width:90px">الحالة</th><th style="width:90px">التاريخ</th></tr></thead>
+    <div class="card"><div class="tbl-wrap"><table><thead><tr><th>العميل</th><th>النوع</th><th>الوصف</th><th style="width:90px">الحالة</th><th style="width:90px">التاريخ</th></tr></thead>
     <tbody>${buildMaintReqRows()}</tbody></table></div></div>`;
-}
-function onMaintDeptChange(dept){
-  const itemSel=document.getElementById('mnt-item');
-  const map=maintDeptItemsMap();
-  const items=dept?[...map[dept]]:[...new Set([].concat(...Object.values(map).map(s=>[...s])))];
-  itemSel.innerHTML='<option value="">— كل البنود —</option>'+items.map(n=>`<option value="${n}">${n}</option>`).join('');
-  filterMaintClientList();
-}
-function onMaintItemChange(){filterMaintClientList();}
-function filterMaintClientList(){
-  const dept=document.getElementById('mnt-dept')?.value||'';
-  const item=document.getElementById('mnt-item')?.value||'';
-  const listEl=document.getElementById('mnt-cl-list');if(!listEl)return;
-  if(!dept&&!item){listEl.innerHTML=Object.values(clients).map(c=>`<option value="${c.name}">`).join('');return;}
-  const matching=maintClientsForDeptItem(dept,item);
-  listEl.innerHTML=matching.map(n=>`<option value="${n}">`).join('');
-}
-function onMaintClientInput(val){
-  if(!val)return;
-  const ex=Object.values(clients).find(c=>(c.name||'').trim()===val.trim());
-  if(ex){const phoneEl=document.getElementById('mnt-phone');if(phoneEl&&ex.phone&&!phoneEl.value)phoneEl.value=ex.phone;}
 }
 function buildMaintReqRows(){
   const arr=ordersArr().filter(o=>o.orderKind==='maintenance').sort((a,b)=>new Date(b.createdAt||b.date)-new Date(a.createdAt||a.date)).slice(0,20);
-  if(!arr.length)return'<tr><td colspan="4" style="text-align:center;color:var(--text-3);padding:24px">لا توجد طلبات صيانة بعد</td></tr>';
+  if(!arr.length)return'<tr><td colspan="5" style="text-align:center;color:var(--text-3);padding:24px">لا توجد طلبات صيانة بعد</td></tr>';
   return arr.map(o=>`<tr onclick="openOrderModal('${o._key}')" style="cursor:pointer">
     <td><strong>${o.client||'—'}</strong></td>
+    <td>${o.warrantyRequested?'<span class="badge" style="background:#FEF3C7;color:#92400E;">ضمان</span>':'<span class="badge" style="background:var(--surface-2);color:var(--text-2);">صيانة عامة</span>'}</td>
     <td style="font-size:12px;max-width:260px;">${o.notes||'—'}</td>
     <td>${o.currentDept==='done'?'<span class="badge b-done">تم الحل</span>':'<span class="badge" style="background:#FFEDD5;color:#9A3412;">قيد المعالجة</span>'}</td>
     <td style="font-size:11px;">${o.date||'—'}</td>
   </tr>`).join('');
 }
-async function submitMaintenanceRequest(){
-  const client=document.getElementById('mnt-client').value.trim();
-  const phone=document.getElementById('mnt-phone').value.trim();
-  const priority=document.getElementById('mnt-priority').value;
-  const desc=document.getElementById('mnt-desc').value.trim();
-  const relatedDept=document.getElementById('mnt-dept')?.value||'';
-  const relatedItem=document.getElementById('mnt-item')?.value||'';
-  const warrantyRequested=document.getElementById('mnt-warranty-req')?.checked||false;
-  if(!client){toast('⚠️ يرجى إدخال اسم العميل');return;}
-  if(!phone){toast('⚠️ يرجى إدخال رقم الجوال');return;}
-  if(!isValidSaudiPhone(phone)){toast('⚠️ رقم الجوال يجب أن يكون رقم سعودي صحيح (05XXXXXXXX)');return;}
-  if(!desc){toast('⚠️ يرجى وصف المشكلة أو طلب الصيانة');return;}
+async function _createMaintenanceOrder(prefix,warrantyRequested){
+  const orderKey=document.getElementById('mnt'+prefix+'-order').value;
+  const item=document.getElementById('mnt'+prefix+'-item').value;
+  const priority=document.getElementById('mnt'+prefix+'-priority').value;
+  const desc=document.getElementById('mnt'+prefix+'-desc').value.trim();
+  if(!orderKey){toast('⚠️ يرجى اختيار رقم الطلب');return;}
+  const linkedOrder=orders[orderKey];
+  if(!linkedOrder){toast('⚠️ تعذر العثور على الطلب المحدد');return;}
+  if(!item){toast('⚠️ يرجى اختيار البند الذي يحتاج تعديل');return;}
+  if(!desc){toast('⚠️ يرجى وصف المشكلة');return;}
   const today=new Date().toISOString().split('T')[0];
   showSaving('جاري التسجيل...');
   try{
-    if(!Object.values(clients).find(c=>c.name===client))await fbPush('clients',{name:client,phone:normalizeSaudiPhone(phone),date:today});
-    const linkedOrder=findMatchingOrderForMaint(client,relatedDept,relatedItem);
     const ord={
-      client,service:'طلب صيانة',orderItems:[],orderKind:'maintenance',
+      client:linkedOrder.client,service:'طلب صيانة',orderItems:[],orderKind:'maintenance',
       date:today,createdAt:new Date().toISOString(),stageStartDate:new Date().toISOString(),
-      priority,phone:normalizeSaudiPhone(phone),notes:desc,files:[],
-      relatedDept,relatedItem,warrantyRequested,
-      linkedOrderKey:linkedOrder?linkedOrder._key:'',linkedOrderId:linkedOrder?(linkedOrder.id||linkedOrder._key):'',
+      priority,phone:linkedOrder.phone||'',notes:desc,files:[],
+      relatedItem:item,warrantyRequested,
+      linkedOrderKey:orderKey,linkedOrderId:linkedOrder.id||orderKey,
       paymentStatus:'',paidAmount:0,totalAmount:0,remainingAmount:0,
       createdBy:cu.name,createdByUname:cu._uname,
       designTo:'none',designName:'❌ معفى',
@@ -2479,10 +2427,12 @@ async function submitMaintenanceRequest(){
     const res=await fbPush('orders',ord);
     const newId='ORD-'+String(Object.keys(orders).length+1).padStart(3,'0');
     await fbPatch(`orders/${res.name}`,{id:newId});
-    await loadData();hideSaving();toast('✓ تم تسجيل طلب الصيانة: '+newId);
+    await loadData();hideSaving();toast('✓ تم تسجيل الطلب: '+newId);
     buildMaintRequestPage();
   }catch(e){hideSaving();toast('❌ فشل تسجيل الطلب');}
 }
+async function submitWarrantyMaintenance(){await _createMaintenanceOrder('w',true);}
+async function submitGeneralMaintenance(){await _createMaintenanceOrder('g',false);}
 // ============================================================
 // QUOTE PAGE
 // ============================================================
