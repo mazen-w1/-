@@ -960,6 +960,7 @@ input[type="password"]{direction:rtl;text-align:right;padding-left:40px;padding-
         <div class="page" id="page-deptstage"><div id="deptstage-content"></div></div>
         <div class="page" id="page-govobligations"><div id="govobligations-content"></div></div>
         <div class="page" id="page-govcat"><div id="govcat-content"></div></div>
+        <div class="page" id="page-maintreq"><div id="maintreq-content"></div></div>
       </div>
     </div>
   </div>
@@ -1462,6 +1463,7 @@ function buildSidebar(){
     ]);
     h+=navGroup('إدارة الطلبات',[
       ni('add','ti-plus','تسجيل طلب'),
+      ni('maintreq','ti-tool','طلب صيانة'),
       ni('quote','ti-receipt-2','عرض سعر رسمي'),
       ni('wf','ti-grid-dots','سير العمل'),
     ]);
@@ -1482,13 +1484,14 @@ function buildSidebar(){
   }else if(['designer','printer','workshop'].includes(t)){
     h+=navGroup('الأعمال',[ni('my','ti-user-check','أعمالي الحالية')]);
     if(t==='designer'){h+=navGroup('إضافي',[ni('add','ti-bolt','طلب مستعجل'),ni('request','ti-send','رفع طلب')]);}
-    if(t==='workshop'){h+=navGroup('إضافي',[ni('warranty','ti-shield-check','ضمان اللوحات'),ni('request','ti-send','رفع طلب')]);}
+    if(t==='workshop'){h+=navGroup('إضافي',[ni('maintreq','ti-tool','طلب صيانة'),ni('warranty','ti-shield-check','ضمان اللوحات'),ni('request','ti-send','رفع طلب')]);}
   }else if(t==='follower'){
     h+=navGroup('المتابعة',[ni('wf','ti-grid-dots','متابعة الأعمال')]);
   }else if(t==='admin'){
     h+=navGroup('الرئيسية',[ni('dash','ti-layout-dashboard','لوحة التحكم')]);
     h+=navGroup('إدارة الطلبات',[
       ni('add','ti-plus','تسجيل طلب'),
+      ni('maintreq','ti-tool','طلب صيانة'),
       ni('quote','ti-receipt-2','عرض سعر رسمي'),
       ni('wf','ti-grid-dots','سير العمل'),
     ]);
@@ -2283,12 +2286,29 @@ function filterWfDept(dept){document.querySelectorAll('.wf-card').forEach(c=>{c.
 // ============================================================
 // MY WORK
 // ============================================================
+function setMyWorkFilter(f){window._myWorkFilter=f;buildMyWork();}
 function buildMyWork(){
-  const myOrders=ordersArr().filter(o=>isMyOrder(o));
   const isWorkshop=cu.type==='workshop';
+  const allMyOrders=ordersArr().filter(o=>isMyOrder(o));
+  const wfFilter=isWorkshop?(window._myWorkFilter||'all'):'all';
+  const myOrders=wfFilter==='all'?allMyOrders:wfFilter==='maintenance'?allMyOrders.filter(o=>o.orderKind==='maintenance'):allMyOrders.filter(o=>o.orderKind!=='maintenance');
+  // Workshop gets a quick filter bar to instantly separate regular production jobs
+  // from maintenance/repair requests in their daily working queue.
+  const filterBar=isWorkshop?(()=>{
+    const regCount=allMyOrders.filter(o=>o.orderKind!=='maintenance').length;
+    const mntCount=allMyOrders.filter(o=>o.orderKind==='maintenance').length;
+    return`<div class="tab-bar" style="margin-bottom:14px;">
+      <button class="tab-btn ${wfFilter==='all'?'active':''}" onclick="setMyWorkFilter('all')"><i class="ti ti-list"></i> كل الطلبات (${allMyOrders.length})</button>
+      <button class="tab-btn ${wfFilter==='regular'?'active':''}" onclick="setMyWorkFilter('regular')"><i class="ti ti-building-factory-2"></i> الطلبات العادية (${regCount})</button>
+      <button class="tab-btn ${wfFilter==='maintenance'?'active':''}" onclick="setMyWorkFilter('maintenance')"><i class="ti ti-tool"></i> طلبات الصيانة (${mntCount})</button>
+    </div>`;
+  })():'';
   const cards=myOrders.length===0?'<div style="color:var(--text-3);padding:30px;text-align:center;"><i class="ti ti-check-circle" style="font-size:36px;display:block;margin-bottom:10px;color:#10B981;"></i>لا توجد أعمال موكلة إليك حالياً</div>'
-    :`<div class="wf-grid">${myOrders.map(o=>`<div class="wf-card" style="${o.isQuickTask?'border:2px solid #C89A4A;background:linear-gradient(135deg,#FFFDF8,#FFF5E0);':''}" onclick="openOrderModal('${o._key}')">${hasOrderUpdate(o)?'<span class="order-update-dot" title="تم تحديث بيانات الطلب"></span>':''}<div class="wf-card-top">
-      <div class="wf-card-id">${o.id||o._key} · ${orderDateTime(o)}${o.isQuickTask?'<span class="urgent-tag" style="margin-right:6px;font-size:9px;background:linear-gradient(135deg,#78350F,#C89A4A);"><i class="ti ti-bolt"></i>مهمة سريعة</span>':''}</div>
+    :`<div class="wf-grid">${myOrders.map(o=>{
+      const isMnt=o.orderKind==='maintenance';
+      const cardBorder=isMnt?'border:2px solid #DC2626;background:linear-gradient(135deg,#FEF2F2,#FFF5F5);':o.isQuickTask?'border:2px solid #C89A4A;background:linear-gradient(135deg,#FFFDF8,#FFF5E0);':'';
+      return`<div class="wf-card" style="${cardBorder}" onclick="openOrderModal('${o._key}')">${hasOrderUpdate(o)?'<span class="order-update-dot" title="تم تحديث بيانات الطلب"></span>':''}<div class="wf-card-top">
+      <div class="wf-card-id">${o.id||o._key} · ${orderDateTime(o)}${isMnt?'<span class="urgent-tag" style="margin-right:6px;font-size:9px;background:linear-gradient(135deg,#991B1B,#DC2626);"><i class="ti ti-tool"></i>صيانة</span>':''}${o.isQuickTask?'<span class="urgent-tag" style="margin-right:6px;font-size:9px;background:linear-gradient(135deg,#78350F,#C89A4A);"><i class="ti ti-bolt"></i>مهمة سريعة</span>':''}</div>
       <div class="wf-card-name">${o.client}</div>
       <div class="wf-card-svc">${o.service}</div>
       <div style="display:flex;gap:5px;flex-wrap:wrap;">${deptBadge(o.currentDept)} ${gpbadge(o.priority)} ${timeBadge(hoursAgo(o.stageStartDate||o.date))}</div>
@@ -2297,10 +2317,92 @@ function buildMyWork(){
       ${isWorkshop&&o.isQuickTask&&!o.workshopFeedbackDone?`<div style="margin-top:8px;"><button class="btn btn-orange btn-sm" onclick="event.stopPropagation();openWorkshopFeedback('${o._key}')"><i class="ti ti-clipboard-check"></i> إدخال القياسات</button></div>`:''}
       ${o.workshopFeedbackDone?`<div style="margin-top:6px;background:#F0FDF4;border:1px solid #BBF7D0;border-radius:6px;padding:6px 10px;font-size:11px;"><i class="ti ti-check" style="color:#10B981"></i> تم رفع التقرير — بانتظار الإجراء</div>`:''}
       ${o.phone&&o.phone!=='—'?`<div style="margin-top:8px"><button class="btn btn-whatsapp btn-sm" onclick="event.stopPropagation();openWhatsapp('${o.phone}')"><i class="ti ti-brand-whatsapp"></i> واتساب</button></div>`:''}
-    </div><div class="wf-card-prog"><div class="wf-card-fill" style="width:${orderProgress(o)}%;background:${progressColor(o)}"></div></div></div>`).join('')}</div>`;
+    </div><div class="wf-card-prog"><div class="wf-card-fill" style="width:${orderProgress(o)}%;background:${progressColor(o)}"></div></div></div>`;}).join('')}</div>`;
   document.getElementById('my-content').innerHTML=`
     <div class="page-header"><div class="ptitle"><i class="ti ti-user-check"></i> أعمالي — ${cu.name}</div></div>
+    ${filterBar}
     ${controlsRow(false)}<div>${cards}</div>`;
+}
+// ============================================================
+// MAINTENANCE REQUEST PAGE — a detached, simplified channel for logging
+// customer repair/maintenance issues, separate from the generic multi-item
+// order-registration flow. Routed straight to the workshop for resolution.
+// ============================================================
+function buildMaintRequestPage(){
+  const cArr=Object.values(clients);
+  document.getElementById('maintreq-content').innerHTML=`
+    <div class="page-header"><div class="ptitle"><i class="ti ti-tool"></i> تسجيل طلب صيانة</div></div>
+    <div class="ro-notice" style="background:#FFF7ED;border-color:#FDBA74;color:#9A3412;"><i class="ti ti-info-circle"></i> نموذج مستقل ومبسّط لتسجيل طلبات الصيانة — يُحال مباشرة لفريق الورشة دون المرور بمسار تسجيل الطلبات الاعتيادي.</div>
+    <div class="card">
+      <div class="card-header"><span class="card-title"><i class="ti ti-user"></i> بيانات العميل والمشكلة</span></div>
+      <div class="form-grid">
+        <div class="fg"><label>اسم العميل * <span style="font-size:10px;color:var(--text-3);font-weight:600;">(اختر عميلاً موجوداً أو اكتب اسماً جديداً)</span></label>
+          <datalist id="mnt-cl-list">${cArr.map(c=>`<option value="${c.name}">`).join('')}</datalist>
+          <input id="mnt-client" list="mnt-cl-list" placeholder="اسم العميل" oninput="onMaintClientInput(this.value)" autocomplete="off"/>
+        </div>
+        <div class="fg"><label>رقم الجوال *</label><input id="mnt-phone" inputmode="tel" placeholder="05XXXXXXXX" maxlength="20"/></div>
+        <div class="fg"><label>الأولوية</label>
+          <select id="mnt-priority"><option value="عادية">عادية</option><option value="متوسطة">متوسطة</option><option value="عاجلة">عاجلة</option></select>
+        </div>
+      </div>
+      <div style="padding:0 20px 16px;">
+        <div class="fg"><label>وصف المشكلة / طلب الصيانة *</label><textarea id="mnt-desc" placeholder="اشرح المشكلة أو المطلوب صيانته..." style="min-height:90px;"></textarea></div>
+      </div>
+      <div style="padding:0 20px 20px;">
+        <button class="btn btn-brand" onclick="submitMaintenanceRequest()"><i class="ti ti-tool"></i> تسجيل طلب الصيانة</button>
+      </div>
+    </div>
+    <div class="page-header" style="margin-top:20px;"><div class="ptitle" style="font-size:16px;"><i class="ti ti-history"></i> طلبات الصيانة الأخيرة</div></div>
+    <div class="card"><div class="tbl-wrap"><table><thead><tr><th>العميل</th><th>الوصف</th><th style="width:90px">الحالة</th><th style="width:90px">التاريخ</th></tr></thead>
+    <tbody>${buildMaintReqRows()}</tbody></table></div></div>`;
+}
+function onMaintClientInput(val){
+  if(!val)return;
+  const ex=Object.values(clients).find(c=>(c.name||'').trim()===val.trim());
+  if(ex){const phoneEl=document.getElementById('mnt-phone');if(phoneEl&&ex.phone&&!phoneEl.value)phoneEl.value=ex.phone;}
+}
+function buildMaintReqRows(){
+  const arr=ordersArr().filter(o=>o.orderKind==='maintenance').sort((a,b)=>new Date(b.createdAt||b.date)-new Date(a.createdAt||a.date)).slice(0,20);
+  if(!arr.length)return'<tr><td colspan="4" style="text-align:center;color:var(--text-3);padding:24px">لا توجد طلبات صيانة بعد</td></tr>';
+  return arr.map(o=>`<tr onclick="openOrderModal('${o._key}')" style="cursor:pointer">
+    <td><strong>${o.client||'—'}</strong></td>
+    <td style="font-size:12px;max-width:260px;">${o.notes||'—'}</td>
+    <td>${o.currentDept==='done'?'<span class="badge b-done">تم الحل</span>':'<span class="badge" style="background:#FFEDD5;color:#9A3412;">قيد المعالجة</span>'}</td>
+    <td style="font-size:11px;">${o.date||'—'}</td>
+  </tr>`).join('');
+}
+async function submitMaintenanceRequest(){
+  const client=document.getElementById('mnt-client').value.trim();
+  const phone=document.getElementById('mnt-phone').value.trim();
+  const priority=document.getElementById('mnt-priority').value;
+  const desc=document.getElementById('mnt-desc').value.trim();
+  if(!client){toast('⚠️ يرجى إدخال اسم العميل');return;}
+  if(!phone){toast('⚠️ يرجى إدخال رقم الجوال');return;}
+  if(!isValidSaudiPhone(phone)){toast('⚠️ رقم الجوال يجب أن يكون رقم سعودي صحيح (05XXXXXXXX)');return;}
+  if(!desc){toast('⚠️ يرجى وصف المشكلة أو طلب الصيانة');return;}
+  const today=new Date().toISOString().split('T')[0];
+  showSaving('جاري التسجيل...');
+  try{
+    if(!Object.values(clients).find(c=>c.name===client))await fbPush('clients',{name:client,phone:normalizeSaudiPhone(phone),date:today});
+    const ord={
+      client,service:'طلب صيانة',orderItems:[],orderKind:'maintenance',
+      date:today,createdAt:new Date().toISOString(),stageStartDate:new Date().toISOString(),
+      priority,phone:normalizeSaudiPhone(phone),notes:desc,files:[],
+      paymentStatus:'',paidAmount:0,totalAmount:0,remainingAmount:0,
+      createdBy:cu.name,createdByUname:cu._uname,
+      designTo:'none',designName:'❌ معفى',
+      externalTo:'none',externalName:'❌ معفى',externalNote:'',
+      printTo:'none',printName:'❌ معفى',
+      workshopTo:'all',workshopName:'كل فريق الورشة',
+      currentDept:'workshop',status:'قيد المتابعة',
+      approvedPrintFile:'',approvedWorkshopFile:'',finalWorkshopDoneFile:''
+    };
+    const res=await fbPush('orders',ord);
+    const newId='ORD-'+String(Object.keys(orders).length+1).padStart(3,'0');
+    await fbPatch(`orders/${res.name}`,{id:newId});
+    await loadData();hideSaving();toast('✓ تم تسجيل طلب الصيانة: '+newId);
+    buildMaintRequestPage();
+  }catch(e){hideSaving();toast('❌ فشل تسجيل الطلب');}
 }
 // ============================================================
 // QUOTE PAGE
@@ -3524,7 +3626,12 @@ function openOrderModal(key){
   const nextLabels={design:'اعتماد التصميم والإرسال للمرحلة التالية ➔',external:'إنهاء التوريد والنقل ➔',print:'إتمام الطباعة ➔',workshop:'اكتمال التركيب ✓'};
   let nextBtn='';
   if(canAct&&o.currentDept!=='done'){
-    if(nd==='done'&&o.currentDept==='workshop'){
+    if(o.orderKind==='maintenance'&&nd==='done'&&o.currentDept==='workshop'){
+      nextBtn=`<div style="width:100%;display:flex;flex-direction:column;gap:8px;">
+        <textarea id="mnt-resolution-${key}" placeholder="اكتب وصف حل المشكلة..." style="min-height:60px;font-size:12px;"></textarea>
+        <button class="btn btn-green btn-sm" style="align-self:flex-start;" onclick="resolveMaintenanceOrder('${key}')"><i class="ti ti-circle-check"></i> تسجيل الحل وإتمام الطلب</button>
+      </div>`;
+    }else if(nd==='done'&&o.currentDept==='workshop'){
       nextBtn=o.finalWorkshopDoneFile
         ?`<button class="btn btn-green btn-sm" onclick="finishOrder('${key}')"><i class="ti ti-circle-check"></i> إتمام الطلب وأرشفته</button>`
         :`<span style="font-size:11px;color:#EF4444;font-weight:700"><i class="ti ti-alert-triangle"></i> يرجى إرفاق صورة المنجز أولاً</span>`;
@@ -3599,6 +3706,13 @@ function openOrderModal(key){
       ${_visitsHistory}
     </div>
   </div>`:'';
+  const maintOrderRow=o.orderKind==='maintenance'?`<div class="di" style="grid-column:1/-1;border-top:1px solid var(--border-soft);padding-top:10px;">
+    <span class="dk" style="color:#DC2626"><i class="ti ti-tool"></i> طلب صيانة</span>
+    <div class="dv" style="display:flex;flex-direction:column;gap:6px;">
+      <span style="font-size:12px;"><strong>وصف المشكلة:</strong> ${o.notes||'—'}</span>
+      ${o.maintenanceResolutionNote?`<div style="background:#F0FDF4;border:1px solid #BBF7D0;border-radius:8px;padding:8px 10px;font-size:12px;"><strong style="color:#065F46;"><i class="ti ti-check"></i> الحل المسجّل:</strong> ${o.maintenanceResolutionNote}${o.maintenanceResolvedBy?`<div style="font-size:10px;color:var(--text-3);margin-top:3px;">بواسطة ${o.maintenanceResolvedBy}</div>`:''}</div>`:''}
+    </div>
+  </div>`:'';
   const trackingUrl=`${location.origin}${location.pathname.replace(/[^/]*$/,'tracking.html')}?id=${o.id||key}`;
     const fromQuoteHtml=o.fromQuoteRef?`<div style="background:#F0FDF4;border:1px solid #BBF7D0;border-radius:var(--radius-sm);padding:8px 14px;font-size:12px;color:#166534;margin-bottom:14px;"><i class="ti ti-receipt-2"></i> تحويل من عرض السعر: <strong>${o.fromQuoteRef}</strong></div>`:'';
   const updateBannerHtml=o.lastItemUpdateAt?`<div style="background:#FFFBEB;border:1px solid #FDE68A;border-radius:var(--radius-sm);padding:8px 14px;font-size:12px;color:#92400E;margin-bottom:14px;display:flex;align-items:center;gap:6px;"><i class="ti ti-refresh"></i> تم تحديث الطلب (${o.lastItemUpdateType==='edit'?'تعديل بند':'إضافة بند جديد'}) بواسطة <strong>${o.lastItemUpdateBy||'—'}</strong> بتاريخ ${(o.lastItemUpdateAt||'').split('T')[0]||'—'}</div>`:'';
@@ -3628,7 +3742,7 @@ function openOrderModal(key){
     :''
   document.getElementById('order-modal-body').innerHTML=`
     <div class="modal-header">
-      <div><div class="modal-title"><i class="ti ti-file-text"></i> ${o.id||key} — ${o.client}${o.isQuickTask?'<span class="urgent-tag" style="margin-right:8px;font-size:9px;"><i class="ti ti-bolt"></i>مهمة سريعة</span>':''}</div><div style="font-size:11px;color:var(--text-3);margin-top:2px;">${o.service}</div></div>
+      <div><div class="modal-title"><i class="ti ti-file-text"></i> ${o.id||key} — ${o.client}${o.orderKind==='maintenance'?'<span class="urgent-tag" style="margin-right:8px;font-size:9px;background:linear-gradient(135deg,#991B1B,#DC2626);"><i class="ti ti-tool"></i>صيانة</span>':''}${o.isQuickTask?'<span class="urgent-tag" style="margin-right:8px;font-size:9px;"><i class="ti ti-bolt"></i>مهمة سريعة</span>':''}</div><div style="font-size:11px;color:var(--text-3);margin-top:2px;">${o.service}</div></div>
       <button class="btn-close" onclick="closeModal('order-modal')">×</button>
     </div>
     ${fromQuoteHtml}
@@ -3649,6 +3763,7 @@ function openOrderModal(key){
       <div class="di" style="grid-column:1/-1"><span class="dk" style="color:#9A3412">📷 توثيق التركيب النهائي</span><span class="dv">${dLink}</span></div>`:''}
       ${o.workshopDeptFile?`<div class="di" style="grid-column:1/-1"><span class="dk" style="color:#9A3412">📎 ملف الورشة عند التسجيل</span><span class="dv">${wdLink}</span></div>`:''}
       ${o.workshopFeedback?`<div class="di" style="grid-column:1/-1;border-top:1px solid var(--border-soft);padding-top:10px;"><span class="dk" style="color:#9A3412">📐 بيانات القياسات الميدانية</span><span class="dv" style="font-weight:400;background:#FFEDD5;padding:8px;border-radius:6px;display:block;margin-top:4px;">${o.workshopFeedback}</span>${o.workshopSitePhoto?`<a href="${o.workshopSitePhoto}" download class="file-download-link" style="margin-top:6px;display:inline-flex;"><i class="ti ti-photo"></i> صورة الموقع</a>`:''}</div>`:''}
+      ${maintOrderRow}
       ${paymentRow}
       ${maintenanceRow}
       <div class="di" style="grid-column:1/-1;background:var(--surface-2);border-radius:var(--radius-sm);padding:10px;border:1px solid var(--border);border-top:none;">
@@ -3804,7 +3919,8 @@ async function createWarrantyIfNeeded(key,o){
   try{
     const completedAt=new Date().toISOString();
     const expiryAt=new Date(Date.now()+365*86400000).toISOString();
-    const res=await fbPush('warranties',{orderKey:key,orderId:o.id||key,client:o.client||'—',phone:o.phone||'',completedAt,expiryAt});
+    const boardItem=(o.orderItems&&o.orderItems.length?o.orderItems[0].name:o.service)||'—';
+    const res=await fbPush('warranties',{orderKey:key,orderId:o.id||key,client:o.client||'—',phone:o.phone||'',boardItem,completedAt,expiryAt});
     await fbPatch(`orders/${key}`,{warrantyAdded:true,warrantyKey:res.name});
   }catch(e){}
 }
@@ -3839,6 +3955,15 @@ async function submitMaintVisit(){
     await loadData();hideSaving();closeModal('maint-visit-modal');openOrderModal(key);
     toast('✓ تم تسجيل طلب الصيانة');
   }catch(e){hideSaving();toast('⚠️ فشل تسجيل طلب الصيانة');}
+}
+async function resolveMaintenanceOrder(key){
+  const ta=document.getElementById('mnt-resolution-'+key);
+  const note=ta?ta.value.trim():'';
+  if(!note){toast('⚠️ يرجى تسجيل وصف حل المشكلة قبل الإتمام');return;}
+  showSaving('جاري الحفظ...');
+  await fbPatch(`orders/${key}`,{maintenanceResolutionNote:note,maintenanceResolvedBy:cu.name,maintenanceResolvedAt:new Date().toISOString()});
+  hideSaving();
+  await finishOrder(key);
 }
 async function finishOrder(key){
   showSaving('جاري الإغلاق...');
@@ -4477,56 +4602,22 @@ async function bulkDeleteClients(){
 // ============================================================
 // TIMELINE
 // ============================================================
-function buildTimelineStats(arr){
-  const deptKeys=['design','external','print','workshop'];
-  const deptMeta={design:{label:'التصميم',color:'#6B21A8'},external:{label:'الخارجي',color:'#713F12'},print:{label:'الطباعة',color:'#3730A3'},workshop:{label:'الورشة',color:'#9A3412'}};
-  const doneAtMap={design:'designDoneAt',external:'externalDoneAt',print:'printDoneAt',workshop:'workshopDoneAt'};
-  const startAtMap2={design:o=>o.designStartAt||o.date,external:o=>o.externalStartAt||o.designDoneAt||o.date,print:o=>o.printStartAt||o.externalDoneAt||o.designDoneAt||o.date,workshop:o=>o.workshopStartAt||o.printDoneAt||o.externalDoneAt||o.designDoneAt||o.date};
-  const deptStats=deptKeys.map(dk=>{
-    const activeNow=arr.filter(o=>o.currentDept===dk);
-    const completedForDept=arr.filter(o=>getActiveDepts(o).includes(dk)&&o[doneAtMap[dk]]);
-    const durations=completedForDept.map(o=>Math.max(0,(new Date(o[doneAtMap[dk]])-new Date(startAtMap2[dk](o)))/3600000));
-    const avgHours=durations.length?(durations.reduce((a,b)=>a+b,0)/durations.length):0;
-    const maxH=Math.max(...activeNow.map(o=>hoursAgo(o.stageStartDate||o.date)),0);
-    return{dk,label:deptMeta[dk].label,color:deptMeta[dk].color,activeNow:activeNow.length,completedCount:completedForDept.length,avgHours,maxH};
-  });
-  const maxAvg=Math.max(1,...deptStats.map(d=>d.avgHours));
-  const activeStats=deptStats.filter(d=>d.activeNow>0);
-  const allStats=deptStats;
-  return`
-  ${activeStats.length?`<div style="margin-bottom:6px;font-size:11px;font-weight:800;color:var(--maroon);letter-spacing:.5px;"><i class="ti ti-loader"></i> المراحل الجارية حالياً</div>
-  <div class="stats-row" style="grid-template-columns:repeat(auto-fill,minmax(200px,1fr));margin-bottom:16px;">${activeStats.map(d=>`<div class="mini-stat-card" style="border-right:3px solid ${d.color}"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;"><strong style="font-size:13px;color:${d.color}">${d.label}</strong><span class="badge" style="background:${d.color}20;color:${d.color};font-weight:800;">${d.activeNow} طلب</span></div><div style="font-size:11px;color:var(--text-3);">أطول انتظار حالي: <strong style="color:${d.maxH>72?'#EF4444':d.maxH>24?'#F59E0B':'#10B981'}">${fmtStageDuration(d.maxH)}</strong></div><div style="font-size:11px;color:var(--text-3);margin-top:3px;">متوسط الإنجاز: <strong style="color:var(--text-1)">${fmtStageDuration(d.avgHours)}</strong></div></div>`).join('')}</div>`:''}
-  <div style="margin-bottom:6px;font-size:11px;font-weight:800;color:var(--text-2);letter-spacing:.5px;"><i class="ti ti-chart-bar"></i> إحصائيات جميع المراحل</div>
-  <div class="stats-row" style="grid-template-columns:repeat(auto-fill,minmax(200px,1fr));">${allStats.map(d=>`<div class="mini-stat-card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;"><strong style="font-size:13px;color:var(--maroon)">${d.label}</strong></div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;"><span class="badge" style="background:${d.color}20;color:${d.color};"><i class="ti ti-loader"></i> ${d.activeNow} جارية</span><span class="badge" style="background:#D1FAE5;color:#065F46;"><i class="ti ti-check"></i> ${d.completedCount} مكتملة</span></div><div style="font-size:11px;color:var(--text-3);">متوسط المدة: <strong style="color:var(--text-1)">${d.avgHours===0?'—':d.avgHours<24?d.avgHours+' ساعة':Math.round(d.avgHours/24)+' يوم'}</strong></div><div class="mini-stat-bar-track" style="margin-top:8px;"><div class="mini-stat-bar-fill" style="width:${Math.round((d.avgHours/maxAvg)*100)}%;background:${d.color}"></div></div></div>`).join('')}</div>`;
-}
 function buildTimelinePage(){
   const arr=ordersArr();
   const activeArr=arr.filter(o=>o.currentDept!=='done');
   const doneArr=arr.filter(o=>o.currentDept==='done');
-  const allDepts=['design','external','print','workshop'];
-  const usedDepts=allDepts.filter(dk=>arr.some(o=>getActiveDepts(o).includes(dk)));
-  const deptHeaders={design:'وقت التصميم',external:'وقت الخارجي',print:'وقت الطباعة',workshop:'وقت الورشة'};
-  const headerCols=usedDepts.map(dk=>`<th style="width:90px">${deptHeaders[dk]}</th>`).join('');
+  // Duration/timing markers per stage were removed to keep this reception-facing
+  // view simple — it shows only the order, client, current stage, and overall
+  // completion progress, without exposing internal per-stage timing metrics.
   const makeRow=o=>{
-    const stageHours=hoursAgo(o.stageStartDate||o.date);const preciseStageHours=(new Date()-new Date(o.stageStartDate||o.date))/3600000;const pct=orderProgress(o);const col=progressColor(o);
-    const stagesCells=usedDepts.map(dk=>{
-      const doneAtMap={design:o.designDoneAt,external:o.externalDoneAt,print:o.printDoneAt,workshop:o.workshopDoneAt};
-      const startAtMap={design:o.designStartAt||o.date,external:o.externalStartAt||o.designDoneAt||o.date,print:o.printStartAt||o.designDoneAt||o.externalDoneAt||o.date,workshop:o.workshopStartAt||o.printDoneAt||o.externalDoneAt||o.designDoneAt||o.date};
-      const doneAt=doneAtMap[dk];const startAt=startAtMap[dk]||o.date;
-      if(doneAt){const h=Math.max(0,(new Date(doneAt)-new Date(startAt))/3600000);return`<td>${preciseTimeBadge(h)}</td>`;}
-      if(o.currentDept===dk)return`<td>${preciseTimeBadge(preciseStageHours)}</td>`;
-      if(o.currentDept==='done')return`<td><span class="badge b-done" style="font-size:9px">✓</span></td>`;
-      return`<td style="color:var(--text-3);font-size:10px">—</td>`;
-    }).join('');
-    return`<tr onclick="openOrderTimelineView('${o._key}')" style="cursor:pointer"><td><strong style="color:var(--maroon)">${o.id||o._key}</strong></td><td><strong style="font-size:13px;color:var(--text-1);">${o.client||'—'}</strong></td><td>${deptBadge(o.currentDept)}</td>${stagesCells}<td>${preciseTimeBadge(preciseStageHours)}</td><td><div style="width:80px;background:var(--border);border-radius:4px;height:6px"><div style="width:${pct}%;background:${col};height:6px;border-radius:4px"></div></div></td></tr>`;
+    const pct=orderProgress(o);const col=progressColor(o);
+    return`<tr onclick="openOrderTimelineView('${o._key}')" style="cursor:pointer"><td><strong style="color:var(--maroon)">${o.id||o._key}</strong></td><td><strong style="font-size:13px;color:var(--text-1);">${o.client||'—'}</strong></td><td>${deptBadge(o.currentDept)}</td><td><div style="width:80px;background:var(--border);border-radius:4px;height:6px"><div style="width:${pct}%;background:${col};height:6px;border-radius:4px"></div></div></td></tr>`;
   };
-  const thead=`<thead><tr><th style="width:70px">الطلب</th><th style="width:110px">العميل</th><th style="width:90px">المرحلة</th>${headerCols}<th style="width:90px">الحالي</th><th style="width:90px">الإنجاز</th></tr></thead>`;
+  const thead=`<thead><tr><th style="width:90px">الطلب</th><th>العميل</th><th style="width:110px">المرحلة</th><th style="width:110px">الإنجاز</th></tr></thead>`;
   const activeRows=activeArr.map(makeRow).join('');
   const doneRows=doneArr.map(makeRow).join('');
   document.getElementById('page-timeline').innerHTML=`
     <div class="page-header"><div class="ptitle"><i class="ti ti-clock"></i> توقيت المراحل</div></div>
-    ${buildTimelineStats(arr)}
-    <div class="ro-notice" style="background:#EFF6FF;border-color:#BFDBFE;color:#1E40AF"><i class="ti ti-clock"></i> أخضر &lt;24س · أصفر 1-3 أيام · أحمر &gt;3 أيام</div>
     ${activeArr.length?`<div style="font-size:12px;font-weight:800;color:var(--maroon);margin:14px 0 6px;"><i class="ti ti-loader"></i> الطلبات الجارية (${activeArr.length})</div>
     <div class="card"><div class="tbl-wrap"><table>${thead}<tbody>${activeRows}</tbody></table></div></div>`:''}
     ${doneArr.length?`<div id="timeline-done-section" style="font-size:12px;font-weight:800;color:#10B981;margin:18px 0 6px;scroll-margin-top:var(--header-h);"><i class="ti ti-circle-check"></i> الطلبات المنتهية (${doneArr.length})</div>
@@ -4659,8 +4750,10 @@ function buildRequestPage(){
     <div class="page-header"><div class="ptitle"><i class="ti ti-send"></i> رفع طلب مالي</div></div>
     <div class="card">
       <div class="form-grid">
-        <div class="fg ff"><label>اختيار الطلب *</label><select id="req-order"><option value="">— اختر الطلب —</option>${orderOptions||'<option disabled>لا توجد طلبات</option>'}</select></div>
+        <div class="fg ff"><label>اختيار الطلب *</label><select id="req-order" onchange="onReqOrderChange(this.value)"><option value="">— اختر الطلب —</option>${orderOptions||'<option disabled>لا توجد طلبات</option>'}</select></div>
         <div class="fg ff"><label>حالة الدفعة *</label><select id="req-pay-status"><option value="كاملة">دفعة كاملة</option><option value="جزئية">دفع جزئي</option></select></div>
+        <div class="fg ff"><label>المبلغ الإجمالي (ر.س)</label><input type="text" id="req-order-total" readonly style="background:var(--surface-2);color:var(--maroon);font-weight:800;" value="—"/></div>
+        <div class="fg ff"><label>المبلغ المتبقي (ر.س)</label><input type="text" id="req-order-remaining" readonly style="background:var(--surface-2);color:#DC2626;font-weight:800;" value="—"/></div>
       </div>
       <div style="padding:0 20px;">
         <div style="font-size:12px;font-weight:800;color:var(--text-2);margin-bottom:8px;"><i class="ti ti-credit-card"></i> مصفوفة الدفع — أدخل المبلغ حسب كل وسيلة دفع مستخدمة</div>
@@ -4697,6 +4790,14 @@ function buildMyRequestsRows(){
   if(!mine.length)return'<tr><td colspan="5" style="text-align:center;color:var(--text-3);padding:24px">لم تقم برفع أي طلب</td></tr>';
   const statusBadge=s=>s==='pending'?'<span class="badge b-proc">قيد المراجعة</span>':s==='done'?'<span class="badge b-done">تمت المعالجة</span>':'<span class="badge b-new">جديد</span>';
   return mine.map(([k,r])=>`<tr><td><strong>${r.client||'—'}</strong></td><td style="font-size:11px;">${reqChannelsSummary(r)}${r.fileData?`<div style="margin-top:3px;"><a href="${r.fileData}" download class="file-download-link"><i class="ti ti-download"></i> المرفق</a></div>`:''}</td><td>${gpbadge(r.priority)}</td><td>${statusBadge(r.status)}</td><td style="font-size:11px">${r.date||'—'}</td></tr>`).join('');
+}
+function onReqOrderChange(key){
+  const totalEl=document.getElementById('req-order-total');
+  const remEl=document.getElementById('req-order-remaining');
+  const o=orders[key];
+  if(!o){if(totalEl)totalEl.value='—';if(remEl)remEl.value='—';return;}
+  if(totalEl)totalEl.value=fmtMoney(Number(o.totalAmount||0));
+  if(remEl)remEl.value=fmtMoney(Number(o.remainingAmount!=null?o.remainingAmount:Math.max(0,(o.totalAmount||0)-(o.paidAmount||0))));
 }
 function recalcReqAmounts(){
   const network=Number(document.getElementById('req-amt-network')?.value||0);
@@ -5458,37 +5559,47 @@ function buildGovCategoryPage(){
 function buildWarrantyPage(){
   const arr=Object.entries(warranties).map(([k,w])=>({...w,_key:k})).sort((a,b)=>new Date(a.expiryAt)-new Date(b.expiryAt));
   const now=Date.now();
-  let rows;
+  let cardsHtml;
   if(!arr.length){
-    rows=`<tr><td colspan="5" style="text-align:center;color:var(--text-3);padding:32px"><i class="ti ti-shield-check" style="font-size:40px;display:block;margin-bottom:8px;color:var(--gold);"></i>لا توجد لوحات تحت الضمان حالياً</td></tr>`;
+    cardsHtml=`<div style="text-align:center;color:var(--text-3);padding:50px 20px;"><i class="ti ti-shield-check" style="font-size:44px;display:block;margin-bottom:10px;color:var(--gold);"></i>لا توجد لوحات تحت الضمان حالياً</div>`;
   }else{
-    rows=arr.map(w=>{
+    cardsHtml=`<div class="warranty-grid">${arr.map(w=>{
       const daysLeft=Math.ceil((new Date(w.expiryAt).getTime()-now)/86400000);
       const expired=daysLeft<0;
       const dueSoon=!expired&&daysLeft<=30;
+      const accent=expired?'#DC2626':dueSoon?'#D97706':'#10B981';
       const statusHtml=expired
         ?`<span class="badge" style="background:#FEE2E2;color:#991B1B;">منتهي الضمان</span>`
         :dueSoon
           ?`<span class="badge" style="background:#FEF3C7;color:#92400E;">يستحق صيانة قريباً (${daysLeft} يوم)</span>`
           :`<span class="badge" style="background:#D1FAE5;color:#065F46;">ساري (${daysLeft} يوم متبقي)</span>`;
-      return`<tr ${w.orderKey?`onclick="openOrderModal('${w.orderKey}')" style="cursor:pointer;"`:''}>
-        <td>${w.client||'—'}</td>
-        <td>${w.orderId||'—'}</td>
-        <td>${w.completedAt?new Date(w.completedAt).toLocaleDateString('ar-SA'):'—'}</td>
-        <td>${w.expiryAt?new Date(w.expiryAt).toLocaleDateString('ar-SA'):'—'}</td>
-        <td>${statusHtml}</td>
-      </tr>`;
-    }).join('');
+      return`<div class="warranty-card" style="border-top:4px solid ${accent};" ${w.orderKey?`onclick="openOrderModal('${w.orderKey}')"`:''}>
+        <div class="warranty-card-icon" style="color:${accent};"><i class="ti ti-photo-shield"></i></div>
+        <div class="warranty-card-item">${w.boardItem||'—'}</div>
+        <div class="warranty-card-client"><i class="ti ti-user"></i> ${w.client||'—'}</div>
+        <div class="warranty-card-dates">
+          <span><i class="ti ti-calendar-check"></i> ${w.completedAt?new Date(w.completedAt).toLocaleDateString('ar-SA'):'—'}</span>
+          <span><i class="ti ti-calendar-x"></i> ${w.expiryAt?new Date(w.expiryAt).toLocaleDateString('ar-SA'):'—'}</span>
+        </div>
+        <div style="margin-top:8px;">${statusHtml}</div>
+      </div>`;
+    }).join('')}</div>`;
   }
   document.getElementById('warranty-content').innerHTML=`
     <div class="page-header">
       <div class="ptitle"><i class="ti ti-shield-check"></i> ضمان اللوحات</div>
       <div style="font-size:14px;color:var(--text-2);font-weight:600;">${arr.length} لوحة تحت الضمان</div>
     </div>
-    <div class="card"><div class="tbl-wrap"><table>
-      <thead><tr><th>العميل</th><th>رقم الطلب</th><th>تاريخ الإكمال</th><th>تاريخ انتهاء الضمان</th><th>الحالة</th></tr></thead>
-      <tbody>${rows}</tbody>
-    </table></div></div>`;
+    ${cardsHtml}
+    <style>
+      .warranty-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;}
+      .warranty-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px;cursor:pointer;transition:transform .18s ease,box-shadow .18s ease;text-align:center;}
+      .warranty-card:hover{transform:translateY(-3px);box-shadow:0 10px 24px rgba(0,0,0,.08);}
+      .warranty-card-icon{font-size:26px;margin-bottom:8px;}
+      .warranty-card-item{font-size:14px;font-weight:800;color:var(--maroon);margin-bottom:6px;}
+      .warranty-card-client{font-size:12px;color:var(--text-2);font-weight:700;margin-bottom:10px;display:flex;align-items:center;justify-content:center;gap:5px;}
+      .warranty-card-dates{display:flex;flex-direction:column;gap:4px;font-size:11px;color:var(--text-3);}
+    </style>`;
 }
 // ── Auto-convert Arabic/Persian digits to English while typing ──────────────
 function toEnglishDigits(str){
@@ -5529,6 +5640,7 @@ function _buildPage(p){
   else if(p==='revenue') buildRevenuePage();
   else if(p==='deptstage') buildDeptStagePage();
   else if(p==='govobligations') buildGovObligationsPage();
+  else if(p==='maintreq') buildMaintRequestPage();
   else if(p==='govcat') buildGovCategoryPage();
 }
    </script>
