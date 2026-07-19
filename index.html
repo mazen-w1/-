@@ -2205,6 +2205,10 @@ function toggleCompletedWfColumn(){window._wfCompletedExpanded=!window._wfComple
 // STANDALONE PER-DEPARTMENT STAGE PAGE
 // ============================================================
 function openDeptStagePage(deptKey){window._deptStageKey=deptKey;nav('deptstage');}
+function hasLaterMaintenanceForOrder(o){
+  if(o.maintenanceVisits&&o.maintenanceVisits.length)return true;
+  return ordersArr().some(m=>m.orderKind==='maintenance'&&m.linkedOrderKey===o._key);
+}
 function buildDeptStagePage(){
   const deptKey=window._deptStageKey||'design';
   const deptMeta={
@@ -2219,7 +2223,7 @@ function buildDeptStagePage(){
   const arr=ordersArr().filter(o=>(o.currentDept||'design')===deptKey).sort((a,b)=>new Date(b.date)-new Date(a.date));
   const rows=arr.map(o=>isCompleted?`<tr onclick="openOrderTimelineView('${o._key}')" style="cursor:pointer;">
     <td><strong style="color:var(--maroon)">${o.id||o._key}</strong></td>
-    <td><strong style="font-size:13px;">${o.client||'—'}</strong></td>
+    <td><strong style="font-size:13px;">${o.client||'—'}</strong>${hasLaterMaintenanceForOrder(o)?' <span class="badge" style="background:#FEE2E2;color:#991B1B;font-size:9px;"><i class="ti ti-tool"></i> طلب صيانة لاحق</span>':''}</td>
     <td style="font-weight:800;">${o.totalAmount?fmtMoney(Number(o.totalAmount))+' ر.س':'—'}</td>
     <td style="font-size:12px;">${o.service||'—'}</td>
     <td style="font-size:12px;">${o.createdBy||'—'}</td>
@@ -2328,11 +2332,64 @@ function buildMyWork(){
 // customer repair/maintenance issues, separate from the generic multi-item
 // order-registration flow. Routed straight to the workshop for resolution.
 // ============================================================
+const MAINT_DEPT_LABELS={design:'التصميم',external:'تنفيذ خارجي',print:'الطباعة',workshop:'الورشة'};
+function maintOrderItemNames(o){
+  return(o.orderItems&&o.orderItems.length)?o.orderItems.map(i=>i.name).filter(Boolean):(o.service?[o.service]:[]);
+}
+function maintDeptItemsMap(){
+  const map={design:new Set(),external:new Set(),print:new Set(),workshop:new Set()};
+  ordersArr().forEach(o=>{
+    if(o.orderKind==='maintenance')return;
+    const items=maintOrderItemNames(o);
+    ['design','external','print','workshop'].forEach(dk=>{
+      if(o[dk+'To']&&o[dk+'To']!=='none')items.forEach(n=>map[dk].add(n));
+    });
+  });
+  return map;
+}
+function maintClientsForDeptItem(dept,item){
+  const set=new Set();
+  ordersArr().forEach(o=>{
+    if(o.orderKind==='maintenance'||!o.client)return;
+    if(dept&&!(o[dept+'To']&&o[dept+'To']!=='none'))return;
+    if(item&&!maintOrderItemNames(o).includes(item))return;
+    set.add(o.client);
+  });
+  return[...set];
+}
+function findMatchingOrderForMaint(client,dept,item){
+  return ordersArr().find(o=>{
+    if(o.orderKind==='maintenance'||o.client!==client)return false;
+    if(dept&&!(o[dept+'To']&&o[dept+'To']!=='none'))return false;
+    if(item&&!maintOrderItemNames(o).includes(item))return false;
+    return true;
+  })||null;
+}
 function buildMaintRequestPage(){
   const cArr=Object.values(clients);
   document.getElementById('maintreq-content').innerHTML=`
     <div class="page-header"><div class="ptitle"><i class="ti ti-tool"></i> تسجيل طلب صيانة</div></div>
     <div class="ro-notice" style="background:#FFF7ED;border-color:#FDBA74;color:#9A3412;"><i class="ti ti-info-circle"></i> نموذج مستقل ومبسّط لتسجيل طلبات الصيانة — يُحال مباشرة لفريق الورشة دون المرور بمسار تسجيل الطلبات الاعتيادي.</div>
+    <div class="card">
+      <div class="card-header"><span class="card-title"><i class="ti ti-sitemap"></i> ربط الطلب بالقسم والبند (اختياري)</span></div>
+      <div class="form-grid">
+        <div class="fg"><label>القسم المطلوب</label>
+          <select id="mnt-dept" onchange="onMaintDeptChange(this.value)">
+            <option value="">— أي قسم —</option>
+            ${Object.entries(MAINT_DEPT_LABELS).map(([k,l])=>`<option value="${k}">${l}</option>`).join('')}
+          </select>
+        </div>
+        <div class="fg"><label>البند المرتبط</label>
+          <select id="mnt-item" onchange="onMaintItemChange(this.value)"><option value="">— اختر القسم أولاً —</option></select>
+        </div>
+      </div>
+      <div style="padding:0 20px 4px;">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:700;color:var(--maroon);">
+          <input type="checkbox" id="mnt-warranty-req" style="width:18px;height:18px;accent-color:var(--gold);"/>
+          <i class="ti ti-shield-check"></i> طلب صيانة تحت الضمان
+        </label>
+      </div>
+    </div>
     <div class="card">
       <div class="card-header"><span class="card-title"><i class="ti ti-user"></i> بيانات العميل والمشكلة</span></div>
       <div class="form-grid">
@@ -2356,6 +2413,22 @@ function buildMaintRequestPage(){
     <div class="card"><div class="tbl-wrap"><table><thead><tr><th>العميل</th><th>الوصف</th><th style="width:90px">الحالة</th><th style="width:90px">التاريخ</th></tr></thead>
     <tbody>${buildMaintReqRows()}</tbody></table></div></div>`;
 }
+function onMaintDeptChange(dept){
+  const itemSel=document.getElementById('mnt-item');
+  const map=maintDeptItemsMap();
+  const items=dept?[...map[dept]]:[...new Set([].concat(...Object.values(map).map(s=>[...s])))];
+  itemSel.innerHTML='<option value="">— كل البنود —</option>'+items.map(n=>`<option value="${n}">${n}</option>`).join('');
+  filterMaintClientList();
+}
+function onMaintItemChange(){filterMaintClientList();}
+function filterMaintClientList(){
+  const dept=document.getElementById('mnt-dept')?.value||'';
+  const item=document.getElementById('mnt-item')?.value||'';
+  const listEl=document.getElementById('mnt-cl-list');if(!listEl)return;
+  if(!dept&&!item){listEl.innerHTML=Object.values(clients).map(c=>`<option value="${c.name}">`).join('');return;}
+  const matching=maintClientsForDeptItem(dept,item);
+  listEl.innerHTML=matching.map(n=>`<option value="${n}">`).join('');
+}
 function onMaintClientInput(val){
   if(!val)return;
   const ex=Object.values(clients).find(c=>(c.name||'').trim()===val.trim());
@@ -2376,6 +2449,9 @@ async function submitMaintenanceRequest(){
   const phone=document.getElementById('mnt-phone').value.trim();
   const priority=document.getElementById('mnt-priority').value;
   const desc=document.getElementById('mnt-desc').value.trim();
+  const relatedDept=document.getElementById('mnt-dept')?.value||'';
+  const relatedItem=document.getElementById('mnt-item')?.value||'';
+  const warrantyRequested=document.getElementById('mnt-warranty-req')?.checked||false;
   if(!client){toast('⚠️ يرجى إدخال اسم العميل');return;}
   if(!phone){toast('⚠️ يرجى إدخال رقم الجوال');return;}
   if(!isValidSaudiPhone(phone)){toast('⚠️ رقم الجوال يجب أن يكون رقم سعودي صحيح (05XXXXXXXX)');return;}
@@ -2384,10 +2460,13 @@ async function submitMaintenanceRequest(){
   showSaving('جاري التسجيل...');
   try{
     if(!Object.values(clients).find(c=>c.name===client))await fbPush('clients',{name:client,phone:normalizeSaudiPhone(phone),date:today});
+    const linkedOrder=findMatchingOrderForMaint(client,relatedDept,relatedItem);
     const ord={
       client,service:'طلب صيانة',orderItems:[],orderKind:'maintenance',
       date:today,createdAt:new Date().toISOString(),stageStartDate:new Date().toISOString(),
       priority,phone:normalizeSaudiPhone(phone),notes:desc,files:[],
+      relatedDept,relatedItem,warrantyRequested,
+      linkedOrderKey:linkedOrder?linkedOrder._key:'',linkedOrderId:linkedOrder?(linkedOrder.id||linkedOrder._key):'',
       paymentStatus:'',paidAmount:0,totalAmount:0,remainingAmount:0,
       createdBy:cu.name,createdByUname:cu._uname,
       designTo:'none',designName:'❌ معفى',
@@ -4611,7 +4690,8 @@ function buildTimelinePage(){
   // completion progress, without exposing internal per-stage timing metrics.
   const makeRow=o=>{
     const pct=orderProgress(o);const col=progressColor(o);
-    return`<tr onclick="openOrderTimelineView('${o._key}')" style="cursor:pointer"><td><strong style="color:var(--maroon)">${o.id||o._key}</strong></td><td><strong style="font-size:13px;color:var(--text-1);">${o.client||'—'}</strong></td><td>${deptBadge(o.currentDept)}</td><td><div style="width:80px;background:var(--border);border-radius:4px;height:6px"><div style="width:${pct}%;background:${col};height:6px;border-radius:4px"></div></div></td></tr>`;
+    const mntBadge=(o.currentDept==='done'&&hasLaterMaintenanceForOrder(o))?' <span class="badge" style="background:#FEE2E2;color:#991B1B;font-size:9px;"><i class="ti ti-tool"></i> طلب صيانة لاحق</span>':'';
+    return`<tr onclick="openOrderTimelineView('${o._key}')" style="cursor:pointer"><td><strong style="color:var(--maroon)">${o.id||o._key}</strong></td><td><strong style="font-size:13px;color:var(--text-1);">${o.client||'—'}</strong>${mntBadge}</td><td>${deptBadge(o.currentDept)}</td><td><div style="width:80px;background:var(--border);border-radius:4px;height:6px"><div style="width:${pct}%;background:${col};height:6px;border-radius:4px"></div></div></td></tr>`;
   };
   const thead=`<thead><tr><th style="width:90px">الطلب</th><th>العميل</th><th style="width:110px">المرحلة</th><th style="width:110px">الإنجاز</th></tr></thead>`;
   const activeRows=activeArr.map(makeRow).join('');
@@ -5556,6 +5636,63 @@ function buildGovCategoryPage(){
     <div class="page-header"><div class="ptitle"><i class="ti ${meta.icon}"></i> ${meta.label}</div></div>
     ${body}`;
 }
+function openWarrantyClientProfile(client){
+  const wArr=Object.entries(warranties).map(([k,w])=>({...w,_key:k})).filter(w=>w.client===client);
+  const clientOrders=ordersArr().filter(o=>o.client===client);
+  // Merge both maintenance sources: warranty-visit logs on contract orders, and
+  // standalone maintenance-order requests — each becomes one "المشكلة/الرد عليها" row.
+  const history=[];
+  clientOrders.forEach(o=>{
+    (o.maintenanceVisits||[]).forEach(v=>{
+      const vd=typeof v==='object'?v:{date:v,reason:'',photo:''};
+      history.push({date:vd.date,issue:vd.reason||'—',response:vd.photo?'تم إرفاق صورة توثيق':'—',source:'زيارة ضمان',warrantyRequested:true});
+    });
+    if(o.orderKind==='maintenance'){
+      history.push({date:o.createdAt||o.date,issue:o.notes||'—',response:o.maintenanceResolutionNote||(o.currentDept==='done'?'—':'قيد المعالجة'),source:'طلب صيانة مستقل',warrantyRequested:!!o.warrantyRequested});
+    }
+  });
+  history.sort((a,b)=>new Date(b.date||0)-new Date(a.date||0));
+  const maintCount=history.length;
+  const itemsHtml=wArr.length?wArr.map(w=>{
+    const daysLeft=Math.ceil((new Date(w.expiryAt).getTime()-Date.now())/86400000);
+    const expired=daysLeft<0;
+    return`<div style="display:flex;align-items:center;justify-content:space-between;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;margin-bottom:6px;">
+      <span style="font-size:12px;font-weight:700;">${w.boardItem||'—'}</span>
+      <span class="badge" style="background:${expired?'#FEE2E2':'#D1FAE5'};color:${expired?'#991B1B':'#065F46'};font-size:10px;">${expired?'منتهي':'ساري'}</span>
+    </div>`;
+  }).join(''):'<div style="font-size:12px;color:var(--text-3);">لا توجد لوحات مسجلة تحت الضمان لهذا العميل</div>';
+  window._maintHistoryData=history;
+  document.getElementById('gov-modal-body').innerHTML=`
+    <div class="modal-header"><span class="modal-title"><i class="ti ti-user"></i> ${client}</span><button class="btn-close" onclick="closeModal('gov-modal')">×</button></div>
+    <div style="display:flex;flex-direction:column;gap:12px;">
+      <div><div style="font-size:11px;font-weight:800;color:var(--text-2);margin-bottom:6px;">اللوحات تحت الضمان</div>${itemsHtml}</div>
+      <div class="stat-card c-red" style="cursor:pointer;" onclick="toggleMaintHistoryPanel()">
+        <div class="stat-icon i-red"><i class="ti ti-tool"></i></div>
+        <div class="stat-label">كم عدد مرات الصيانة</div>
+        <div class="stat-value" style="color:#DC2626">${maintCount}</div>
+        <div class="stat-trend"><span style="color:var(--text-2)"><i class="ti ti-chevron-down"></i> اضغط لعرض التفاصيل</span></div>
+      </div>
+      <div id="maint-history-panel" style="display:none;max-height:320px;overflow-y:auto;display:flex;flex-direction:column;gap:8px;"></div>
+    </div>`;
+  openModal('gov-modal');
+}
+function toggleMaintHistoryPanel(){
+  const panel=document.getElementById('maint-history-panel');if(!panel)return;
+  const showing=panel.style.display==='flex';
+  if(showing){panel.style.display='none';return;}
+  const history=window._maintHistoryData||[];
+  panel.innerHTML=history.length?history.map(h=>`
+    <div style="border:1px solid var(--border);border-radius:8px;padding:10px 12px;background:var(--surface);">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px;">
+        <span class="badge" style="background:var(--gold-soft);color:var(--maroon);font-size:9px;">${h.source}</span>
+        <span style="font-size:10px;color:var(--text-3);">${h.date?new Date(h.date).toLocaleDateString('ar-SA'):'—'}</span>
+      </div>
+      <div style="font-size:12px;margin-bottom:4px;"><strong>المشكلة:</strong> ${h.issue}</div>
+      <div style="font-size:12px;color:#065F46;"><strong>الرد عليها:</strong> ${h.response}</div>
+      ${h.warrantyRequested?`<div style="margin-top:4px;"><span class="badge" style="background:#FEF3C7;color:#92400E;font-size:9px;"><i class="ti ti-shield-check"></i> تحت الضمان</span></div>`:''}
+    </div>`).join(''):'<div style="font-size:12px;color:var(--text-3);text-align:center;padding:16px;">لا يوجد سجل صيانة بعد</div>';
+  panel.style.display='flex';
+}
 function buildWarrantyPage(){
   const arr=Object.entries(warranties).map(([k,w])=>({...w,_key:k})).sort((a,b)=>new Date(a.expiryAt)-new Date(b.expiryAt));
   const now=Date.now();
@@ -5573,10 +5710,10 @@ function buildWarrantyPage(){
         :dueSoon
           ?`<span class="badge" style="background:#FEF3C7;color:#92400E;">يستحق صيانة قريباً (${daysLeft} يوم)</span>`
           :`<span class="badge" style="background:#D1FAE5;color:#065F46;">ساري (${daysLeft} يوم متبقي)</span>`;
-      return`<div class="warranty-card" style="border-top:4px solid ${accent};" ${w.orderKey?`onclick="openOrderModal('${w.orderKey}')"`:''}>
-        <div class="warranty-card-icon" style="color:${accent};"><i class="ti ti-photo-shield"></i></div>
-        <div class="warranty-card-item">${w.boardItem||'—'}</div>
-        <div class="warranty-card-client"><i class="ti ti-user"></i> ${w.client||'—'}</div>
+      return`<div class="warranty-card" style="border-top:4px solid ${accent};">
+        <div class="warranty-card-icon" style="color:${accent};" ${w.orderKey?`onclick="openOrderModal('${w.orderKey}')" style="cursor:pointer;"`:''}><i class="ti ti-photo-shield"></i></div>
+        <div class="warranty-card-item" ${w.orderKey?`onclick="openOrderModal('${w.orderKey}')" style="cursor:pointer;"`:''}>${w.boardItem||'—'}</div>
+        <div class="warranty-card-client" onclick="openWarrantyClientProfile('${(w.client||'').replace(/'/g,"\\'")}')" style="cursor:pointer;text-decoration:underline;text-decoration-color:transparent;" onmouseover="this.style.textDecorationColor='var(--gold)'" onmouseout="this.style.textDecorationColor='transparent'"><i class="ti ti-user"></i> ${w.client||'—'}</div>
         <div class="warranty-card-dates">
           <span><i class="ti ti-calendar-check"></i> ${w.completedAt?new Date(w.completedAt).toLocaleDateString('ar-SA'):'—'}</span>
           <span><i class="ti ti-calendar-x"></i> ${w.expiryAt?new Date(w.expiryAt).toLocaleDateString('ar-SA'):'—'}</span>
