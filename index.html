@@ -286,6 +286,8 @@ input[type="password"]{direction:rtl;text-align:right;padding-left:40px;padding-
 .prod-line-row .dept-body select{font-size:10px;padding:4px 6px;border-radius:5px;width:100%;}
 .prod-line-file-btn{margin-top:6px;font-size:9.5px;font-weight:700;color:var(--maroon);background:var(--surface);border:1px dashed var(--border);border-radius:6px;padding:5px 6px;text-align:center;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:.15s;}
 .prod-line-file-btn:hover{border-color:var(--gold);background:var(--gold-soft);}
+.pay-channels-compact .fg label{font-size:10px;}
+.pay-channels-compact .fg input{font-size:11px;padding:5px 8px;height:30px;}
 /* ============================================================ CREATE ORDER FORM — compact sizing */
 #add-content label{font-size:11px;}
 #add-content input,#add-content select,#add-content textarea{font-size:12px;padding:8px 12px;}
@@ -1500,8 +1502,7 @@ function buildSidebar(){
       ni('requests','ti-inbox','الالتمامات المالية','','requests-badge'),
       ni('clients','ti-address-book','العملاء'),
       ni('users','ti-users','الموظفين'),
-      ni('timeline','ti-clock','إحصائيات المراحل'),
-      ni('emp','ti-chart-bar','أداء الموظفين'),
+      ni('emp','ti-chart-bar','أداء الموظفين وإحصائيات المراحل'),
       ni('warranty','ti-shield-check','ضمان اللوحات'),
       ni('govobligations','ti-building-bank','الالتزامات الحكومية والتشغيلية'),
       ni('export','ti-table-export','تصدير Excel'),
@@ -1775,9 +1776,15 @@ async function resyncOrderToSheet(key){
 // ============================================================
 // QUICK TASKS
 // ============================================================
+function onQtTestDeptChange(dept){
+  const sel=document.getElementById('qt-assignee');if(!sel)return;
+  const workers=getDeptWorkers(dept);
+  sel.innerHTML=`<option value="all">📢 جميع موظفي ${dept==='print'?'الطباعة':'التنفيذ الخارجي'}</option>`+workers.map(w=>`<option value="${w.uname}">${w.name}</option>`).join('');
+}
 function openQuickTask(type){
-  const dw=getDeptWorkers('design');const ww=getDeptWorkers('workshop');const isProof=type==='proof';
-  document.getElementById('qt-modal-title').innerHTML=`<i class="ti ${isProof?'ti-brush':'ti-ruler'}"></i> ${isProof?'طلب بروفة عاجلة للمصممين':'تكليف الورشة بأخذ قياسات'}`;
+  const dw=getDeptWorkers('design');const ww=getDeptWorkers('workshop');const pw=getDeptWorkers('print');
+  const isProof=type==='proof';const isTest=type==='test';
+  document.getElementById('qt-modal-title').innerHTML=`<i class="ti ${isProof?'ti-brush':isTest?'ti-flask':'ti-ruler'}"></i> ${isProof?'طلب بروفة عاجلة للمصممين':isTest?'طلب تست (طباعة / تنفيذ خارجي)':'تكليف الورشة بأخذ قياسات'}`;
   document.getElementById('qt-modal-body').innerHTML=`
     <div style="display:flex;flex-direction:column;gap:14px;padding:4px 0;">
       <div class="fg"><label>اسم العميل / الجهة *</label><input id="qt-client" placeholder="اسم العميل"/></div>
@@ -1788,6 +1795,18 @@ function openQuickTask(type){
         </div>
         <div class="fg"><label>ملاحظات البروفة *</label><textarea id="qt-notes" placeholder="وصف التعديلات..."></textarea></div>
         <div class="fg"><label>إرفاق ملف</label>
+          <div class="dept-upload-box" onclick="document.getElementById('qt-file').click()"><i class="ti ti-upload" style="font-size:20px;color:var(--gold);"></i><br>اضغط لرفع ملف</div>
+          <input type="file" id="qt-file" style="display:none" accept="image/*,.pdf,.doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onchange="handleQtFile(this.files)"/>
+          <div id="qt-file-note" style="font-size:11px;color:#10B981;margin-top:4px;font-weight:700;"></div>
+        </div>`:isTest?`
+        <div class="fg"><label>القسم المسؤول *</label>
+          <select id="qt-test-dept" onchange="onQtTestDeptChange(this.value)"><option value="print">الطباعة</option><option value="external">التنفيذ الخارجي</option></select>
+        </div>
+        <div class="fg"><label>الموظف المكلف *</label>
+          <select id="qt-assignee"><option value="all">📢 جميع موظفي الطباعة</option>${pw.map(w=>`<option value="${w.uname}">${w.name}</option>`).join('')}</select>
+        </div>
+        <div class="fg"><label>ملاحظات التست *</label><textarea id="qt-notes" placeholder="وصف التست المطلوب..."></textarea></div>
+        <div class="fg"><label>إرفاق ملف (اختياري)</label>
           <div class="dept-upload-box" onclick="document.getElementById('qt-file').click()"><i class="ti ti-upload" style="font-size:20px;color:var(--gold);"></i><br>اضغط لرفع ملف</div>
           <input type="file" id="qt-file" style="display:none" accept="image/*,.pdf,.doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onchange="handleQtFile(this.files)"/>
           <div id="qt-file-note" style="font-size:11px;color:#10B981;margin-top:4px;font-weight:700;"></div>
@@ -1830,17 +1849,21 @@ async function submitQuickTask(type){
   if(!c){toast('⚠️ يرجى كتابة اسم العميل');return;}
   if(!p){toast('⚠️ يرجى إدخال رقم الجوال');return;}
   if(!isValidSaudiPhone(p)){toast('⚠️ رقم الجوال يجب أن يكون رقم سعودي صحيح (05XXXXXXXX)');return;}
-  const isProof=type==='proof';
-  const location=!isProof?(document.getElementById('qt-location')?.value.trim()||''):'';
+  const isProof=type==='proof';const isTest=type==='test';
+  const testDept=isTest?(document.getElementById('qt-test-dept')?.value||'print'):'';
+  const location=(!isProof&&!isTest)?(document.getElementById('qt-location')?.value.trim()||''):'';
   const ord={
     client:c,phone:normalizeSaudiPhone(p),notes:n||'—',
-    service:isProof?'تجهيز بروفة عاجلة':`أخذ قياسات ميدانية${location?' - '+location:''}`,
+    service:isProof?'تجهيز بروفة عاجلة':isTest?'طلب تست':`أخذ قياسات ميدانية${location?' - '+location:''}`,
     priority:'عاجلة',paymentStatus:'مهمة داخلية',
     date:new Date().toISOString().split('T')[0],createdAt:new Date().toISOString(),stageStartDate:new Date().toISOString(),
-    currentDept:isProof?'design':'workshop',
+    currentDept:isProof?'design':isTest?testDept:'workshop',
     createdBy:cu.name,createdByUname:cu._uname,
-    designTo:isProof?assignee:'none',workshopTo:!isProof?assignee:'none',
-    printTo:'none',externalTo:'none',
+    designTo:isProof?assignee:'none',
+    printTo:isTest&&testDept==='print'?assignee:'none',
+    externalTo:isTest&&testDept==='external'?assignee:'none',
+    workshopTo:(!isProof&&!isTest)?assignee:'none',
+    quickTaskType:type,
     quickTaskFile:window._qtFileB64||'',quickTaskFileName:window._qtFileName||'',
     quickTaskLocation:location,status:'قيد التنفيذ',isQuickTask:true,
     relatedOrderKey:document.getElementById('qt-link-order-sel')?.value||window._qtLinkedOrderKey||'',
@@ -1939,6 +1962,10 @@ function buildDash(){
       <button class="quick-action-btn" onclick="openQuickTask('measure')">
         <div class="qa-icon" style="background:#FFEDD5;color:#9A3412;"><i class="ti ti-ruler"></i></div>
         <div style="text-align:right;"><div style="font-size:13px;font-weight:700;color:var(--maroon)">قياسات ميدانية</div><div style="font-size:11px;color:var(--text-3)">تكليف الورشة بالزيارة</div></div>
+      </button>
+      <button class="quick-action-btn" onclick="openQuickTask('test')">
+        <div class="qa-icon" style="background:#E0E7FF;color:#3730A3;"><i class="ti ti-flask"></i></div>
+        <div style="text-align:right;"><div style="font-size:13px;font-weight:700;color:var(--maroon)">تست</div><div style="font-size:11px;color:var(--text-3)">تكليف الطباعة أو التنفيذ الخارجي</div></div>
       </button>
     </div>`:'';
   // ── time-based statistics ────────────────────────────────────────
@@ -2071,6 +2098,7 @@ function buildWfGrid(tab){
         <div class="wf-card-id">${o.id||o._key} · ${orderDateTime(o)}${o.isQuickTask?'<span class="urgent-tag" style="margin-right:6px;font-size:9px;"><i class="ti ti-bolt"></i>سريعة</span>':''}</div>
         <div class="wf-card-name">${o.client}</div>
         <div class="wf-card-svc">${o.service}</div>
+        ${o.isQuickTask?`<div style="font-size:11px;color:var(--maroon);font-weight:700;margin-bottom:4px;"><i class="ti ti-user"></i> اسم العميل: ${o.client||'—'} &nbsp; <i class="ti ti-phone"></i> رقم الجوال: ${o.phone||'—'}</div>`:''}
         <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;margin-bottom:6px;">${deptBadge(o.currentDept)} ${gpbadge(o.priority)} ${timeBadge(hoursAgo(o.stageStartDate||o.date))}</div>
         <div style="font-size:11px;color:var(--text-3);">المسؤول: ${currentPersonName(o)}</div>
         ${deadlineBadge(o.deadline)}
@@ -2260,7 +2288,10 @@ async function bulkDeleteSelected(){
   if(!confirm('حذف '+window._wfSelected.size+' طلبات؟ لا يمكن التراجع عن هذا الإجراء.'))return;
   showSaving('جاري الحذف...');
   for(const key of window._wfSelected){
-    try{await fbDelete('orders/'+key);}catch(e){console.error(e);}
+    try{
+      await fbDelete('orders/'+key);
+      await deleteWarrantyForOrder(key);
+    }catch(e){console.error(e);}
   }
   await loadData();hideSaving();
   window._wfSelected=new Set();window._wfMultiMode=false;
@@ -2315,6 +2346,7 @@ function buildMyWork(){
       <div class="wf-card-id">${o.id||o._key} · ${orderDateTime(o)}${isMnt?'<span class="urgent-tag" style="margin-right:6px;font-size:9px;background:linear-gradient(135deg,#991B1B,#DC2626);"><i class="ti ti-tool"></i>صيانة</span>':''}${o.isQuickTask?'<span class="urgent-tag" style="margin-right:6px;font-size:9px;background:linear-gradient(135deg,#78350F,#C89A4A);"><i class="ti ti-bolt"></i>مهمة سريعة</span>':''}</div>
       <div class="wf-card-name">${o.client}</div>
       <div class="wf-card-svc">${o.service}</div>
+      ${o.isQuickTask?`<div style="font-size:11px;color:var(--maroon);font-weight:700;margin-bottom:4px;"><i class="ti ti-user"></i> اسم العميل: ${o.client||'—'} &nbsp; <i class="ti ti-phone"></i> رقم الجوال: ${o.phone||'—'}</div>`:''}
       <div style="display:flex;gap:5px;flex-wrap:wrap;">${deptBadge(o.currentDept)} ${gpbadge(o.priority)} ${timeBadge(hoursAgo(o.stageStartDate||o.date))}</div>
       ${deadlineBadge(o.deadline)}
       ${o.quickTaskLocation?`<div style="font-size:11px;color:#9A3412;margin-top:6px;"><i class="ti ti-map-pin"></i> ${o.quickTaskLocation}</div>`:''}
@@ -2335,8 +2367,13 @@ function buildMyWork(){
 function maintOrderItemNames(o){
   return(o.orderItems&&o.orderItems.length)?o.orderItems.map(i=>i.name).filter(Boolean):(o.service?[o.service]:[]);
 }
-function maintOrderOptionsHtml(){
-  return ordersArr().filter(o=>o.orderKind!=='maintenance').sort((a,b)=>new Date(b.date)-new Date(a.date))
+function maintOrderOptionsHtml(warrantyOnly){
+  let list=ordersArr().filter(o=>o.orderKind!=='maintenance');
+  if(warrantyOnly){
+    const warrantyClients=new Set(Object.values(warranties).map(w=>w.client));
+    list=list.filter(o=>warrantyClients.has(o.client));
+  }
+  return list.sort((a,b)=>new Date(b.date)-new Date(a.date))
     .map(o=>`<option value="${o._key}">${o.id||o._key} — ${o.client}</option>`).join('');
 }
 // Both maintenance forms (Warranty Registration / General Maintenance) are entirely
@@ -2352,8 +2389,32 @@ function onMaintOrderChange(prefix){
   itemSel.innerHTML='<option value="">— اختر البند —</option>'+items.map(n=>`<option value="${n}">${n}</option>`).join('');
   if(infoEl)infoEl.innerHTML=`<i class="ti ti-user"></i> ${o.client||'—'} &nbsp; <i class="ti ti-phone"></i> ${o.phone||'—'}`;
 }
+// Lightweight searchable combo-box: filters the order <select>'s own option list
+// live against the full option set stored on the element, without any external UI library.
+function filterMaintOrderSelect(prefix,query){
+  const sel=document.getElementById('mnt'+prefix+'-order');if(!sel)return;
+  if(!sel.dataset.fullOptions)sel.dataset.fullOptions=sel.innerHTML;
+  const q=(query||'').trim().toLowerCase();
+  if(!q){sel.innerHTML=sel.dataset.fullOptions;return;}
+  const tmp=document.createElement('div');tmp.innerHTML=sel.dataset.fullOptions;
+  const opts=[...tmp.querySelectorAll('option')].filter(o=>!o.value||o.textContent.toLowerCase().includes(q));
+  sel.innerHTML=opts.map(o=>o.outerHTML).join('');
+}
+async function handleMaintFile(prefix,files){
+  if(!files||!files.length)return;
+  showSaving('جاري تجهيز الملف...');
+  try{
+    window['_mnt'+prefix+'FileB64']=await convertFileToBase64(files[0]);
+    window['_mnt'+prefix+'FileName']=files[0].name;
+    const note=document.getElementById('mnt'+prefix+'-file-note');
+    if(note)note.textContent='✓ تم إرفاق: '+files[0].name;
+  }catch(e){toast(e&&e.message?e.message:'⚠️ فشل تحميل الملف');}
+  hideSaving();
+}
 function buildMaintRequestPage(){
-  const orderOpts=maintOrderOptionsHtml();
+  const warrantyOrderOpts=maintOrderOptionsHtml(true);
+  const generalOrderOpts=maintOrderOptionsHtml(false);
+  window._mntwFileB64='';window._mntwFileName='';window._mntgFileB64='';window._mntgFileName='';
   document.getElementById('maintreq-content').innerHTML=`
     <div class="page-header"><div class="ptitle"><i class="ti ti-tool"></i> تسجيل الصيانة</div></div>
     <div class="ro-notice" style="background:#FFF7ED;border-color:#FDBA74;color:#9A3412;"><i class="ti ti-info-circle"></i> نموذجان مستقلان تماماً — كل نموذج يُحدَّد ببداية رقم الطلب، ثم يُختار البند المطلوب تعديله من داخل ذلك الطلب تحديداً.</div>
@@ -2361,37 +2422,51 @@ function buildMaintRequestPage(){
       <div class="card">
         <div class="card-header" style="background:#FEF3C7;"><span class="card-title" style="color:#92400E;"><i class="ti ti-shield-check"></i> تسجيل الضمان</span></div>
         <div style="padding:16px;display:flex;flex-direction:column;gap:12px;">
-          <div class="fg"><label>رقم الطلب *</label><select id="mntw-order" onchange="onMaintOrderChange('w')"><option value="">— اختر رقم الطلب —</option>${orderOpts}</select></div>
+          <div class="fg"><label>بحث عن رقم الطلب</label><input placeholder="اكتب للبحث والتصفية..." oninput="filterMaintOrderSelect('w',this.value)"/></div>
+          <div class="fg"><label>رقم الطلب * <span style="font-size:10px;color:var(--text-3);font-weight:600;">(عملاء الضمان المسجّلين فقط)</span></label><select id="mntw-order" onchange="onMaintOrderChange('w')"><option value="">— اختر رقم الطلب —</option>${warrantyOrderOpts}</select></div>
           <div class="fg"><label>البند الذي يحتاج تعديل *</label><select id="mntw-item"><option value="">— اختر رقم الطلب أولاً —</option></select></div>
           <div id="mntw-client-info" style="font-size:11.5px;color:var(--text-3);font-weight:700;"></div>
           <div class="fg"><label>الأولوية</label><select id="mntw-priority"><option value="عادية">عادية</option><option value="متوسطة">متوسطة</option><option value="عاجلة">عاجلة</option></select></div>
           <div class="fg"><label>وصف المشكلة *</label><textarea id="mntw-desc" placeholder="اشرح المشكلة المطلوب حلها تحت الضمان..." style="min-height:80px;"></textarea></div>
+          <div class="fg"><label>إرفاق ملف (اختياري)</label>
+            <div class="dept-upload-box" onclick="document.getElementById('mntw-file-input').click()"><i class="ti ti-upload" style="font-size:20px;color:var(--gold);"></i><br>اضغط لإرفاق ملف</div>
+            <input type="file" id="mntw-file-input" style="display:none" onchange="handleMaintFile('w',this.files)"/>
+            <div id="mntw-file-note" style="font-size:10px;color:#10B981;margin-top:4px;font-weight:700;"></div>
+          </div>
           <button class="btn btn-brand" onclick="submitWarrantyMaintenance()"><i class="ti ti-shield-check"></i> تسجيل ضمن الضمان</button>
         </div>
       </div>
       <div class="card">
         <div class="card-header"><span class="card-title"><i class="ti ti-tool"></i> الصيانة الباقية</span></div>
         <div style="padding:16px;display:flex;flex-direction:column;gap:12px;">
-          <div class="fg"><label>رقم الطلب *</label><select id="mntg-order" onchange="onMaintOrderChange('g')"><option value="">— اختر رقم الطلب —</option>${orderOpts}</select></div>
+          <div class="fg"><label>بحث عن رقم الطلب</label><input placeholder="اكتب للبحث والتصفية..." oninput="filterMaintOrderSelect('g',this.value)"/></div>
+          <div class="fg"><label>رقم الطلب *</label><select id="mntg-order" onchange="onMaintOrderChange('g')"><option value="">— اختر رقم الطلب —</option>${generalOrderOpts}</select></div>
           <div class="fg"><label>البند الذي يحتاج تعديل *</label><select id="mntg-item"><option value="">— اختر رقم الطلب أولاً —</option></select></div>
           <div id="mntg-client-info" style="font-size:11.5px;color:var(--text-3);font-weight:700;"></div>
           <div class="fg"><label>الأولوية</label><select id="mntg-priority"><option value="عادية">عادية</option><option value="متوسطة">متوسطة</option><option value="عاجلة">عاجلة</option></select></div>
           <div class="fg"><label>وصف المشكلة *</label><textarea id="mntg-desc" placeholder="اشرح المشكلة أو الصيانة المطلوبة..." style="min-height:80px;"></textarea></div>
+          <div class="fg"><label>إرفاق ملف (اختياري)</label>
+            <div class="dept-upload-box" onclick="document.getElementById('mntg-file-input').click()"><i class="ti ti-upload" style="font-size:20px;color:var(--gold);"></i><br>اضغط لإرفاق ملف</div>
+            <input type="file" id="mntg-file-input" style="display:none" onchange="handleMaintFile('g',this.files)"/>
+            <div id="mntg-file-note" style="font-size:10px;color:#10B981;margin-top:4px;font-weight:700;"></div>
+          </div>
           <button class="btn btn-teal" onclick="submitGeneralMaintenance()"><i class="ti ti-tool"></i> تسجيل الصيانة</button>
         </div>
       </div>
     </div>
-    <div class="page-header" style="margin-top:20px;"><div class="ptitle" style="font-size:16px;"><i class="ti ti-history"></i> طلبات الصيانة الأخيرة</div></div>
-    <div class="card"><div class="tbl-wrap"><table><thead><tr><th>العميل</th><th>النوع</th><th>الوصف</th><th style="width:90px">الحالة</th><th style="width:90px">التاريخ</th></tr></thead>
-    <tbody>${buildMaintReqRows()}</tbody></table></div></div>`;
+    <div class="page-header" style="margin-top:20px;"><div class="ptitle" style="font-size:16px;"><i class="ti ti-shield-check"></i> سجل الضمان</div></div>
+    <div class="card"><div class="tbl-wrap"><table><thead><tr><th>العميل</th><th>الوصف</th><th style="width:90px">الحالة</th><th style="width:90px">التاريخ</th></tr></thead>
+    <tbody>${buildMaintReqRows(true)}</tbody></table></div></div>
+    <div class="page-header" style="margin-top:20px;"><div class="ptitle" style="font-size:16px;"><i class="ti ti-tool"></i> سجل الصيانة العامة</div></div>
+    <div class="card"><div class="tbl-wrap"><table><thead><tr><th>العميل</th><th>الوصف</th><th style="width:90px">الحالة</th><th style="width:90px">التاريخ</th></tr></thead>
+    <tbody>${buildMaintReqRows(false)}</tbody></table></div></div>`;
 }
-function buildMaintReqRows(){
-  const arr=ordersArr().filter(o=>o.orderKind==='maintenance').sort((a,b)=>new Date(b.createdAt||b.date)-new Date(a.createdAt||a.date)).slice(0,20);
-  if(!arr.length)return'<tr><td colspan="5" style="text-align:center;color:var(--text-3);padding:24px">لا توجد طلبات صيانة بعد</td></tr>';
+function buildMaintReqRows(warrantyOnly){
+  const arr=ordersArr().filter(o=>o.orderKind==='maintenance'&&!!o.warrantyRequested===warrantyOnly).sort((a,b)=>new Date(b.createdAt||b.date)-new Date(a.createdAt||a.date)).slice(0,20);
+  if(!arr.length)return'<tr><td colspan="4" style="text-align:center;color:var(--text-3);padding:24px">لا توجد طلبات بعد</td></tr>';
   return arr.map(o=>`<tr onclick="openOrderModal('${o._key}')" style="cursor:pointer">
     <td><strong>${o.client||'—'}</strong></td>
-    <td>${o.warrantyRequested?'<span class="badge" style="background:#FEF3C7;color:#92400E;">ضمان</span>':'<span class="badge" style="background:var(--surface-2);color:var(--text-2);">صيانة عامة</span>'}</td>
-    <td style="font-size:12px;max-width:260px;">${o.notes||'—'}</td>
+    <td style="font-size:12px;max-width:260px;">${o.notes||'—'}${o.attachmentFile?` <a href="${o.attachmentFile}" download="${o.attachmentFileName||'ملف'}" class="file-download-link" onclick="event.stopPropagation()"><i class="ti ti-paperclip"></i></a>`:''}</td>
     <td>${o.currentDept==='done'?'<span class="badge b-done">تم الحل</span>':'<span class="badge" style="background:#FFEDD5;color:#9A3412;">قيد المعالجة</span>'}</td>
     <td style="font-size:11px;">${o.date||'—'}</td>
   </tr>`).join('');
@@ -2414,6 +2489,7 @@ async function _createMaintenanceOrder(prefix,warrantyRequested){
       date:today,createdAt:new Date().toISOString(),stageStartDate:new Date().toISOString(),
       priority,phone:linkedOrder.phone||'',notes:desc,files:[],
       relatedItem:item,warrantyRequested,
+      attachmentFile:window['_mnt'+prefix+'FileB64']||'',attachmentFileName:window['_mnt'+prefix+'FileName']||'',
       linkedOrderKey:orderKey,linkedOrderId:linkedOrder.id||orderKey,
       paymentStatus:'',paidAmount:0,totalAmount:0,remainingAmount:0,
       createdBy:cu.name,createdByUname:cu._uname,
@@ -3953,6 +4029,13 @@ async function createWarrantyIfNeeded(key,o){
     await fbPatch(`orders/${key}`,{warrantyAdded:true,warrantyKey:res.name});
   }catch(e){}
 }
+// Hard link: deleting an order must destroy its linked warranty record too, so
+// no orphaned warranty entries survive a deleted order.
+async function deleteWarrantyForOrder(orderKey){
+  const match=Object.entries(warranties).find(([,w])=>w.orderKey===orderKey);
+  if(!match)return;
+  try{await fbDelete('warranties/'+match[0]);}catch(e){}
+}
 function openMaintVisitModal(key){
   const o=orders[key];if(!o)return;
   window.__mvKey=key;
@@ -4073,13 +4156,13 @@ function buildAddForm(isUrgentQuick=false){
         </div>
       </div>
       <!-- Multi-Channel Payment Matrix (partial or full payment) -->
-      <div id="payment-channels-section" style="display:none;padding:0 20px 16px;">
-        <div style="font-size:12px;font-weight:800;color:var(--text-2);margin-bottom:8px;"><i class="ti ti-credit-card"></i> مصفوفة الدفع — أدخل المبلغ حسب كل وسيلة دفع مستخدمة</div>
-        <div class="form-grid">
-          <div class="fg"><label>المبلغ المدفوع شبكة</label><input type="text" inputmode="decimal" id="f-amt-network" placeholder="0" oninput="onPayChannelInput(this)" onfocus="this.select()"/></div>
-          <div class="fg"><label>المبلغ المدفوع كاش</label><input type="text" inputmode="decimal" id="f-amt-cash" placeholder="0" oninput="onPayChannelInput(this)" onfocus="this.select()"/></div>
-          <div class="fg"><label>المبلغ المدفوع تحويل</label><input type="text" inputmode="decimal" id="f-amt-transfer" placeholder="0" oninput="onPayChannelInput(this)" onfocus="this.select()"/></div>
-          <div class="fg partial-field-ro"><label>إجمالي المبلغ المدفوع (ر.س)</label><input type="text" id="f-paid-amount" readonly style="background:var(--surface-2);color:var(--maroon);font-weight:800;"/></div>
+      <div id="payment-channels-section" class="pay-channels-compact" style="display:none;padding:0 20px 16px;">
+        <div style="font-size:11px;font-weight:800;color:var(--text-2);margin-bottom:6px;"><i class="ti ti-credit-card"></i> مصفوفة الدفع — أدخل المبلغ حسب كل وسيلة دفع مستخدمة</div>
+        <div class="form-grid" style="gap:8px;">
+          <div class="fg"><label>شبكة</label><input type="text" inputmode="decimal" id="f-amt-network" placeholder="0" oninput="onPayChannelInput(this)" onfocus="this.select()"/></div>
+          <div class="fg"><label>كاش</label><input type="text" inputmode="decimal" id="f-amt-cash" placeholder="0" oninput="onPayChannelInput(this)" onfocus="this.select()"/></div>
+          <div class="fg"><label>تحويل</label><input type="text" inputmode="decimal" id="f-amt-transfer" placeholder="0" oninput="onPayChannelInput(this)" onfocus="this.select()"/></div>
+          <div class="fg partial-field-ro"><label>الإجمالي المدفوع</label><input type="text" id="f-paid-amount" readonly style="background:var(--surface-2);color:var(--maroon);font-weight:800;"/></div>
         </div>
       </div>
       <!-- Remaining amount (partial payment only) -->
@@ -4648,6 +4731,10 @@ function buildTimelinePage(){
   const doneRows=doneArr.map(makeRow).join('');
   document.getElementById('page-timeline').innerHTML=`
     <div class="page-header"><div class="ptitle"><i class="ti ti-clock"></i> توقيت المراحل</div></div>
+    ${cu.type==='admin'?`<div class="tab-bar" style="margin-bottom:16px;">
+      <button class="tab-btn" onclick="nav('emp')"><i class="ti ti-chart-bar"></i> أداء الموظفين</button>
+      <button class="tab-btn active" onclick="nav('timeline')"><i class="ti ti-clock"></i> إحصائيات المراحل</button>
+    </div>`:''}
     ${activeArr.length?`<div style="font-size:12px;font-weight:800;color:var(--maroon);margin:14px 0 6px;"><i class="ti ti-loader"></i> الطلبات الجارية (${activeArr.length})</div>
     <div class="card"><div class="tbl-wrap"><table>${thead}<tbody>${activeRows}</tbody></table></div></div>`:''}
     ${doneArr.length?`<div id="timeline-done-section" style="font-size:12px;font-weight:800;color:#10B981;margin:18px 0 6px;scroll-margin-top:var(--header-h);"><i class="ti ti-circle-check"></i> الطلبات المنتهية (${doneArr.length})</div>
@@ -4786,13 +4873,14 @@ function buildRequestPage(){
         <div class="fg ff"><label>المبلغ المتبقي (ر.س)</label><input type="text" id="req-order-remaining" readonly style="background:var(--surface-2);color:#DC2626;font-weight:800;" value="—"/></div>
       </div>
       <div style="padding:0 20px;">
-        <div style="font-size:12px;font-weight:800;color:var(--text-2);margin-bottom:8px;"><i class="ti ti-credit-card"></i> مصفوفة الدفع — أدخل المبلغ حسب كل وسيلة دفع مستخدمة</div>
-        <div class="form-grid">
-          <div class="fg ff"><label>المبلغ المدفوع شبكة</label><input type="number" id="req-amt-network" min="0" step="0.01" placeholder="0" oninput="recalcReqAmounts()"/></div>
-          <div class="fg ff"><label>المبلغ المدفوع كاش</label><input type="number" id="req-amt-cash" min="0" step="0.01" placeholder="0" oninput="recalcReqAmounts()"/></div>
-          <div class="fg ff"><label>المبلغ المدفوع تحويل</label><input type="number" id="req-amt-transfer" min="0" step="0.01" placeholder="0" oninput="recalcReqAmounts()"/></div>
-          <div class="fg ff"><label>إجمالي المبلغ المدفوع</label><input type="text" id="req-amt-total" readonly style="font-weight:800;background:var(--surface-2);" value="0"/></div>
+        <div class="fg ff"><label>طريقة الدفع * <span style="font-size:10px;color:var(--text-3);font-weight:600;">(يمكن اختيار أكثر من خيار)</span></label>
+          <div style="display:flex;gap:16px;flex-wrap:wrap;padding:6px 0;">
+            <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:700;cursor:pointer;"><input type="checkbox" class="req-pay-method-cb" value="شبكة" onchange="onReqPayMethodChange()"/> شبكة</label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:700;cursor:pointer;"><input type="checkbox" class="req-pay-method-cb" value="كاش" onchange="onReqPayMethodChange()"/> كاش</label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:700;cursor:pointer;"><input type="checkbox" class="req-pay-method-cb" value="حوالة" onchange="onReqPayMethodChange()"/> حوالة</label>
+          </div>
         </div>
+        <div class="fg ff" style="max-width:260px;"><label>المبلغ المدفوع (ر.س) *</label><input type="text" inputmode="decimal" id="req-amount-paid" placeholder="0" oninput="normalizeAmountInput(this)"/></div>
       </div>
       <div class="form-grid" style="padding:0 20px;">
         <div class="fg ff" id="req-file-wrap" style="display:none;">
@@ -4829,30 +4917,27 @@ function onReqOrderChange(key){
   if(totalEl)totalEl.value=fmtMoney(Number(o.totalAmount||0));
   if(remEl)remEl.value=fmtMoney(Number(o.remainingAmount!=null?o.remainingAmount:Math.max(0,(o.totalAmount||0)-(o.paidAmount||0))));
 }
-function recalcReqAmounts(){
-  const network=Number(document.getElementById('req-amt-network')?.value||0);
-  const cash=Number(document.getElementById('req-amt-cash')?.value||0);
-  const transfer=Number(document.getElementById('req-amt-transfer')?.value||0);
-  const total=network+cash+transfer;
-  const totalEl=document.getElementById('req-amt-total');if(totalEl)totalEl.value=fmtMoney(total);
-  const w=document.getElementById('req-file-wrap');if(w)w.style.display=(transfer>0)?'block':'none';
-  return{network,cash,transfer,total};
+function onReqPayMethodChange(){
+  const methods=[...document.querySelectorAll('.req-pay-method-cb:checked')].map(cb=>cb.value);
+  const w=document.getElementById('req-file-wrap');if(w)w.style.display=methods.includes('حوالة')?'block':'none';
 }
 async function handleReqFile(files){if(!files||!files.length)return;showSaving('جاري تجهيز الملف...');try{window.reqFileB64=await convertFileToBase64(files[0]);window.reqFileName=files[0].name;document.getElementById('req-file-note').textContent='✓ تم: '+files[0].name;}catch(e){toast(e&&e.message?e.message:'⚠️ فشل');}hideSaving();}
 async function submitRequest(){
   const orderKey=document.getElementById('req-order')?.value,priority='عادية';
   const payStatus=document.getElementById('req-pay-status')?.value||'كاملة';
-  const{network:paidNetwork,cash:paidCash,transfer:paidTransfer,total:amountPaid}=recalcReqAmounts();
+  const payMethods=[...document.querySelectorAll('.req-pay-method-cb:checked')].map(cb=>cb.value);
+  const amountPaid=parseFloat(normalizeDigits(document.getElementById('req-amount-paid')?.value))||0;
   if(!orderKey){toast('⚠️ يرجى اختيار الطلب');return;}
-  if(!amountPaid||amountPaid<=0){toast('⚠️ يرجى إدخال المبلغ المدفوع في وسيلة دفع واحدة على الأقل');return;}
-  if(paidTransfer>0&&!window.reqFileB64){toast('⚠️ يرجى إرفاق إثبات التحويل');return;}
+  if(!payMethods.length){toast('⚠️ يرجى اختيار طريقة دفع واحدة على الأقل');return;}
+  if(!amountPaid||amountPaid<=0){toast('⚠️ يرجى إدخال المبلغ المدفوع');return;}
+  if(payMethods.includes('حوالة')&&!window.reqFileB64){toast('⚠️ يرجى إرفاق إثبات التحويل');return;}
   // ── prevent duplicate submissions ──
   const dup=Object.values(submittedRequests).find(r=>r.orderKey===orderKey&&(r.status==='pending'||r.status==='accountant_approved'));
   if(dup){toast('⚠️ هذا الطلب مرفوع مسبقاً وبانتظار المراجعة');return;}
   const relatedOrder=orders[orderKey],clientName=relatedOrder?relatedOrder.client:'—';
   showSaving('جاري الإرسال...');
   try{
-    await fbPush('requests',{orderKey,client:clientName,payStatus,paidNetwork,paidCash,paidTransfer,amountPaid,priority,status:'pending',fileData:window.reqFileB64||'',fileName:window.reqFileName||'',createdBy:cu.name,createdByUname:cu._uname,createdByRole:cu.role||cu.type,date:new Date().toISOString().split('T')[0],createdAt:new Date().toISOString()});
+    await fbPush('requests',{orderKey,client:clientName,payStatus,payMethod:payMethods.join('، '),amountPaid,priority,status:'pending',fileData:window.reqFileB64||'',fileName:window.reqFileName||'',createdBy:cu.name,createdByUname:cu._uname,createdByRole:cu.role||cu.type,date:new Date().toISOString().split('T')[0],createdAt:new Date().toISOString()});
     await loadData();hideSaving();toast('✓ تم إرسال الطلب للمحاسب');buildRequestPage();
   }catch(e){hideSaving();toast('❌ فشل الإرسال');}
 }
@@ -4865,9 +4950,10 @@ function buildRequestsPage(){
   const pending=arr.filter(r=>r.status==='pending');
   const accApproved=arr.filter(r=>r.status==='accountant_approved');
   const done=arr.filter(r=>r.status==='done');
-  // Unpaid / partial orders from firebase
-  const unpaidOrds=ordersArr().filter(o=>o.paymentStatus&&o.paymentStatus!=='تم الدفع'&&o.paymentStatus!=='');
-  const partialOrds=ordersArr().filter(o=>o.paymentStatus==='دفع جزئي');
+  // Unpaid / partial orders from firebase — quick tasks (بروفة/قياسات) and standalone
+  // maintenance requests are internal/non-billable and are not official paid orders.
+  const unpaidOrds=ordersArr().filter(o=>o.paymentStatus&&o.paymentStatus!=='تم الدفع'&&o.paymentStatus!==''&&!o.isQuickTask&&o.orderKind!=='maintenance');
+  const partialOrds=ordersArr().filter(o=>o.paymentStatus==='دفع جزئي'&&!o.isQuickTask&&o.orderKind!=='maintenance');
   const statusLabel=s=>s==='pending'?'<span class="badge b-proc">بانتظار المحاسب</span>':s==='accountant_approved'?'<span class="badge b-new" style="background:#7C3AED20;color:#7C3AED">موافقة مبدئية</span>':'<span class="badge b-done">تمت</span>';
   const makeRows=(list,mode)=>list.length===0?`<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text-3)">لا توجد طلبات</td></tr>`
     :list.map(r=>`<tr>
@@ -4893,7 +4979,7 @@ function buildRequestsPage(){
     </tr>`).join('');
   // Parallel-line orders (parentOrderKey set) carry no amount of their own — the
   // revenue is already counted on their primary order — so they're excluded here.
-  const totalRevenue=ordersArr().filter(o=>!o.parentOrderKey).reduce((s,o)=>s+(Number(o.totalAmount)||0),0);
+  const totalRevenue=ordersArr().filter(o=>!o.parentOrderKey&&!o.isQuickTask&&o.orderKind!=='maintenance').reduce((s,o)=>s+(Number(o.totalAmount)||0),0);
   const unpaidOutstanding=unpaidOrds.reduce((s,o)=>s+(Number(o.remainingAmount)||0),0);
   document.getElementById('requests-content').innerHTML=`
     <div class="page-header"><div class="ptitle"><i class="ti ti-inbox"></i> صندوق طلبات المحاسبة</div></div>
@@ -4937,7 +5023,9 @@ function buildRevenuePage(){
   const to=window._revenueDateTo||'';
   // Parallel-line orders (parentOrderKey set) carry no amount of their own — the
   // revenue is already counted on their primary order — so they're excluded here.
-  const allOrds=ordersArr().filter(o=>!o.parentOrderKey);
+  // Quick tasks (بروفة/قياسات) and standalone maintenance requests are internal,
+  // non-billable entries and are not official paid orders.
+  const allOrds=ordersArr().filter(o=>!o.parentOrderKey&&!o.isQuickTask&&o.orderKind!=='maintenance');
   const filtered=allOrds.filter(o=>{
     const d=(o.date||'').slice(0,10);
     if(from&&d<from)return false;
@@ -5011,10 +5099,7 @@ async function managerApproveRequest(key){
       const ord=orders[reqData.orderKey];
       const patch={
         paymentStatus:chosenStatus,
-        paidNetwork:(Number(ord.paidNetwork)||0)+(Number(reqData.paidNetwork)||0),
-        paidCash:(Number(ord.paidCash)||0)+(Number(reqData.paidCash)||0),
-        paidTransfer:(Number(ord.paidTransfer)||0)+(Number(reqData.paidTransfer)||0),
-        paymentMethod:reqChannelsSummary(reqData)
+        paymentMethod:reqData.payMethod||reqChannelsSummary(reqData)
       };
       if(chosenStatus==='دفع جزئي'){
         const newPaid=(Number(ord.paidAmount)||0)+(Number(reqData.amountPaid)||0);
@@ -5082,6 +5167,10 @@ function buildEmpPage(){
   const monthLabel=now.toLocaleDateString('ar-SA',{month:'long',year:'numeric'});
   document.getElementById('emp-content').innerHTML=`
     <div class="page-header"><div class="ptitle"><i class="ti ti-chart-bar"></i> تحليل أداء الموظفين</div></div>
+    <div class="tab-bar" style="margin-bottom:16px;">
+      <button class="tab-btn active" onclick="nav('emp')"><i class="ti ti-chart-bar"></i> أداء الموظفين</button>
+      <button class="tab-btn" onclick="nav('timeline')"><i class="ti ti-clock"></i> إحصائيات المراحل</button>
+    </div>
     ${empOfMonth?`<div class="card" style="margin-bottom:20px;background:linear-gradient(135deg,var(--maroon) 0%,var(--maroon-dark) 100%);border:none;overflow:hidden;position:relative;">
       <div style="position:absolute;inset:0;background:radial-gradient(circle at 85% 20%,rgba(212,175,55,.25),transparent 60%);pointer-events:none;"></div>
       <div style="position:relative;padding:22px 26px;display:flex;align-items:center;gap:18px;flex-wrap:wrap;color:#fff;">
@@ -5379,19 +5468,28 @@ function openGovEmployeeModal(){
     <div style="display:flex;flex-direction:column;gap:10px;">
       <div class="fg"><label>اسم الموظف <span style="color:#EF4444">*</span></label><input id="gov-emp-name" placeholder="اسم الموظف"/></div>
       <div class="fg"><label>رقم جوال الموظف</label><input id="gov-emp-phone" inputmode="tel" placeholder="05XXXXXXXX"/></div>
-      <div class="fg"><label>البنود <span style="color:#EF4444">*</span> (يمكن اختيار أكثر من بند)</label>
+      <div class="fg"><label>البنود <span style="color:#EF4444">*</span> (يمكن اختيار أكثر من بند — لكل بند سعره الخاص)</label>
         <div style="display:flex;flex-direction:column;gap:8px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;">
-          ${Object.entries(GOV_EMP_CATS).map(([catKey,meta])=>`<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:700;">
-            <input type="checkbox" class="gov-emp-type-cb" value="${catKey}"/> <i class="ti ${meta.icon}"></i> ${meta.label}
-          </label>`).join('')}
+          ${Object.entries(GOV_EMP_CATS).map(([catKey,meta])=>`
+          <div>
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:700;">
+              <input type="checkbox" class="gov-emp-type-cb" value="${catKey}" onchange="toggleGovEmpItemPrice('${catKey}',this.checked)"/> <i class="ti ${meta.icon}"></i> ${meta.label}
+            </label>
+            <div id="gov-emp-price-wrap-${catKey}" style="display:none;margin-top:6px;margin-right:26px;">
+              <input type="text" inputmode="decimal" class="gov-emp-price-input" data-cat="${catKey}" placeholder="سعر ${meta.label} (ر.س)" oninput="normalizeAmountInput(this)"/>
+            </div>
+          </div>`).join('')}
         </div>
       </div>
       <div class="fg"><label>تاريخ التجديد</label><input type="date" id="gov-emp-renewal"/></div>
       <div class="fg"><label>تاريخ الانتهاء <span style="color:#EF4444">*</span></label><input type="date" id="gov-emp-expiry"/></div>
-      <div class="fg"><label>المبلغ (ر.س)</label><input type="text" inputmode="decimal" id="gov-emp-amount" placeholder="0" oninput="normalizeAmountInput(this)"/></div>
       <button class="btn btn-brand" style="width:100%;justify-content:center;" onclick="submitGovEmployeeRecord()"><i class="ti ti-check"></i> حفظ البيانات</button>
     </div>`;
   openModal('gov-modal');
+}
+function toggleGovEmpItemPrice(catKey,checked){
+  const wrap=document.getElementById('gov-emp-price-wrap-'+catKey);
+  if(wrap)wrap.style.display=checked?'block':'none';
 }
 async function submitGovEmployeeRecord(){
   const name=document.getElementById('gov-emp-name').value.trim();
@@ -5399,14 +5497,20 @@ async function submitGovEmployeeRecord(){
   const renewal=document.getElementById('gov-emp-renewal').value;
   const expiry=document.getElementById('gov-emp-expiry').value;
   const cats=[...document.querySelectorAll('.gov-emp-type-cb:checked')].map(cb=>cb.value);
-  const amount=parseFloat(normalizeDigits(document.getElementById('gov-emp-amount').value))||0;
   if(!name){toast('⚠️ يرجى إدخال اسم الموظف');return;}
   if(!cats.length){toast('⚠️ يرجى اختيار بند واحد على الأقل');return;}
   if(!expiry){toast('⚠️ يرجى تحديد تاريخ الانتهاء');return;}
+  // Each selected item charges its own distinct price — no single uniform rate
+  // applied across all of them.
+  const catAmounts={};
+  cats.forEach(cat=>{
+    const input=document.querySelector(`.gov-emp-price-input[data-cat="${cat}"]`);
+    catAmounts[cat]=parseFloat(normalizeDigits(input?.value||''))||0;
+  });
   showSaving('جاري الحفظ...');
   try{
     for(const cat of cats){
-      await fbPush('govRecords',{section:'employees',category:cat,employeeName:name,employeePhone:phone,renewalDate:renewal,expiryDate:expiry,amount,createdAt:new Date().toISOString(),createdBy:cu.name});
+      await fbPush('govRecords',{section:'employees',category:cat,employeeName:name,employeePhone:phone,renewalDate:renewal,expiryDate:expiry,amount:catAmounts[cat],createdAt:new Date().toISOString(),createdBy:cu.name});
     }
     await loadData();hideSaving();closeModal('gov-modal');toast('✓ تم تسجيل بيانات الموظف');
     buildGovCategoryPage();
