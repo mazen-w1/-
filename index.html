@@ -321,6 +321,24 @@ input[type="password"]{direction:rtl;text-align:right;padding-left:40px;padding-
 .oc-checkbox-row{display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12.5px;font-weight:700;color:var(--maroon);}
 .oc-checkbox-row input{width:17px;height:17px;accent-color:var(--gold);}
 .oc-hint{font-size:10.5px;color:var(--text-3);margin-right:25px;}
+#add-content .card{border-color:rgba(212,175,55,.4);}
+#add-content .card-header{padding:16px 22px;}
+/* Order items — premium row cards (visual only, same fields/handlers) */
+.oi-row{background:#fff;border:1px solid var(--border-soft);border-radius:16px;padding:16px;margin-bottom:14px;box-shadow:0 2px 12px rgba(74,14,23,.05);}
+.oi-row-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px;}
+.oi-row-head-left{display:flex;align-items:center;gap:8px;}
+.oi-badge{font-size:11px;font-weight:800;color:var(--maroon);background:var(--gold-soft);padding:4px 12px;border-radius:20px;}
+.oi-main-tag{font-size:9.5px;font-weight:700;color:var(--gold);}
+.oi-grid{display:grid;grid-template-columns:2fr 1fr;gap:14px;}
+@media(max-width:640px){.oi-grid{grid-template-columns:1fr;}}
+/* Production workflow — horizontal connected timeline (visual only, same selects/depts) */
+.wf-stage-track{display:flex;align-items:center;gap:0;overflow-x:auto;padding:6px 2px 10px;}
+.wf-stage-card{flex:1;min-width:150px;}
+.wf-stage-connector{flex:0 0 26px;height:2px;background:linear-gradient(90deg,rgba(212,175,55,.25),var(--gold),rgba(212,175,55,.25));border-radius:2px;}
+#add-content .wf-stage-card .dept-section{border-radius:var(--radius-lg);border-color:rgba(212,175,55,.35);box-shadow:0 4px 14px rgba(74,14,23,.05);}
+#add-content .wf-stage-card .dept-header{display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 10px 10px;font-size:11.5px;}
+.wf-stage-icon{width:30px;height:30px;border-radius:50%;background:rgba(255,255,255,.65);border:1px solid rgba(212,175,55,.5);display:flex;align-items:center;justify-content:center;font-size:14px;}
+#add-content .wf-stage-card .dept-body{padding:12px;}
 /* ============================================================ DEPT TRACK (sleek circles + thin lines) */
 .dept-track-wrap{margin-bottom:18px;}
 .dept-track-sub-label{font-size:9.5px;font-weight:800;color:var(--gold);letter-spacing:.4px;margin-bottom:6px;display:flex;align-items:center;gap:4px;}
@@ -4406,24 +4424,27 @@ function buildAddForm(isUrgentQuick=false){
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
           <span style="font-size:10px;font-weight:800;color:var(--gold);"><i class="ti ti-flag"></i> الخط الأساسي</span>
         </div>
-        <div class="dept-grid-layout" style="padding:0;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;">
-          <div id="dept-wrap-design" class="dept-section"><div class="dept-header dept-design"><i class="ti ti-brush"></i> التصميم</div><div class="dept-body">
+        <div class="wf-stage-track">
+          <div class="wf-stage-card"><div id="dept-wrap-design" class="dept-section"><div class="dept-header dept-design"><span class="wf-stage-icon"><i class="ti ti-brush"></i></span> التصميم</div><div class="dept-body">
             <select id="fw-design"><option value="none">❌ بدون تصميم</option>${isDesigner||isUrgentQuick?`<option value="${cu._uname}" selected>${cu.name}</option>`:''}${mkOpts(dw)}</select>
-          </div></div>
-          <div id="dept-wrap-external" class="dept-section"><div class="dept-header dept-ext"><i class="ti ti-world"></i> تنفيذ خارجي</div><div class="dept-body">
+          </div></div></div>
+          <div class="wf-stage-connector"></div>
+          <div class="wf-stage-card"><div id="dept-wrap-external" class="dept-section"><div class="dept-header dept-ext"><span class="wf-stage-icon"><i class="ti ti-world"></i></span> تنفيذ خارجي</div><div class="dept-body">
             <select id="fw-external" onchange="onExternalChange(this.value)"><option value="none">❌ لا يوجد</option>${mkOpts(ew)}</select>
             <div id="external-note-wrap" style="display:none;margin-top:8px;">
               <textarea id="fw-external-note" placeholder="ملاحظات المورد..." style="min-height:55px;font-size:12px;"></textarea>
             </div>
-          </div></div>
-          <div id="dept-wrap-print" class="dept-section"><div class="dept-header dept-print"><i class="ti ti-printer"></i> الطباعة</div><div class="dept-body">
+          </div></div></div>
+          <div class="wf-stage-connector"></div>
+          <div class="wf-stage-card"><div id="dept-wrap-print" class="dept-section"><div class="dept-header dept-print"><span class="wf-stage-icon"><i class="ti ti-printer"></i></span> الطباعة</div><div class="dept-body">
             <select id="fw-print"><option value="none">❌ لا يتطلب</option>${mkOpts(pw)}</select>
-          </div></div>
-          <div id="dept-wrap-workshop" class="dept-section"><div class="dept-header dept-workshop"><i class="ti ti-tools"></i> الورشة</div><div class="dept-body">
+          </div></div></div>
+          <div class="wf-stage-connector"></div>
+          <div class="wf-stage-card"><div id="dept-wrap-workshop" class="dept-section"><div class="dept-header dept-workshop"><span class="wf-stage-icon"><i class="ti ti-tools"></i></span> الورشة</div><div class="dept-body">
             <select id="fw-workshop"><option value="none">❌ لا يتطلب</option>${mkOpts(ww)}</select>
             <div class="prod-line-file-btn" onclick="document.getElementById('fw-workshop-file').click()"><i class="ti ti-paperclip"></i> <span id="fw-workshop-file-note">إرفاق ملف (اختياري)</span></div>
             <input type="file" id="fw-workshop-file" style="display:none" accept="image/*,.pdf,.doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onchange="handleWorkshopDeptFile(this.files)"/>
-          </div></div>
+          </div></div></div>
         </div>
       </div>
       <div style="padding:16px 20px 4px;border-top:1px solid var(--border-soft);margin-top:6px;">
@@ -4655,11 +4676,19 @@ function renderOrderLines(){
     return;
   }
   wrap.innerHTML=window._orderLines.map((l,i)=>`
-    <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:10px;">
-      <div style="font-size:11px;font-weight:800;color:var(--maroon);margin-bottom:8px;">بند #${i+1}${i===0?' <span style="font-size:9px;color:var(--gold);font-weight:700">(الخدمة الرئيسية)</span>':''}</div>
-      <div style="display:flex;flex-direction:column;gap:8px;">
-        <div class="fg"><label>اسم البند *</label><input placeholder="مثال: لوحة إعلانية" value="${l.name.replace(/"/g,'&quot;')}" oninput="updateOrderLine('${l.id}','name',this.value)"/></div>
-        <div class="fg"><label>سعر البند (ر.س)</label><input type="text" inputmode="decimal" placeholder="0" min="0" value="${(l.price||'').toString().replace(/"/g,'&quot;')}" oninput="updateOrderLinePrice(this,'${l.id}')" onfocus="this.select()"/></div>
+    <div class="oi-row">
+      <div class="oi-row-head">
+        <div class="oi-row-head-left">
+          <span class="oi-badge">بند #${i+1}</span>
+          ${i===0?'<span class="oi-main-tag">(الخدمة الرئيسية)</span>':''}
+        </div>
+        ${window._orderLines.length>1?`<button class="btn btn-red btn-xs" type="button" onclick="removeOrderLine('${l.id}')"><i class="ti ti-trash"></i> حذف</button>`:''}
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <div class="oi-grid">
+          <div class="fg"><label>اسم البند *</label><input placeholder="مثال: لوحة إعلانية" value="${l.name.replace(/"/g,'&quot;')}" oninput="updateOrderLine('${l.id}','name',this.value)"/></div>
+          <div class="fg"><label>سعر البند (ر.س)</label><input type="text" inputmode="decimal" placeholder="0" min="0" value="${(l.price||'').toString().replace(/"/g,'&quot;')}" oninput="updateOrderLinePrice(this,'${l.id}')" onfocus="this.select()"/></div>
+        </div>
         <div class="fg"><label>التفاصيل والمواصفات</label><textarea placeholder="المقاسات، المواد، عدد النسخ..." style="min-height:55px;" oninput="updateOrderLine('${l.id}','details',this.value)">${l.details}</textarea></div>
         <div class="fg"><label>مرفقات البند (يمكن إرفاق أكثر من ملف)</label>
           <label style="cursor:pointer;border:1.5px dashed var(--border);border-radius:8px;padding:7px 14px;font-size:11px;display:inline-flex;align-items:center;gap:6px;">
@@ -4668,7 +4697,6 @@ function renderOrderLines(){
           </label>
           ${(l.files&&l.files.length)?`<div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px;">${l.files.map((f,fi)=>`<span style="display:inline-flex;align-items:center;gap:4px;background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:3px 8px;font-size:10px;"><a href="${f.data}" download="${f.name}" style="color:var(--maroon);text-decoration:none;"><i class="ti ti-download"></i> ${f.name}</a><button type="button" onclick="removeOrderLineFile('${l.id}',${fi})" style="background:none;border:none;color:#EF4444;cursor:pointer;padding:0 0 0 2px;font-size:11px;line-height:1;">×</button></span>`).join('')}</div>`:'<div style="font-size:10px;color:var(--text-3);margin-top:4px;">لا توجد مرفقات</div>'}
         </div>
-        ${window._orderLines.length>1?`<div style="text-align:left;"><button class="btn btn-red btn-xs" type="button" onclick="removeOrderLine('${l.id}')"><i class="ti ti-trash"></i> حذف</button></div>`:''}
       </div>
     </div>`).join('');
   recalcOrderTotal();
