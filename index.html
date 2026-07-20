@@ -480,6 +480,16 @@ input[type="password"]{direction:rtl;text-align:right;padding-left:40px;padding-
   @page{size:A4;margin:6mm;}
 }
 #print-area{display:none;}
+/* Applied only while html2canvas captures the quote for PDF export — forces the
+   capture root to a fully opaque white background and strips any shadow/backdrop/
+   blend effects that could otherwise leave transparent pixels (which JPEG export
+   turns solid black). Scoped to the two capture-root containers only, not `*`,
+   so intentionally colored badges/pills inside the quote are left untouched. */
+#print-area.pdf-force-light,#print-area.pdf-force-light #print-area-inner{
+  background:#ffffff!important;box-shadow:none!important;
+  backdrop-filter:none!important;-webkit-backdrop-filter:none!important;
+  mix-blend-mode:normal!important;filter:none!important;opacity:1!important;
+}
 .quote-action-item{display:flex;align-items:center;gap:8px;width:100%;padding:10px 14px;background:none;border:none;border-bottom:1px solid var(--border-soft);text-align:right;font-size:13px;font-weight:700;color:var(--text-1);cursor:pointer;font-family:inherit;}
 .quote-action-item:last-child{border-bottom:none;}
 .quote-action-item:hover{background:var(--surface-2);}
@@ -872,6 +882,19 @@ input:focus,select:focus,textarea:focus{box-shadow:inset 0 1px 3px rgba(74,14,23
 .wf-card{border-radius:var(--radius-xl);box-shadow:var(--shadow-sm);transition:box-shadow .25s,transform .25s;}
 .wf-card:hover{box-shadow:var(--shadow-lg);transform:translateY(-3px);}
 .badge{box-shadow:0 1px 2px rgba(0,0,0,.05);}
+/* ================================================================
+   FULL-WIDTH TOP NAVBAR — decoupled from the sidebar/main content
+   grid so it spans the entire viewport edge-to-edge, sitting above
+   the sidebar. .body-wrap gets a top offset equal to the header's
+   height so nothing is hidden underneath it. Nav logic/toggle
+   behavior/IDs are untouched — this is a positioning-only change.
+   ================================================================ */
+.header{
+  position:fixed;top:0;left:0;right:0;width:100%;
+  margin:0;border-radius:0;z-index:1000;
+}
+.header::after,.header::before{border-radius:0;}
+.body-wrap{padding-top:var(--header-h);}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -2322,13 +2345,28 @@ async function downloadQuotePDF(savedKey){
     // html2canvas would otherwise capture a blank/zero-size element — force it
     // visible off-screen just for the capture, then restore.
     el.style.cssText='display:block;position:fixed;top:0;left:-99999px;z-index:-1;background:#fff;';
+    // Force a solid opaque white background (and strip any shadow/blend/backdrop
+    // effects) on the capture root only — without this, any residually transparent
+    // pixel in the captured canvas gets composited to solid BLACK once toDataURL
+    // re-encodes it as JPEG (JPEG has no alpha channel), which is what produced the
+    // black-screen export.
+    el.classList.add('pdf-force-light');
     // html2canvas's default canvas-glyph renderer draws Arabic character-by-character
     // in logical order with no bidi/shaping support, which is what produces mirrored,
     // disconnected letterforms. foreignObjectRendering delegates text layout to the
     // browser's native (correctly-shaping) text engine instead.
     try{if(document.fonts&&document.fonts.ready)await document.fonts.ready;}catch(e){}
     await new Promise(r=>setTimeout(r,500));
-    const canvas=await html2canvas(el,{scale:2,useCORS:true,foreignObjectRendering:true});
+    // Explicit scrollX/scrollY/window* options anchor html2canvas's capture frame to
+    // the element itself rather than the ambient page scroll position — needed
+    // because the element sits off-screen at left:-99999px, and without these the
+    // captured region can be miscalculated into a blank/black canvas.
+    const canvas=await html2canvas(el,{
+      scale:2,useCORS:true,foreignObjectRendering:true,
+      backgroundColor:'#ffffff',
+      scrollX:0,scrollY:0,x:0,y:0,
+      windowWidth:el.scrollWidth,windowHeight:el.scrollHeight,
+    });
     const imgData=canvas.toDataURL('image/jpeg',0.95);
     const {jsPDF}=window.jspdf;
     const pdf=new jsPDF('p','mm','a4');
@@ -2346,7 +2384,7 @@ async function downloadQuotePDF(savedKey){
     }
     pdf.save('عرض_سعر_'+(data.client||'')+'_'+(data.ref||'')+'.pdf');
   }catch(e){console.error(e);toast('حدث خطأ أثناء إنشاء ملف PDF');}
-  finally{if(el)el.style.cssText='display:none;';}
+  finally{if(el){el.classList.remove('pdf-force-light');el.style.cssText='display:none;';}}
   hideSaving();
 }
 function fmtMoney(n){n=Number(n)||0;var s=n.toFixed(2);if(s.slice(-3)===".00")return s.slice(0,-3);return s;}
