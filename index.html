@@ -303,6 +303,24 @@ input[type="password"]{direction:rtl;text-align:right;padding-left:40px;padding-
 #add-content textarea{min-height:64px;}
 #add-content .dept-header{font-size:11px;padding:7px 12px;}
 #add-content .dept-body select{font-size:11.5px;padding:5px 9px;}
+/* ============================================================ CREATE ORDER — PREMIUM ENTERPRISE DASHBOARD CARDS */
+.order-cards-row{display:grid;grid-template-columns:repeat(4,1fr);gap:22px;align-items:start;margin-bottom:22px;}
+@media(max-width:1400px){.order-cards-row{grid-template-columns:repeat(2,1fr);}}
+@media(max-width:768px){.order-cards-row{grid-template-columns:1fr;}}
+.oc-card{background:#fff;border:1px solid rgba(212,175,55,.4);border-radius:20px;box-shadow:0 14px 34px rgba(74,14,23,.09),0 2px 8px rgba(74,14,23,.05);padding:22px 20px;display:flex;flex-direction:column;gap:14px;}
+.oc-head{display:flex;align-items:center;gap:10px;}
+.oc-icon{width:38px;height:38px;border-radius:50%;border:1.5px solid var(--gold);background:linear-gradient(135deg,#fff,var(--gold-soft));display:flex;align-items:center;justify-content:center;color:var(--maroon);font-size:16px;flex:none;}
+.oc-title{font-size:14.5px;font-weight:800;color:var(--maroon);letter-spacing:-.1px;}
+.oc-card .fg{gap:5px;}
+.oc-card label{font-size:11px;font-weight:700;color:var(--text-2);}
+.oc-total-box{background:linear-gradient(135deg,var(--maroon),var(--maroon-dark));border-radius:16px;padding:20px 16px;text-align:center;position:relative;overflow:hidden;}
+.oc-total-box::before{content:'';position:absolute;inset:0;background:radial-gradient(circle at 30% 20%,rgba(212,175,55,.28),transparent 60%);}
+.oc-total-label{font-size:10.5px;font-weight:800;color:var(--gold);letter-spacing:.5px;position:relative;z-index:1;}
+#add-content .oc-total-box input{width:100%;text-align:center;background:transparent!important;border:none!important;color:#fff!important;font-size:30px;font-weight:900;padding:4px 0!important;position:relative;z-index:1;cursor:default;}
+.oc-total-note{font-size:10px;color:rgba(255,255,255,.75);position:relative;z-index:1;margin-top:2px;}
+.oc-checkbox-row{display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12.5px;font-weight:700;color:var(--maroon);}
+.oc-checkbox-row input{width:17px;height:17px;accent-color:var(--gold);}
+.oc-hint{font-size:10.5px;color:var(--text-3);margin-right:25px;}
 /* ============================================================ DEPT TRACK (sleek circles + thin lines) */
 .dept-track-wrap{margin-bottom:18px;}
 .dept-track-sub-label{font-size:9.5px;font-weight:800;color:var(--gold);letter-spacing:.4px;margin-bottom:6px;display:flex;align-items:center;gap:4px;}
@@ -4300,16 +4318,26 @@ function buildAddForm(isUrgentQuick=false){
   document.getElementById('add-content').innerHTML=`
     ${isUrgentQuick?'<div class="ro-notice" style="background:#FFF5F5;border-color:#FCA5A5;color:#991B1B"><i class="ti ti-bolt"></i> تسجيل طلب مستعجل</div>':''}
     <datalist id="cl-list">${cArr.map(c=>`<option value="${c.name}">`).join('')}</datalist>
-    <div class="card">
-      <div class="card-header"><span class="card-title"><i class="ti ti-user"></i> بيانات العميل والطلب</span></div>
-      <div class="form-grid">
+    <div class="order-cards-row">
+      <!-- CARD 1 (Far Right): CUSTOMER INFORMATION -->
+      <div class="oc-card">
+        <div class="oc-head"><div class="oc-icon"><i class="ti ti-user"></i></div><div class="oc-title">بيانات العميل</div></div>
         <div class="fg"><label>اسم العميل / الجهة *</label><input id="fc" list="cl-list" oninput="onClientInput(this.value)" autocomplete="off" placeholder="اسم الشركة أو العميل"/></div>
         <div class="fg"><label>رقم الجوال *</label>
           <div style="display:flex;gap:6px;"><input id="fp" inputmode="tel" placeholder="05XXXXXXXX" maxlength="20" style="flex:1;" required/><button type="button" class="btn btn-whatsapp btn-sm" onclick="openWhatsapp(document.getElementById('fp').value)"><i class="ti ti-brand-whatsapp"></i></button></div>
         </div>
+        <div class="fg"><label>الشخص المسؤول للتواصل (اختياري)</label><input id="f-contact-person" placeholder="اسم المسؤول عن التواصل..."/></div>
+      </div>
+      <!-- CARD 2: ORDER INFORMATION -->
+      <div class="oc-card">
+        <div class="oc-head"><div class="oc-icon"><i class="ti ti-clipboard-list"></i></div><div class="oc-title">بيانات الطلب</div></div>
         <div class="fg"><label>الأولوية</label>
           <select id="fpr"><option value="عادية">عادية</option><option value="متوسطة">متوسطة</option><option value="عاجلة"${isUrgentQuick?' selected':''}>عاجلة</option></select>
         </div>
+        <div class="fg"><label>نوع الطلب</label>
+          <select id="f-order-type"><option value="">— غير محدد —</option>${Object.keys(SERVICE_TYPE_PRESETS).map(k=>`<option value="${k}">${k}</option>`).join('')}</select>
+        </div>
+        <div class="fg"><label>تاريخ التسليم المتوقع *</label><input type="datetime-local" id="fd" required/></div>
         <div class="fg"><label>حالة الدفع *</label>
           <select id="fpay" onchange="onPaymentChange(this.value)">
             <option value="">— اختر حالة الدفع —</option>
@@ -4318,48 +4346,48 @@ function buildAddForm(isUrgentQuick=false){
             <option value="عند التسليم">عند التسليم</option>
           </select>
         </div>
-        <div class="fg"><label>تاريخ التسليم المتوقع *</label><input type="datetime-local" id="fd" required/></div>
       </div>
-      <!-- Total amount: auto-calculated from item prices below, read-only -->
-      <div style="padding:0 20px 16px;">
-        <div class="fg">
-          <label>المبلغ الإجمالي (ر.س) <span style="font-size:10px;color:var(--text-3);font-weight:600;">(يُحسب تلقائياً من سعر البنود أدناه)</span></label>
-          <input type="text" id="f-total-amount" placeholder="0" readonly style="background:var(--surface-2);color:var(--maroon);cursor:not-allowed;font-weight:800;font-size:15px;"/>
+      <!-- CARD 3: NOTES & INSTRUCTIONS -->
+      <div class="oc-card">
+        <div class="oc-head"><div class="oc-icon"><i class="ti ti-notes"></i></div><div class="oc-title">ملاحظات وتعليمات</div></div>
+        <div class="fg" style="flex:1;"><label>ملاحظات وتفاصيل المواصفات</label><textarea id="fn" placeholder="اكتب الملاحظات والمقاسات هنا..." style="min-height:90px;"></textarea></div>
+        <label class="oc-checkbox-row"><input type="checkbox" id="f-urgent-important"/><i class="ti ti-alert-triangle"></i> طلب عاجل ومهم</label>
+        <label class="oc-checkbox-row"><input type="checkbox" id="f-maintenance"/><i class="ti ti-shield-check"></i> عقد صيانة</label>
+        <div class="oc-hint">عند تفعيل عقد الصيانة، سيُضاف الطلب تلقائياً لقائمة "ضمان اللوحات" بضمان سنة كاملة من تاريخ الإكمال</div>
+        <div class="fg"><label>تعليمات داخلية إضافية</label><textarea id="f-internal-notes" placeholder="تعليمات داخلية للفريق (غير ظاهرة للعميل)..." style="min-height:60px;"></textarea></div>
+      </div>
+      <!-- CARD 4 (Far Left): FINANCIAL SUMMARY -->
+      <div class="oc-card">
+        <div class="oc-head"><div class="oc-icon"><i class="ti ti-cash"></i></div><div class="oc-title">الملخص المالي</div></div>
+        <div class="oc-total-box">
+          <div class="oc-total-label">المبلغ الإجمالي (ر.س)</div>
+          <input type="text" id="f-total-amount" placeholder="0" readonly/>
+          <div class="oc-total-note">يُحسب تلقائياً من سعر البنود أدناه</div>
         </div>
-      </div>
-      <!-- Multi-Channel Payment Matrix (partial or full payment) -->
-      <div id="payment-channels-section" class="pay-channels-compact" style="display:none;padding:0 20px 16px;">
-        <div style="font-size:11px;font-weight:800;color:var(--text-2);margin-bottom:6px;"><i class="ti ti-credit-card"></i> مصفوفة الدفع — أدخل المبلغ حسب كل وسيلة دفع مستخدمة</div>
-        <div class="form-grid" style="gap:8px;">
-          <div class="fg"><label>شبكة</label><input type="text" inputmode="decimal" id="f-amt-network" placeholder="0" oninput="onPayChannelInput(this)" onfocus="this.select()"/></div>
-          <div class="fg"><label>كاش</label><input type="text" inputmode="decimal" id="f-amt-cash" placeholder="0" oninput="onPayChannelInput(this)" onfocus="this.select()"/></div>
-          <div class="fg"><label>تحويل</label><input type="text" inputmode="decimal" id="f-amt-transfer" placeholder="0" oninput="onPayChannelInput(this)" onfocus="this.select()"/></div>
-          <div class="fg partial-field-ro"><label>الإجمالي المدفوع</label><input type="text" id="f-paid-amount" readonly style="background:var(--surface-2);color:var(--maroon);font-weight:800;"/></div>
+        <!-- Multi-Channel Payment Matrix (partial or full payment) -->
+        <div id="payment-channels-section" class="pay-channels-compact" style="display:none;">
+          <div style="font-size:11px;font-weight:800;color:var(--text-2);margin-bottom:6px;"><i class="ti ti-credit-card"></i> مصفوفة الدفع — أدخل المبلغ حسب كل وسيلة دفع مستخدمة</div>
+          <div class="form-grid" style="gap:8px;">
+            <div class="fg"><label>شبكة</label><input type="text" inputmode="decimal" id="f-amt-network" placeholder="0" oninput="onPayChannelInput(this)" onfocus="this.select()"/></div>
+            <div class="fg"><label>كاش</label><input type="text" inputmode="decimal" id="f-amt-cash" placeholder="0" oninput="onPayChannelInput(this)" onfocus="this.select()"/></div>
+            <div class="fg"><label>تحويل</label><input type="text" inputmode="decimal" id="f-amt-transfer" placeholder="0" oninput="onPayChannelInput(this)" onfocus="this.select()"/></div>
+            <div class="fg partial-field-ro"><label>الإجمالي المدفوع</label><input type="text" id="f-paid-amount" readonly style="background:var(--surface-2);color:var(--maroon);font-weight:800;"/></div>
+          </div>
         </div>
-      </div>
-      <!-- Remaining amount (partial payment only) -->
-      <div id="partial-remaining-wrap" style="display:none;padding:0 20px 16px;">
-        <div class="fg partial-field-ro" style="max-width:260px;">
-          <label>المبلغ المتبقي (ر.س)</label>
-          <input type="text" inputmode="decimal" id="f-remaining-amount" placeholder="0" readonly/>
+        <!-- Remaining amount (partial payment only) -->
+        <div id="partial-remaining-wrap" style="display:none;">
+          <div class="fg partial-field-ro">
+            <label>المبلغ المتبقي (ر.س)</label>
+            <input type="text" inputmode="decimal" id="f-remaining-amount" placeholder="0" readonly/>
+          </div>
         </div>
-      </div>
-      <!-- Pay on delivery notice -->
-      <div id="delivery-amount-field" style="display:none;padding:0 20px 16px;">
-        <div style="font-size:11px;color:#92400E;background:#FEF3C7;border-radius:8px;padding:9px 12px;font-weight:700;"><i class="ti ti-clock"></i> سيتم تحصيل المبلغ الإجمالي كاملاً عند التسليم</div>
-      </div>
-      <div style="padding:0 20px 16px;">
-        <div class="fg"><label>ملاحظات وتفاصيل المواصفات</label><textarea id="fn" placeholder="اكتب الملاحظات والمقاسات هنا..."></textarea></div>
-      </div>
-      <div style="padding:0 20px 16px;">
-        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:700;color:var(--maroon);">
-          <input type="checkbox" id="f-maintenance" style="width:18px;height:18px;accent-color:var(--gold);"/>
-          <i class="ti ti-shield-check"></i> عقد صيانة
-        </label>
-        <div style="font-size:11px;color:var(--text-3);margin-top:4px;margin-right:26px;">عند التفعيل، سيُضاف الطلب تلقائياً لقائمة "ضمان اللوحات" بضمان سنة كاملة من تاريخ الإكمال</div>
+        <!-- Pay on delivery notice -->
+        <div id="delivery-amount-field" style="display:none;">
+          <div style="font-size:11px;color:#92400E;background:#FEF3C7;border-radius:8px;padding:9px 12px;font-weight:700;"><i class="ti ti-clock"></i> سيتم تحصيل المبلغ الإجمالي كاملاً عند التسليم</div>
+        </div>
       </div>
     </div>
-    <!-- ORDER ITEMS CARD -->
+    <!-- ORDER ITEMS CARD (full width) -->
     <div class="card">
       <div class="card-header"><span class="card-title"><i class="ti ti-list-details"></i> بنود الطلب والخدمات</span><button class="btn btn-out btn-sm" type="button" onclick="addOrderLine()"><i class="ti ti-plus"></i> إضافة بند</button></div>
       <div style="padding:16px;">
@@ -4734,6 +4762,10 @@ async function submitOrder(isUrgentQuick=false){
     approvedPrintFile:'',approvedPrintFileName:'',approvedWorkshopFile:'',approvedWorkshopFileName:'',
     finalWorkshopDoneFile:'',finalWorkshopDoneFileName:'',
     maintenanceContract:document.getElementById('f-maintenance')?.checked||false,
+    contactPerson:document.getElementById('f-contact-person')?.value.trim()||'',
+    orderType:document.getElementById('f-order-type')?.value||'',
+    urgentImportant:document.getElementById('f-urgent-important')?.checked||false,
+    internalNotes:document.getElementById('f-internal-notes')?.value.trim()||'',
   };
   showSaving('جاري الحفظ...');
   try{
