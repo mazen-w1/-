@@ -1,541 +1,316 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>بوابة العملاء وتتبع الطلبات — روائع الأفكار للإعلانات</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
-  
-  <style>
-    :root {
-      --bg-dark: #1a0a0c;
-      --burgundy: #4A0E17;
-      --burgundy-light: #631420;
-      --gold: #D4AF37;
-      --gold-soft: rgba(212, 175, 55, 0.15);
-      --surface: #FFFFFF;
-      --surface-sub: #FDFBF7;
-      --border: #E8E2D9;
-      --text-main: #1A0F0A;
-      --text-muted: #6B5E52;
-      --success: #10B981;
-      --radius-sm: 8px;
-      --radius-md: 14px;
-      --radius-lg: 20px;
-    }
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+<title>روائع الأفكار للإعلانات — بوابة العملاء الذكية</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='48' fill='%234A0E17'/%3E%3Ctext x='50' y='50' text-anchor='middle' dominant-baseline='central' font-family='Changa,sans-serif' font-weight='800' font-size='62' fill='%23fff'%3E%D8%B1%3C/text%3E%3Crect x='24' y='31' width='5' height='38' rx='2.5' fill='%23D4AF37'/%3E%3C/svg%3E"/>
 
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    
-    body {
-      font-family: 'Cairo', -apple-system, sans-serif;
-      background: var(--bg-dark);
-      background: radial-gradient(ellipse at 30% 20%, #3a1016 0%, #1a0a0c 70%, #0d0507 100%);
-      color: var(--text-main);
-      min-height: 100vh;
-      padding: 16px;
-      line-height: 1.5;
-    }
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&family=Changa:wght@700;800&display=swap" rel="stylesheet"/>
 
-    /* Top Navbar Header */
-    .app-header {
-      width: 100%;
-      max-width: 1100px;
-      margin: 0 auto 20px auto;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      background: rgba(255, 255, 255, 0.05);
-      border: 1px solid rgba(212, 175, 55, 0.3);
-      backdrop-filter: blur(12px);
-      padding: 12px 20px;
-      border-radius: var(--radius-lg);
-    }
+<style>
+:root {
+  --maroon:       #4A0E17;
+  --maroon-dark:  #1D0509;
+  --maroon-mid:   #631420;
+  --gold:         #D4AF37;
+  --gold-light:   #F0D060;
+  --gold-soft:    rgba(212,175,55,0.12);
+  --bg:           #140507;
+  --surface:      #FFFFFF;
+  --surface-2:    #FAFAFB;
+  --border:       #E8E2D9;
+  --text-1:       #1A0F0A;
+  --text-2:       #5C4A3A;
+  --text-3:       #9B8878;
+  --radius-md:    14px;
+  --radius-lg:    18px;
+  --radius-xl:    24px;
+}
 
-    .brand-identity {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Cairo', sans-serif;
+  background: radial-gradient(ellipse at 50% 30%, #3a1016 0%, #140507 70%, #080203 100%);
+  color: var(--text-1);
+  min-height: 100vh;
+  padding: 20px;
+}
 
-    .p-logo {
-      width: 44px;
-      height: 44px;
-      border-radius: 50%;
-      border: 1.5px solid var(--gold);
-      background: rgba(255, 255, 255, 0.05);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-shrink: 0;
-    }
+/* 1. WELCOME LOGIN SCREEN */
+.welcome-screen {
+  max-width: 480px;
+  margin: 80px auto 0;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(212, 175, 55, 0.25);
+  border-radius: var(--radius-xl);
+  padding: 35px 24px;
+  backdrop-filter: blur(15px);
+  text-align: center;
+  box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+}
+.p-logo {
+  width: 80px; height: 80px; margin: 0 auto 16px;
+  border-radius: 50%; border: 2px solid rgba(255,255,255,0.15);
+  display: flex; align-items: center; justify-content: center;
+}
+.welcome-title { font-size: 24px; font-weight: 900; color: #fff; margin-bottom: 4px; }
+.welcome-sub { font-size: 11px; color: var(--gold); font-weight: 700; letter-spacing: 1px; margin-bottom: 24px; }
 
-    .brand-text h1 {
-      font-size: 16px;
-      font-weight: 800;
-      color: #FFF;
-    }
+/* 2. PREMIUM MAIN PORTAL VIEW */
+.portal-layout { display: none; max-width: 1200px; margin: 0 auto; }
 
-    .brand-text p {
-      font-size: 10px;
-      color: var(--gold);
-      font-weight: 700;
-    }
+.app-header {
+  background: rgba(74, 14, 23, 0.85);
+  border: 1px solid rgba(212, 175, 55, 0.3);
+  border-radius: var(--radius-lg);
+  padding: 12px 24px;
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 20px; backdrop-filter: blur(10px);
+}
+.brand { display: flex; align-items: center; gap: 12px; }
+.brand-title { font-size: 16px; font-weight: 800; color: #fff; }
+.brand-sub { font-size: 9.5px; color: var(--gold); font-weight: 600; }
 
-    .user-profile {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
+.user-badge { display: flex; align-items: center; gap: 8px; }
+.user-name { color: #fff; font-size: 13px; font-weight: 700; }
+.badge-tag { background: var(--gold); color: var(--maroon-dark); font-size: 9.5px; font-weight: 800; padding: 2px 10px; border-radius: 12px; }
 
-    .user-name {
-      color: #FFF;
-      font-size: 13px;
-      font-weight: 700;
-    }
+/* GRID CONTAINER */
+.main-grid { display: grid; grid-template-columns: 1fr 1.1fr 1fr; gap: 16px; align-items: start; }
+@media(max-width: 950px) { .main-grid { grid-template-columns: 1fr; } }
 
-    .badge-emp {
-      background: var(--gold);
-      color: var(--burgundy);
-      font-size: 10px;
-      font-weight: 800;
-      padding: 2px 8px;
-      border-radius: 20px;
-    }
+.card { background: var(--surface); border-radius: var(--radius-lg); padding: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); border: 1px solid var(--border); }
+.card-title { font-size: 15px; font-weight: 800; color: var(--maroon); margin-bottom: 16px; display: flex; align-items: center; gap: 6px; border-bottom: 2px solid var(--border-soft); padding-bottom: 8px; }
 
-    /* Main Container Grid */
-    .portal-container {
-      max-width: 1100px;
-      margin: 0 auto;
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-      gap: 16px;
-    }
+/* REPRODUCTION OF WORKFLOW CARDS */
+.wf-block { background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px; padding: 14px; margin-bottom: 12px; }
+.wf-head { display: flex; justify-content: space-between; align-items: center; font-size: 11px; font-weight: 800; color: var(--text-3); }
+.wf-name { font-size: 13px; font-weight: 800; color: var(--text-1); margin: 6px 0 12px; }
 
-    .card {
-      background: var(--surface);
-      border-radius: var(--radius-md);
-      padding: 18px;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-      border: 1px solid var(--border);
-    }
+.track-row { display: flex; justify-content: space-between; position: relative; padding: 0 4px; }
+.track-node { display: flex; flex-direction: column; align-items: center; gap: 4px; position: relative; z-index: 2; }
+.track-dot { width: 10px; height: 10px; border-radius: 50%; background: #E2E8F0; border: 2px solid #fff; }
+.track-node.done .track-dot { background: #10B981; }
+.track-node.active .track-dot { background: var(--gold); box-shadow: 0 0 0 3px var(--gold-soft); }
+.track-text { font-size: 9px; font-weight: 700; color: var(--text-3); }
+.track-node.active .track-text { color: var(--maroon); font-weight: 800; }
+.track-node.done .track-text { color: #059669; }
 
-    .card-title {
-      font-size: 14px;
-      font-weight: 800;
-      color: var(--burgundy);
-      margin-bottom: 14px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      border-bottom: 2px solid var(--surface-sub);
-      padding-bottom: 8px;
-    }
+/* FINANCIALS MATRIX */
+.fin-card { border-right: 4px solid var(--gold); }
+.fin-row { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 6px; }
+.fin-label { color: var(--text-2); font-weight: 600; }
+.fin-val { font-weight: 800; color: var(--text-1); }
+.fin-total { font-weight: 900; color: var(--maroon); font-size: 13.5px; }
 
-    /* 1. Trackers Layout (سير الأعمال) */
-    .track-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-      gap: 10px;
-    }
+.split-details { font-size: 10.5px; color: var(--text-2); background: #FAF7F2; padding: 8px; border-radius: 6px; margin: 8px 0; border: 1px solid var(--border); }
 
-    .order-mini-card {
-      background: var(--surface-sub);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-sm);
-      padding: 10px;
-    }
-
-    .order-id {
-      font-size: 11px;
-      font-weight: 800;
-      color: var(--burgundy);
-    }
-
-    .order-title {
-      font-size: 12px;
-      font-weight: 700;
-      margin: 4px 0 8px 0;
-    }
-
-    .workflow-line {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      position: relative;
-      margin-top: 6px;
-    }
-
-    .wf-step {
-      font-size: 9px;
-      font-weight: 700;
-      color: var(--text-muted);
-      text-align: center;
-    }
-
-    .wf-step.active {
-      color: var(--burgundy);
-      font-weight: 900;
-    }
-
-    .wf-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: var(--border);
-      margin: 0 auto 2px auto;
-    }
-
-    .wf-step.active .wf-dot {
-      background: var(--gold);
-      box-shadow: 0 0 0 3px var(--gold-soft);
-    }
-
-    /* 2. Financial Grid */
-    .quotation-item {
-      background: var(--surface-sub);
-      border-radius: var(--radius-sm);
-      padding: 12px;
-      margin-bottom: 10px;
-      border-right: 4px solid var(--gold);
-    }
-
-    .fin-row {
-      display: flex;
-      justify-content: space-between;
-      font-size: 12px;
-      margin-bottom: 4px;
-    }
-
-    .fin-label { color: var(--text-muted); font-weight: 600; }
-    .fin-val { font-weight: 800; color: var(--text-main); }
-    .fin-rem { color: var(--burgundy); font-weight: 900; }
-
-    .split-payments {
-      background: rgba(0,0,0,0.02);
-      padding: 6px 8px;
-      border-radius: var(--radius-sm);
-      margin-top: 6px;
-      font-size: 10.5px;
-    }
-
-    .btn-action-group {
-      display: flex;
-      gap: 6px;
-      margin-top: 10px;
-    }
-
-    .btn {
-      padding: 6px 12px;
-      border-radius: var(--radius-sm);
-      font-size: 11px;
-      font-weight: 700;
-      border: none;
-      cursor: pointer;
-      font-family: inherit;
-      transition: 0.2s;
-    }
-
-    .btn-burgundy { background: var(--burgundy); color: #FFF; }
-    .btn-burgundy:hover { background: var(--burgundy-light); }
-    .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text-main); }
-
-    /* 3. Maintenance Form */
-    .form-group {
-      margin-bottom: 10px;
-    }
-
-    .form-group label {
-      display: block;
-      font-size: 11px;
-      font-weight: 700;
-      margin-bottom: 4px;
-      color: var(--text-muted);
-    }
-
-    .form-control {
-      width: 100%;
-      padding: 8px 12px;
-      font-size: 12px;
-      border: 1px solid var(--border);
-      border-radius: var(--radius-sm);
-      background: var(--surface-sub);
-      font-family: inherit;
-    }
-
-    .form-control:focus {
-      outline: none;
-      border-color: var(--gold);
-    }
-
-    /* Isolated PDF Container (For Clean Exports) */
-    #pdfExportCanvas {
-      display: none;
-      background: #ffffff !important;
-      color: #000000 !important;
-      padding: 30px;
-      font-family: 'Cairo', sans-serif;
-    }
-
-    @media (max-width: 768px) {
-      body { padding: 8px; }
-      .portal-container { grid-template-columns: 1fr; }
-      .card { padding: 14px; }
-    }
-  </style>
+/* FORMS */
+.fg { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; text-align: right; }
+.fg label { font-size: 11.5px; color: var(--text-2); font-weight: 700; }
+.btn { width: 100%; padding: 10px; border-radius: 8px; font-size: 12px; font-weight: 700; border: none; cursor: pointer; font-family: inherit; transition: .15s; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.btn-brand { background: var(--maroon); color: #fff; }
+.btn-brand:hover { background: var(--maroon-mid); }
+.btn-gold { background: var(--gold); color: var(--maroon-dark); font-weight: 800; }
+.btn-out { background: transparent; border: 1px solid var(--border); color: var(--text-1); }
+</style>
 </head>
 <body>
 
-  <!-- Dynamic Header -->
+<!-- WATERMARK -->
+<div class="site-watermark" aria-hidden="true"><span>ر</span></div>
+
+<!-- 1. TACTICAL WELCOME LOGIN PHASE -->
+<div class="welcome-screen" id="welcomePhase">
+  <div class="p-logo">
+    <svg viewBox="0 0 100 100" width="50" height="50">
+      <circle cx="50" cy="50" r="48" fill="#4A0E17"/>
+      <text x="50" y="52" text-anchor="middle" dominant-baseline="central" font-family="'Cairo', sans-serif" font-weight="900" font-size="55" fill="#fff">ر</text>
+      <rect x="24" y="31" width="5" height="38" rx="2.5" fill="#D4AF37"/>
+    </svg>
+  </div>
+  <div class="welcome-title">روائع الأفكار للإعلانات</div>
+  <div class="welcome-sub">بوابة تتبع الطلبات والخدمات الذكية</div>
+  
+  <div class="fg">
+    <input type="text" id="accessInput" placeholder="أدخل رقم الطلب أو رقم الجوال..." style="text-align: center; font-weight: 700; padding: 12px; border-radius: 10px;"/>
+  </div>
+  <button class="btn btn-gold" style="padding: 12px; font-size: 13.5px;" onclick="authenticateClientPortal()"><i class="ti ti-login"></i> الدخول للبوابة</button>
+</div>
+
+<!-- 2. LUXURY CLIENT PORTAL DASHBOARD -->
+<div class="portal-layout" id="portalDashboardPhase">
   <header class="app-header">
-    <div class="brand-identity">
-      <div class="p-logo">
-        <svg viewBox="0 0 100 100" width="28" height="28">
-          <text x="50" y="55" text-anchor="middle" dominant-baseline="central" font-family="'Cairo', sans-serif" font-weight="900" font-size="60" fill="#FFF">ر</text>
-          <rect x="20" y="10" width="6" height="40" rx="3" fill="#D4AF37"/>
-        </svg>
-      </div>
-      <div class="brand-text">
-        <h1>روائع الأفكار للإعلانات</h1>
-        <p>بوابة تتبع الطلبات والخدمات الذكية</p>
-      </div>
+    <div class="brand">
+      <div class="brand-title">روائع الأفكار للإعلانات</div>
+      <div class="brand-sub">بوابة تتبع الطلبات والخدمات الذكية</div>
     </div>
-    
-    <div class="user-profile" id="userProfileArea">
-      <!-- Dynamic Injection -->
+    <div class="user-badge">
+      <span class="user-name" id="clientProfileName">العميل</span>
+      <span class="badge-tag" id="employeeTag" style="display:none;">عميل / موظف</span>
     </div>
   </header>
 
-  <main class="portal-container">
+  <div class="main-grid">
     
-    <!-- Module 1: Compact Workflows -->
-    <section class="card">
-      <div class="card-title">
-        <span>سير الأعمال المباشر</span>
-        <span style="font-size: 10px; color: var(--gold); font-weight: 700;">مُحدث الآن</span>
-      </div>
-      <div class="track-grid" id="trackersList">
-        <!-- Injected via JS -->
-      </div>
-    </section>
-
-    <!-- Module 2: Financials & Quotations -->
-    <section class="card">
-      <div class="card-title">
-        <span>عروض الأسعار والطلبات</span>
-      </div>
-      <div id="quotationList">
-        <!-- Injected via JS -->
-      </div>
-    </section>
-
-    <!-- Module 3: Warranties & Maintenance Request -->
-    <section class="card">
-      <div class="card-title">
-        <span>الضمان وطلب الصيانة</span>
-      </div>
-      
-      <form id="maintenanceForm" onsubmit="handleMaintenanceSubmit(event)">
-        <div class="form-group">
+    <!-- COLUMN 1 (FAR LEFT): WARRANTY & MAINTENANCE -->
+    <div class="card" id="maintenanceCardContainer" style="display: none;">
+      <div class="card-title"><i class="ti ti-tool"></i> الضمان وطلب الصيانة</div>
+      <form onsubmit="event.preventDefault(); alert('تم إرسال طلب الصيانة الفنية الفورية للورشة بنجاح.');">
+        <div class="fg">
           <label>رقم الطلب / العقد</label>
-          <select id="orderSelect" class="form-control" onchange="populateItemSubSelector()" required>
-            <option value="">اختر رقم الطلب...</option>
-          </select>
+          <select id="maintOrderSelect" onchange="loadOrderSubItems(this.value)"><option value="">اختر رقم الطلب...</option></select>
         </div>
-
-        <div class="form-group">
+        <div class="fg">
           <label>البند / اللوحة المطلوبة للصيانة</label>
-          <select id="itemSubSelect" class="form-control" required disabled>
-            <option value="">حدد رقم الطلب أولاً</option>
-          </select>
+          <select id="maintItemSelect"><option value="">اختر البند المخصص...</option></select>
         </div>
-
-        <div class="form-group">
+        <div class="fg">
           <label>وصف المشكلة / التعديل</label>
-          <textarea id="issueNotes" class="form-control" rows="2" placeholder="اكتب التفاصيل هنا..." required></textarea>
+          <textarea placeholder="اكتب الملاحظات والتفاصيل هنا..." style="min-height: 70px; resize: none;"></textarea>
         </div>
-
-        <div class="form-group">
+        <div class="fg">
           <label>إرفاق صورة (اختياري)</label>
-          <input type="file" id="attachmentInput" class="form-control" accept="image/*">
+          <input type="file" accept="image/*" style="padding: 5px; font-size: 11px;"/>
         </div>
-
-        <button type="submit" class="btn btn-burgundy" style="width: 100%; margin-top: 4px;">إرسال طلب الصيانة</button>
+        <button type="submit" class="btn btn-brand"><i class="ti ti-send"></i> إرسال طلب الصيانة</button>
       </form>
-    </section>
-
-  </main>
-
-  <!-- Isolated PDF Layout for Clean Exporting -->
-  <div id="pdfExportCanvas">
-    <div style="text-align: center; border-bottom: 2px solid #4A0E17; padding-bottom: 12px; margin-bottom: 16px;">
-      <h2 style="color: #4A0E17; margin: 0;">روائع الأفكار للإعلانات</h2>
-      <p style="font-size: 12px; color: #555;">عرض سعر رسمي - وثيقة رقمية</p>
     </div>
-    <div id="pdfExportBody"></div>
+
+    <!-- COLUMN 2 (CENTER): QUOTATIONS & NEW QUOTE REQUEST -->
+    <div class="card">
+      <div class="card-title"><i class="ti ti-receipt-2"></i> عروض الأسعار والطلبات</div>
+      
+      <!-- Trigger for new quote request -->
+      <button class="btn btn-out" style="margin-bottom: 14px; background: var(--gold-soft); border-color: var(--gold);" onclick="requestNewQuotationPopup()"><i class="ti ti-file-plus"></i> طلب عرض سعر جديد</button>
+      
+      <div id="quotationsListSlot"></div>
+    </div>
+
+    <!-- COLUMN 3 (FAR RIGHT): LIVE PRODUCTION WORKFLOW LINE -->
+    <div class="card">
+      <div class="card-title"><i class="ti ti-git-commit"></i> سير الأعمال المباشر</div>
+      <div id="productionWorkflowSlot"></div>
+    </div>
+
   </div>
+</div>
 
-  <script>
-    // State Management & Mock Data Mapping
-    const customerState = {
-      profile: {
-        name: "عبدالعزيز محمد",
-        isEmployee: true
+<script>
+// Isolated Mock Data Mapping to reflect the attached screenshot structure
+const portalDatabase = {
+  "0550000000": {
+    name: "عبدالعزيز محمد",
+    isEmployee: true,
+    orders: [
+      {
+        id: "ORD-9081",
+        title: "كلادينج وحروف زنكور",
+        phase: "print", // design | print | execution
+        total: 12500, remaining: 3500,
+        splitPayments: "كاش: 5000 ريال | شبكة: 4000 ريال",
+        items: ["لوحة واجهة رئيسية کلادينج", "حروف زنكور مضيئة"],
+        linkedToWorkshop: true // This enforces showing the maintenance card
       },
-      orders: [
-        {
-          id: "ORD-9081",
-          title: "كلادينج وحروف زنكور",
-          currentPhase: "printing", // design | printing | external
-          total: 12500,
-          remaining: 3500,
-          payments: { cash: 5000, network: 4000 },
-          items: ["واجهة كلادينج رئيسية", "شعار بارز مضيء"],
-          hasWarranty: true
-        },
-        {
-          id: "ORD-9082",
-          title: "مطبوعات واستيكرات",
-          currentPhase: "design",
-          total: 1800,
-          remaining: 0,
-          payments: { transfer: 1800 },
-          items: ["استيكر سيارات 3M", "كروت شخصية"],
-          hasWarranty: false
-        }
-      ]
-    };
+      {
+        id: "ORD-9082",
+        title: "مطبوعات واستيكرات",
+        phase: "design",
+        total: 1800, remaining: 0,
+        splitPayments: "تحويل: 1800 ريال",
+        items: ["استيكر سيارات داخلي"],
+        linkedToWorkshop: false
+      }
+    ]
+  }
+};
 
-    // Initialize Page
-    document.addEventListener("DOMContentLoaded", () => {
-      renderHeaderProfile();
-      renderTrackers();
-      renderFinancials();
-      populateOrderSelector();
+function authenticateClientPortal() {
+  const input = document.getElementById("accessInput").value.trim();
+  if (!input) return;
+
+  // Search profile by phone or specific hardcoded id match
+  const profile = portalDatabase[input] || portalDatabase["0550000000"]; 
+  
+  document.getElementById("welcomePhase").style.display = "none";
+  document.getElementById("portalDashboardPhase").style.display = "block";
+  
+  // Set Client Visual Profile Details
+  document.getElementById("clientProfileName").textContent = profile.name;
+  if (profile.isEmployee) document.getElementById("employeeTag").style.display = "inline-block";
+
+  // Check if any order touches the workshop to display the maintenance section
+  const hasWorkshopLink = profile.orders.some(o => o.linkedToWorkshop);
+  if (hasWorkshopLink) {
+    document.getElementById("maintenanceCardContainer").style.display = "block";
+    populateMaintenanceDropdowns(profile.orders);
+  }
+
+  renderWorkflowSection(profile.orders);
+  renderFinancialSection(profile.orders);
+}
+
+function renderWorkflowSection(orders) {
+  const slot = document.getElementById("productionWorkflowSlot");
+  slot.innerHTML = orders.map(o => `
+    <div class="wf-block">
+      <div class="wf-head"><span>رقم الطلب</span><strong>${o.id}</strong></div>
+      <div class="wf-name">${o.title}</div>
+      <div class="track-row">
+        <div class="track-node ${o.phase==='design'?'active': 'done'}"><div class="track-dot"></div><span class="track-text">تصميم</span></div>
+        <div class="track-node ${o.phase==='print'?'active': (o.phase==='execution'?'done':'')}"><div class="track-dot"></div><span class="track-text">طباعة</span></div>
+        <div class="track-node ${o.phase==='execution'?'active':''}"><div class="track-dot"></div><span class="track-text">تنفيذ</span></div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderFinancialSection(orders) {
+  const slot = document.getElementById("quotationsListSlot");
+  slot.innerHTML = orders.map(o => `
+    <div class="wf-block fin-card">
+      <div class="fin-row"><span class="fin-label">${o.id} - ${o.title}</span><span class="fin-total">${o.total} ريال</span></div>
+      <div class="fin-row"><span class="fin-label">المتبقي:</span><span class="fin-val" style="color:var(--maroon); font-weight:800;">${o.remaining} ريال</span></div>
+      <div class="split-details"><strong>تفاصيل المدفوعات:</strong> ${o.splitPayments}</div>
+      <button class="btn btn-brand btn-xs" style="margin-top:4px;" onclick="alert('جاري تنزيل ملف العرض الصافي...')"><i class="ti ti-download"></i> تنزيل العرض PDF</button>
+    </div>
+  `).join('');
+}
+
+function populateMaintenanceDropdowns(orders) {
+  const select = document.getElementById("maintOrderSelect");
+  orders.filter(o => o.linkedToWorkshop).forEach(o => {
+    const opt = document.createElement("option");
+    opt.value = o.id; opt.textContent = `${o.id} - ${o.title} (تحت الضمان)`;
+    select.appendChild(opt);
+  });
+}
+
+function loadOrderSubItems(orderId) {
+  const itemSelect = document.getElementById("maintItemSelect");
+  itemSelect.innerHTML = '<option value="">اختر البند المخصص...</option>';
+  if (!orderId) return;
+
+  // Pull mock profile again to extract specific item lines
+  const orders = portalDatabase["0550000000"].orders;
+  const match = orders.find(o => o.id === orderId);
+  if (match && match.items) {
+    match.items.forEach(it => {
+      const opt = document.createElement("option");
+      opt.value = it; opt.textContent = it;
+      itemSelect.appendChild(opt);
     });
+  }
+}
 
-    // 1. Render Profile Header
-    function renderHeaderProfile() {
-      const area = document.getElementById("userProfileArea");
-      const { name, isEmployee } = customerState.profile;
-      area.innerHTML = `
-        <span class="user-name">${name}</span>
-        ${isEmployee ? `<span class="badge-emp">عميل / موظف</span>` : ''}
-      `;
-    }
+function requestNewQuotationPopup() {
+  const desc = prompt("يرجى كتابة مواصفات اللوحة أو المطبوعات المطلوبة لرفعها لقسم المبيعات:");
+  if (desc) alert("تم رفع طلبك بنجاح. سيقوم مسؤول المبيعات بإصدار عرض السعر وإرساله لحسابك هنا فوراً.");
+}
+</script>
 
-    // 2. Render Trackers
-    function renderTrackers() {
-      const list = document.getElementById("trackersList");
-      list.innerHTML = customerState.orders.map(o => `
-        <div class="order-mini-card">
-          <div class="order-id">${o.id}</div>
-          <div class="order-title">${o.title}</div>
-          <div class="workflow-line">
-            <div class="wf-step ${o.currentPhase === 'design' ? 'active' : ''}">
-              <div class="wf-dot"></div>تصميم
-            </div>
-            <div class="wf-step ${o.currentPhase === 'printing' ? 'active' : ''}">
-              <div class="wf-dot"></div>طباعة
-            </div>
-            <div class="wf-step ${o.currentPhase === 'external' ? 'active' : ''}">
-              <div class="wf-dot"></div>تنفيذ
-            </div>
-          </div>
-        </div>
-      `).join('');
-    }
-
-    // 3. Render Financials
-    function renderFinancials() {
-      const container = document.getElementById("quotationList");
-      container.innerHTML = customerState.orders.map(o => {
-        const p = o.payments;
-        const splitText = Object.keys(p).map(k => `${k === 'cash' ? 'كاش' : k === 'network' ? 'شبكة' : 'تحويل'}: ${p[k]} ريال`).join(' | ');
-
-        return `
-          <div class="quotation-item">
-            <div class="fin-row">
-              <span class="fin-label">${o.id} - ${o.title}</span>
-              <span class="fin-val">${o.total} ريال</span>
-            </div>
-            <div class="fin-row">
-              <span class="fin-label">المتبقي:</span>
-              <span class="fin-rem">${o.remaining} ريال</span>
-            </div>
-            <div class="split-payments">
-              <strong>تفاصيل المدفوعات:</strong> ${splitText}
-            </div>
-            <div class="btn-action-group">
-              <button class="btn btn-burgundy" onclick="exportCleanPDF('${o.id}')">تنزيل العرض PDF</button>
-            </div>
-          </div>
-        `;
-      }).join('');
-    }
-
-    // 4. Warranty & Maintenance Cascading Dropdowns
-    function populateOrderSelector() {
-      const select = document.getElementById("orderSelect");
-      customerState.orders.forEach(o => {
-        const opt = document.createElement("option");
-        opt.value = o.id;
-        opt.textContent = `${o.id} - ${o.title} ${o.hasWarranty ? '(تحت الضمان)' : ''}`;
-        select.appendChild(opt);
-      });
-    }
-
-    function populateItemSubSelector() {
-      const orderId = document.getElementById("orderSelect").value;
-      const itemSelect = document.getElementById("itemSubSelect");
-      
-      itemSelect.innerHTML = '<option value="">اختر البند المخصص...</option>';
-      
-      if (!orderId) {
-        itemSelect.disabled = true;
-        return;
-      }
-
-      const targetOrder = customerState.orders.find(o => o.id === orderId);
-      if (targetOrder && targetOrder.items) {
-        targetOrder.items.forEach(item => {
-          const opt = document.createElement("option");
-          opt.value = item;
-          opt.textContent = item;
-          itemSelect.appendChild(opt);
-        });
-        itemSelect.disabled = false;
-      }
-    }
-
-    // 5. Clean PDF Export (Eliminating Black Screen Engine Error)
-    function exportCleanPDF(orderId) {
-      const order = customerState.orders.find(o => o.id === orderId);
-      const canvas = document.getElementById("pdfExportCanvas");
-      const body = document.getElementById("pdfExportBody");
-
-      body.innerHTML = `
-        <p><strong>رقم الطلب:</strong> ${order.id}</p>
-        <p><strong>اسم الخدمة:</strong> ${order.title}</p>
-        <p><strong>الإجمالي:</strong> ${order.total} ريال</p>
-        <p><strong>المتبقي:</strong> ${order.remaining} ريال</p>
-        <hr style="margin: 12px 0;">
-        <p style="font-size: 11px;">شروط العرض: يسري هذا العرض لمدة 15 يوماً من تاريخ الإصدار.</p>
-      `;
-
-      // Display clean layout, print, and hide
-      canvas.style.display = "block";
-      window.print();
-      canvas.style.display = "none";
-    }
-
-    function handleMaintenanceSubmit(e) {
-      e.preventDefault();
-      alert("تم إرسال طلب الصيانة بنجاح، سيتم التواصل معكم قريباً.");
-      e.target.reset();
-      document.getElementById("itemSubSelect").disabled = true;
-    }
-  </script>
 </body>
 </html>
