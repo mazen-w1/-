@@ -2570,7 +2570,10 @@ function maintOrderItemNames(o){
   return(o.orderItems&&o.orderItems.length)?o.orderItems.map(i=>i.name).filter(Boolean):(o.service?[o.service]:[]);
 }
 function maintOrderOptionsData(warrantyOnly){
-  let list=ordersArr().filter(o=>o.orderKind!=='maintenance');
+  // Quick tasks (بروفة/قياسات/تست) are internal, non-billable entries — they were
+  // never real orders to begin with, so they must never show up as a selectable
+  // "order needing maintenance" in this dispatch picker either.
+  let list=ordersArr().filter(o=>o.orderKind!=='maintenance'&&!o.isQuickTask);
   if(warrantyOnly){
     const warrantyClients=new Set(Object.values(warranties).map(w=>w.client));
     list=list.filter(o=>warrantyClients.has(o.client));
@@ -2819,6 +2822,7 @@ function goToQuoteWithPrefill(client,phone){
 }
 function buildQuotePage(){
   window._quoteLines=[];
+  window._quoteCalcMode='combined';
   const cArr=Object.values(clients);
   // Auto-generate quote number (RA-0001 format, locked)
   const autoRef='RA-'+(Object.keys(standaloneQuotes).length+1).toString().padStart(4,'0');
@@ -2855,6 +2859,15 @@ function buildQuotePage(){
     <div class="card">
       <div class="card-header"><span class="card-title"><i class="ti ti-table"></i> تفاصيل المنتجات والخدمات</span></div>
       <div style="padding:16px;">
+        <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:12px;padding:10px 12px;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:10px;">
+          <span style="font-size:11.5px;font-weight:800;color:var(--text-2);"><i class="ti ti-calculator"></i> طريقة حساب الإجمالي:</span>
+          <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;cursor:pointer;">
+            <input type="radio" name="q-calc-mode" value="combined" checked onchange="onQuoteCalcModeChange(this.value)"/> خيار مجمع (نفس ما هو الآن)
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;cursor:pointer;">
+            <input type="radio" name="q-calc-mode" value="separate" onchange="onQuoteCalcModeChange(this.value)"/> خيار منفصل (كل بند سعره منفصل عن الآخر)
+          </label>
+        </div>
         <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1fr 0.5fr;gap:8px;margin-bottom:8px;padding:0 4px;">
           <span style="font-size:11px;font-weight:800;color:var(--text-3);">وصف البند</span>
           <span style="font-size:11px;font-weight:800;color:var(--text-3);">الكمية</span>
@@ -2981,6 +2994,9 @@ async function editQuote(key){
   // q-bank is intentionally left untouched — it always shows the fixed company bank details set in buildQuotePage().
   setVal('q-paid-amount',q.paidAmount);
   const ptSel=document.getElementById('q-payment-terms');if(ptSel&&q.paymentTerms)ptSel.value=q.paymentTerms;
+  window._quoteCalcMode=q.calcMode||'combined';
+  const calcRadio=document.querySelector(`input[name="q-calc-mode"][value="${window._quoteCalcMode}"]`);
+  if(calcRadio)calcRadio.checked=true;
   window._quoteLines=(q.lines||[]).map(l=>({...l,id:'q'+Date.now()+Math.random().toString(36).slice(2)}));
   renderQuoteLines();
   document.getElementById('page-quote')?.scrollIntoView({behavior:'smooth',block:'start'});
@@ -3063,8 +3079,9 @@ function renderQuoteTotals(){
   const vat=subtotal*0.15;const total=subtotal+vat;
   const g=document.getElementById('q-grand-total');
   const vn=document.getElementById('q-vat-note');
-  if(g)g.textContent=fmt(total)+' ر.س';
-  if(vn)vn.textContent=`(قبل الضريبة: ${fmt(subtotal)} + ضريبة: ${fmt(vat)})`;
+  const isSeparate=window._quoteCalcMode==='separate';
+  if(g)g.textContent=isSeparate?'غير مُجمّع':(fmt(total)+' ر.س');
+  if(vn)vn.textContent=isSeparate?'كل بند بسعره الخاص — راجع إجمالي كل بند في الجدول أعلاه':`(قبل الضريبة: ${fmt(subtotal)} + ضريبة: ${fmt(vat)})`;
   const paid=parseFloat(document.getElementById('q-paid-amount')?.value)||0;
   const remWrap=document.getElementById('q-remaining-wrap');
   if(remWrap){
@@ -3074,7 +3091,9 @@ function renderQuoteTotals(){
     }else{remWrap.innerHTML='';}
   }
 }
+function onQuoteCalcModeChange(mode){window._quoteCalcMode=mode;renderQuoteTotals();}
 function getQuoteData(){
+  const calcMode=window._quoteCalcMode||'combined';
   const client=document.getElementById('q-client')?.value.trim()||'';
   const ref=document.getElementById('q-ref')?.value.trim()||('QT-'+Date.now().toString().slice(-6));
   const phone=document.getElementById('q-phone')?.value.trim()||'';
@@ -3090,7 +3109,7 @@ function getQuoteData(){
   const paidAmount=parseFloat(document.getElementById('q-paid-amount')?.value)||0;
   const remainingAmount=Math.max(0,totalWithVat-paidAmount);
   const qDate=document.getElementById('q-date')?.value||new Date().toISOString().split('T')[0];
-  return{client,ref,phone:normalizeSaudiPhone(phone),validity,sales,delivery,paymentTerms,terms,bank,lines,subtotal,vat,totalWithVat,paidAmount,remainingAmount,date:qDate,createdBy:cu.name};
+  return{client,ref,phone:normalizeSaudiPhone(phone),validity,sales,delivery,paymentTerms,terms,bank,lines,subtotal,vat,totalWithVat,paidAmount,remainingAmount,date:qDate,createdBy:cu.name,calcMode};
 }
 async function saveQuoteToDb(){
   const data=getQuoteData();
@@ -3098,6 +3117,12 @@ async function saveQuoteToDb(){
   if(!data.phone||!isValidSaudiPhone(data.phone)){toast('⚠️ يرجى إدخال رقم الجوال ويجب أن يكون رقم سعودي صحيح (05XXXXXXXX)');return;}
   if(!data.lines.length){toast('يرجى إضافة بند واحد على الأقل');return;}
   showSaving('جاري الحفظ...');
+  // A brand-new customer typed directly into the quote form must be captured
+  // into the shared clients database, same as the main order-registration form
+  // already does — otherwise a quote-only client would never show up in "قائمة العملاء".
+  if(!Object.values(clients).some(c=>normCustomerName(c.name)===normCustomerName(data.client))){
+    await fbPush('clients',{name:data.client,phone:data.phone,date:data.date});
+  }
   if(window._editingQuoteKey){
     await fbPatch('standalone_quotes/'+window._editingQuoteKey,data);
     await loadData();hideSaving();toast('✓ تم تحديث عرض السعر');buildQuotePage();
@@ -3285,6 +3310,11 @@ function renderA4Quote(data,key=''){
        content order (WhatsApp preview, some mobile PDF viewers, etc). A plain
        table keeps DOM order == visual order == PDF content order. -->
   <div style="background:linear-gradient(135deg,#5B0F19 0%,#7A1B28 50%,#5B0F19 100%);border-radius:16px;padding:16px 22px;margin-bottom:14px;border:1px solid #7A1B28;">
+    ${data.calcMode==='separate'?`
+    <div style="display:flex;align-items:center;justify-content:center;gap:10px;padding:6px 0;">
+      <i class="ti ti-info-circle" style="color:#C9A227;font-size:16px;"></i>
+      <div style="color:#fff;font-size:12.5px;font-weight:700;">الأسعار مفصلة لكل بند بشكل منفصل — راجع إجمالي كل بند في الجدول أعلاه</div>
+    </div>`:`
     <div style="display:table;width:100%;table-layout:fixed;border-collapse:collapse;">
       <div style="display:table-cell;vertical-align:middle;width:auto;">
         <div style="display:table;width:100%;table-layout:fixed;">
@@ -3314,7 +3344,7 @@ function renderA4Quote(data,key=''){
         <div style="color:#fff;font-size:26px;font-weight:900;line-height:1;">${fmt(totalWithVat)}</div>
         <div style="color:rgba(255,255,255,.6);font-size:10px;margin-top:4px;">ريال سعودي</div>
       </div>
-    </div>
+    </div>`}
   </div>
   <!-- BANK INFO + QR -->
   <div style="display:flex;gap:10px;margin-bottom:10px;">
@@ -4952,7 +4982,16 @@ async function buildClientsPage(){
   document.getElementById('page-clients').innerHTML=`
     <div class="page-header"><div class="ptitle"><i class="ti ti-address-book"></i> سجل العملاء</div></div>
     <div class="controls-row"><div class="search-bar"><i class="ti ti-search"></i><input placeholder="بحث في العملاء..." oninput="filterClients(this.value)"/></div>
+    <button class="btn btn-brand btn-sm" onclick="toggleAddClientForm()"><i class="ti ti-user-plus"></i> إضافة عميل</button>
     ${isAdmin?`<button class="btn btn-red btn-sm" id="clients-bulk-del-btn" style="display:none;margin-right:auto;" onclick="bulkDeleteClients()"><i class="ti ti-trash"></i> حذف المحدد (<span id="clients-sel-count">0</span>)</button>`:''}</div>
+    <div class="card" id="add-client-card" style="display:none;">
+      <div class="card-header"><span class="card-title"><i class="ti ti-user-plus"></i> إضافة عميل جديد</span></div>
+      <div class="form-grid" style="padding:16px;">
+        <div class="fg"><label>اسم العميل / الجهة *</label><input id="nc-name" placeholder="اسم العميل أو الجهة"/></div>
+        <div class="fg"><label>رقم الجوال *</label><input id="nc-phone" inputmode="tel" placeholder="05XXXXXXXX"/></div>
+      </div>
+      <div style="padding:0 20px 16px;"><button class="btn btn-brand btn-sm" onclick="submitNewClient()"><i class="ti ti-check"></i> حفظ العميل</button></div>
+    </div>
     <div class="card">
       <div class="card-header"><span class="card-title"><i class="ti ti-users"></i> العملاء (${arr.length})</span></div>
       <div style="font-size:11px;color:var(--text-3);padding:0 20px 10px;"><i class="ti ti-info-circle"></i> يتم دمج العملاء بنفس الاسم تلقائياً — اضغط على أي عميل لعرض جميع طلباته وفواتيره في مكان واحد.</div>
@@ -4961,6 +5000,22 @@ async function buildClientsPage(){
     </div>`;
 }
 function filterClients(q){document.querySelectorAll('#clients-tbody tr').forEach(r=>{r.style.display=r.textContent.toLowerCase().includes(q.toLowerCase())?'':'none';});}
+function toggleAddClientForm(){
+  const el=document.getElementById('add-client-card');if(!el)return;
+  el.style.display=el.style.display==='none'?'block':'none';
+}
+async function submitNewClient(){
+  const name=document.getElementById('nc-name')?.value.trim();
+  const phone=document.getElementById('nc-phone')?.value.trim();
+  if(!name){toast('⚠️ يرجى كتابة اسم العميل');return;}
+  if(!phone||!isValidSaudiPhone(phone)){toast('⚠️ يرجى إدخال رقم جوال سعودي صحيح (05XXXXXXXX)');return;}
+  if(Object.values(clients).some(c=>normCustomerName(c.name)===normCustomerName(name))){toast('⚠️ هذا العميل مسجل مسبقاً');return;}
+  showSaving('جاري الحفظ...');
+  try{
+    await fbPush('clients',{name,phone:normalizeSaudiPhone(phone),date:new Date().toISOString().split('T')[0]});
+    await loadData();hideSaving();toast('✓ تم إضافة العميل');buildClientsPage();
+  }catch(e){hideSaving();toast('❌ فشل إضافة العميل');}
+}
 async function deleteClientGroup(keysStr){
   if(cu.type!=='admin'){toast('⚠️ الحذف متاح للمدير فقط');return;}
   const keys=String(keysStr).split(',').filter(Boolean);
