@@ -2962,13 +2962,27 @@ document.addEventListener('click',e=>{
   const menu=document.getElementById('quote-actions-menu');
   if(menu&&menu.style.display==='block'&&!menu.contains(e.target)&&!e.target.closest('button[onclick*="toggleQuoteActionsMenu"]'))menu.style.display='none';
 });
+async function deleteQuoteArchiveRow(key){
+  if(!confirm('حذف عرض السعر هذا نهائياً؟ لا يمكن التراجع عن هذا الإجراء.'))return;
+  showSaving('جاري الحذف...');
+  try{
+    await fbDelete('standalone_quotes/'+key);
+    if(window._editingQuoteKey===key)window._editingQuoteKey=null;
+    await loadData();hideSaving();toast('✓ تم حذف عرض السعر');
+    buildQuotePage();
+  }catch(e){hideSaving();toast('❌ فشل الحذف');}
+}
 function buildQuoteArchiveRows(){
   const arr=Object.entries(standaloneQuotes).map(([k,v])=>({...v,_key:k})).sort((a,b)=>new Date(b.date)-new Date(a.date));
   if(!arr.length)return'<tr><td colspan="5" style="text-align:center;color:var(--text-3);padding:24px">لا يوجد عروض أسعار محفوظة</td></tr>';
   return arr.map(q=>{
     const conv=q.convertedToOrder;
+    const firstImg=(q.lines||[]).find(l=>l.img);
     return `<tr data-key="${q._key}" data-date="${q.date||''}" data-converted="${conv?'1':'0'}" style="${conv?'background:#F0FDF4;':''}">
-    <td><strong>${q.client}</strong></td>
+    <td><div style="display:flex;align-items:center;gap:8px;">
+      ${firstImg?`<img src="${firstImg.img}" title="يحتوي على صور مرفقة" style="width:26px;height:26px;object-fit:cover;border-radius:6px;border:1px solid var(--border);flex-shrink:0;"/>`:''}
+      <strong>${q.client}</strong>
+    </div></td>
     <td><span class="badge b-new">${q.ref||'—'}</span></td>
     <td><span class="badge b-proc" style="font-size:12px;">${fmtMoney(Number(q.totalWithVat||q.total||0))} ر.س</span></td>
     <td style="font-size:11px">${q.date}</td>
@@ -2978,6 +2992,7 @@ function buildQuoteArchiveRows(){
       <button class="btn btn-out btn-xs" onclick="downloadQuotePDF('${q._key}')"><i class="ti ti-download"></i> تنزيل PDF</button>
       <button class="btn btn-gold btn-xs" onclick="editQuote('${q._key}')"><i class="ti ti-edit"></i> تعديل</button>
       ${conv?'':`<button class=\"btn btn-purple btn-xs\" onclick=\"convertSavedQuoteToOrder('${q._key}')\"><i class=\"ti ti-transfer\"></i> أمر</button>`}
+      <button class="btn btn-red btn-xs" onclick="deleteQuoteArchiveRow('${q._key}')"><i class="ti ti-trash"></i> حذف</button>
     </div></td>
   </tr>`;
   }).join('');
@@ -3047,11 +3062,24 @@ function renderQuoteLines(){
   </div>`).join('');
   renderQuoteTotals();
 }
+// Quote line images are stored as a self-contained base64 data URI (via
+// FileReader) rather than routed through the external Cloudinary upload that
+// convertFileToBase64 uses for other attachments — that remote round trip was
+// the failure point behind item images going missing again after a quote was
+// saved and reopened (an upload hiccup/expired remote URL leaves nothing but
+// a broken reference), whereas a base64 string lives directly inside the
+// quote's own Firebase record and can never separately disappear.
+async function convertQuoteImageToBase64(file){
+  const MAX_BYTES=8*1024*1024;
+  if(file.size>MAX_BYTES)throw new Error('⚠️ حجم الصورة كبير جداً (الحد الأقصى 8 ميجابايت). يرجى اختيار صورة أصغر.');
+  const raw=await _readFileAsDataUrl(file);
+  try{return await compressImage(raw,1200,0.75);}catch(e){return raw;}
+}
 async function attachLineImage(id,files){
   if(!files||!files.length)return;
   showSaving('جاري تجهيز الصورة...');
   try{
-    const b64=await convertFileToBase64(files[0]);
+    const b64=await convertQuoteImageToBase64(files[0]);
     const l=window._quoteLines.find(x=>x.id===id);if(l)l.img=b64;
     renderQuoteLines();
   }catch(e){toast(e&&e.message?e.message:'⚠️ فشل تحميل الصورة');}
