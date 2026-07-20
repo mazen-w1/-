@@ -2,324 +2,540 @@
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>تتبع الطلب — روائع الأفكار</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>بوابة العملاء وتتبع الطلبات — روائع الأفكار للإعلانات</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&family=Changa:wght@700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+  
   <style>
-    :root{
-      --maroon:#4A0E17;
-      --maroon-mid:#631420;
-      --gold:#D4AF37;
-      --gold-soft:rgba(212,175,55,.12);
-      --surface:#FFFFFF;
-      --surface-2:#FDFBF7;
-      --border:#E8E2D9;
-      --border-soft:#F0EBE3;
-      --text-1:#1A0F0A;
-      --text-2:#5C4A3A;
-      --text-3:#9B8878;
-      --radius-lg:18px;
-      --radius-xl:24px;
+    :root {
+      --bg-dark: #1a0a0c;
+      --burgundy: #4A0E17;
+      --burgundy-light: #631420;
+      --gold: #D4AF37;
+      --gold-soft: rgba(212, 175, 55, 0.15);
+      --surface: #FFFFFF;
+      --surface-sub: #FDFBF7;
+      --border: #E8E2D9;
+      --text-main: #1A0F0A;
+      --text-muted: #6B5E52;
+      --success: #10B981;
+      --radius-sm: 8px;
+      --radius-md: 14px;
+      --radius-lg: 20px;
     }
-    *{margin:0;padding:0;box-sizing:border-box;}
-    html,body{height:100%;width:100%;}
-    body{
-      font-family:'Cairo',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
-      color:var(--text-1);
-      line-height:1.6;
-      min-height:100vh;
-      position:relative;
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    
+    body {
+      font-family: 'Cairo', -apple-system, sans-serif;
+      background: var(--bg-dark);
+      background: radial-gradient(ellipse at 30% 20%, #3a1016 0%, #1a0a0c 70%, #0d0507 100%);
+      color: var(--text-main);
+      min-height: 100vh;
+      padding: 16px;
+      line-height: 1.5;
     }
-    /* Same dark radial-gradient background as the app's unified login portal */
-    .portal-bg{position:fixed;inset:0;background:radial-gradient(ellipse at 30% 40%,#3a1016 0%,#1a0a0c 60%,#0d0507 100%);z-index:0;}
-    .portal-wrap{position:relative;z-index:1;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 20px;}
-    .page{display:none;width:100%;max-width:520px;flex-direction:column;align-items:center;}
-    .page.active{display:flex;}
 
-    .portal-header{text-align:center;margin-bottom:28px;}
-    .p-logo{width:82px;height:82px;margin:0 auto 14px;border-radius:50%;border:2px solid rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.03);}
-    .p-logo svg{width:100%;height:100%;display:block;}
-    .p-title{font-size:24px;font-weight:900;color:#fff;text-shadow:0 2px 14px rgba(0,0,0,.5);}
-    .p-title span{color:var(--gold);}
-    .p-sub{font-size:11px;color:var(--gold);font-weight:700;letter-spacing:.5px;margin:4px 0 14px;}
-    .p-badge{display:inline-block;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.2);color:rgba(255,255,255,.85);padding:6px 20px;border-radius:30px;font-size:11.5px;font-weight:700;backdrop-filter:blur(8px);}
-
-    .card{
-      background:var(--surface);border-radius:var(--radius-xl);
-      padding:28px;width:100%;
-      box-shadow:0 16px 50px rgba(0,0,0,.5);
-      border:2px solid var(--gold);
-      text-align:right;
-      position:relative;z-index:2;
+    /* Top Navbar Header */
+    .app-header {
+      width: 100%;
+      max-width: 1100px;
+      margin: 0 auto 20px auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(212, 175, 55, 0.3);
+      backdrop-filter: blur(12px);
+      padding: 12px 20px;
+      border-radius: var(--radius-lg);
     }
-    .card + .card{margin-top:16px;}
 
-    .fg{display:flex;flex-direction:column;gap:6px;margin-bottom:14px;}
-    .fg label{font-size:12px;color:var(--text-2);font-weight:700;}
-    .fg input{
-      border:1.5px solid var(--border);border-radius:var(--radius-lg);
-      padding:13px 44px 13px 16px;font-size:14px;background:var(--surface-2);color:var(--text-1);
-      width:100%;font-family:inherit;transition:.15s;
+    .brand-identity {
+      display: flex;
+      align-items: center;
+      gap: 12px;
     }
-    .fg input:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 3px var(--gold-soft);}
-    .input-wrap{position:relative;}
-    .input-wrap i{position:absolute;top:50%;right:15px;transform:translateY(-50%);color:var(--text-3);font-size:16px;pointer-events:none;}
 
-    .btn{width:100%;padding:14px;font-size:15px;font-weight:800;border:none;border-radius:var(--radius-lg);cursor:pointer;font-family:inherit;transition:.15s;}
-    .btn-primary{background:var(--maroon);color:#fff;}
-    .btn-primary:hover{background:var(--maroon-mid);}
-    .btn-secondary{background:var(--surface-2);color:var(--maroon);border:1.5px solid var(--border);}
-    .btn-secondary:hover{border-color:var(--gold);}
-    .action-row{display:flex;gap:10px;margin-top:6px;}
+    .p-logo {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      border: 1.5px solid var(--gold);
+      background: rgba(255, 255, 255, 0.05);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
 
-    .privacy-note{font-size:11px;color:var(--text-3);text-align:center;margin-top:16px;}
-    .error-message{background:#FEF2F2;border:1px solid #FCA5A5;color:#991B1B;padding:12px 16px;border-radius:var(--radius-lg);text-align:center;font-weight:600;font-size:12.5px;margin-bottom:14px;}
+    .brand-text h1 {
+      font-size: 16px;
+      font-weight: 800;
+      color: #FFF;
+    }
 
-    .success-badge{display:flex;align-items:center;justify-content:center;width:52px;height:52px;background:rgba(34,197,94,.1);border-radius:50%;margin:0 auto 14px;font-size:26px;color:#10B981;}
-    .result-title{font-size:17px;font-weight:900;color:var(--text-1);text-align:center;margin-bottom:2px;}
-    .result-sub{font-size:11.5px;color:var(--text-3);text-align:center;margin-bottom:18px;}
+    .brand-text p {
+      font-size: 10px;
+      color: var(--gold);
+      font-weight: 700;
+    }
 
-    .dg{display:grid;grid-template-columns:repeat(auto-fit,minmax(115px,1fr));gap:0;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:var(--radius-lg);padding:4px 2px;margin-bottom:16px;}
-    .di{display:flex;flex-direction:column;gap:2px;padding:8px 10px;}
-    .dk{font-size:9px;color:var(--text-3);font-weight:800;letter-spacing:.3px;text-transform:uppercase;}
-    .dv{font-size:13px;font-weight:700;color:var(--text-1);}
+    .user-profile {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
 
-    /* Sleek circles + thin lines track — same visual language as the internal system's order view */
-    .track-row{display:flex;align-items:flex-start;overflow-x:auto;padding:4px 2px 0;margin-bottom:4px;}
-    .track-node{display:flex;flex-direction:column;align-items:center;gap:5px;flex:0 0 auto;min-width:52px;}
-    .track-dot{width:13px;height:13px;border-radius:50%;background:var(--surface);border:2px solid var(--border);flex-shrink:0;box-sizing:border-box;transition:.25s;}
-    .track-dot.done{background:#10B981;border-color:#10B981;}
-    .track-dot.active{background:var(--gold);border-color:var(--gold);box-shadow:0 0 0 4px var(--gold-soft);}
-    .track-label{font-size:9.5px;font-weight:700;color:var(--text-3);white-space:nowrap;text-align:center;}
-    .track-label.done{color:#059669;}
-    .track-label.active{color:var(--maroon);font-weight:800;}
-    .track-line{flex:1 1 18px;height:2px;background:var(--border-soft);margin-top:5.5px;min-width:12px;}
-    .track-line.done{background:#10B981;}
+    .user-name {
+      color: #FFF;
+      font-size: 13px;
+      font-weight: 700;
+    }
 
-    .details-section{margin-top:6px;padding-top:16px;border-top:1px solid var(--border-soft);}
-    .details-section h3{font-size:11px;font-weight:800;color:var(--text-2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px;}
-    .detail-row{display:flex;justify-content:space-between;gap:14px;padding:6px 0;font-size:12.5px;}
-    .detail-row + .detail-row{border-top:1px solid var(--border-soft);}
-    .detail-label{color:var(--text-3);font-weight:700;flex-shrink:0;}
-    .detail-value{color:var(--text-1);text-align:left;}
+    .badge-emp {
+      background: var(--gold);
+      color: var(--burgundy);
+      font-size: 10px;
+      font-weight: 800;
+      padding: 2px 8px;
+      border-radius: 20px;
+    }
 
-    @media (max-width:640px){
-      .card{padding:20px;}
-      .p-title{font-size:20px;}
+    /* Main Container Grid */
+    .portal-container {
+      max-width: 1100px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 16px;
+    }
+
+    .card {
+      background: var(--surface);
+      border-radius: var(--radius-md);
+      padding: 18px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+      border: 1px solid var(--border);
+    }
+
+    .card-title {
+      font-size: 14px;
+      font-weight: 800;
+      color: var(--burgundy);
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 2px solid var(--surface-sub);
+      padding-bottom: 8px;
+    }
+
+    /* 1. Trackers Layout (سير الأعمال) */
+    .track-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 10px;
+    }
+
+    .order-mini-card {
+      background: var(--surface-sub);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 10px;
+    }
+
+    .order-id {
+      font-size: 11px;
+      font-weight: 800;
+      color: var(--burgundy);
+    }
+
+    .order-title {
+      font-size: 12px;
+      font-weight: 700;
+      margin: 4px 0 8px 0;
+    }
+
+    .workflow-line {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: relative;
+      margin-top: 6px;
+    }
+
+    .wf-step {
+      font-size: 9px;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-align: center;
+    }
+
+    .wf-step.active {
+      color: var(--burgundy);
+      font-weight: 900;
+    }
+
+    .wf-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--border);
+      margin: 0 auto 2px auto;
+    }
+
+    .wf-step.active .wf-dot {
+      background: var(--gold);
+      box-shadow: 0 0 0 3px var(--gold-soft);
+    }
+
+    /* 2. Financial Grid */
+    .quotation-item {
+      background: var(--surface-sub);
+      border-radius: var(--radius-sm);
+      padding: 12px;
+      margin-bottom: 10px;
+      border-right: 4px solid var(--gold);
+    }
+
+    .fin-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      margin-bottom: 4px;
+    }
+
+    .fin-label { color: var(--text-muted); font-weight: 600; }
+    .fin-val { font-weight: 800; color: var(--text-main); }
+    .fin-rem { color: var(--burgundy); font-weight: 900; }
+
+    .split-payments {
+      background: rgba(0,0,0,0.02);
+      padding: 6px 8px;
+      border-radius: var(--radius-sm);
+      margin-top: 6px;
+      font-size: 10.5px;
+    }
+
+    .btn-action-group {
+      display: flex;
+      gap: 6px;
+      margin-top: 10px;
+    }
+
+    .btn {
+      padding: 6px 12px;
+      border-radius: var(--radius-sm);
+      font-size: 11px;
+      font-weight: 700;
+      border: none;
+      cursor: pointer;
+      font-family: inherit;
+      transition: 0.2s;
+    }
+
+    .btn-burgundy { background: var(--burgundy); color: #FFF; }
+    .btn-burgundy:hover { background: var(--burgundy-light); }
+    .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text-main); }
+
+    /* 3. Maintenance Form */
+    .form-group {
+      margin-bottom: 10px;
+    }
+
+    .form-group label {
+      display: block;
+      font-size: 11px;
+      font-weight: 700;
+      margin-bottom: 4px;
+      color: var(--text-muted);
+    }
+
+    .form-control {
+      width: 100%;
+      padding: 8px 12px;
+      font-size: 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--surface-sub);
+      font-family: inherit;
+    }
+
+    .form-control:focus {
+      outline: none;
+      border-color: var(--gold);
+    }
+
+    /* Isolated PDF Container (For Clean Exports) */
+    #pdfExportCanvas {
+      display: none;
+      background: #ffffff !important;
+      color: #000000 !important;
+      padding: 30px;
+      font-family: 'Cairo', sans-serif;
+    }
+
+    @media (max-width: 768px) {
+      body { padding: 8px; }
+      .portal-container { grid-template-columns: 1fr; }
+      .card { padding: 14px; }
     }
   </style>
 </head>
 <body>
-  <div class="portal-bg"></div>
-  <div class="portal-wrap">
-    <div class="portal-header">
+
+  <!-- Dynamic Header -->
+  <header class="app-header">
+    <div class="brand-identity">
       <div class="p-logo">
-        <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="روائع الأفكار">
-          <text x="50" y="50" text-anchor="middle" dominant-baseline="central" font-family="'Changa',sans-serif" font-weight="800" font-size="62" fill="#fff">ر</text>
-          <rect x="24" y="12" width="5" height="38" rx="2.5" fill="#D4AF37"/>
+        <svg viewBox="0 0 100 100" width="28" height="28">
+          <text x="50" y="55" text-anchor="middle" dominant-baseline="central" font-family="'Cairo', sans-serif" font-weight="900" font-size="60" fill="#FFF">ر</text>
+          <rect x="20" y="10" width="6" height="40" rx="3" fill="#D4AF37"/>
         </svg>
       </div>
-      <div class="p-title"><span>•</span> روائع الأفكار الإعلانية</div>
-      <div class="p-sub">RAWAEE AL-AFKAR FOR ADVERTISING</div>
-      <div class="p-badge">بوابة تتبع الطلبات العامة</div>
-    </div>
-
-    <!-- PAGE 1: SEARCH -->
-    <div id="searchPage" class="page active">
-      <div class="card">
-        <div id="searchErrorSlot"></div>
-        <div class="fg">
-          <label>رقم الطلب أو رقم الجوال</label>
-          <div class="input-wrap">
-            <input type="search" id="searchInput" placeholder="مثال: ORD-014 أو 05XXXXXXXX" autocomplete="off"/>
-          </div>
-        </div>
-        <button class="btn btn-primary" id="searchBtn" onclick="searchOrder()">تتبع الطلب</button>
-        <div class="privacy-note">لن يتم استخدام بياناتك إلا لعرض حالة طلبك.</div>
+      <div class="brand-text">
+        <h1>روائع الأفكار للإعلانات</h1>
+        <p>بوابة تتبع الطلبات والخدمات الذكية</p>
       </div>
     </div>
-
-    <!-- PAGE 2: RESULT -->
-    <div id="statusPage" class="page">
-      <div class="card">
-        <div class="success-badge">✓</div>
-        <div class="result-title" id="resultClient">—</div>
-        <div class="result-sub" id="resultMeta">—</div>
-
-        <div class="dg">
-          <div class="di"><span class="dk">رقم الطلب</span><span class="dv" id="orderNumber">—</span></div>
-          <div class="di"><span class="dk">تاريخ الطلب</span><span class="dv" id="orderDate">—</span></div>
-          <div class="di"><span class="dk">تاريخ التسليم المتوقع</span><span class="dv" id="estimatedDelivery">—</span></div>
-        </div>
-
-        <div id="progressTrack"></div>
-
-        <div class="details-section">
-          <h3>تفاصيل الطلب</h3>
-          <div class="detail-row"><span class="detail-label">الخدمة</span><span class="detail-value" id="detailService">—</span></div>
-          <div class="detail-row"><span class="detail-label">أنشئ بواسطة</span><span class="detail-value" id="detailCreatedBy">—</span></div>
-          <div class="detail-row"><span class="detail-label">ملاحظات</span><span class="detail-value" id="detailNotes">—</span></div>
-        </div>
-      </div>
-      <div class="action-row">
-        <button class="btn btn-secondary" onclick="backToSearch()">تتبع طلب آخر</button>
-      </div>
+    
+    <div class="user-profile" id="userProfileArea">
+      <!-- Dynamic Injection -->
     </div>
+  </header>
+
+  <main class="portal-container">
+    
+    <!-- Module 1: Compact Workflows -->
+    <section class="card">
+      <div class="card-title">
+        <span>سير الأعمال المباشر</span>
+        <span style="font-size: 10px; color: var(--gold); font-weight: 700;">مُحدث الآن</span>
+      </div>
+      <div class="track-grid" id="trackersList">
+        <!-- Injected via JS -->
+      </div>
+    </section>
+
+    <!-- Module 2: Financials & Quotations -->
+    <section class="card">
+      <div class="card-title">
+        <span>عروض الأسعار والطلبات</span>
+      </div>
+      <div id="quotationList">
+        <!-- Injected via JS -->
+      </div>
+    </section>
+
+    <!-- Module 3: Warranties & Maintenance Request -->
+    <section class="card">
+      <div class="card-title">
+        <span>الضمان وطلب الصيانة</span>
+      </div>
+      
+      <form id="maintenanceForm" onsubmit="handleMaintenanceSubmit(event)">
+        <div class="form-group">
+          <label>رقم الطلب / العقد</label>
+          <select id="orderSelect" class="form-control" onchange="populateItemSubSelector()" required>
+            <option value="">اختر رقم الطلب...</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>البند / اللوحة المطلوبة للصيانة</label>
+          <select id="itemSubSelect" class="form-control" required disabled>
+            <option value="">حدد رقم الطلب أولاً</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>وصف المشكلة / التعديل</label>
+          <textarea id="issueNotes" class="form-control" rows="2" placeholder="اكتب التفاصيل هنا..." required></textarea>
+        </div>
+
+        <div class="form-group">
+          <label>إرفاق صورة (اختياري)</label>
+          <input type="file" id="attachmentInput" class="form-control" accept="image/*">
+        </div>
+
+        <button type="submit" class="btn btn-burgundy" style="width: 100%; margin-top: 4px;">إرسال طلب الصيانة</button>
+      </form>
+    </section>
+
+  </main>
+
+  <!-- Isolated PDF Layout for Clean Exporting -->
+  <div id="pdfExportCanvas">
+    <div style="text-align: center; border-bottom: 2px solid #4A0E17; padding-bottom: 12px; margin-bottom: 16px;">
+      <h2 style="color: #4A0E17; margin: 0;">روائع الأفكار للإعلانات</h2>
+      <p style="font-size: 12px; color: #555;">عرض سعر رسمي - وثيقة رقمية</p>
+    </div>
+    <div id="pdfExportBody"></div>
   </div>
 
   <script>
-    const FIREBASE_DB_URL = "https://rawaee-alafkar-default-rtdb.firebaseio.com";
-    // Mirrors the main system's department sequence (index.html getActiveDepts) so the
-    // progress shown here always matches the real record instead of a fixed generic list.
-    const DEPT_META = {
-      design:   {label:'التصميم'},
-      external: {label:'التنفيذ الخارجي'},
-      print:    {label:'الطباعة'},
-      workshop: {label:'الورشة'}
-    };
-    var currentOrder = null;
-
-    function toEnglishDigits(str){
-      const map={'٠':'0','١':'1','٢':'2','٣':'3','٤':'4','٥':'5','٦':'6','٧':'7','٨':'8','٩':'9','۰':'0','۱':'1','۲':'2','۳':'3','۴':'4','۵':'5','۶':'6','۷':'7','۸':'8','۹':'9'};
-      return String(str||'').replace(/[٠-٩۰-۹]/g,ch=>map[ch]!==undefined?map[ch]:ch);
-    }
-    function normalizeSaudiPhone(v){
-      let s=toEnglishDigits(v).trim().replace(/[^\d+]/g,'');
-      if(s.startsWith('+966'))s='0'+s.slice(4);
-      else if(s.startsWith('00966'))s='0'+s.slice(5);
-      else if(s.startsWith('966')&&s.length>=12)s='0'+s.slice(3);
-      else if(/^5\d{8}$/.test(s))s='0'+s;
-      return s;
-    }
-    function getActiveDepts(o){
-      const seq=[];
-      if(o.designTo&&o.designTo!=='none')seq.push('design');
-      if(o.externalTo&&o.externalTo!=='none')seq.push('external');
-      if(o.printTo&&o.printTo!=='none')seq.push('print');
-      if(o.workshopTo&&o.workshopTo!=='none')seq.push('workshop');
-      return seq;
-    }
-
-    async function fetchOrders(){
-      const res = await fetch(FIREBASE_DB_URL + '/orders.json');
-      if(!res.ok) throw new Error('http_' + res.status);
-      const data = await res.json();
-      return data || {};
-    }
-
-    function setSearchError(message){
-      const slot = document.getElementById('searchErrorSlot');
-      slot.innerHTML = message ? `<div class="error-message"><i class="ti ti-alert-circle"></i> ${message}</div>` : '';
-    }
-
-    async function searchOrder(){
-      const raw = document.getElementById('searchInput').value.trim();
-      if(!raw){ setSearchError('الرجاء إدخال رقم الطلب أو رقم الجوال'); return; }
-      setSearchError('');
-      const btn = document.getElementById('searchBtn');
-      btn.disabled = true; btn.textContent = 'جاري البحث...';
-      try{
-        const orders = await fetchOrders();
-        if(!orders || !Object.keys(orders).length){
-          setSearchError('تعذّر العثور على أي طلبات حالياً.');
-          return;
+    // State Management & Mock Data Mapping
+    const customerState = {
+      profile: {
+        name: "عبدالعزيز محمد",
+        isEmployee: true
+      },
+      orders: [
+        {
+          id: "ORD-9081",
+          title: "كلادينج وحروف زنكور",
+          currentPhase: "printing", // design | printing | external
+          total: 12500,
+          remaining: 3500,
+          payments: { cash: 5000, network: 4000 },
+          items: ["واجهة كلادينج رئيسية", "شعار بارز مضيء"],
+          hasWarranty: true
+        },
+        {
+          id: "ORD-9082",
+          title: "مطبوعات واستيكرات",
+          currentPhase: "design",
+          total: 1800,
+          remaining: 0,
+          payments: { transfer: 1800 },
+          items: ["استيكر سيارات 3M", "كروت شخصية"],
+          hasWarranty: false
         }
-        const normalizedPhone = normalizeSaudiPhone(raw);
-        // Public tracking only surfaces active/ongoing orders — completed ones are
-        // intentionally excluded from search results entirely.
-        const activeOrders = Object.entries(orders).filter(([, order]) => order.currentDept !== 'done');
-        const found = activeOrders.find(([key, order]) =>
-          key === raw ||
-          (order.id && order.id === raw) ||
-          (order.phone && (order.phone === raw || order.phone === normalizedPhone)) ||
-          (order.client && order.client.trim() === raw)
-        );
-        if(!found){ setSearchError('لم يتم العثور على طلب جارٍ مطابق. تحقق من رقم الطلب أو الجوال.'); return; }
-        currentOrder = { _key: found[0], ...found[1] };
-        displayOrder();
-      }catch(e){
-        setSearchError('تعذّر الاتصال بقاعدة البيانات، حاول مرة أخرى.');
-      }finally{
-        btn.disabled = false; btn.textContent = 'تتبع الطلب';
+      ]
+    };
+
+    // Initialize Page
+    document.addEventListener("DOMContentLoaded", () => {
+      renderHeaderProfile();
+      renderTrackers();
+      renderFinancials();
+      populateOrderSelector();
+    });
+
+    // 1. Render Profile Header
+    function renderHeaderProfile() {
+      const area = document.getElementById("userProfileArea");
+      const { name, isEmployee } = customerState.profile;
+      area.innerHTML = `
+        <span class="user-name">${name}</span>
+        ${isEmployee ? `<span class="badge-emp">عميل / موظف</span>` : ''}
+      `;
+    }
+
+    // 2. Render Trackers
+    function renderTrackers() {
+      const list = document.getElementById("trackersList");
+      list.innerHTML = customerState.orders.map(o => `
+        <div class="order-mini-card">
+          <div class="order-id">${o.id}</div>
+          <div class="order-title">${o.title}</div>
+          <div class="workflow-line">
+            <div class="wf-step ${o.currentPhase === 'design' ? 'active' : ''}">
+              <div class="wf-dot"></div>تصميم
+            </div>
+            <div class="wf-step ${o.currentPhase === 'printing' ? 'active' : ''}">
+              <div class="wf-dot"></div>طباعة
+            </div>
+            <div class="wf-step ${o.currentPhase === 'external' ? 'active' : ''}">
+              <div class="wf-dot"></div>تنفيذ
+            </div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    // 3. Render Financials
+    function renderFinancials() {
+      const container = document.getElementById("quotationList");
+      container.innerHTML = customerState.orders.map(o => {
+        const p = o.payments;
+        const splitText = Object.keys(p).map(k => `${k === 'cash' ? 'كاش' : k === 'network' ? 'شبكة' : 'تحويل'}: ${p[k]} ريال`).join(' | ');
+
+        return `
+          <div class="quotation-item">
+            <div class="fin-row">
+              <span class="fin-label">${o.id} - ${o.title}</span>
+              <span class="fin-val">${o.total} ريال</span>
+            </div>
+            <div class="fin-row">
+              <span class="fin-label">المتبقي:</span>
+              <span class="fin-rem">${o.remaining} ريال</span>
+            </div>
+            <div class="split-payments">
+              <strong>تفاصيل المدفوعات:</strong> ${splitText}
+            </div>
+            <div class="btn-action-group">
+              <button class="btn btn-burgundy" onclick="exportCleanPDF('${o.id}')">تنزيل العرض PDF</button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // 4. Warranty & Maintenance Cascading Dropdowns
+    function populateOrderSelector() {
+      const select = document.getElementById("orderSelect");
+      customerState.orders.forEach(o => {
+        const opt = document.createElement("option");
+        opt.value = o.id;
+        opt.textContent = `${o.id} - ${o.title} ${o.hasWarranty ? '(تحت الضمان)' : ''}`;
+        select.appendChild(opt);
+      });
+    }
+
+    function populateItemSubSelector() {
+      const orderId = document.getElementById("orderSelect").value;
+      const itemSelect = document.getElementById("itemSubSelect");
+      
+      itemSelect.innerHTML = '<option value="">اختر البند المخصص...</option>';
+      
+      if (!orderId) {
+        itemSelect.disabled = true;
+        return;
+      }
+
+      const targetOrder = customerState.orders.find(o => o.id === orderId);
+      if (targetOrder && targetOrder.items) {
+        targetOrder.items.forEach(item => {
+          const opt = document.createElement("option");
+          opt.value = item;
+          opt.textContent = item;
+          itemSelect.appendChild(opt);
+        });
+        itemSelect.disabled = false;
       }
     }
 
-    function formatDate(v){
-      if(!v) return '—';
-      try{
-        const d = new Date(v);
-        if(isNaN(d.getTime())) return v;
-        return d.toLocaleDateString('ar-SA', { year:'numeric', month:'long', day:'numeric' });
-      }catch(e){ return v; }
+    // 5. Clean PDF Export (Eliminating Black Screen Engine Error)
+    function exportCleanPDF(orderId) {
+      const order = customerState.orders.find(o => o.id === orderId);
+      const canvas = document.getElementById("pdfExportCanvas");
+      const body = document.getElementById("pdfExportBody");
+
+      body.innerHTML = `
+        <p><strong>رقم الطلب:</strong> ${order.id}</p>
+        <p><strong>اسم الخدمة:</strong> ${order.title}</p>
+        <p><strong>الإجمالي:</strong> ${order.total} ريال</p>
+        <p><strong>المتبقي:</strong> ${order.remaining} ريال</p>
+        <hr style="margin: 12px 0;">
+        <p style="font-size: 11px;">شروط العرض: يسري هذا العرض لمدة 15 يوماً من تاريخ الإصدار.</p>
+      `;
+
+      // Display clean layout, print, and hide
+      canvas.style.display = "block";
+      window.print();
+      canvas.style.display = "none";
     }
 
-    function renderTrack(o){
-      const seq = getActiveDepts(o);
-      const nodes = [...seq.map(dk => ({key:dk, label:DEPT_META[dk].label})), {key:'done', label:'تسليم'}];
-      const cur = o.currentDept || seq[0] || 'done';
-      const curIdx = cur === 'done' ? nodes.length - 1 : nodes.findIndex(n => n.key === cur);
-      let html = '<div class="track-row">';
-      nodes.forEach((n, i) => {
-        let st = '';
-        if(cur === 'done'){ st = 'done'; }
-        else if(i < curIdx){ st = 'done'; }
-        else if(n.key === cur){ st = 'active'; }
-        html += `<div class="track-node"><div class="track-dot ${st}"></div><div class="track-label ${st}">${n.label}</div></div>`;
-        if(i < nodes.length - 1) html += `<div class="track-line ${st === 'done' ? 'done' : ''}"></div>`;
-      });
-      html += '</div>';
-      return html;
+    function handleMaintenanceSubmit(e) {
+      e.preventDefault();
+      alert("تم إرسال طلب الصيانة بنجاح، سيتم التواصل معكم قريباً.");
+      e.target.reset();
+      document.getElementById("itemSubSelect").disabled = true;
     }
-
-    function displayOrder(){
-      const o = currentOrder;
-      document.getElementById('resultClient').textContent = o.client || '—';
-      document.getElementById('resultMeta').textContent = o.currentDept === 'done' ? 'تم إنجاز طلبك بالكامل' : 'طلبك قيد التنفيذ حالياً';
-      document.getElementById('orderNumber').textContent = o.id || o._key || '—';
-      document.getElementById('orderDate').textContent = formatDate(o.date || o.createdAt);
-      document.getElementById('estimatedDelivery').textContent = (o.deadline && o.deadline !== '—') ? formatDate(o.deadline) : '—';
-      document.getElementById('detailService').textContent = (o.orderItems && o.orderItems.length ? o.orderItems[0].name : o.service) || '—';
-      document.getElementById('detailCreatedBy').textContent = o.createdBy || '—';
-      document.getElementById('detailNotes').textContent = (o.notes && o.notes !== '—') ? o.notes : 'لا توجد ملاحظات';
-      document.getElementById('progressTrack').innerHTML = renderTrack(o);
-      document.getElementById('searchPage').classList.remove('active');
-      document.getElementById('statusPage').classList.add('active');
-    }
-
-    function backToSearch(){
-      document.getElementById('searchInput').value = '';
-      setSearchError('');
-      document.getElementById('statusPage').classList.remove('active');
-      document.getElementById('searchPage').classList.add('active');
-    }
-
-    document.getElementById('searchInput').addEventListener('keypress', (e) => {
-      if(e.key === 'Enter') searchOrder();
-    });
-
-    // Auto-load if an order id is passed in the URL (?id=ORD-014)
-    (function(){
-      const params = new URLSearchParams(window.location.search);
-      const orderId = params.get('id');
-      if(!orderId) return;
-      window.addEventListener('load', async () => {
-        try{
-          const orders = await fetchOrders();
-          const activeOrders = Object.entries(orders || {}).filter(([, o]) => o.currentDept !== 'done');
-          const found = activeOrders.find(([key, o]) => key === orderId || o.id === orderId);
-          if(found){
-            currentOrder = { _key: found[0], ...found[1] };
-            displayOrder();
-          }else{
-            setSearchError('لم يتم العثور على طلب جارٍ بهذا الرقم.');
-          }
-        }catch(e){
-          setSearchError('تعذّر الاتصال بقاعدة البيانات، حاول مرة أخرى.');
-        }
-      });
-    })();
   </script>
 </body>
 </html>
