@@ -2382,6 +2382,26 @@ function toggleWfMultiMode(){
     if(bar)bar.classList.remove('show');
   }
 }
+// Waits for every <img> inside the print root to actually finish decoding before
+// the caller captures/prints it. Without this, html2canvas/window.print() can fire
+// while a base64 item-image or attachment is still mid-decode, so the browser lays
+// it out at zero height — the resulting shorter-than-real content height is exactly
+// what produces images landing on the wrong page or getting split across a page
+// boundary. A short safety timeout per image means one broken/slow image can never
+// hang the whole export.
+function waitForPrintImages(root){
+  const imgs=root?[...root.querySelectorAll('img')]:[];
+  if(!imgs.length)return Promise.resolve();
+  return Promise.all(imgs.map(img=>{
+    if(img.complete&&img.naturalWidth>0)return Promise.resolve();
+    return new Promise(resolve=>{
+      const done=()=>resolve();
+      img.addEventListener('load',done,{once:true});
+      img.addEventListener('error',done,{once:true});
+      setTimeout(done,3000);
+    });
+  }));
+}
 async function downloadQuotePDF(savedKey){
   let data;
   if(savedKey){
@@ -2413,6 +2433,7 @@ async function downloadQuotePDF(savedKey){
     // disconnected letterforms. foreignObjectRendering delegates text layout to the
     // browser's native (correctly-shaping) text engine instead.
     try{if(document.fonts&&document.fonts.ready)await document.fonts.ready;}catch(e){}
+    await waitForPrintImages(el);
     await new Promise(r=>setTimeout(r,500));
     // Explicit scrollX/scrollY/window* options anchor html2canvas's capture frame to
     // the element itself rather than the ambient page scroll position — needed
@@ -2439,7 +2460,14 @@ async function downloadQuotePDF(savedKey){
     let heightLeft=imgH,pos=0;
     pdf.addImage(imgData,'PNG',0,pos,imgW,imgH);
     heightLeft-=pageH;
-    while(heightLeft>0){
+    // A plain `heightLeft>0` check here is what produced spurious near-blank
+    // trailing pages: canvas.height*imgW/canvas.width is a floating-point division,
+    // so content whose real height lands just barely over an exact multiple of the
+    // page height leaves a sub-millimeter remainder — enough to satisfy `>0` and
+    // trigger one more full page that shows only that sliver, i.e. an almost
+    // entirely blank page. Requiring a couple of millimeters of real remaining
+    // content before adding another page removes that class of blank page outright.
+    while(heightLeft>2){
       pos=heightLeft-imgH;
       pdf.addPage();
       pdf.addImage(imgData,'PNG',0,pos,imgW,imgH);
@@ -3280,7 +3308,7 @@ async function deleteQuoteFromForm(){
     await loadData();hideSaving();toast('✓ تم حذف عرض السعر');buildQuotePage();
   }catch(e){hideSaving();toast('❌ فشل الحذف');}
 }
-function saveAndPreviewQuote(){
+async function saveAndPreviewQuote(){
   const data=getQuoteData();
   if(!data.client){toast('يرجى تحديد العميل');return;}
   if(!data.lines.length){toast('يرجى إضافة بند واحد على الأقل');return;}
@@ -3288,13 +3316,16 @@ function saveAndPreviewQuote(){
   const origTitle=document.title;
   document.title='عرض_سعر_'+data.client+'_'+data.ref;
   renderA4Quote(data);
-  setTimeout(()=>{window.print();setTimeout(()=>document.title=origTitle,2000);},400);
+  await waitForPrintImages(document.getElementById('print-area'));
+  window.print();
+  setTimeout(()=>document.title=origTitle,2000);
 }
 async function previewSavedQuote(key){
   const q=standaloneQuotes[key]||await fbGet(`standalone_quotes/${key}`);
   if(!q)return;
   renderA4Quote(q,key);
-  setTimeout(()=>window.print(),400);
+  await waitForPrintImages(document.getElementById('print-area'));
+  window.print();
 }
 function renderA4Quote(data,key=''){
   // Plain Western digits, always exactly 2 decimals, no thousands separator.
@@ -3335,6 +3366,12 @@ function renderA4Quote(data,key=''){
 <style>
 #print-area *{box-sizing:border-box;font-family:'Tajawal','Cairo',sans-serif;}
 #print-area{direction:rtl;background:#FAF8F5;max-width:794px;margin:0 auto;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+/* Keep each product row and its image intact instead of letting the browser's
+   native print pagination slice through them at a page boundary. */
+#print-area table{break-inside:avoid!important;page-break-inside:avoid!important;page-break-after:auto!important;}
+#print-area tr{break-inside:avoid!important;page-break-inside:avoid!important;page-break-after:auto!important;}
+#print-area td,#print-area th{break-inside:avoid!important;page-break-inside:avoid!important;}
+#print-area img{break-inside:avoid!important;page-break-inside:avoid!important;}
 @media print{
   @page{size:A4;margin:6mm;}
   body>*:not(#modal-overlay):not(#modal-box):not(#print-area){display:none!important;}
