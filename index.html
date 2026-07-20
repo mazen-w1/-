@@ -2868,11 +2868,12 @@ function buildQuotePage(){
             <input type="radio" name="q-calc-mode" value="separate" onchange="onQuoteCalcModeChange(this.value)"/> خيار منفصل (كل بند سعره منفصل عن الآخر)
           </label>
         </div>
-        <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1fr 0.5fr;gap:8px;margin-bottom:8px;padding:0 4px;">
+        <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1fr 1fr 0.5fr;gap:8px;margin-bottom:8px;padding:0 4px;">
           <span style="font-size:11px;font-weight:800;color:var(--text-3);">وصف البند</span>
           <span style="font-size:11px;font-weight:800;color:var(--text-3);">الكمية</span>
-          <span style="font-size:11px;font-weight:800;color:var(--text-3);">السعر بدون ضريبة</span>
-          <span style="font-size:11px;font-weight:800;color:var(--text-3);">السعر شامل الضريبة</span>
+          <span style="font-size:11px;font-weight:800;color:var(--text-3);">سعر الوحدة قبل الضريبة</span>
+          <span style="font-size:11px;font-weight:800;color:var(--text-3);">قيمة الضريبة (15%)</span>
+          <span style="font-size:11px;font-weight:800;color:var(--text-3);">السعر بعد الضريبة</span>
           <span style="font-size:11px;font-weight:800;color:var(--text-3);">إجمالي البند</span>
           <span></span>
         </div>
@@ -3051,11 +3052,12 @@ function updateQuoteLineFromTax(id,v){
 }
 function renderQuoteLines(){
   const wrap=document.getElementById('quote-lines-wrap');if(!wrap)return;
-  wrap.innerHTML=window._quoteLines.map(l=>`<div class="quote-line" style="grid-template-columns:2fr 1fr 1fr 1fr 1fr auto auto;gap:6px;">
+  wrap.innerHTML=window._quoteLines.map(l=>`<div class="quote-line" style="grid-template-columns:2fr 1fr 1fr 1fr 1fr 1fr auto auto;gap:6px;">
     <input placeholder="وصف البند" value="${l.lbl}" oninput="updateQuoteLine('${l.id}','lbl',this.value)"/>
     <input type="text" inputmode="decimal" id="q-line-qty-${l.id}" placeholder="الكمية" value="${l.q}" oninput="updateQuoteLine('${l.id}','q',this.value)" min="1" onfocus="this.select()"/>
-    <input type="text" inputmode="decimal" id="q-line-notax-${l.id}" placeholder="السعر بدون ضريبة" value="${l.p}" oninput="updateQuoteLine('${l.id}','p',this.value)" min="0" onfocus="this.select()"/>
-    <input type="text" inputmode="decimal" id="q-line-wtax-${l.id}" placeholder="السعر شامل الضريبة" value="${fmtMoney((l.p*1.15))}" oninput="updateQuoteLineFromTax('${l.id}',this.value)" min="0" onfocus="this.select()"/>
+    <input type="text" inputmode="decimal" id="q-line-notax-${l.id}" placeholder="سعر الوحدة قبل الضريبة" value="${l.p}" oninput="updateQuoteLine('${l.id}','p',this.value)" min="0" onfocus="this.select()"/>
+    <div id="q-line-tax-${l.id}" style="display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#B45309;background:#FFFBEB;border:1.5px solid #FDE68A;border-radius:8px;padding:8px 6px;text-align:center;">${fmtMoney((l.q||0)*(l.p||0)*0.15)}</div>
+    <input type="text" inputmode="decimal" id="q-line-wtax-${l.id}" placeholder="السعر بعد الضريبة" value="${fmtMoney((l.p*1.15))}" oninput="updateQuoteLineFromTax('${l.id}',this.value)" min="0" onfocus="this.select()"/>
     <div id="q-line-total-${l.id}" style="display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:var(--maroon);background:var(--surface-2);border:1.5px solid var(--border);border-radius:8px;padding:8px 6px;text-align:center;">${fmtMoney(((l.q||0)*(l.p||0)*1.15))}</div>
     <label title="إرفاق صورة للبند" style="cursor:pointer;display:flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:8px;border:1px dashed var(--border);background:var(--bg);flex-shrink:0;transition:.12s;" onmouseover="this.style.borderColor='var(--gold)'" onmouseout="this.style.borderColor='var(--border)'">
       ${l.img?`<img src="${l.img}" style="width:28px;height:28px;object-fit:cover;border-radius:6px;"/>`:
@@ -3063,10 +3065,6 @@ function renderQuoteLines(){
       <input type="file" accept="image/*" style="display:none" onchange="attachLineImage('${l.id}',this.files)"/>
     </label>
     <button class="btn btn-red btn-sm btn-icon" onclick="removeQuoteLine('${l.id}')"><i class="ti ti-trash"></i></button>
-    ${window._quoteCalcMode==='separate'?`<div style="grid-column:1/-1;display:flex;gap:16px;flex-wrap:wrap;font-size:10.5px;color:var(--text-3);padding:2px 4px 0;">
-      <span><i class="ti ti-receipt-tax"></i> الضريبة (15%) لهذا البند: <strong style="color:var(--maroon)">${fmtMoney((l.q||0)*(l.p||0)*0.15)}</strong> ر.س</span>
-      <span><i class="ti ti-cash-banknote"></i> السعر بعد الضريبة لهذا البند: <strong style="color:var(--maroon)">${fmtMoney((l.q||0)*(l.p||0)*1.15)}</strong> ر.س</span>
-    </div>`:''}
   </div>`).join('');
   renderQuoteTotals();
 }
@@ -3109,6 +3107,8 @@ function renderQuoteTotals(){
     const p=l.p||0;
     l.q=q;
     subtotal+=q*p;
+    const taxEl=document.getElementById('q-line-tax-'+l.id);
+    if(taxEl)taxEl.textContent=fmt(q*p*0.15);
     const totEl=document.getElementById('q-line-total-'+l.id);
     if(totEl)totEl.textContent=fmt(q*p*1.15);
   });
@@ -3127,7 +3127,7 @@ function renderQuoteTotals(){
     }else{remWrap.innerHTML='';}
   }
 }
-function onQuoteCalcModeChange(mode){window._quoteCalcMode=mode;renderQuoteLines();}
+function onQuoteCalcModeChange(mode){window._quoteCalcMode=mode;renderQuoteTotals();}
 function getQuoteData(){
   const calcMode=window._quoteCalcMode||'combined';
   const client=document.getElementById('q-client')?.value.trim()||'';
@@ -3214,7 +3214,9 @@ function renderA4Quote(data,key=''){
   /* ── Products rows — Image | Description | Qty | Unit Price | Total (per spec: 5 cols) ── */
   const linesHtml=lines.map((l,i)=>{
     const qty=Number(l.q||0),price=Number(l.p||0);
-    const lineTotal=qty*price;
+    const lineTax=qty*price*0.15;
+    const priceAfterTax=price*1.15;
+    const lineTotal=qty*price*1.15;
     const imgCell=hasAnyImg?(l.img
       ?`<td style="padding:8px;text-align:center;"><img src="${l.img}" style="width:44px;height:44px;object-fit:cover;border-radius:8px;border:1px solid #EDE3D0;"/></td>`
       :`<td style="padding:8px;text-align:center;"><div style="width:44px;height:44px;border-radius:8px;background:#F3EEE4;display:inline-flex;align-items:center;justify-content:center;"><i class="ti ti-photo" style="color:#C9A227;font-size:16px;"></i></div></td>`):'';
@@ -3223,13 +3225,14 @@ function renderA4Quote(data,key=''){
       <td style="padding:10px 12px;text-align:right;font-size:12.5px;color:#2A2A2A;font-weight:600;line-height:1.4;">${l.lbl||'—'}</td>
       <td style="padding:10px 12px;text-align:center;font-size:12.5px;color:#5B0F19;font-weight:700;">${qty}</td>
       <td style="padding:10px 12px;text-align:center;font-size:12.5px;color:#2A2A2A;">${fmt(price)} <span style="font-size:9.5px;color:#9B8F80;">ر.س</span></td>
+      <td style="padding:10px 12px;text-align:center;font-size:12px;color:#B45309;">${fmt(lineTax)} <span style="font-size:9.5px;color:#9B8F80;">ر.س</span></td>
+      <td style="padding:10px 12px;text-align:center;font-size:12.5px;color:#2A2A2A;">${fmt(priceAfterTax)} <span style="font-size:9.5px;color:#9B8F80;">ر.س</span></td>
       <td style="padding:10px 12px;text-align:center;font-weight:800;color:#5B0F19;font-size:12.5px;">${fmt(lineTotal)} <span style="font-size:9.5px;font-weight:600;color:#9B8F80;">ر.س</span></td>
     </tr>`;
   }).join('');
   /* ── Main print HTML — completely new luxury/enterprise layout ── */
   const printHtml=`
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;900&family=Cairo:wght@400;600;700;900&display=swap');
 #print-area *{box-sizing:border-box;font-family:'Tajawal','Cairo',sans-serif;}
 #print-area{direction:rtl;background:#FAF8F5;max-width:794px;margin:0 auto;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
 @media print{
@@ -3328,11 +3331,13 @@ function renderA4Quote(data,key=''){
             ${hasAnyImg?`<th style="padding:10px 12px;color:#C9A227;font-size:11px;font-weight:800;text-align:center;width:66px;">الصورة</th>`:''}
             <th style="padding:10px 12px;color:#fff;font-size:11px;font-weight:800;text-align:right;">وصف الصنف</th>
             <th style="padding:10px 12px;color:#C9A227;font-size:11px;font-weight:800;text-align:center;width:60px;">الكمية</th>
-            <th style="padding:10px 12px;color:#C9A227;font-size:11px;font-weight:800;text-align:center;width:95px;">سعر الوحدة</th>
+            <th style="padding:10px 12px;color:#C9A227;font-size:11px;font-weight:800;text-align:center;width:90px;">سعر الوحدة قبل الضريبة</th>
+            <th style="padding:10px 12px;color:#C9A227;font-size:11px;font-weight:800;text-align:center;width:80px;">قيمة الضريبة</th>
+            <th style="padding:10px 12px;color:#C9A227;font-size:11px;font-weight:800;text-align:center;width:90px;">السعر بعد الضريبة</th>
             <th style="padding:10px 12px;color:#fff;font-size:11px;font-weight:800;text-align:center;width:105px;">الإجمالي</th>
           </tr>
         </thead>
-        <tbody>${linesHtml||`<tr><td colspan="${hasAnyImg?5:4}" style="text-align:center;padding:24px;color:#BBB;font-size:12.5px;">لا توجد بنود</td></tr>`}</tbody>
+        <tbody>${linesHtml||`<tr><td colspan="${hasAnyImg?7:6}" style="text-align:center;padding:24px;color:#BBB;font-size:12.5px;">لا توجد بنود</td></tr>`}</tbody>
       </table>
     </div>
   </div>
