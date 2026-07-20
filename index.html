@@ -499,9 +499,6 @@ input[type="password"]{direction:rtl;text-align:right;padding-left:40px;padding-
   backdrop-filter:none!important;-webkit-backdrop-filter:none!important;
   mix-blend-mode:normal!important;filter:none!important;opacity:1!important;
 }
-.quote-action-item{display:flex;align-items:center;gap:8px;width:100%;padding:10px 14px;background:none;border:none;border-bottom:1px solid var(--border-soft);text-align:right;font-size:13px;font-weight:700;color:var(--text-1);cursor:pointer;font-family:inherit;}
-.quote-action-item:last-child{border-bottom:none;}
-.quote-action-item:hover{background:var(--surface-2);}
 .quote-a4{width:100%;max-width:794px;margin:0 auto;background:#fff;font-family:'Cairo','Segoe UI',Tahoma,sans-serif;direction:rtl;}
 /* ============================================================ LOGIN PORTAL */
 .portal-bg{position:fixed;top:0;left:0;width:100%;height:100%;background:radial-gradient(ellipse at 30% 40%,#3a1016 0%,#1a0a0c 60%,#0d0507 100%);z-index:0;}
@@ -1763,7 +1760,6 @@ function refreshCurrentPage(){
   // operation, or an expanded interactive detail row — a background rebuild
   // mid-interaction would silently close/collapse it under them.
   if(document.querySelector('.row-menu[style*="block"]'))return;
-  const _qam=document.getElementById('quote-actions-menu');if(_qam&&_qam.style.display==='block')return;
   const _saving=document.getElementById('saving-overlay');if(_saving&&_saving.classList.contains('show'))return;
   if(document.querySelector('[id^="pay-hist-"][style*="table-row"]'))return;
   if(document.querySelector('[id^="my-req-"][style*="table-row"]'))return;
@@ -2428,19 +2424,25 @@ async function downloadQuotePDF(savedKey){
       scrollX:0,scrollY:0,x:0,y:0,
       windowWidth:el.scrollWidth,windowHeight:el.scrollHeight,
     });
-    const imgData=canvas.toDataURL('image/jpeg',0.95);
+    // PNG instead of JPEG: JPEG has no alpha channel, so any pixel the capture
+    // left transparent gets composited to solid BLACK when toDataURL re-encodes
+    // it — that was the real source of the black-screen export. PNG preserves
+    // transparency as transparency (at worst rendering blank, never black),
+    // which closes off that entire failure class regardless of whether the
+    // backgroundColor/.pdf-force-light coverage above catches every element.
+    const imgData=canvas.toDataURL('image/png');
     const {jsPDF}=window.jspdf;
     const pdf=new jsPDF('p','mm','a4');
     const pageW=210,pageH=297;
     const imgW=pageW;
     const imgH=canvas.height*imgW/canvas.width;
     let heightLeft=imgH,pos=0;
-    pdf.addImage(imgData,'JPEG',0,pos,imgW,imgH);
+    pdf.addImage(imgData,'PNG',0,pos,imgW,imgH);
     heightLeft-=pageH;
     while(heightLeft>0){
       pos=heightLeft-imgH;
       pdf.addPage();
-      pdf.addImage(imgData,'JPEG',0,pos,imgW,imgH);
+      pdf.addImage(imgData,'PNG',0,pos,imgW,imgH);
       heightLeft-=pageH;
     }
     // Optional attachment: appended as a clean, dedicated second page — a page
@@ -2994,15 +2996,12 @@ function buildQuotePage(){
           </select>
         </div>
         ${window._editingQuoteKey?`
-        <div style="position:relative;display:inline-block;margin-top:16px;">
-          <button class="btn btn-brand" onclick="toggleQuoteActionsMenu(event)"><i class="ti ti-list-check"></i> إجراءات العرض <i class="ti ti-chevron-down"></i></button>
-          <div id="quote-actions-menu" style="display:none;position:absolute;top:calc(100% + 6px);right:0;background:var(--surface);border:1px solid var(--border);border-radius:10px;box-shadow:0 12px 30px rgba(0,0,0,.15);min-width:230px;z-index:50;overflow:hidden;">
-            <button type="button" class="quote-action-item" onclick="closeQuoteActionsMenu();saveAndPreviewQuote()"><i class="ti ti-eye"></i> معاينة وطباعة A4</button>
-            <button type="button" class="quote-action-item" onclick="closeQuoteActionsMenu();downloadQuotePDF()"><i class="ti ti-download"></i> تنزيل PDF</button>
-            <button type="button" class="quote-action-item" onclick="closeQuoteActionsMenu();saveQuoteToDb()"><i class="ti ti-edit"></i> تعديل العرض</button>
-            <button type="button" class="quote-action-item" onclick="closeQuoteActionsMenu();convertQuoteToOrder()"><i class="ti ti-transfer"></i> تحويل لأمر تشغيل</button>
-            <button type="button" class="quote-action-item" style="color:#DC2626;" onclick="closeQuoteActionsMenu();deleteQuoteFromForm()"><i class="ti ti-trash"></i> حذف العرض</button>
-          </div>
+        <div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap;">
+          <button class="btn btn-out btn-sm" onclick="saveAndPreviewQuote()"><i class="ti ti-eye"></i> معاينة وطباعة A4</button>
+          <button class="btn btn-teal btn-sm" onclick="downloadQuotePDF()"><i class="ti ti-download"></i> تنزيل PDF</button>
+          <button class="btn btn-brand btn-sm" onclick="saveQuoteToDb()"><i class="ti ti-edit"></i> تعديل</button>
+          <button class="btn btn-purple btn-sm" onclick="convertQuoteToOrder()"><i class="ti ti-transfer"></i> تحويل لأمر تشغيل</button>
+          <button class="btn btn-red btn-sm" onclick="deleteQuoteFromForm()"><i class="ti ti-trash"></i> حذف العرض</button>
         </div>`:`
         <div style="display:flex;gap:10px;margin-top:16px;">
           <button class="btn btn-brand btn-sm" onclick="saveQuoteToDb()"><i class="ti ti-device-floppy"></i> حفظ العرض</button>
@@ -3045,12 +3044,6 @@ function onClientInputQuote(val){
   }
 }
 function onQuotePaymentChange(v){}
-function toggleQuoteActionsMenu(e){if(e)e.stopPropagation();const m=document.getElementById('quote-actions-menu');if(!m)return;m.style.display=m.style.display==='none'?'block':'none';}
-function closeQuoteActionsMenu(){const m=document.getElementById('quote-actions-menu');if(m)m.style.display='none';}
-document.addEventListener('click',e=>{
-  const menu=document.getElementById('quote-actions-menu');
-  if(menu&&menu.style.display==='block'&&!menu.contains(e.target)&&!e.target.closest('button[onclick*="toggleQuoteActionsMenu"]'))menu.style.display='none';
-});
 async function deleteQuoteArchiveRow(key){
   if(!confirm('حذف عرض السعر هذا نهائياً؟ لا يمكن التراجع عن هذا الإجراء.'))return;
   showSaving('جاري الحذف...');
@@ -3262,11 +3255,19 @@ async function saveQuoteToDb(){
   }
   if(window._editingQuoteKey){
     await fbPatch('standalone_quotes/'+window._editingQuoteKey,data);
-    await loadData();hideSaving();toast('✓ تم تحديث عرض السعر');buildQuotePage();
+    await loadData();hideSaving();toast('✓ تم تحديث عرض السعر');
+    // Reload the just-saved record back into the form (not a blank buildQuotePage())
+    // so every field — including the attachment — stays visibly in sync with what
+    // was actually persisted. Without this, the form went blank right after saving
+    // while still showing the "editing" action row, and any further save from that
+    // blank state would silently overwrite the record with empty fields (dropping
+    // the attachment and everything else).
+    await editQuote(window._editingQuoteKey);
   }else{
     const res=await fbPush('standalone_quotes',data);
     window._editingQuoteKey=res.name;
-    await loadData();hideSaving();toast('✓ تم حفظ عرض السعر');buildQuotePage();
+    await loadData();hideSaving();toast('✓ تم حفظ عرض السعر');
+    await editQuote(window._editingQuoteKey);
   }
 }
 async function deleteQuoteFromForm(){
