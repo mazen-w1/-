@@ -1724,7 +1724,7 @@ function buildSidebar(){
     h+=navGroup('الأعمال',[ni('my','ti-user-check','أعمالي الحالية')]);
     if(t==='designer'){h+=navGroup('إضافي',[ni('urgent','ti-bolt','طلب عاجل')]);}
     if(t==='printer'){h+=navGroup('إضافي',[ni('urgent','ti-bolt','طلب عاجل')]);}
-    if(t==='workshop'){h+=navGroup('إضافي',[ni('maintreq','ti-tool','طلب صيانة'),ni('warranty','ti-shield-check','ضمان اللوحات'),ni('urgent','ti-bolt','طلب عاجل')]);}
+    if(t==='workshop'){h+=navGroup('إضافي',[ni('maintreq','ti-tool','طلب صيانة')]);}
   }else if(t==='follower'){
     h+=navGroup('المتابعة',[ni('wf','ti-grid-dots','متابعة الأعمال')]);
   }else if(t==='admin'){
@@ -2342,7 +2342,7 @@ function buildWfGrid(tab){
     const showQtActions=o.isQuickTask&&!o.incompleteClient&&o.currentDept!=='done'&&(cu.type==='admin'||cu.type==='receiver');
     const qtActions=showQtActions?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;" onclick="event.stopPropagation();">
         <button class="btn btn-brand btn-xs" onclick="transferQuickTaskToOrder('${o._key}')"><i class="ti ti-transfer"></i> تحويل لأمر تشغيل</button>
-        <button class="btn btn-xs" style="background:linear-gradient(135deg,#78350F,#C89A4A);color:#fff;" onclick="goToQuoteWithPrefill('${(o.client||'').replace(/'/g,"\\'")}','${o.phone||''}')"><i class="ti ti-receipt-2"></i> إنشاء عرض سعر</button>
+        <button class="btn btn-xs" style="background:linear-gradient(135deg,#78350F,#C89A4A);color:#fff;" onclick="goToQuoteWithPrefill('${(o.client||'').replace(/'/g,"\\'")}','${o.phone||''}','${o._key}')"><i class="ti ti-receipt-2"></i> إنشاء عرض سعر</button>
       </div>`:'';
     return `<div class="wf-card" data-dept="${o.currentDept||'design'}" data-name="${(o.client||'').toLowerCase()}" data-key="${o._key}" onclick="wfCardClick(event,'${o._key}')">${hasOrderUpdate(o)?'<span class="order-update-dot" title="تم تحديث بيانات الطلب"></span>':''}<input type="checkbox" class="wf-check" data-key="${o._key}" onchange="toggleWfSelect('${o._key}',this.checked)"/><div class="wf-card-top">
         <div style="display:flex;justify-content:center;margin-bottom:4px;"><div style="width:22px;height:22px;border-radius:50%;background:var(--maroon);display:flex;align-items:center;justify-content:center;position:relative;flex-shrink:0;box-shadow:0 1px 3px rgba(0,0,0,.25);"><span style="font-family:'Changa',sans-serif;font-weight:800;font-size:12px;line-height:1;color:rgba(255,255,255,.92);">ر</span><span style="position:absolute;top:3px;left:5px;width:1px;height:9px;background:#D4AF37;border-radius:1px;"></span></div></div>
@@ -2928,13 +2928,15 @@ async function submitGeneralMaintenance(){await _createMaintenanceOrder('g',fals
 // client name + a brief work description; مستقبل العميل / المدير then
 // pick it up and complete the full order details later.
 // ============================================================
-// A quick task's department work is done (workshopFeedbackDone for measurement
-// tasks, approvedPrintFile for proof/test tasks) but it isn't a finished order yet —
-// it needs a receiver/admin to turn it into a real quote or work order, or close it
-// out. This page collects every such task in one place instead of requiring someone
-// to notice the inline banner inside each order's own modal.
+// A quick task's department work is done — workshopFeedbackDone (measurement),
+// approvedPrintFile (proof, or a test routed to الطباعة), or externalFile (a test
+// routed to التنفيذ الخارجي) — but it isn't a finished order yet: it needs a
+// receiver/admin to review what the department sent back and turn it into a real
+// quote or work order, or close it out. This page collects every such task in one
+// place instead of requiring someone to notice the inline banner inside each
+// order's own modal.
 function prepPhaseTasks(){
-  return ordersArr().filter(o=>o.isQuickTask&&!o.incompleteClient&&o.currentDept!=='done'&&(o.workshopFeedbackDone||o.approvedPrintFile));
+  return ordersArr().filter(o=>o.isQuickTask&&!o.incompleteClient&&o.currentDept!=='done'&&(o.workshopFeedbackDone||o.approvedPrintFile||o.externalFile));
 }
 function updatePrepBadgeSidebar(){
   const badge=document.getElementById('prep-badge');if(!badge)return;
@@ -2942,27 +2944,68 @@ function updatePrepBadgeSidebar(){
   if(n>0){badge.style.display='inline-block';badge.textContent=n;}
   else{badge.style.display='none';}
 }
+// Renders whatever the executed department actually sent back, per quick-task type,
+// so the sender can review it before deciding what to do with the task.
+function prepPhaseResponseHtml(o){
+  const isImg=(url)=>/^data:image\//.test(url||'');
+  const fileBlock=(url,name,label)=>{
+    if(!url)return'';
+    return`<div style="margin-bottom:8px;">
+      <div style="font-size:10.5px;font-weight:700;color:var(--text-3);margin-bottom:4px;">${label}</div>
+      ${isImg(url)?`<img src="${url}" style="width:100%;max-height:180px;object-fit:cover;border-radius:8px;border:1px solid var(--border);"/>`
+        :`<a href="${url}" download="${esc(name||'ملف')}" class="file-download-link"><i class="ti ti-download"></i> ${esc(name||'تنزيل الملف')}</a>`}
+    </div>`;
+  };
+  if(o.quickTaskType==='measure'||o.workshopFeedbackDone){
+    const parts=(o.workshopFeedback||'').split('|').map(s=>s.trim());
+    const [dims,siteStatus,notes]=parts;
+    return`<div style="background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:8px;">
+      <div style="font-size:10.5px;font-weight:800;color:#166534;margin-bottom:6px;"><i class="ti ti-ruler"></i> رد الورشة — القياسات الميدانية</div>
+      ${dims?`<div style="font-size:12px;margin-bottom:3px;"><strong>القياسات:</strong> ${esc(dims)}</div>`:''}
+      ${siteStatus?`<div style="font-size:12px;margin-bottom:3px;"><strong>حالة الموقع:</strong> ${esc(siteStatus)}</div>`:''}
+      ${notes?`<div style="font-size:12px;margin-bottom:6px;"><strong>ملاحظات:</strong> ${esc(notes)}</div>`:''}
+      ${fileBlock(o.workshopSitePhoto,o.workshopSitePhotoName,'صورة الموقع الميداني')}
+    </div>`;
+  }
+  if(o.quickTaskType==='proof'){
+    return`<div style="background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:8px;">
+      <div style="font-size:10.5px;font-weight:800;color:#92400E;margin-bottom:6px;"><i class="ti ti-brush"></i> رد التصميم — البروفة النهائية</div>
+      ${fileBlock(o.approvedPrintFile,o.approvedPrintFileName,'ملف البروفة المرسل للعميل')}
+    </div>`;
+  }
+  if(o.quickTaskType==='test'){
+    const url=o.approvedPrintFile||o.externalFile,name=o.approvedPrintFileName||o.externalFileName;
+    return`<div style="background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:8px;">
+      <div style="font-size:10.5px;font-weight:800;color:#1D4ED8;margin-bottom:6px;"><i class="ti ti-flask"></i> نتيجة التست</div>
+      ${fileBlock(url,name,'ملف نتيجة التست')}
+    </div>`;
+  }
+  return'';
+}
 function buildPrepPhasePage(){
   const arr=prepPhaseTasks();
+  const typeLabel={measure:'القياسات مكتملة',proof:'البروفة جاهزة',test:'نتيجة التست جاهزة'};
+  const typeColor={measure:{bg:'#F0FDF4',fg:'#166534',bd:'#BBF7D0'},proof:{bg:'#FFF9EE',fg:'#92400E',bd:'#FDE68A'},test:{bg:'#EFF6FF',fg:'#1D4ED8',bd:'#BFDBFE'}};
   document.getElementById('prep-content').innerHTML=`
     <div class="page-header"><div class="ptitle"><i class="ti ti-list-check"></i> مرحلة التجهيز (${arr.length})</div></div>
-    <div class="ro-notice"><i class="ti ti-info-circle"></i> مهام سريعة أنهى القسم المسؤول تجهيزها وعادت إليك — حوّلها لأمر تشغيل كامل أو عرض سعر رسمي، أو أغلقها إن لم يرغب العميل بالاستمرار.</div>
+    <div class="ro-notice"><i class="ti ti-info-circle"></i> مهام سريعة أنهى القسم المسؤول تجهيزها وعادت إليك — راجع الرد المرفق ثم حوّلها لأمر تشغيل كامل أو عرض سعر رسمي، أو أغلقها إن لم يرغب العميل بالاستمرار.</div>
     <div style="display:flex;flex-direction:column;gap:10px;">
       ${arr.length?arr.map(o=>{
-        const isMeasure=!!o.workshopFeedbackDone;
+        const kind=o.quickTaskType||(o.workshopFeedbackDone?'measure':'proof');
+        const col=typeColor[kind]||typeColor.proof;
         return`<div class="card" style="padding:14px 16px;">
           <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:8px;">
             <div>
               <div style="font-weight:800;font-size:14px;color:var(--maroon);">${esc(o.client||'—')}</div>
               <div style="font-size:11.5px;color:var(--text-2);"><i class="ti ti-phone"></i> ${esc(o.phone||'—')} &nbsp; <i class="ti ti-briefcase"></i> ${esc(o.service||'—')}</div>
             </div>
-            <span class="badge" style="background:${isMeasure?'#F0FDF4':'#FFF9EE'};color:${isMeasure?'#166534':'#92400E'};border:1px solid ${isMeasure?'#BBF7D0':'#FDE68A'};">${isMeasure?'القياسات مكتملة':'البروفة جاهزة'}</span>
+            <span class="badge" style="background:${col.bg};color:${col.fg};border:1px solid ${col.bd};">${typeLabel[kind]||typeLabel.proof}</span>
           </div>
-          ${o.workshopSitePhoto?`<img src="${o.workshopSitePhoto}" style="width:100%;max-height:150px;object-fit:cover;border-radius:8px;margin-bottom:8px;"/>`:''}
+          ${prepPhaseResponseHtml(o)}
           <div style="display:flex;gap:8px;flex-wrap:wrap;">
             <button class="btn btn-brand btn-sm" onclick="transferQuickTaskToOrder('${o._key}')"><i class="ti ti-transfer"></i> تحويل لأمر تشغيل</button>
-            <button class="btn btn-sm" style="background:linear-gradient(135deg,#78350F,#C89A4A);color:#fff;" onclick="goToQuoteWithPrefill('${(o.client||'').replace(/'/g,"\\'")}','${o.phone||''}')"><i class="ti ti-receipt-2"></i> إنشاء عرض سعر</button>
-            <button class="btn btn-out btn-sm" onclick="markAsIncomplete('${o._key}')"><i class="ti ti-user-off"></i> العميل لم يرغب</button>
+            <button class="btn btn-sm" style="background:linear-gradient(135deg,#78350F,#C89A4A);color:#fff;" onclick="goToQuoteWithPrefill('${(o.client||'').replace(/'/g,"\\'")}','${o.phone||''}','${o._key}')"><i class="ti ti-receipt-2"></i> إنشاء عرض سعر</button>
+            <button class="btn btn-out btn-sm" onclick="markAsIncomplete('${o._key}')"><i class="ti ti-user-off"></i> لم يرغب العميل</button>
           </div>
         </div>`;
       }).join(''):'<div class="card" style="padding:24px;text-align:center;color:var(--text-3);font-size:12px;">لا توجد مهام في مرحلة التجهيز حالياً</div>'}
@@ -3058,8 +3101,9 @@ function quoteArchiveSectionHtml(){
       <tbody id="quotes-archive-tbody">${buildQuoteArchiveRows()}</tbody>
     </table></div></div>`;
 }
-function goToQuoteWithPrefill(client,phone){
+function goToQuoteWithPrefill(client,phone,quickTaskKey){
   window._quotePrefillClient=client||'';window._quotePrefillPhone=phone||'';
+  window._quotePendingQuickTaskKey=quickTaskKey||'';
   nav('quote');
 }
 function buildQuotePage(){
@@ -3435,6 +3479,14 @@ async function saveQuoteToDb(){
   }else{
     const res=await fbPush('standalone_quotes',data);
     window._editingQuoteKey=res.name;
+    // If this quote was created from a "مرحلة التجهيز" quick task, remove the
+    // original quick-task order now that it has become a real quote — otherwise
+    // it would keep sitting in both the department's active list and the
+    // Preparation Phase list even though it's already been acted on.
+    if(window._quotePendingQuickTaskKey){
+      try{await fbDelete('orders/'+window._quotePendingQuickTaskKey);}catch(e){}
+      window._quotePendingQuickTaskKey='';
+    }
     await loadData();hideSaving();toast('✓ تم حفظ عرض السعر');
     await editQuote(window._editingQuoteKey);
   }
@@ -4470,8 +4522,8 @@ function openOrderModal(key){
   const _measureBtns=(k,cl,ph)=>`
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
       <button class="btn btn-brand btn-sm" onclick="transferQuickTaskToOrder('${k}')"><i class="ti ti-transfer"></i> تحويل لأمر تشغيل</button>
-      <button class="btn btn-sm" style="background:linear-gradient(135deg,#78350F,#C89A4A);color:#fff;" onclick="closeModal('order-modal');goToQuoteWithPrefill('${(cl||'').replace(/'/g,"\\'")}','${ph||''}')"><i class="ti ti-receipt-2"></i> إنشاء عرض سعر</button>
-      <button class="btn btn-out btn-sm" onclick="markAsIncomplete('${k}')"><i class="ti ti-user-off"></i> العميل لم يرغب</button>
+      <button class="btn btn-sm" style="background:linear-gradient(135deg,#78350F,#C89A4A);color:#fff;" onclick="closeModal('order-modal');goToQuoteWithPrefill('${(cl||'').replace(/'/g,"\\'")}','${ph||''}','${k}')"><i class="ti ti-receipt-2"></i> إنشاء عرض سعر</button>
+      <button class="btn btn-out btn-sm" onclick="markAsIncomplete('${k}')"><i class="ti ti-user-off"></i> لم يرغب العميل</button>
     </div>`;
   const _measureDone=o.isQuickTask&&o.workshopFeedbackDone&&o.currentDept!=='done'&&!o.incompleteClient&&(cu.type==='admin'||cu.type==='receiver');
   const _proofDone=o.isQuickTask&&o.approvedPrintFile&&o.currentDept!=='done'&&!o.workshopFeedbackDone&&!o.incompleteClient&&(cu.type==='admin'||cu.type==='receiver');
