@@ -2,7 +2,7 @@
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>روائع الأفكار الإعلانية — النظام الداخلي v3</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='48' fill='%234A0E17'/%3E%3Ctext x='50' y='50' text-anchor='middle' dominant-baseline='central' font-family='Changa,sans-serif' font-weight='800' font-size='62' fill='%23fff'%3E%D8%B1%3C/text%3E%3Crect x='24' y='31' width='5' height='38' rx='2.5' fill='%23D4AF37'/%3E%3C/svg%3E"/>
 <link rel="alternate icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='48' fill='%234A0E17'/%3E%3Ctext x='50' y='50' text-anchor='middle' dominant-baseline='central' font-family='Changa,sans-serif' font-weight='800' font-size='62' fill='%23fff'%3E%D8%B1%3C/text%3E%3Crect x='24' y='31' width='5' height='38' rx='2.5' fill='%23D4AF37'/%3E%3C/svg%3E"/>
@@ -278,9 +278,8 @@ input[inputmode="decimal"],input[inputmode="numeric"],input[type="number"],input
   direction:ltr;text-align:right;
 }
 /* Password field: type/align right-to-left like the username field above it (the page's
-   natural RTL flow); the show/hide eye button (added by enhancements.js) is repositioned
-   to the left side of the field by the cleanup script at the end of the document, with
-   matching padding so typed text never runs under the icon. */
+   natural RTL flow); the native show/hide eye button (see addPasswordToggles()) sits on
+   the left side of the field, with matching padding so typed text never runs under it. */
 input[type="password"]{direction:rtl;text-align:right;padding-left:40px;padding-right:14px;}
 .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:20px;}
 .ff{grid-column:1/-1;}
@@ -978,7 +977,6 @@ input:focus,select:focus,textarea:focus{box-shadow:inset 0 1px 3px rgba(74,14,23
   firebase.auth().signInAnonymously().catch(function(e){ console.error("Anon auth failed", e); });
 })();
 </script>
-<script src="system-enhancements-v2.js"></script>
 </head>
 <body>
 <div class="site-watermark" aria-hidden="true"><span>ر</span></div>
@@ -986,7 +984,6 @@ input:focus,select:focus,textarea:focus{box-shadow:inset 0 1px 3px rgba(74,14,23
 <div id="ls" style="display:block;">
   <div class="portal-bg"></div>
   <div class="portal-wrap">
-      <script src="enhancements.js"></script>
      <div id="portal-main-view">
       <div class="portal-header">
         <div class="p-logo">
@@ -1249,6 +1246,21 @@ input:focus,select:focus,textarea:focus{box-shadow:inset 0 1px 3px rgba(74,14,23
 <div class="toast-el" id="toast"></div>
 <script>
 // ============================================================
+// SECURITY: HTML ESCAPING + GLOBAL ERROR HANDLING
+// ============================================================
+function esc(s){
+  return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function isHashedPass(s){return /^[0-9a-f]{64}$/i.test(s||'');}
+window.addEventListener('unhandledrejection',function(e){
+  console.error('Unhandled rejection:',e.reason);
+  try{toast('⚠️ حدث خطأ غير متوقع، حاول مجدداً');}catch(_){}
+});
+window.onerror=function(msg,src,line,col,err){
+  console.error('Uncaught error:',msg,err);
+  try{toast('⚠️ حدث خطأ غير متوقع، حاول مجدداً');}catch(_){}
+};
+// ============================================================
 // CORE CONFIG & STATE
 // ============================================================
 const SESSION_KEY='rawaee_session_v8';
@@ -1343,12 +1355,18 @@ async function doLogin(){
   const p=document.getElementById('lp').value;
   const e=document.getElementById('lerr');
   const allowed=PORTAL_ROLE_MAP[_pendingPortalType]||[];
-  if(USERS[u]&&USERS[u].pass===p){
-    if(allowed.length>0&&!allowed.includes(USERS[u].type)){e.style.display='block';e.textContent='هذا الحساب لا ينتمي لهذا القسم';return;}
+  const rec=USERS[u];
+  const hash=rec?await makeSessionToken(u,p):null;
+  // rec.pass may still be a legacy plaintext value for accounts that haven't logged in
+  // since password hashing was introduced — verify against it directly this one time,
+  // then transparently upgrade it to a hash so plaintext never gets re-persisted.
+  const legacyMatch=rec&&!isHashedPass(rec.pass)&&rec.pass===p;
+  if(rec&&(rec.pass===hash||legacyMatch)){
+    if(legacyMatch){try{await fbPatch(`users/${u}`,{pass:hash});rec.pass=hash;}catch(err){}}
+    if(allowed.length>0&&!allowed.includes(rec.type)){e.style.display='block';e.textContent='هذا الحساب لا ينتمي لهذا القسم';return;}
     showSaving('جاري الدخول...');
     await loadData();hideSaving();
-    const tok=await makeSessionToken(u,p);
-    localStorage.setItem(SESSION_KEY,JSON.stringify({uname:u,tok}));
+    localStorage.setItem(SESSION_KEY,JSON.stringify({uname:u,tok:hash}));
     enterApp(u);e.style.display='none';
   }else{e.textContent='بيانات الدخول غير صحيحة';e.style.display='block';}
 }
@@ -1410,8 +1428,14 @@ const fbPush=(p,d)=>fbReq(p,'POST',d);
 const fbPatch=(p,d)=>fbReq(p,'PATCH',d);
 const fbDelete=p=>fbReq(p,'DELETE');
 async function syncUsers(){
-  try{const r=await fbGet('users');if(!r||Object.keys(r).length===0){await fbSet('users',INITIAL_USERS);USERS={...INITIAL_USERS};}else USERS=r;}
-  catch(e){USERS={...INITIAL_USERS};}
+  try{
+    const r=await fbGet('users');
+    if(!r||Object.keys(r).length===0){
+      const seeded={};
+      for(const uname in INITIAL_USERS){seeded[uname]={...INITIAL_USERS[uname],pass:await makeSessionToken(uname,INITIAL_USERS[uname].pass)};}
+      await fbSet('users',seeded);USERS=seeded;
+    }else USERS=r;
+  }catch(e){USERS={...INITIAL_USERS};}
 }
 async function loadData(){
   try{
@@ -1492,7 +1516,11 @@ window.addEventListener('load',async()=>{
   if(sess){
     try{
       const s=JSON.parse(sess);
-      if(s.uname&&s.tok&&USERS[s.uname]&&s.tok===await makeSessionToken(s.uname,USERS[s.uname].pass)){
+      const rec=USERS[s.uname];
+      // rec.pass is a hash post-migration, so the stored token can be compared to it
+      // directly; a not-yet-migrated legacy account still needs one re-derivation.
+      const stillValid=rec&&s.tok&&(isHashedPass(rec.pass)?s.tok===rec.pass:s.tok===await makeSessionToken(s.uname,rec.pass));
+      if(s.uname&&stillValid){
         await loadData();hideSaving();enterApp(s.uname);return;
       }
     }catch(e){}
@@ -1516,11 +1544,11 @@ function notifRelevantToMe(o){
 function getNotifications(){
   const notifs=[];const arr=ordersArr();const now=new Date();
   arr.filter(o=>o.currentDept!=='done'&&notifRelevantToMe(o)).forEach(o=>{
-    if(o.priority==='عاجلة')notifs.push({type:'urgent',msg:`طلب عاجل: ${o.id||o._key} — ${o.client}`,key:o._key,color:'#EF4444'});
+    if(o.priority==='عاجلة')notifs.push({type:'urgent',msg:`طلب عاجل: ${o.id||o._key} — ${esc(o.client)}`,key:o._key,color:'#EF4444'});
     if(o.deadline&&o.deadline!=='—'){
       const dl=new Date(o.deadline);const hoursLeft=Math.round((dl-now)/3600000);
       if(hoursLeft>=0&&hoursLeft<=24)notifs.push({type:'deadline',msg:`تسليم قريب (${hoursLeft} ساعة): ${o.id||o._key}`,key:o._key,color:'#F59E0B'});
-      else if(hoursLeft<0)notifs.push({type:'overdue',msg:`تجاوز موعد التسليم: ${o.id||o._key} — ${o.client}`,key:o._key,color:'#DC2626'});
+      else if(hoursLeft<0)notifs.push({type:'overdue',msg:`تجاوز موعد التسليم: ${o.id||o._key} — ${esc(o.client)}`,key:o._key,color:'#DC2626'});
     }
   });
   return notifs;
@@ -1919,7 +1947,7 @@ async function doTrack(){
       const pct=o.currentDept==='done'?100:Math.round((getActiveDepts(o).indexOf(o.currentDept)/Math.max(getActiveDepts(o).length,1))*100);
       return`<div style="background:var(--surface-2);border:1px solid var(--border);padding:16px;border-radius:var(--radius-md);margin-bottom:12px;text-align:right;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;"><strong style="color:var(--maroon);font-size:16px;">${o.id||'—'}</strong>${deptBadge(o.currentDept)}</div>
-        <div style="font-size:13px;margin:4px 0;"><strong>${o.client}</strong> — ${o.service}</div>
+        <div style="font-size:13px;margin:4px 0;"><strong>${esc(o.client)}</strong> — ${esc(o.service)}</div>
         <div style="font-size:11px;color:var(--text-3);margin-bottom:10px;">مسؤول المرحلة: ${currentPersonName(o)}</div>
         <div style="background:var(--border);border-radius:6px;height:8px;overflow:hidden;">
           <div style="width:${pct}%;background:${progressColor(o)};height:8px;border-radius:6px;"></div>
@@ -1976,7 +2004,7 @@ async function resyncOrderToSheet(key){
 function onQtTestDeptChange(dept){
   const sel=document.getElementById('qt-assignee');if(!sel)return;
   const workers=getDeptWorkers(dept);
-  sel.innerHTML=`<option value="all">📢 جميع موظفي ${dept==='print'?'الطباعة':'التنفيذ الخارجي'}</option>`+workers.map(w=>`<option value="${w.uname}">${w.name}</option>`).join('');
+  sel.innerHTML=`<option value="all">📢 جميع موظفي ${dept==='print'?'الطباعة':'التنفيذ الخارجي'}</option>`+workers.map(w=>`<option value="${esc(w.uname)}">${esc(w.name)}</option>`).join('');
 }
 function openQuickTask(type){
   const dw=getDeptWorkers('design');const ww=getDeptWorkers('workshop');const pw=getDeptWorkers('print');
@@ -1988,7 +2016,7 @@ function openQuickTask(type){
       <div class="fg"><label>رقم الجوال *</label><input id="qt-phone" inputmode="tel" placeholder="05XXXXXXXX"/></div>
       ${isProof?`
         <div class="fg"><label>المصمم المكلف *</label>
-          <select id="qt-assignee"><option value="all">📢 جميع المصممين</option>${dw.map(w=>`<option value="${w.uname}">${w.name}</option>`).join('')}</select>
+          <select id="qt-assignee"><option value="all">📢 جميع المصممين</option>${dw.map(w=>`<option value="${esc(w.uname)}">${esc(w.name)}</option>`).join('')}</select>
         </div>
         <div class="fg"><label>ملاحظات البروفة *</label><textarea id="qt-notes" placeholder="وصف التعديلات..."></textarea></div>
         <div class="fg"><label>إرفاق ملف</label>
@@ -2000,7 +2028,7 @@ function openQuickTask(type){
           <select id="qt-test-dept" onchange="onQtTestDeptChange(this.value)"><option value="print">الطباعة</option><option value="external">التنفيذ الخارجي</option></select>
         </div>
         <div class="fg"><label>الموظف المكلف *</label>
-          <select id="qt-assignee"><option value="all">📢 جميع موظفي الطباعة</option>${pw.map(w=>`<option value="${w.uname}">${w.name}</option>`).join('')}</select>
+          <select id="qt-assignee"><option value="all">📢 جميع موظفي الطباعة</option>${pw.map(w=>`<option value="${esc(w.uname)}">${esc(w.name)}</option>`).join('')}</select>
         </div>
         <div class="fg"><label>ملاحظات التست *</label><textarea id="qt-notes" placeholder="وصف التست المطلوب..."></textarea></div>
         <div class="fg"><label>إرفاق ملف (اختياري)</label>
@@ -2009,7 +2037,7 @@ function openQuickTask(type){
           <div id="qt-file-note" style="font-size:11px;color:#10B981;margin-top:4px;font-weight:700;"></div>
         </div>`:`
         <div class="fg"><label>موظف الورشة *</label>
-          <select id="qt-assignee"><option value="all">📢 جميع موظفي الورشة</option>${ww.map(w=>`<option value="${w.uname}">${w.name}</option>`).join('')}</select>
+          <select id="qt-assignee"><option value="all">📢 جميع موظفي الورشة</option>${ww.map(w=>`<option value="${esc(w.uname)}">${esc(w.name)}</option>`).join('')}</select>
         </div>
         <div class="fg"><label>الموقع الميداني *</label><input id="qt-location" placeholder="اسم المنطقة والموقع..."/></div>
         <div class="fg"><label>تفاصيل إضافية</label><textarea id="qt-notes" placeholder="تفاصيل المهمة..."></textarea></div>
@@ -2078,7 +2106,7 @@ function openWorkshopFeedback(key){
   const o=orders[key];if(!o)return;
   window._wfSitePhotoB64='';window._wfSitePhotoName='';
   document.getElementById('wf-feedback-body').innerHTML=`
-    <div style="margin-bottom:14px;font-size:12px;color:var(--text-2);">الطلب: <strong>${o.id||key}</strong> — ${o.client}</div>
+    <div style="margin-bottom:14px;font-size:12px;color:var(--text-2);">الطلب: <strong>${o.id||key}</strong> — ${esc(o.client)}</div>
     <div style="display:flex;flex-direction:column;gap:12px;">
       <div class="fg"><label>القياسات (ارتفاع × عرض × عمق)</label><input id="fb-dimensions" placeholder="مثال: 200×100 سم"/></div>
       <div class="fg"><label>حالة الموقع</label>
@@ -2200,7 +2228,7 @@ function buildDash(){
     const avatarLetter=(o.client||'؟').charAt(0);
     return`<div onclick="openOrderModal('${o._key}')" style="display:flex;align-items:center;gap:12px;padding:8px 14px;border-bottom:1px solid var(--border-soft);cursor:pointer;transition:background .12s;${bgRow?'background:'+bgRow+';':''}" onmouseover="this.style.background='#F9F5F0'" onmouseout="this.style.background='${bgRow}'">
       <div style="width:32px;height:32px;border-radius:50%;background:${accent}18;border:2px solid ${accent}40;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px;font-weight:800;color:${accent};">${avatarLetter}</div>
-      <div style="flex:1;min-width:0;"><div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;flex-wrap:wrap;"><span style="background:${accent};color:#fff;padding:1px 7px;border-radius:6px;font-size:9px;font-weight:800;display:inline-flex;align-items:center;gap:2px;white-space:nowrap;"><i class="ti ${icon}" style="font-size:9px;"></i> ${tag}</span><strong style="font-size:12px;color:var(--maroon);">${o.id||o._key}</strong></div><div style="font-size:11px;color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${o.client} ${o.service?'· '+o.service:''}</div></div>
+      <div style="flex:1;min-width:0;"><div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;flex-wrap:wrap;"><span style="background:${accent};color:#fff;padding:1px 7px;border-radius:6px;font-size:9px;font-weight:800;display:inline-flex;align-items:center;gap:2px;white-space:nowrap;"><i class="ti ${icon}" style="font-size:9px;"></i> ${tag}</span><strong style="font-size:12px;color:var(--maroon);">${o.id||o._key}</strong></div><div style="font-size:11px;color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(o.client)} ${o.service?'· '+o.service:''}</div></div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0;">${deptBadge(o.currentDept)}${timeBadge(hoursAgo(o.stageStartDate||o.date))}</div>
     </div>`;
   };
@@ -2231,14 +2259,14 @@ function buildDash(){
   </div>`:'';
   const tableRows=myArr.filter(o=>hoursAgo(o.stageStartDate||o.date)<=24).slice(0,8).map(o=>`<tr onclick="openOrderModal('${o._key}')" style="cursor:pointer">
     <td><strong style="color:var(--maroon)">${o.id||o._key}</strong>${o.priority==='عاجلة'?`<span class="urgent-tag" style="margin-right:5px;font-size:9px;"><i class="ti ti-bolt"></i></span>`:''}</td>
-    <td><strong>${o.client}</strong></td>
-    <td style="font-size:11px;color:var(--text-2);">${o.service}</td>
+    <td><strong>${esc(o.client)}</strong></td>
+    <td style="font-size:11px;color:var(--text-2);">${esc(o.service)}</td>
     <td>${gpbadge(o.priority)}</td>
     <td>${deptBadge(o.currentDept)}</td>
     <td>${timeBadge(hoursAgo(o.stageStartDate||o.date))}</td>
   </tr>`).join('');
   document.getElementById('page-dash').innerHTML=`
-    <div class="page-header"><div><div class="ptitle"><i class="ti ti-layout-dashboard"></i> لوحة التحكم</div><div class="breadcrumb">مرحباً، ${cu.name}</div></div></div>
+    <div class="page-header"><div><div class="ptitle"><i class="ti ti-layout-dashboard"></i> لوحة التحكم</div><div class="breadcrumb">مرحباً، ${esc(cu.name)}</div></div></div>
     ${roNote}${myNote}${qtBtns}${stats}
     ${controlsRow(false)}
     <div class="card">
@@ -2293,9 +2321,9 @@ function buildWfGrid(tab){
     return `<div class="wf-card" data-dept="${o.currentDept||'design'}" data-name="${(o.client||'').toLowerCase()}" data-key="${o._key}" onclick="wfCardClick(event,'${o._key}')">${hasOrderUpdate(o)?'<span class="order-update-dot" title="تم تحديث بيانات الطلب"></span>':''}<input type="checkbox" class="wf-check" data-key="${o._key}" onchange="toggleWfSelect('${o._key}',this.checked)"/><div class="wf-card-top">
         <div style="display:flex;justify-content:center;margin-bottom:4px;"><div style="width:22px;height:22px;border-radius:50%;background:var(--maroon);display:flex;align-items:center;justify-content:center;position:relative;flex-shrink:0;box-shadow:0 1px 3px rgba(0,0,0,.25);"><span style="font-family:'Changa',sans-serif;font-weight:800;font-size:12px;line-height:1;color:rgba(255,255,255,.92);">ر</span><span style="position:absolute;top:3px;left:5px;width:1px;height:9px;background:#D4AF37;border-radius:1px;"></span></div></div>
         <div class="wf-card-id">${o.id||o._key} · ${orderDateTime(o)}${o.isQuickTask?'<span class="urgent-tag" style="margin-right:6px;font-size:9px;"><i class="ti ti-bolt"></i>سريعة</span>':''}</div>
-        <div class="wf-card-name">${o.client}</div>
-        <div class="wf-card-svc">${o.service}</div>
-        ${o.isQuickTask?`<div style="font-size:11px;color:var(--maroon);font-weight:700;margin-bottom:4px;"><i class="ti ti-user"></i> اسم العميل: ${o.client||'—'} &nbsp; <i class="ti ti-phone"></i> رقم الجوال: ${o.phone||'—'}</div>`:''}
+        <div class="wf-card-name">${esc(o.client)}</div>
+        <div class="wf-card-svc">${esc(o.service)}</div>
+        ${o.isQuickTask?`<div style="font-size:11px;color:var(--maroon);font-weight:700;margin-bottom:4px;"><i class="ti ti-user"></i> اسم العميل: ${esc(o.client||'—')} &nbsp; <i class="ti ti-phone"></i> رقم الجوال: ${esc(o.phone||'—')}</div>`:''}
         <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;margin-bottom:6px;">${deptBadge(o.currentDept)} ${gpbadge(o.priority)} ${timeBadge(hoursAgo(o.stageStartDate||o.date))}</div>
         <div style="font-size:11px;color:var(--text-3);">المسؤول: ${currentPersonName(o)}</div>
         ${deadlineBadge(o.deadline)}
@@ -2526,10 +2554,10 @@ function buildDeptStagePage(){
   const rows=arr.map(o=>isCompleted?`<tr onclick="openOrderTimelineView('${o._key}')" style="cursor:pointer;">
     ${canDelete?`<td style="width:34px;" onclick="event.stopPropagation()"><input type="checkbox" class="deptstage-check" data-key="${o._key}" onchange="toggleDeptStageSelect('${o._key}',this.checked)"/></td>`:''}
     <td><strong style="color:var(--maroon)">${o.id||o._key}</strong></td>
-    <td><strong style="font-size:13px;">${o.client||'—'}</strong>${hasLaterMaintenanceForOrder(o)?' <span class="badge" style="background:#FEE2E2;color:#991B1B;font-size:9px;"><i class="ti ti-tool"></i> طلب صيانة لاحق</span>':''}</td>
+    <td><strong style="font-size:13px;">${esc(o.client||'—')}</strong>${hasLaterMaintenanceForOrder(o)?' <span class="badge" style="background:#FEE2E2;color:#991B1B;font-size:9px;"><i class="ti ti-tool"></i> طلب صيانة لاحق</span>':''}</td>
     <td style="font-weight:800;">${o.totalAmount?fmtMoney(Number(o.totalAmount))+' ر.س':'—'}</td>
-    <td style="font-size:12px;">${o.service||'—'}</td>
-    <td style="font-size:12px;">${o.createdBy||'—'}</td>
+    <td style="font-size:12px;">${esc(o.service||'—')}</td>
+    <td style="font-size:12px;">${esc(o.createdBy||'—')}</td>
     <td style="font-size:11px;">${o.date||'—'}</td>
     ${canDelete?`<td style="width:40px;" onclick="event.stopPropagation()">
       <div class="row-menu-wrap">
@@ -2541,8 +2569,8 @@ function buildDeptStagePage(){
     </td>`:''}
   </tr>`:`<tr onclick="openOrderTimelineView('${o._key}')" style="cursor:pointer;">
     <td><strong style="color:var(--maroon)">${o.id||o._key}</strong></td>
-    <td><strong style="font-size:13px;">${o.client||'—'}</strong></td>
-    <td style="font-size:12px;">${o.service||'—'}</td>
+    <td><strong style="font-size:13px;">${esc(o.client||'—')}</strong></td>
+    <td style="font-size:12px;">${esc(o.service||'—')}</td>
     <td style="font-size:11px;">${o.date||'—'}</td>
     <td>${gpbadge(o.priority)}</td>
     <td>${timeBadge(hoursAgo(o.stageStartDate||o.date))}</td>
@@ -2658,9 +2686,9 @@ function buildMyWork(){
       const cardBorder=isMnt?'border:2px solid #DC2626;background:linear-gradient(135deg,#FEF2F2,#FFF5F5);':o.isQuickTask?'border:2px solid #C89A4A;background:linear-gradient(135deg,#FFFDF8,#FFF5E0);':'';
       return`<div class="wf-card" style="${cardBorder}" onclick="openOrderModal('${o._key}')">${hasOrderUpdate(o)?'<span class="order-update-dot" title="تم تحديث بيانات الطلب"></span>':''}<div class="wf-card-top">
       <div class="wf-card-id">${o.id||o._key} · ${orderDateTime(o)}${isMnt?'<span class="urgent-tag" style="margin-right:6px;font-size:9px;background:linear-gradient(135deg,#991B1B,#DC2626);"><i class="ti ti-tool"></i>صيانة</span>':''}${o.isQuickTask?'<span class="urgent-tag" style="margin-right:6px;font-size:9px;background:linear-gradient(135deg,#78350F,#C89A4A);"><i class="ti ti-bolt"></i>مهمة سريعة</span>':''}</div>
-      <div class="wf-card-name">${o.client}</div>
-      <div class="wf-card-svc">${o.service}</div>
-      ${o.isQuickTask?`<div style="font-size:11px;color:var(--maroon);font-weight:700;margin-bottom:4px;"><i class="ti ti-user"></i> اسم العميل: ${o.client||'—'} &nbsp; <i class="ti ti-phone"></i> رقم الجوال: ${o.phone||'—'}</div>`:''}
+      <div class="wf-card-name">${esc(o.client)}</div>
+      <div class="wf-card-svc">${esc(o.service)}</div>
+      ${o.isQuickTask?`<div style="font-size:11px;color:var(--maroon);font-weight:700;margin-bottom:4px;"><i class="ti ti-user"></i> اسم العميل: ${esc(o.client||'—')} &nbsp; <i class="ti ti-phone"></i> رقم الجوال: ${esc(o.phone||'—')}</div>`:''}
       <div style="display:flex;gap:5px;flex-wrap:wrap;">${deptBadge(o.currentDept)} ${gpbadge(o.priority)} ${timeBadge(hoursAgo(o.stageStartDate||o.date))}</div>
       ${deadlineBadge(o.deadline)}
       ${o.quickTaskLocation?`<div style="font-size:11px;color:#9A3412;margin-top:6px;"><i class="ti ti-map-pin"></i> ${o.quickTaskLocation}</div>`:''}
@@ -2669,7 +2697,7 @@ function buildMyWork(){
       ${o.phone&&o.phone!=='—'?`<div style="margin-top:8px"><button class="btn btn-whatsapp btn-sm" onclick="event.stopPropagation();openWhatsapp('${o.phone}')"><i class="ti ti-brand-whatsapp"></i> واتساب</button></div>`:''}
     </div><div class="wf-card-prog"><div class="wf-card-fill" style="width:${orderProgress(o)}%;background:${progressColor(o)}"></div></div></div>`;}).join('')}</div>`;
   document.getElementById('my-content').innerHTML=`
-    <div class="page-header"><div class="ptitle"><i class="ti ti-user-check"></i> أعمالي — ${cu.name}</div></div>
+    <div class="page-header"><div class="ptitle"><i class="ti ti-user-check"></i> أعمالي — ${esc(cu.name)}</div></div>
     ${filterBar}
     ${controlsRow(false)}<div>${cards}</div>`;
 }
@@ -2704,7 +2732,7 @@ function onMaintOrderChange(prefix){
   if(!o){itemSel.innerHTML='<option value="">— اختر رقم الطلب أولاً —</option>';if(infoEl)infoEl.textContent='';return;}
   const items=maintOrderItemNames(o);
   itemSel.innerHTML='<option value="">— اختر البند —</option>'+items.map(n=>`<option value="${n}">${n}</option>`).join('');
-  if(infoEl)infoEl.innerHTML=`<i class="ti ti-user"></i> ${o.client||'—'} &nbsp; <i class="ti ti-phone"></i> ${o.phone||'—'}`;
+  if(infoEl)infoEl.innerHTML=`<i class="ti ti-user"></i> ${esc(o.client||'—')} &nbsp; <i class="ti ti-phone"></i> ${esc(o.phone||'—')}`;
 }
 // Single merged search+select combo (input+datalist): typing filters the native
 // datalist suggestions, picking one resolves the display label back to the real
@@ -2790,8 +2818,8 @@ function buildMaintReqRows(warrantyOnly){
   const arr=ordersArr().filter(o=>o.orderKind==='maintenance'&&!!o.warrantyRequested===warrantyOnly).sort((a,b)=>new Date(b.createdAt||b.date)-new Date(a.createdAt||a.date)).slice(0,20);
   if(!arr.length)return'<tr><td colspan="4" style="text-align:center;color:var(--text-3);padding:24px">لا توجد طلبات بعد</td></tr>';
   return arr.map(o=>`<tr onclick="openOrderModal('${o._key}')" style="cursor:pointer">
-    <td><strong>${o.client||'—'}</strong></td>
-    <td style="font-size:12px;max-width:260px;">${o.notes||'—'}${o.attachmentFile?` <a href="${o.attachmentFile}" download="${o.attachmentFileName||'ملف'}" class="file-download-link" onclick="event.stopPropagation()"><i class="ti ti-paperclip"></i></a>`:''}</td>
+    <td><strong>${esc(o.client||'—')}</strong></td>
+    <td style="font-size:12px;max-width:260px;">${esc(o.notes||'—')}${o.attachmentFile?` <a href="${o.attachmentFile}" download="${o.attachmentFileName||'ملف'}" class="file-download-link" onclick="event.stopPropagation()"><i class="ti ti-paperclip"></i></a>`:''}</td>
     <td>${o.currentDept==='done'?'<span class="badge b-done">تم الحل</span>':'<span class="badge" style="background:#FFEDD5;color:#9A3412;">قيد المعالجة</span>'}</td>
     <td style="font-size:11px;">${o.date||'—'}</td>
   </tr>`).join('');
@@ -2853,16 +2881,16 @@ function buildUrgentPage(){
           <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--surface);border:1.5px solid #FCA5A5;border-radius:10px;padding:10px 14px;">
             <i class="ti ti-bolt" style="color:#DC2626;font-size:18px;"></i>
             <div style="flex:1;min-width:160px;">
-              <div style="font-weight:800;font-size:13px;">${r.client||'—'}</div>
-              <div style="font-size:11.5px;color:var(--text-2);">${r.workDesc||'—'}</div>
-              <div style="font-size:10px;color:var(--text-3);margin-top:2px;"><i class="ti ti-user"></i> ${r.createdBy||'—'} &nbsp; <i class="ti ti-clock"></i> ${(r.createdAt||'').replace('T',' ').slice(0,16)}</div>
+              <div style="font-weight:800;font-size:13px;">${esc(r.client||'—')}</div>
+              <div style="font-size:11.5px;color:var(--text-2);">${esc(r.workDesc||'—')}</div>
+              <div style="font-size:10px;color:var(--text-3);margin-top:2px;"><i class="ti ti-user"></i> ${esc(r.createdBy||'—')} &nbsp; <i class="ti ti-clock"></i> ${(r.createdAt||'').replace('T',' ').slice(0,16)}</div>
             </div>
             <button class="btn btn-brand btn-sm" onclick="startProcessUrgent('${r._key}')"><i class="ti ti-arrow-left"></i> بدء المعالجة</button>
           </div>`).join(''):`<div class="card" style="padding:24px;text-align:center;color:var(--text-3);font-size:12px;">لا توجد طلبات عاجلة بانتظار المعالجة</div>`}
       </div>
       <div class="page-header" style="margin-top:18px;"><div class="ptitle" style="font-size:14px;"><i class="ti ti-history"></i> تمت معالجتها (${done.length})</div></div>
       <div class="card"><div class="tbl-wrap"><table><thead><tr><th>العميل</th><th>مختصر الأعمال</th><th style="width:110px">عولجت بواسطة</th><th style="width:90px">التاريخ</th></tr></thead>
-      <tbody>${done.length?done.map(r=>`<tr><td><strong>${r.client||'—'}</strong></td><td style="font-size:11.5px;">${r.workDesc||'—'}</td><td style="font-size:11px;">${r.processedBy||'—'}</td><td style="font-size:11px;">${(r.date||'').slice(0,10)}</td></tr>`).join(''):'<tr><td colspan="4" style="text-align:center;padding:18px;color:var(--text-3)">لا يوجد سجل بعد</td></tr>'}</tbody></table></div></div>`;
+      <tbody>${done.length?done.map(r=>`<tr><td><strong>${esc(r.client||'—')}</strong></td><td style="font-size:11.5px;">${esc(r.workDesc||'—')}</td><td style="font-size:11px;">${r.processedBy||'—'}</td><td style="font-size:11px;">${(r.date||'').slice(0,10)}</td></tr>`).join(''):'<tr><td colspan="4" style="text-align:center;padding:18px;color:var(--text-3)">لا يوجد سجل بعد</td></tr>'}</tbody></table></div></div>`;
     return;
   }
   const mine=arr.filter(r=>r.createdByUname===cu._uname);
@@ -2879,7 +2907,7 @@ function buildUrgentPage(){
     </div>
     <div class="page-header" style="margin-top:20px;"><div class="ptitle" style="font-size:14px;"><i class="ti ti-history"></i> طلباتي العاجلة السابقة</div></div>
     <div class="card"><div class="tbl-wrap"><table><thead><tr><th>العميل</th><th>مختصر الأعمال</th><th style="width:110px">الحالة</th><th style="width:90px">التاريخ</th></tr></thead>
-    <tbody>${mine.length?mine.map(r=>`<tr><td><strong>${r.client||'—'}</strong></td><td style="font-size:11.5px;">${r.workDesc||'—'}</td><td>${statusBadge(r.status)}</td><td style="font-size:11px;">${(r.date||'').slice(0,10)}</td></tr>`).join(''):'<tr><td colspan="4" style="text-align:center;padding:18px;color:var(--text-3)">لم تقم برفع أي طلب عاجل بعد</td></tr>'}</tbody></table></div></div>`;
+    <tbody>${mine.length?mine.map(r=>`<tr><td><strong>${esc(r.client||'—')}</strong></td><td style="font-size:11.5px;">${esc(r.workDesc||'—')}</td><td>${statusBadge(r.status)}</td><td style="font-size:11px;">${(r.date||'').slice(0,10)}</td></tr>`).join(''):'<tr><td colspan="4" style="text-align:center;padding:18px;color:var(--text-3)">لم تقم برفع أي طلب عاجل بعد</td></tr>'}</tbody></table></div></div>`;
 }
 async function submitUrgentRequest(){
   const client=document.getElementById('urg-client').value.trim();
@@ -2950,7 +2978,7 @@ function buildQuotePage(){
         <div style="padding:16px;display:flex;flex-direction:column;gap:12px;">
           <div class="fg">
             <label>العميل / الجهة *</label>
-            <datalist id="q-cl-list">${cArr.map(c=>`<option value="${c.name}">`).join('')}</datalist>
+            <datalist id="q-cl-list">${cArr.map(c=>`<option value="${esc(c.name)}">`).join('')}</datalist>
             <input id="q-client" list="q-cl-list" placeholder="اسم الشركة أو العميل" oninput="onClientInputQuote(this.value)" autocomplete="off"/>
           </div>
           <div class="fg"><label>رقم الجوال *</label><input id="q-phone" inputmode="tel" placeholder="05XXXXXXXX"/></div>
@@ -2962,7 +2990,7 @@ function buildQuotePage(){
         <div style="padding:16px;display:flex;flex-direction:column;gap:12px;">
           <div class="fg"><label>رقم العرض (تلقائي)</label><input id="q-ref" value="${autoRef}" placeholder="${autoRef}" readonly disabled style="background:var(--surface-2);color:var(--text-2);cursor:not-allowed;"/></div>
           <div class="fg"><label>تاريخ العرض</label><input id="q-date" value="${todayQ}" readonly disabled style="background:var(--surface-2);color:var(--text-2);cursor:not-allowed;"/></div>
-          <div class="fg"><label>مسؤول المبيعات</label><input id="q-sales" value="${cu.name}"/></div>
+          <div class="fg"><label>مسؤول المبيعات</label><input id="q-sales" value="${esc(cu.name)}"/></div>
           <div class="fg"><label>صلاحية العرض حتى</label><input type="date" id="q-validity"/></div>
           <div class="fg"><label>مدة التنفيذ</label><input id="q-delivery" placeholder="مثال: 5-7 أيام عمل"/></div>
           <div class="fg">
@@ -3091,7 +3119,7 @@ function buildQuoteArchiveRows(){
     return `<tr data-key="${q._key}" data-date="${q.date||''}" data-converted="${conv?'1':'0'}" style="${conv?'background:#F0FDF4;':''}">
     <td><div style="display:flex;align-items:center;gap:8px;">
       ${firstImg?`<img src="${firstImg.img}" title="يحتوي على صور مرفقة" style="width:26px;height:26px;object-fit:cover;border-radius:6px;border:1px solid var(--border);flex-shrink:0;"/>`:''}
-      <strong>${q.client}</strong>
+      <strong>${esc(q.client)}</strong>
     </div></td>
     <td><span class="badge b-new">${q.ref||'—'}</span></td>
     <td><span class="badge b-proc" style="font-size:12px;">${fmtMoney(Number(q.totalWithVat||q.total||0))} ر.س</span></td>
@@ -3354,7 +3382,7 @@ function renderA4Quote(data,key=''){
       :`<td style="padding:8px;text-align:center;"><div style="width:44px;height:44px;border-radius:8px;background:#F3EEE4;display:inline-flex;align-items:center;justify-content:center;"><i class="ti ti-photo" style="color:#C9A227;font-size:16px;"></i></div></td>`):'';
     return `<tr style="background:${i%2===0?'#ffffff':'#FBF8F2'};">
       ${imgCell}
-      <td style="padding:10px 12px;text-align:right;font-size:12.5px;color:#2A2A2A;font-weight:600;line-height:1.4;">${l.lbl||'—'}</td>
+      <td style="padding:10px 12px;text-align:right;font-size:12.5px;color:#2A2A2A;font-weight:600;line-height:1.4;">${esc(l.lbl||'—')}</td>
       <td style="padding:10px 12px;text-align:center;font-size:12.5px;color:#5B0F19;font-weight:700;">${qty}</td>
       <td style="padding:10px 12px;text-align:center;font-size:12.5px;color:#2A2A2A;">${fmt(price)} <span style="font-size:9.5px;color:#9B8F80;">ر.س</span></td>
       <td style="padding:10px 12px;text-align:center;font-size:12.5px;color:#2A2A2A;">${fmt(priceAfterTax)} <span style="font-size:9.5px;color:#9B8F80;">ر.س</span></td>
@@ -3425,11 +3453,11 @@ function renderA4Quote(data,key=''){
       <div style="display:flex;flex-direction:column;gap:8px;">
         <div style="display:flex;justify-content:space-between;border-bottom:1px dashed #EEE3D3;padding-bottom:6px;">
           <span style="font-size:11px;color:#9B8F80;">اسم العميل</span>
-          <span style="font-size:12.5px;font-weight:700;color:#2A2A2A;">${data.client||'—'}</span>
+          <span style="font-size:12.5px;font-weight:700;color:#2A2A2A;">${esc(data.client||'—')}</span>
         </div>
         <div style="display:flex;justify-content:space-between;">
           <span style="font-size:11px;color:#9B8F80;">رقم الجوال</span>
-          <span style="font-size:12.5px;font-weight:700;color:#2A2A2A;direction:ltr;">${data.phone||'—'}</span>
+          <span style="font-size:12.5px;font-weight:700;color:#2A2A2A;direction:ltr;">${esc(data.phone||'—')}</span>
         </div>
       </div>
     </div>
@@ -3441,15 +3469,15 @@ function renderA4Quote(data,key=''){
       <div style="display:flex;flex-direction:column;gap:8px;">
         <div style="display:flex;justify-content:space-between;border-bottom:1px dashed #EEE3D3;padding-bottom:6px;">
           <span style="font-size:11px;color:#9B8F80;">مسؤول المبيعات</span>
-          <span style="font-size:12.5px;font-weight:700;color:#2A2A2A;">${data.sales||'—'}</span>
+          <span style="font-size:12.5px;font-weight:700;color:#2A2A2A;">${esc(data.sales||'—')}</span>
         </div>
         <div style="display:flex;justify-content:space-between;border-bottom:1px dashed #EEE3D3;padding-bottom:6px;">
           <span style="font-size:11px;color:#9B8F80;">مدة التنفيذ</span>
-          <span style="font-size:12.5px;font-weight:700;color:#2A2A2A;">${data.delivery||'—'}</span>
+          <span style="font-size:12.5px;font-weight:700;color:#2A2A2A;">${esc(data.delivery||'—')}</span>
         </div>
         <div style="display:flex;justify-content:space-between;">
           <span style="font-size:11px;color:#9B8F80;">طريقة وشروط الدفع</span>
-          <span style="font-size:12.5px;font-weight:700;color:#2A2A2A;">${data.paymentTerms||'—'}</span>
+          <span style="font-size:12.5px;font-weight:700;color:#2A2A2A;">${esc(data.paymentTerms||'—')}</span>
         </div>
       </div>
     </div>
@@ -3530,7 +3558,7 @@ function renderA4Quote(data,key=''){
         <i class="ti ti-building-bank" style="color:#5B0F19;font-size:15px;"></i>
         <span style="font-size:11px;font-weight:800;color:#5B0F19;letter-spacing:1.5px;">البيانات البنكية</span>
       </div>
-      <div style="background:#FBF8F2;border:1px solid #F1E9D8;border-radius:10px;padding:10px 14px;font-size:11.5px;color:#2A2A2A;line-height:1.7;white-space:pre-line;">${data.bank||'—'}</div>
+      <div style="background:#FBF8F2;border:1px solid #F1E9D8;border-radius:10px;padding:10px 14px;font-size:11.5px;color:#2A2A2A;line-height:1.7;white-space:pre-line;">${esc(data.bank||'—')}</div>
     </div>
     <div style="flex:1;background:#fff;border-radius:16px;padding:14px 18px;border:1px solid #F1E9D8;display:flex;align-items:center;gap:14px;">
       <div id="print-qr-${key||'new'}" style="flex-shrink:0;"></div>
@@ -3547,7 +3575,7 @@ function renderA4Quote(data,key=''){
       <i class="ti ti-notes" style="color:#5B0F19;font-size:15px;"></i>
       <span style="font-size:11px;font-weight:800;color:#5B0F19;letter-spacing:1.5px;">الشروط والأحكام</span>
     </div>
-    <div style="font-size:11px;color:#5a5a5a;line-height:1.6;white-space:pre-line;">${data.terms}</div>
+    <div style="font-size:11px;color:#5a5a5a;line-height:1.6;white-space:pre-line;">${esc(data.terms)}</div>
   </div>`:''}
   <!-- FOOTER CARD -->
   <div style="background:#fff;border-radius:16px;padding:12px 20px;border:1px solid #F1E9D8;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
@@ -3615,10 +3643,10 @@ async function convertSavedQuoteToOrder(key,preloadedData=null){
       </div>
       <div class="fg"><label>الأولوية</label><select id="co-priority"><option>عادية</option><option>متوسطة</option><option>عاجلة</option></select></div>
       <div class="fg"><label>تاريخ التسليم *</label><input type="datetime-local" id="co-deadline" required/></div>
-      <div class="fg"><label>مسؤول التصميم</label><select id="co-design"><option value="none">❌ بدون تصميم</option>${dw.map(w=>`<option value="${w.uname}">${w.name}</option>`).join('')}</select></div>
-      <div class="fg"><label>مسؤول التنفيذ الخارجي</label><select id="co-external"><option value="none">❌ بدون تنفيذ خارجي</option>${ew.map(w=>`<option value="${w.uname}">${w.name}</option>`).join('')}</select></div>
-      <div class="fg"><label>مسؤول الطباعة</label><select id="co-print"><option value="none">❌ بدون طباعة</option>${pw.map(w=>`<option value="${w.uname}">${w.name}</option>`).join('')}</select></div>
-      <div class="fg"><label>مسؤول الورشة</label><select id="co-workshop"><option value="none">❌ بدون ورشة</option>${ww.map(w=>`<option value="${w.uname}">${w.name}</option>`).join('')}</select></div>
+      <div class="fg"><label>مسؤول التصميم</label><select id="co-design"><option value="none">❌ بدون تصميم</option>${dw.map(w=>`<option value="${esc(w.uname)}">${esc(w.name)}</option>`).join('')}</select></div>
+      <div class="fg"><label>مسؤول التنفيذ الخارجي</label><select id="co-external"><option value="none">❌ بدون تنفيذ خارجي</option>${ew.map(w=>`<option value="${esc(w.uname)}">${esc(w.name)}</option>`).join('')}</select></div>
+      <div class="fg"><label>مسؤول الطباعة</label><select id="co-print"><option value="none">❌ بدون طباعة</option>${pw.map(w=>`<option value="${esc(w.uname)}">${esc(w.name)}</option>`).join('')}</select></div>
+      <div class="fg"><label>مسؤول الورشة</label><select id="co-workshop"><option value="none">❌ بدون ورشة</option>${ww.map(w=>`<option value="${esc(w.uname)}">${esc(w.name)}</option>`).join('')}</select></div>
       <div class="fg">
         <div style="display:flex;align-items:center;justify-content:space-between;">
           <label style="margin:0;">خطوط إنتاج موازية (طلبات متزامنة إضافية)</label>
@@ -3648,7 +3676,7 @@ function renderCoProductionLines(){
   const wrap=document.getElementById('co-prod-lines-wrap');if(!wrap)return;
   const lines=window._coProdLines||[];
   const dw=getDeptWorkers('design'),ew=getDeptWorkers('external'),pw=getDeptWorkers('print'),ww=getDeptWorkers('workshop');
-  const mkOpts=(workers,noneLabel)=>sel=>`<option value="none"${sel==='none'?' selected':''}>${noneLabel}</option>`+(workers||[]).map(w=>`<option value="${w.uname}"${sel===w.uname?' selected':''}>${w.name}</option>`).join('');
+  const mkOpts=(workers,noneLabel)=>sel=>`<option value="none"${sel==='none'?' selected':''}>${noneLabel}</option>`+(workers||[]).map(w=>`<option value="${esc(w.uname)}"${sel===w.uname?' selected':''}>${esc(w.name)}</option>`).join('');
   const dOpts=mkOpts(dw,'❌ بدون تصميم'),eOpts=mkOpts(ew,'❌ لا يوجد'),pOpts=mkOpts(pw,'❌ لا يتطلب'),wOpts=mkOpts(ww,'❌ لا يتطلب');
   const quoteLines=window._coQuoteLines||[];
   const itemCheckboxes=(l)=>{
@@ -3793,7 +3821,7 @@ async function finalizeConvertToOrder(quoteKey){
     await fbPatch(`orders/${lineRes.name}`,{id:newId+'-L'+(i+2)});
   }
   syncOrderToSheet(newId,q.client,phone,'عند التسليم',service,{totalAmount:Number(q.totalWithVat||0),paidAmount:0,remainingAmount:Number(q.totalWithVat||0),date:today,deadline,createdBy:cu.name});
-  if(phone&&phone!=='—')await sendSmsNotification(phone,`مرحباً ${q.client}، تم استلام طلبكم رقم ${newId} وهو قيد التنفيذ. روائع الأفكار الإعلانية.`);
+  if(phone&&phone!=='—')await sendSmsNotification(phone,`مرحباً ${esc(q.client)}، تم استلام طلبكم رقم ${newId} وهو قيد التنفيذ. روائع الأفكار الإعلانية.`);
   window._coItemFiles={};window._coProdLines=[];
   await loadData();hideSaving();closeModal('order-modal');
   toast('✓ تم إنشاء أمر التشغيل: '+newId);nav('wf');
@@ -3853,7 +3881,7 @@ async function sendChatMsg(orderKey){
   if(container){
     const div=document.createElement('div');
     div.className='chat-msg mine';
-    div.innerHTML=`<div class="chat-meta">${cu.name} · الآن</div><div>${txt}</div>`;
+    div.innerHTML=`<div class="chat-meta">${esc(cu.name)} · الآن</div><div>${txt}</div>`;
     container.appendChild(div);container.scrollTop=container.scrollHeight;
   }
   await fbPush(`chats/${orderKey}`,msg);
@@ -3993,7 +4021,7 @@ async function sendTeamChatMsg(){
   if(container){
     const div=document.createElement('div');
     div.className='chat-msg mine';
-    div.innerHTML=`<div class="chat-meta">${cu.name} · ${cu.role||''} · الآن</div><div>${highlightMentions(txt)}</div>`;
+    div.innerHTML=`<div class="chat-meta">${esc(cu.name)} · ${cu.role||''} · الآن</div><div>${highlightMentions(txt)}</div>`;
     container.appendChild(div);container.scrollTop=container.scrollHeight;
   }
   await fbPush('team_chat',msg);
@@ -4073,7 +4101,7 @@ function buildReassignBox(o,key){
   if(!deptInfo)return'';
   const workers=getDeptWorkers(dept);
   const curTo=dept==='design'?o.designTo:dept==='print'?o.printTo:dept==='workshop'?o.workshopTo:dept==='external'?o.externalTo:'none';
-  const options=`<option value="none">❌ بدون تكليف</option>`+workers.map(w=>`<option value="${w.uname}" ${w.uname===curTo?'selected':''}>${w.name}</option>`).join('');
+  const options=`<option value="none">❌ بدون تكليف</option>`+workers.map(w=>`<option value="${esc(w.uname)}" ${w.uname===curTo?'selected':''}>${esc(w.name)}</option>`).join('');
   return `<div class="dept-upload-box" style="margin-top:10px;">
     <div class="dept-upload-title" style="color:var(--maroon)"><i class="ti ti-user-cog"></i> تغيير الموظف المسؤول (${deptInfo.label})</div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
@@ -4111,7 +4139,7 @@ function openUnpaidOrderSummary(key){
     </div>
     <div style="padding:16px;display:grid;gap:12px;">
       <div>
-        <div style="font-weight:800;font-size:15px;">${o.client||'—'}</div>
+        <div style="font-weight:800;font-size:15px;">${esc(o.client||'—')}</div>
         <div style="font-size:12px;color:var(--text-3);margin-top:2px;">${(o.orderItems&&o.orderItems.length?o.orderItems[0].name:o.service)||'—'}</div>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
@@ -4241,26 +4269,26 @@ function openOrderModal(key){
     }
   }
   const canSeePayment=['admin','follower','receiver'].includes(t);
-  const fileChips=(o.files&&Array.isArray(o.files)&&o.files.length>0)?o.files.map(f=>f&&f.data&&f.name?`<a href="${f.data}" download="${f.name}" class="file-download-link"><i class="ti ti-download"></i>${f.name}</a>`:'').join(' '):'— لا توجد ملفات مرفقة بالطلب';
+  const fileChips=(o.files&&Array.isArray(o.files)&&o.files.length>0)?o.files.map(f=>f&&f.data&&f.name?`<a href="${f.data}" download="${esc(f.name)}" class="file-download-link"><i class="ti ti-download"></i>${esc(f.name)}</a>`:'').join(' '):'— لا توجد ملفات مرفقة بالطلب';
   const itemsSection=(o.orderItems&&Array.isArray(o.orderItems)&&o.orderItems.length)?`
     <div class="di" style="grid-column:1/-1;border-top:1px solid var(--border-soft);padding-top:10px;">
       <span class="dk">📦 بنود الطلب والمرفقات</span>
       <div style="display:flex;flex-direction:column;gap:8px;margin-top:6px;">
         ${o.orderItems.map((it,i)=>{
-          const chips=(it.files&&it.files.length)?it.files.map(f=>`<a href="${f.data}" download="${f.name}" class="file-download-link"><i class="ti ti-download"></i>${f.name}</a>`).join(' ')
-            :(it.fileData&&it.fileName?`<a href="${it.fileData}" download="${it.fileName}" class="file-download-link"><i class="ti ti-download"></i>${it.fileName}</a>`:'');
+          const chips=(it.files&&it.files.length)?it.files.map(f=>`<a href="${f.data}" download="${esc(f.name)}" class="file-download-link"><i class="ti ti-download"></i>${esc(f.name)}</a>`).join(' ')
+            :(it.fileData&&it.fileName?`<a href="${it.fileData}" download="${esc(it.fileName)}" class="file-download-link"><i class="ti ti-download"></i>${esc(it.fileName)}</a>`:'');
           return`<div style="background:${it.addedLater?'#FFFBEB':'var(--surface-2)'};border:1px solid ${it.addedLater?'#FDE68A':'var(--border)'};border-radius:8px;padding:10px 12px;">
             <div style="font-size:12px;font-weight:800;color:var(--maroon);margin-bottom:3px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-              <span style="flex:1;">بند ${i+1}: ${it.name||'—'}</span>
+              <span style="flex:1;">بند ${i+1}: ${esc(it.name||'—')}</span>
               ${it.price?`<span style="background:var(--gold-soft);color:var(--maroon);font-size:10px;font-weight:800;padding:2px 8px;border-radius:20px;">${fmtMoney(Number(it.price))} ر.س</span>`:''}
               ${it.addedLater?`<span style="background:#C89A4A;color:#fff;font-size:9px;font-weight:800;padding:2px 7px;border-radius:20px;"><i class="ti ti-sparkles"></i> جديد</span>`:''}
               ${it.edited?`<span style="background:#2563EB;color:#fff;font-size:9px;font-weight:800;padding:2px 7px;border-radius:20px;"><i class="ti ti-pencil"></i> معدّل</span>`:''}
               ${deptRestricted?'':`<button class="btn btn-out btn-xs" style="padding:2px 8px;" onclick="openAddItemModal('${key}',${i})" title="تعديل البند"><i class="ti ti-pencil"></i></button>`}
               ${chips?`<button class="btn btn-out btn-xs" style="padding:2px 8px;" onclick="downloadAllItemFiles('${key}',${i})" title="تنزيل كل مرفقات البند"><i class="ti ti-download"></i> تنزيل الكل</button>`:''}
             </div>
-            ${it.addedLater?`<div style="font-size:10px;color:#92400E;margin-bottom:5px;">أُضيف بواسطة ${it.addedBy||'—'} بتاريخ ${(it.addedAt||'').split('T')[0]||'—'}</div>`:''}
-            ${it.edited?`<div style="font-size:10px;color:#1E40AF;margin-bottom:5px;">آخر تعديل بواسطة ${it.editedBy||'—'} بتاريخ ${(it.editedAt||'').split('T')[0]||'—'}</div>`:''}
-            ${it.details?`<div style="font-size:11px;color:var(--text-2);margin-bottom:6px;line-height:1.6;">${it.details}</div>`:''}
+            ${it.addedLater?`<div style="font-size:10px;color:#92400E;margin-bottom:5px;">أُضيف بواسطة ${esc(it.addedBy||'—')} بتاريخ ${(it.addedAt||'').split('T')[0]||'—'}</div>`:''}
+            ${it.edited?`<div style="font-size:10px;color:#1E40AF;margin-bottom:5px;">آخر تعديل بواسطة ${esc(it.editedBy||'—')} بتاريخ ${(it.editedAt||'').split('T')[0]||'—'}</div>`:''}
+            ${it.details?`<div style="font-size:11px;color:var(--text-2);margin-bottom:6px;line-height:1.6;">${esc(it.details)}</div>`:''}
             <div style="display:flex;flex-wrap:wrap;gap:6px;">${chips||'<span style="font-size:10px;color:var(--text-3);">لا توجد مرفقات لهذا البند</span>'}</div>
           </div>`;
         }).join('')}
@@ -4305,7 +4333,7 @@ function openOrderModal(key){
   const maintOrderRow=o.orderKind==='maintenance'?`<div class="di" style="grid-column:1/-1;border-top:1px solid var(--border-soft);padding-top:10px;">
     <span class="dk" style="color:#DC2626"><i class="ti ti-tool"></i> طلب صيانة</span>
     <div class="dv" style="display:flex;flex-direction:column;gap:6px;">
-      <span style="font-size:12px;"><strong>وصف المشكلة:</strong> ${o.notes||'—'}</span>
+      <span style="font-size:12px;"><strong>وصف المشكلة:</strong> ${esc(o.notes||'—')}</span>
       ${o.maintenanceResolutionNote?`<div style="background:#F0FDF4;border:1px solid #BBF7D0;border-radius:8px;padding:8px 10px;font-size:12px;"><strong style="color:#065F46;"><i class="ti ti-check"></i> الحل المسجّل:</strong> ${o.maintenanceResolutionNote}${o.maintenanceResolvedBy?`<div style="font-size:10px;color:var(--text-3);margin-top:3px;">بواسطة ${o.maintenanceResolvedBy}</div>`:''}</div>`:''}
     </div>
   </div>`:'';
@@ -4338,21 +4366,21 @@ function openOrderModal(key){
     :''
   document.getElementById('order-modal-body').innerHTML=`
     <div class="modal-header">
-      <div><div class="modal-title"><i class="ti ti-file-text"></i> ${o.id||key} — ${o.client}${o.orderKind==='maintenance'?'<span class="urgent-tag" style="margin-right:8px;font-size:9px;background:linear-gradient(135deg,#991B1B,#DC2626);"><i class="ti ti-tool"></i>صيانة</span>':''}${o.isQuickTask?'<span class="urgent-tag" style="margin-right:8px;font-size:9px;"><i class="ti ti-bolt"></i>مهمة سريعة</span>':''}</div><div style="font-size:11px;color:var(--text-3);margin-top:2px;">${o.service}</div></div>
+      <div><div class="modal-title"><i class="ti ti-file-text"></i> ${o.id||key} — ${esc(o.client)}${o.orderKind==='maintenance'?'<span class="urgent-tag" style="margin-right:8px;font-size:9px;background:linear-gradient(135deg,#991B1B,#DC2626);"><i class="ti ti-tool"></i>صيانة</span>':''}${o.isQuickTask?'<span class="urgent-tag" style="margin-right:8px;font-size:9px;"><i class="ti ti-bolt"></i>مهمة سريعة</span>':''}</div><div style="font-size:11px;color:var(--text-3);margin-top:2px;">${esc(o.service)}</div></div>
       <button class="btn-close" onclick="closeModal('order-modal')">×</button>
     </div>
     ${fromQuoteHtml}
     ${updateBannerHtml}
     ${stageBar(o,key)}
     <div class="dg" style="margin-bottom:14px;">
-      <div class="di"><span class="dk">اسم العميل</span><span class="dv">${o.client}</span></div>
+      <div class="di"><span class="dk">اسم العميل</span><span class="dv">${esc(o.client)}</span></div>
       <div class="di"><span class="dk">تاريخ ووقت الطلب</span><span class="dv">${orderDateTime(o)}</span></div>
-      <div class="di"><span class="dk">رقم الهاتف</span><span class="dv">${o.phone||'—'} ${o.phone&&o.phone!=='—'?`<button class="btn btn-whatsapp btn-xs" style="margin-right:4px" onclick="openWhatsapp('${o.phone}')"><i class="ti ti-brand-whatsapp"></i></button>`:''}</span></div>
-      <div class="di"><span class="dk">الخدمة</span><span class="dv">${o.service}</span></div>
+      <div class="di"><span class="dk">رقم الهاتف</span><span class="dv">${esc(o.phone||'—')} ${o.phone&&o.phone!=='—'?`<button class="btn btn-whatsapp btn-xs" style="margin-right:4px" onclick="openWhatsapp('${o.phone}')"><i class="ti ti-brand-whatsapp"></i></button>`:''}</span></div>
+      <div class="di"><span class="dk">الخدمة</span><span class="dv">${esc(o.service)}</span></div>
       <div class="di"><span class="dk">الأولوية</span><span class="dv">${gpbadge(o.priority)}</span></div>
       <div class="di"><span class="dk">تاريخ التسليم</span><span class="dv">${o.deadline||'—'} ${deadlineBadge(o.deadline)}</span></div>
-      <div class="di"><span class="dk">منشئ الطلب</span><span class="dv">${o.createdBy||'—'}</span></div>
-      <div class="di" style="grid-column:1/-1;border-top:1px solid var(--border-soft);padding-top:10px;"><span class="dk">ملاحظات ومواصفات</span><span class="dv" style="font-weight:400;background:var(--surface-2);padding:8px 12px;border-radius:var(--radius-sm);border:1px solid var(--border);display:block;margin-top:4px;">${o.notes||'—'}</span></div>
+      <div class="di"><span class="dk">منشئ الطلب</span><span class="dv">${esc(o.createdBy||'—')}</span></div>
+      <div class="di" style="grid-column:1/-1;border-top:1px solid var(--border-soft);padding-top:10px;"><span class="dk">ملاحظات ومواصفات</span><span class="dv" style="font-weight:400;background:var(--surface-2);padding:8px 12px;border-radius:var(--radius-sm);border:1px solid var(--border);display:block;margin-top:4px;">${esc(o.notes||'—')}</span></div>
       ${itemsSection}
       ${getActiveDepts(o).includes('print')?`<div class="di" style="grid-column:1/-1;border-top:1px solid var(--border-soft);padding-top:10px;"><span class="dk" style="color:#6B21A8">🎨 ملف التصميم المعتمد للطباعة</span><span class="dv">${pLink}</span></div>`:''}
       ${getActiveDepts(o).includes('workshop')?`<div class="di" style="grid-column:1/-1"><span class="dk" style="color:#3730A3">📦 مخطط قياسات الورشة</span><span class="dv">${wLink}</span></div>
@@ -4589,7 +4617,7 @@ async function archiveOrder(key){
   showSaving('جاري الأرشفة...');
   await fbPatch(`orders/${key}`,{currentDept:'done',status:'مؤرشف',archivedAt:new Date().toISOString(),archivedBy:cu.name});
   await createWarrantyIfNeeded(key,o);
-  if(o?.phone&&o.phone!=='—')await sendSmsNotification(o.phone,`مرحباً ${o.client}، طلبكم ${o.id||key} تم إغلاقه. روائع الأفكار الإعلانية.`);
+  if(o?.phone&&o.phone!=='—')await sendSmsNotification(o.phone,`مرحباً ${esc(o.client)}، طلبكم ${o.id||key} تم إغلاقه. روائع الأفكار الإعلانية.`);
   await loadData();hideSaving();closeModal('order-modal');
   resyncOrderToSheet(key);
   toast('✓ تم إنهاء الطلب وأرشفته');refreshCurrentPage();
@@ -4613,12 +4641,12 @@ function buildAddForm(isUrgentQuick=false){
   window._pendingQuickTaskKey=window._prefillFromQuickTaskKey||'';
   window._prefillFromQuickTaskKey='';
   window._prefillClient='';window._prefillPhone='';window._prefillFiles=[];
-  const mkOpts=arr=>arr.map(w=>`<option value="${w.uname}">${w.name}</option>`).join('');
+  const mkOpts=arr=>arr.map(w=>`<option value="${esc(w.uname)}">${esc(w.name)}</option>`).join('');
   const cArr=Object.values(clients);
   const isDesigner=cu.type==='designer';
   document.getElementById('add-content').innerHTML=`
     ${isUrgentQuick?'<div class="ro-notice" style="background:#FFF5F5;border-color:#FCA5A5;color:#991B1B"><i class="ti ti-bolt"></i> تسجيل طلب مستعجل</div>':''}
-    <datalist id="cl-list">${cArr.map(c=>`<option value="${c.name}">`).join('')}</datalist>
+    <datalist id="cl-list">${cArr.map(c=>`<option value="${esc(c.name)}">`).join('')}</datalist>
     <div class="order-cards-row">
       <!-- CARD 1 (Far Right): CUSTOMER INFORMATION -->
       <div class="oc-card">
@@ -4709,7 +4737,7 @@ function buildAddForm(isUrgentQuick=false){
         </div>
         <div class="wf-stage-track">
           <div class="wf-stage-card"><div id="dept-wrap-design" class="dept-section"><div class="dept-header dept-design"><span class="wf-stage-icon"><i class="ti ti-brush"></i></span> التصميم</div><div class="dept-body">
-            <select id="fw-design"><option value="none">❌ بدون تصميم</option>${isDesigner||isUrgentQuick?`<option value="${cu._uname}" selected>${cu.name}</option>`:''}${mkOpts(dw)}</select>
+            <select id="fw-design"><option value="none">❌ بدون تصميم</option>${isDesigner||isUrgentQuick?`<option value="${cu._uname}" selected>${esc(cu.name)}</option>`:''}${mkOpts(dw)}</select>
           </div></div></div>
           <div class="wf-stage-connector"></div>
           <div class="wf-stage-card"><div id="dept-wrap-external" class="dept-section"><div class="dept-header dept-ext"><span class="wf-stage-icon"><i class="ti ti-world"></i></span> تنفيذ خارجي</div><div class="dept-body">
@@ -4847,7 +4875,7 @@ function toggleProductionLineItem(id,itemId,checked){
 function renderProductionLines(){
   const wrap=document.getElementById('prod-lines-wrap');if(!wrap)return;
   const lines=window._prodLines||[];
-  const mkDeptOpts=(workers,noneLabel)=>sel=>`<option value="none"${sel==='none'?' selected':''}>${noneLabel}</option>`+(workers||[]).map(w=>`<option value="${w.uname}"${sel===w.uname?' selected':''}>${w.name}</option>`).join('');
+  const mkDeptOpts=(workers,noneLabel)=>sel=>`<option value="none"${sel==='none'?' selected':''}>${noneLabel}</option>`+(workers||[]).map(w=>`<option value="${esc(w.uname)}"${sel===w.uname?' selected':''}>${esc(w.name)}</option>`).join('');
   const dOpts=mkDeptOpts(window._prodLineDesignWorkers,'❌ بدون تصميم');
   const eOpts=mkDeptOpts(window._prodLineExternalWorkers,'❌ لا يوجد');
   const pOpts=mkDeptOpts(window._prodLinePrintWorkers,'❌ لا يتطلب');
@@ -4912,7 +4940,7 @@ async function handleWorkshopDeptFile(files){
   hideSaving();
 }
 async function handleMainFiles(files){
-  for(const f of files){showSaving('جاري التحميل...');try{const b64=await convertFileToBase64(f);window.globalAttachedFiles.push({name:f.name,data:b64});const prev=document.getElementById('file-preview');const chip=document.createElement('div');chip.style.cssText='background:#EFF6FF;border:1px solid #BFDBFE;border-radius:6px;padding:4px 10px;font-size:11px;display:flex;align-items:center;gap:5px;font-weight:600;';chip.innerHTML=`<i class="ti ti-file"></i>${f.name}`;prev.appendChild(chip);}catch(e){toast('⚠️ فشل قراءة الملف');}hideSaving();}
+  for(const f of files){showSaving('جاري التحميل...');try{const b64=await convertFileToBase64(f);window.globalAttachedFiles.push({name:f.name,data:b64});const prev=document.getElementById('file-preview');const chip=document.createElement('div');chip.style.cssText='background:#EFF6FF;border:1px solid #BFDBFE;border-radius:6px;padding:4px 10px;font-size:11px;display:flex;align-items:center;gap:5px;font-weight:600;';chip.innerHTML=`<i class="ti ti-file"></i>${esc(f.name)}`;prev.appendChild(chip);}catch(e){toast('⚠️ فشل قراءة الملف');}hideSaving();}
 }
 function onClientInput(val){
   if(!val)return;
@@ -4978,7 +5006,7 @@ function renderOrderLines(){
             <i class="ti ti-plus" style="color:var(--gold)"></i> إضافة ملف
             <input type="file" accept="image/*,.pdf,.doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" multiple style="display:none" onchange="attachOrderLineFile('${l.id}',this.files)"/>
           </label>
-          ${(l.files&&l.files.length)?`<div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px;">${l.files.map((f,fi)=>`<span style="display:inline-flex;align-items:center;gap:4px;background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:3px 8px;font-size:10px;"><a href="${f.data}" download="${f.name}" style="color:var(--maroon);text-decoration:none;"><i class="ti ti-download"></i> ${f.name}</a><button type="button" onclick="removeOrderLineFile('${l.id}',${fi})" style="background:none;border:none;color:#EF4444;cursor:pointer;padding:0 0 0 2px;font-size:11px;line-height:1;">×</button></span>`).join('')}</div>`:'<div style="font-size:10px;color:var(--text-3);margin-top:4px;">لا توجد مرفقات</div>'}
+          ${(l.files&&l.files.length)?`<div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px;">${l.files.map((f,fi)=>`<span style="display:inline-flex;align-items:center;gap:4px;background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:3px 8px;font-size:10px;"><a href="${f.data}" download="${esc(f.name)}" style="color:var(--maroon);text-decoration:none;"><i class="ti ti-download"></i> ${esc(f.name)}</a><button type="button" onclick="removeOrderLineFile('${l.id}',${fi})" style="background:none;border:none;color:#EF4444;cursor:pointer;padding:0 0 0 2px;font-size:11px;line-height:1;">×</button></span>`).join('')}</div>`:'<div style="font-size:10px;color:var(--text-3);margin-top:4px;">لا توجد مرفقات</div>'}
         </div>
       </div>
     </div>`).join('');
@@ -5149,7 +5177,7 @@ async function buildClientsPage(){
   const employeeNames=new Set(Object.values(USERS).map(u=>normCustomerName(u.name)));
   const rows=arr.map(c=>`<tr style="cursor:pointer;" onclick="openCustomerProfile('${encodeURIComponent(c.name)}')">
     ${isAdmin?`<td style="width:34px;" onclick="event.stopPropagation()"><input type="checkbox" class="client-check" data-keys="${c.keys.join(',')}" onchange="toggleClientSelect(this.dataset.keys,this.checked)"/></td>`:''}
-    <td><strong>${c.name}</strong>${c.keys.length>1?`<span class="badge b-proc" style="margin-right:6px;font-size:9px;">${c.keys.length} سجلات مدمجة</span>`:''}${employeeNames.has(normCustomerName(c.name))?`<span class="badge" style="margin-right:6px;font-size:9px;background:#E0E7FF;color:#3730A3;"><i class="ti ti-id-badge-2"></i> عميل موظف</span>`:''}</td>
+    <td><strong>${esc(c.name)}</strong>${c.keys.length>1?`<span class="badge b-proc" style="margin-right:6px;font-size:9px;">${c.keys.length} سجلات مدمجة</span>`:''}${employeeNames.has(normCustomerName(c.name))?`<span class="badge" style="margin-right:6px;font-size:9px;background:#E0E7FF;color:#3730A3;"><i class="ti ti-id-badge-2"></i> عميل موظف</span>`:''}</td>
     <td onclick="event.stopPropagation()">${c.phone||'—'} ${c.phone?`<button class="btn btn-whatsapp btn-xs" style="margin-right:4px" onclick="openWhatsapp('${c.phone}')"><i class="ti ti-brand-whatsapp"></i></button>`:''}</td>
     <td style="font-size:11px;">${c.date||'—'}</td>
     <td style="font-size:11px;"><strong style="color:var(--maroon)">${c.ordersCount}</strong> طلب${c.totalBilled?` · ${fmtMoney(c.totalBilled)} ر.س`:''}</td>
@@ -5218,7 +5246,7 @@ function openCustomerProfile(nameEncoded){
   const phone=(ords.find(o=>o.phone)||{}).phone||(clientRec||{}).phone||'—';
   const rows=ords.map(o=>`<tr onclick="closeModal('order-modal');setTimeout(()=>openOrderModal('${o._key}'),50)" style="cursor:pointer;">
     <td><strong style="color:var(--maroon)">${o.id||o._key}</strong></td>
-    <td style="font-size:12px;">${o.service||'—'}</td>
+    <td style="font-size:12px;">${esc(o.service||'—')}</td>
     <td style="font-size:11px;">${o.date||'—'}</td>
     <td>${o.currentDept==='done'?'<span class="badge b-done">مكتمل</span>':deptBadge(o.currentDept)}</td>
     <td><span class="badge ${o.paymentStatus==='دفع جزئي'?'b-proc':'b-new'}">${o.paymentStatus||'—'}</span></td>
@@ -5265,7 +5293,7 @@ function buildTimelinePage(){
   const makeRow=o=>{
     const pct=orderProgress(o);const col=progressColor(o);
     const mntBadge=(o.currentDept==='done'&&hasLaterMaintenanceForOrder(o))?' <span class="badge" style="background:#FEE2E2;color:#991B1B;font-size:9px;"><i class="ti ti-tool"></i> طلب صيانة لاحق</span>':'';
-    return`<tr onclick="openOrderTimelineView('${o._key}')" style="cursor:pointer"><td><strong style="color:var(--maroon)">${o.id||o._key}</strong></td><td><strong style="font-size:13px;color:var(--text-1);">${o.client||'—'}</strong>${mntBadge}</td><td>${deptBadge(o.currentDept)}</td><td><div style="width:80px;background:var(--border);border-radius:4px;height:6px"><div style="width:${pct}%;background:${col};height:6px;border-radius:4px"></div></div></td></tr>`;
+    return`<tr onclick="openOrderTimelineView('${o._key}')" style="cursor:pointer"><td><strong style="color:var(--maroon)">${o.id||o._key}</strong></td><td><strong style="font-size:13px;color:var(--text-1);">${esc(o.client||'—')}</strong>${mntBadge}</td><td>${deptBadge(o.currentDept)}</td><td><div style="width:80px;background:var(--border);border-radius:4px;height:6px"><div style="width:${pct}%;background:${col};height:6px;border-radius:4px"></div></div></td></tr>`;
   };
   const thead=`<thead><tr><th style="width:90px">الطلب</th><th>العميل</th><th style="width:110px">المرحلة</th><th style="width:110px">الإنجاز</th></tr></thead>`;
   const activeRows=activeArr.map(makeRow).join('');
@@ -5328,7 +5356,7 @@ function buildUsersPage(){
   const rows=Object.entries(USERS).map(([uname,u])=>{
     const avatarHtml=u.photo?`<img src="${u.photo}" alt=""/>`:`<span>${u.name?u.name.charAt(0):uname.charAt(0)}</span>`;
     return`<tr>
-      <td><div style="display:flex;align-items:center;gap:10px;"><div class="user-avatar-lg" style="width:36px;height:36px;font-size:13px;background:${u.color||'var(--gold)'};flex-shrink:0;">${avatarHtml}</div><div><div style="font-weight:700;">${u.name}</div><div style="font-size:10px;color:var(--text-3);">${uname}</div></div></div></td>
+      <td><div style="display:flex;align-items:center;gap:10px;"><div class="user-avatar-lg" style="width:36px;height:36px;font-size:13px;background:${u.color||'var(--gold)'};flex-shrink:0;">${avatarHtml}</div><div><div style="font-weight:700;">${esc(u.name)}</div><div style="font-size:10px;color:var(--text-3);">${esc(uname)}</div></div></div></td>
       <td><span class="badge" style="background:${u.color||'var(--gold)'}20;color:${u.color||'var(--maroon)'}">${u.role||ROLE_LABELS[u.type]||u.type}</span></td>
       <td><div style="width:18px;height:18px;border-radius:50%;background:${u.color||'var(--gold)'};border:2px solid var(--border);"></div></td>
       <td><div style="display:flex;gap:5px;"><button class="btn btn-out btn-xs" onclick="openEditUser('${uname}')"><i class="ti ti-edit"></i></button><button class="btn btn-red btn-xs" onclick="deleteUser('${uname}')"><i class="ti ti-trash"></i></button></div></td>
@@ -5359,7 +5387,7 @@ async function saveEditUser(){
   const uname=document.getElementById('eu-uname').value;const name=document.getElementById('eu-name').value.trim();const pass=document.getElementById('eu-pass').value;const role=document.getElementById('eu-role').value;
   if(!name){toast('⚠️ يرجى إدخال الاسم');return;}
   const upd={name,type:role,role:ROLE_LABELS[role]||role,color:_euSelectedColor||USERS[uname].color,photo:_euPhotoB64};
-  if(pass)upd.pass=pass;
+  if(pass)upd.pass=await makeSessionToken(uname,pass);
   showSaving('جاري التحديث...');await fbPatch(`users/${uname}`,upd);await syncUsers();await loadData();hideSaving();closeModal('edit-user-modal');toast('✓ تم التحديث');buildUsersPage();
 }
 async function deleteUser(uname){
@@ -5375,10 +5403,10 @@ function openAddUser(){
 }
 async function handleNuPhoto(input){if(!input.files||!input.files.length)return;showSaving('جاري تجهيز الصورة...');try{_nuPhotoB64=await convertFileToBase64(input.files[0]);const prev=document.getElementById('nu-avatar-preview');prev.innerHTML=`<img src="${_nuPhotoB64}" alt=""/>`;prev.style.background='transparent';}catch(e){toast(e&&e.message?e.message:'⚠️ فشل قراءة الصورة');}hideSaving();}
 async function saveNewUser(){
-  const uname=document.getElementById('nu-uname').value.trim().toLowerCase().replace(/\s/g,'');const name=document.getElementById('nu-name').value.trim();const pass=document.getElementById('nu-pass').value;const role=document.getElementById('nu-role').value;
+  const uname=document.getElementById('nu-uname').value.trim().toLowerCase().replace(/\s/g,'').replace(/[.#$\[\]/]/g,'');const name=document.getElementById('nu-name').value.trim();const pass=document.getElementById('nu-pass').value;const role=document.getElementById('nu-role').value;
   if(!uname||!name||!pass){toast('⚠️ يرجى إدخال جميع البيانات');return;}
   if(USERS[uname]){toast('⚠️ اسم المستخدم مستخدم بالفعل');return;}
-  const newUser={name,pass,type:role,role:ROLE_LABELS[role]||role,color:_nuSelectedColor||PRESET_COLORS[0],photo:_nuPhotoB64};
+  const newUser={name,pass:await makeSessionToken(uname,pass),type:role,role:ROLE_LABELS[role]||role,color:_nuSelectedColor||PRESET_COLORS[0],photo:_nuPhotoB64};
   showSaving('جاري إنشاء الحساب...');await fbPatch(`users/${uname}`,newUser);await syncUsers();hideSaving();closeModal('add-user-modal');toast('✓ تم إنشاء الحساب');buildUsersPage();
 }
 // ============================================================
@@ -5403,7 +5431,7 @@ async function exportExcel(){
 function buildRequestPage(){
   window.reqFileB64='';window.reqFileName='';
   const unpaidOrders=ordersArr().filter(o=>o.createdByUname===cu._uname&&o.paymentStatus!=='تم الدفع');
-  const orderOptions=unpaidOrders.map(o=>`<option value="${o._key}">${o.id||o._key} — ${o.client} (${o.paymentStatus||'بدون حالة'})</option>`).join('');
+  const orderOptions=unpaidOrders.map(o=>`<option value="${o._key}">${o.id||o._key} — ${esc(o.client)} (${o.paymentStatus||'بدون حالة'})</option>`).join('');
   document.getElementById('request-content').innerHTML=`
     <div class="page-header"><div class="ptitle"><i class="ti ti-send"></i> رفع طلب مالي</div></div>
     <div class="card">
@@ -5486,7 +5514,7 @@ function buildMyRequestsRows(){
   return mine.map(([k,r])=>{
     const o=r.orderKey?orders[r.orderKey]:null;
     return`<tr onclick="toggleMyRequestRow('${k}')" style="cursor:pointer;" title="اضغط لعرض التفاصيل الكاملة">
-      <td><strong>${r.client||'—'}</strong> <i class="ti ti-chevron-down" style="font-size:11px;color:var(--text-3);"></i></td>
+      <td><strong>${esc(r.client||'—')}</strong> <i class="ti ti-chevron-down" style="font-size:11px;color:var(--text-3);"></i></td>
       <td style="font-size:11px;">${reqChannelsSummary(r)}${r.fileData?`<div style="margin-top:3px;"><a href="${r.fileData}" download class="file-download-link" onclick="event.stopPropagation()"><i class="ti ti-download"></i> المرفق</a></div>`:''}</td>
       <td>${gpbadge(r.priority)}</td>
       <td>${statusBadge(r.status)}</td>
@@ -5494,7 +5522,7 @@ function buildMyRequestsRows(){
     </tr>
     <tr id="my-req-${k}" style="display:none;"><td colspan="5" style="padding:0;background:var(--surface-2);">
       <div style="display:flex;flex-direction:column;gap:6px;padding:10px 14px;font-size:11.5px;">
-        ${o?`<div><strong>رقم الطلب:</strong> ${o.id||r.orderKey} &nbsp; <strong>الخدمة:</strong> ${o.service||'—'}</div>`:'<div style="color:var(--text-3)">لا يوجد طلب مرتبط</div>'}
+        ${o?`<div><strong>رقم الطلب:</strong> ${o.id||r.orderKey} &nbsp; <strong>الخدمة:</strong> ${esc(o.service||'—')}</div>`:'<div style="color:var(--text-3)">لا يوجد طلب مرتبط</div>'}
         <div><strong>المبلغ المدفوع في هذه الدفعة:</strong> ${fmtMoney(Number(r.amountPaid||0))} ر.س</div>
         ${o?`<div><strong>إجمالي الطلب:</strong> ${fmtMoney(Number(o.totalAmount||0))} ر.س &nbsp; <strong>المتبقي:</strong> ${fmtMoney(Number(o.remainingAmount!=null?o.remainingAmount:Math.max(0,(o.totalAmount||0)-(o.paidAmount||0))))} ر.س</div>`:''}
       </div>
@@ -5580,9 +5608,9 @@ function buildRequestsPage(){
   const statusLabel=s=>s==='pending'?'<span class="badge b-proc">بانتظار المحاسب</span>':s==='accountant_approved'?'<span class="badge b-new" style="background:#7C3AED20;color:#7C3AED">موافقة مبدئية</span>':'<span class="badge b-done">تمت</span>';
   const makeRows=(list,mode)=>list.length===0?`<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text-3)">لا توجد طلبات</td></tr>`
     :list.map(r=>`<tr${mode==='done'?` onclick="togglePaymentHistoryRow('${r._key}')" style="cursor:pointer;" title="اضغط لعرض سجل الدفعات كاملاً"`:''}>
-      <td><strong>${r.client||'—'}</strong>${r.orderKey&&orders[r.orderKey]?`<div style="font-size:10px;color:var(--text-3)">${orders[r.orderKey].id||r.orderKey}</div>`:''}${mode==='done'?` <i class="ti ti-chevron-down" style="font-size:11px;color:var(--text-3);"></i>`:''}</td>
+      <td><strong>${esc(r.client||'—')}</strong>${r.orderKey&&orders[r.orderKey]?`<div style="font-size:10px;color:var(--text-3)">${orders[r.orderKey].id||r.orderKey}</div>`:''}${mode==='done'?` <i class="ti ti-chevron-down" style="font-size:11px;color:var(--text-3);"></i>`:''}</td>
       <td style="font-size:11.5px;"><strong>${reqChannelsSummary(r)}</strong>${r.fileData?`<div style="margin-top:4px;"><a href="${r.fileData}" download class="file-download-link" onclick="event.stopPropagation()"><i class="ti ti-download"></i> تنزيل</a></div>`:''}</td>
-      <td>${r.createdBy||'—'}<div style="font-size:10px;color:var(--text-3)">${r.createdByRole||''}</div></td>
+      <td>${esc(r.createdBy||'—')}<div style="font-size:10px;color:var(--text-3)">${r.createdByRole||''}</div></td>
       <td style="font-size:11px">${r.date||'—'}</td>
       <td>${statusLabel(r.status)}</td>
       <td onclick="${mode==='done'?'event.stopPropagation()':''}">
@@ -5595,8 +5623,8 @@ function buildRequestsPage(){
   const makeUnpaidRows=(list)=>list.length===0?`<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--text-3)">لا توجد طلبات غير مسددة</td></tr>`
     :list.map(o=>`<tr onclick="openUnpaidOrderSummary('${o._key}')" style="cursor:pointer">
       <td><strong style="color:var(--maroon)">${o.id||o._key}</strong></td>
-      <td><strong>${o.client}</strong></td>
-      <td>${o.service||'—'}</td>
+      <td><strong>${esc(o.client)}</strong></td>
+      <td>${esc(o.service||'—')}</td>
       <td><span class="badge ${o.paymentStatus==='دفع جزئي'?'b-proc':'b-new'}">${o.paymentStatus||'—'}</span></td>
       <td>${o.totalAmount?fmtMoney(Number(o.totalAmount))+' ر.س':'—'}</td>
     </tr>`).join('');
@@ -5669,8 +5697,8 @@ function buildRevenuePage(){
   const cardActive=k=>metric===k?'outline:2.5px solid var(--gold);':'';
   const rows=displayOrds.map(o=>`<tr onclick="openOrderTimelineView('${o._key}')" style="cursor:pointer;">
     <td><strong style="color:var(--maroon)">${o.id||o._key}</strong></td>
-    <td><strong style="font-size:13px;">${o.client||'—'}</strong></td>
-    <td style="font-size:12px;">${o.service||'—'}</td>
+    <td><strong style="font-size:13px;">${esc(o.client||'—')}</strong></td>
+    <td style="font-size:12px;">${esc(o.service||'—')}</td>
     <td style="font-size:11px;">${o.date||'—'}</td>
     <td><span class="badge ${o.paymentStatus==='دفع جزئي'?'b-proc':'b-new'}">${o.paymentStatus||'—'}</span></td>
     <td style="font-weight:800;">${o.totalAmount?fmtMoney(Number(o.totalAmount))+' ر.س':'—'}</td>
@@ -5899,7 +5927,7 @@ function buildEmpPage(){
           ${recent.length?`<div style="border-top:1px solid var(--border-soft);padding:7px 10px 8px;">
             <div style="font-size:8px;color:var(--text-3);font-weight:800;letter-spacing:.5px;margin-bottom:4px;text-transform:uppercase;">آخر الطلبات</div>
             ${recent.map(o=>`<div onclick="${o.currentDept==='done'?'openOrderTimelineView':'openOrderStageView'}('${o._key}')" style="display:flex;align-items:center;justify-content:space-between;padding:4px 6px;border-radius:6px;cursor:pointer;margin-bottom:2px;transition:.12s;" onmouseover="this.style.background='var(--gold-soft)'" onmouseout="this.style.background=''">
-              <div style="min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><span style="font-size:11px;font-weight:800;color:var(--maroon)">${o.id||o._key}</span>&nbsp;<span style="font-size:10px;color:var(--text-2)">${o.client}</span>&nbsp;<span style="font-size:9px;color:var(--text-3)">${o.date||'—'}</span></div>
+              <div style="min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><span style="font-size:11px;font-weight:800;color:var(--maroon)">${o.id||o._key}</span>&nbsp;<span style="font-size:10px;color:var(--text-2)">${esc(o.client)}</span>&nbsp;<span style="font-size:9px;color:var(--text-3)">${o.date||'—'}</span></div>
               <div style="display:flex;gap:4px;align-items:center;flex-shrink:0;margin-right:8px;">${deptBadge(o.currentDept)}&nbsp;${timeBadge(hoursAgo(o.stageStartDate||o.date))}</div>
             </div>`).join('')}
           </div>`:''}
@@ -5955,9 +5983,9 @@ function openEmpDetail(uname){
   const renderRow=o=>`<div onclick="closeModal('order-modal');setTimeout(()=>${o.currentDept==='done'?'openOrderTimelineView':'openOrderStageView'}('${o._key}'),50)" style="display:flex;align-items:center;justify-content:space-between;padding:9px 14px;border-radius:8px;cursor:pointer;margin-bottom:4px;border:1px solid var(--border-soft);" onmouseover="this.style.background='var(--gold-soft)'" onmouseout="this.style.background=''">
     <div style="flex:1;min-width:0;">
       <span style="font-size:12px;font-weight:800;color:var(--maroon)">${o.id||o._key}</span>
-      <span style="font-size:11px;color:var(--text-2);margin-right:8px;">${o.client}</span>
+      <span style="font-size:11px;color:var(--text-2);margin-right:8px;">${esc(o.client)}</span>
       <span style="font-size:10px;color:var(--text-3);margin-right:8px;"><i class="ti ti-calendar" style="font-size:10px;"></i> ${o.date||'—'}</span>
-      <div style="font-size:10px;color:var(--text-3);margin-top:2px;">${o.service}</div>
+      <div style="font-size:10px;color:var(--text-3);margin-top:2px;">${esc(o.service)}</div>
       <div style="margin-top:3px;">${empStageDurationChip(o)}</div>
     </div>
     <div style="display:flex;gap:6px;align-items:center;flex-shrink:0;">${deptBadge(o.currentDept)}&nbsp;${timeBadge(hoursAgo(o.stageStartDate||o.date))}</div>
@@ -6026,8 +6054,8 @@ function buildIncompletePage(){
   }else{
     cards=`<div class="wf-grid">${arr.map(o=>`<div class="wf-card" style="border:2px solid #FECACA;background:linear-gradient(135deg,#FFF8F8,#FEF2F2);" onclick="openOrderModal('${o._key}')">${hasOrderUpdate(o)?'<span class="order-update-dot" title="تم تحديث بيانات الطلب"></span>':''}<div class="wf-card-top">
       <div class="wf-card-id">${o.id||o._key} · ${orderDateTime(o)}<span class="urgent-tag" style="margin-right:6px;font-size:9px;background:#991B1B;"><i class="ti ti-user-off"></i>غير مكتمل</span></div>
-      <div class="wf-card-name">${o.client}</div>
-      <div class="wf-card-svc">${o.service}</div>
+      <div class="wf-card-name">${esc(o.client)}</div>
+      <div class="wf-card-svc">${esc(o.service)}</div>
       <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;margin-bottom:4px;">${gpbadge(o.priority)} ${timeBadge(hoursAgo(o.stageStartDate||o.date))}</div>
       <div style="font-size:11px;color:#991B1B;margin-top:4px;font-weight:700;"><i class="ti ti-user-off"></i> العميل لم يرغب بالاستمرار ${o.incompleteAt?'· '+new Date(o.incompleteAt).toLocaleDateString('ar-SA'):''}</div>
     </div><div class="wf-card-prog"><div class="wf-card-fill" style="width:100%;background:#FECACA"></div></div></div>`).join('')}</div>`;
@@ -6422,7 +6450,7 @@ function buildGovObligationsPage(){
   // ── Recent Activities ──
   const recentActs=allRecsUnfiltered.slice().sort((a,b)=>new Date(b.createdAt||0)-new Date(a.createdAt||0)).slice(0,6).map(r=>{
     const name=r.section==='employees'?(r.employeeName||GOV_EMP_CATS[r.category]?.label):(r.section==='contracts'?'عقد جديد':(GOV_REGISTRY_CATS[r.category]?.label||r.category));
-    return`<div class="gov-activity-row"><i class="ti ti-circle-plus" style="color:#10B981;"></i><div><div style="font-size:12px;font-weight:700;">${name||'—'}</div><div style="font-size:10px;color:var(--text-3);">بواسطة ${r.createdBy||'—'} — ${(r.createdAt||'').split('T')[0]||'—'}</div></div></div>`;
+    return`<div class="gov-activity-row"><i class="ti ti-circle-plus" style="color:#10B981;"></i><div><div style="font-size:12px;font-weight:700;">${name||'—'}</div><div style="font-size:10px;color:var(--text-3);">بواسطة ${esc(r.createdBy||'—')} — ${(r.createdAt||'').split('T')[0]||'—'}</div></div></div>`;
   }).join('')||'<div style="font-size:12px;color:var(--text-3);text-align:center;padding:12px;">لا يوجد نشاط حديث</div>';
 
   // ── Notifications (expiring + expired) ──
@@ -6650,35 +6678,30 @@ function _buildPage(p){
 }
    </script>
 <script>
-// enhancements.js's addMobileHamburger() matches our real .sidebar/#sidebar-wrap element,
-// then overwrites window.toggleSidebar/closeSidebar to toggle an ".active" class our own
-// CSS never uses, and injects a conflicting @media rule that force-hides .sidebar via
-// transform regardless of state — together this makes the mobile hamburger menu
-// completely unusable. This listener is registered after enhancements.js's (it loads
-// earlier in the document, so its DOMContentLoaded handler fires first), so it runs
-// afterward to undo the damage: strip the conflicting injected style/elements and
-// restore the original working toggle/close behavior.
-document.addEventListener('DOMContentLoaded',function(){
-  document.querySelectorAll('style').forEach(function(s){
-    if(s.textContent&&s.textContent.indexOf('mobile-menu-toggle')!==-1)s.remove();
-  });
-  document.querySelectorAll('.mobile-menu-toggle').forEach(function(b){b.remove();});
-  document.querySelectorAll('.sidebar-overlay').forEach(function(o){if(o.id!=='sidebar-overlay')o.remove();});
-  var sb=document.getElementById('sidebar-wrap');
-  if(sb)sb.classList.remove('active');
-  window.toggleSidebar=function(){document.getElementById('sidebar-wrap').classList.toggle('open');document.getElementById('sidebar-overlay').classList.toggle('show');};
-  window.closeSidebar=function(){document.getElementById('sidebar-wrap').classList.remove('open');document.getElementById('sidebar-overlay').classList.remove('show');};
-  // enhancements.js's addPasswordToggle() anchors its show/hide eye button at right:10px
-  // with matching paddingRight on the input — move it to the left side instead so it
-  // doesn't collide with the right-aligned typed text.
+// Native show/hide toggle for password fields — self-contained, no external script
+// dependency and no runtime patch needed to fix up conflicting behavior.
+function addPasswordToggles(){
   document.querySelectorAll('input[type="password"]').forEach(function(inp){
-    inp.style.paddingRight='14px';
-    inp.style.paddingLeft='40px';
-    var wrapper=inp.parentNode;
-    var btn=wrapper?wrapper.querySelector('button'):null;
-    if(btn){btn.style.right='auto';btn.style.left='10px';}
+    if(inp.dataset.toggleAdded)return;
+    inp.dataset.toggleAdded='1';
+    var wrap=document.createElement('div');
+    wrap.style.position='relative';
+    inp.parentNode.insertBefore(wrap,inp);
+    wrap.appendChild(inp);
+    var btn=document.createElement('button');
+    btn.type='button';
+    btn.innerHTML='<i class="ti ti-eye"></i>';
+    btn.style.cssText='position:absolute;left:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:16px;line-height:1;color:#999;padding:4px;';
+    btn.onclick=function(e){
+      e.preventDefault();
+      var show=inp.type==='password';
+      inp.type=show?'text':'password';
+      btn.innerHTML=show?'<i class="ti ti-eye-off"></i>':'<i class="ti ti-eye"></i>';
+    };
+    wrap.appendChild(btn);
   });
-});
+}
+document.addEventListener('DOMContentLoaded',addPasswordToggles);
 </script>
 </body>
 </html>
