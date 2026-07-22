@@ -2362,7 +2362,7 @@ function buildWfGrid(tab){
         ${o.isQuickTask?`<div style="font-size:11px;color:var(--maroon);font-weight:700;margin-bottom:4px;"><i class="ti ti-user"></i> اسم العميل: ${esc(o.client||'—')} &nbsp; <i class="ti ti-phone"></i> رقم الجوال: ${esc(o.phone||'—')}</div>`:''}
         <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;margin-bottom:6px;">${deptBadge(o.currentDept)} ${gpbadge(o.priority)} ${timeBadge(hoursAgo(o.stageStartDate||o.date))}</div>
         <div style="font-size:11px;color:var(--text-3);">المسؤول: ${esc(currentPersonName(o))}</div>
-        ${o.deadline&&o.deadline!=='—'?`<div style="font-size:10.5px;color:var(--text-3);"><i class="ti ti-calendar-time"></i> التسليم: ${deadlineDateTime(o)}</div>`:''}
+        <div style="font-size:10.5px;color:var(--text-3);"><i class="ti ti-calendar-time"></i> التسليم: ${deadlineDateTime(o)}</div>
         ${deadlineBadge(o.deadline)}
         ${qtActions}
       </div><div class="wf-card-prog"><div class="wf-card-fill" style="width:${pct}%;background:${col}"></div></div></div>`;
@@ -2625,13 +2625,13 @@ function buildDeptStagePage(){
     <td><strong style="font-size:13px;">${esc(o.client||'—')}</strong></td>
     <td style="font-size:12px;">${esc(o.service||'—')}</td>
     <td style="font-size:12px;">${esc(currentPersonName(o))}</td>
-    <td style="font-size:11px;">${o.date||'—'}</td>
+    <td style="font-size:11px;">${deadlineDateTime(o)}</td>
     <td>${gpbadge(o.priority)}</td>
     <td>${timeBadge(hoursAgo(o.stageStartDate||o.date))}</td>
   </tr>`).join('');
   const thead=isCompleted
     ?`${canDelete?'<th style="width:34px;"></th>':''}<th style="width:80px">رقم الطلب</th><th>العميل</th><th style="width:100px">المبلغ</th><th>الخدمة</th><th style="width:120px">منشئ الطلب</th><th style="width:90px">التاريخ</th>${canDelete?'<th style="width:40px;"></th>':''}`
-    :`<th style="width:80px">رقم الطلب</th><th>العميل</th><th>الخدمة</th><th style="width:100px">المسؤول</th><th style="width:90px">التاريخ</th><th style="width:90px">الأولوية</th><th style="width:90px">المدة</th>`;
+    :`<th style="width:80px">رقم الطلب</th><th>العميل</th><th>الخدمة</th><th style="width:100px">المسؤول</th><th style="width:120px">تاريخ التسليم</th><th style="width:90px">الأولوية</th><th style="width:90px">المدة</th>`;
   const personOptions=hasAssignee?[...new Set(arr.map(o=>o[assigneeField]).filter(v=>v&&v!=='none'))]
     .map(u=>`<option value="${esc(u)}">${esc(USERS[u]?.name||u)}</option>`).join(''):'';
   document.getElementById('deptstage-content').innerHTML=`
@@ -2762,7 +2762,8 @@ function buildMyWork(){
       <div class="wf-card-svc">${esc(o.service)}</div>
       ${o.isQuickTask?`<div style="font-size:11px;color:var(--maroon);font-weight:700;margin-bottom:4px;"><i class="ti ti-user"></i> اسم العميل: ${esc(o.client||'—')} &nbsp; <i class="ti ti-phone"></i> رقم الجوال: ${esc(o.phone||'—')}</div>`:''}
       <div style="display:flex;gap:5px;flex-wrap:wrap;">${deptBadge(o.currentDept)} ${gpbadge(o.priority)} ${timeBadge(hoursAgo(o.stageStartDate||o.date))}</div>
-      ${o.deadline&&o.deadline!=='—'?`<div style="font-size:10.5px;color:var(--text-3);"><i class="ti ti-calendar-time"></i> التسليم: ${deadlineDateTime(o)}</div>`:''}
+      <div style="font-size:11px;color:var(--text-3);">المسؤول: ${esc(currentPersonName(o))}</div>
+      <div style="font-size:10.5px;color:var(--text-3);"><i class="ti ti-calendar-time"></i> التسليم: ${deadlineDateTime(o)}</div>
       ${deadlineBadge(o.deadline)}
       ${o.quickTaskLocation?`<div style="font-size:11px;color:#9A3412;margin-top:6px;"><i class="ti ti-map-pin"></i> ${o.quickTaskLocation}</div>`:''}
       ${isWorkshop&&o.isQuickTask&&!o.workshopFeedbackDone?`<div style="margin-top:8px;"><button class="btn btn-orange btn-sm" onclick="event.stopPropagation();openWorkshopFeedback('${o._key}')"><i class="ti ti-clipboard-check"></i> إدخال القياسات</button></div>`:''}
