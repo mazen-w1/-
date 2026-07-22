@@ -341,7 +341,7 @@ input[type="password"]{direction:rtl;text-align:right;padding-left:40px;padding-
 .oi-row-head-left{display:flex;align-items:center;gap:8px;}
 .oi-badge{font-size:10px;font-weight:800;color:var(--maroon);background:var(--gold-soft);padding:3px 10px;border-radius:20px;}
 .oi-main-tag{font-size:9px;font-weight:700;color:var(--gold);}
-.oi-grid{display:grid;grid-template-columns:2fr 1fr;gap:8px;}
+.oi-grid{display:grid;grid-template-columns:2fr 1fr 0.7fr 1fr;gap:8px;}
 @media(max-width:640px){.oi-grid{grid-template-columns:1fr;}}
 .oi-row .fg{gap:3px;}
 .oi-row label{font-size:10px;}
@@ -2599,9 +2599,12 @@ function buildDeptStagePage(){
   const meta=deptMeta[deptKey]||deptMeta.design;
   const isCompleted=deptKey==='done';
   const canDelete=isCompleted&&cu.type==='admin';
+  const assigneeField=deptKey+'To';
+  const hasAssignee=['design','external','print','workshop'].includes(deptKey);
   const arr=ordersArr().filter(o=>(o.currentDept||'design')===deptKey).sort((a,b)=>new Date(b.date)-new Date(a.date));
   window._deptStageSelected=new Set();
-  const rows=arr.map(o=>isCompleted?`<tr onclick="openOrderTimelineView('${o._key}')" style="cursor:pointer;">
+  const searchBlob=o=>esc([o.id,o._key,o.client,o.service].filter(Boolean).join(' ').toLowerCase());
+  const rows=arr.map(o=>isCompleted?`<tr data-search="${searchBlob(o)}" onclick="openOrderTimelineView('${o._key}')" style="cursor:pointer;">
     ${canDelete?`<td style="width:34px;" onclick="event.stopPropagation()"><input type="checkbox" class="deptstage-check" data-key="${o._key}" onchange="toggleDeptStageSelect('${o._key}',this.checked)"/></td>`:''}
     <td><strong style="color:var(--maroon)">${o.id||o._key}</strong></td>
     <td><strong style="font-size:13px;">${esc(o.client||'—')}</strong>${hasLaterMaintenanceForOrder(o)?' <span class="badge" style="background:#FEE2E2;color:#991B1B;font-size:9px;"><i class="ti ti-tool"></i> طلب صيانة لاحق</span>':''}</td>
@@ -2617,23 +2620,42 @@ function buildDeptStagePage(){
         </div>
       </div>
     </td>`:''}
-  </tr>`:`<tr onclick="openOrderTimelineView('${o._key}')" style="cursor:pointer;">
+  </tr>`:`<tr data-search="${searchBlob(o)}"${hasAssignee?` data-assignee="${esc(o[assigneeField]||'')}"`:''} onclick="openOrderTimelineView('${o._key}')" style="cursor:pointer;">
     <td><strong style="color:var(--maroon)">${o.id||o._key}</strong></td>
     <td><strong style="font-size:13px;">${esc(o.client||'—')}</strong></td>
     <td style="font-size:12px;">${esc(o.service||'—')}</td>
+    <td style="font-size:12px;">${esc(currentPersonName(o))}</td>
     <td style="font-size:11px;">${o.date||'—'}</td>
     <td>${gpbadge(o.priority)}</td>
     <td>${timeBadge(hoursAgo(o.stageStartDate||o.date))}</td>
   </tr>`).join('');
   const thead=isCompleted
     ?`${canDelete?'<th style="width:34px;"></th>':''}<th style="width:80px">رقم الطلب</th><th>العميل</th><th style="width:100px">المبلغ</th><th>الخدمة</th><th style="width:120px">منشئ الطلب</th><th style="width:90px">التاريخ</th>${canDelete?'<th style="width:40px;"></th>':''}`
-    :`<th style="width:80px">رقم الطلب</th><th>العميل</th><th>الخدمة</th><th style="width:90px">التاريخ</th><th style="width:90px">الأولوية</th><th style="width:90px">المدة</th>`;
+    :`<th style="width:80px">رقم الطلب</th><th>العميل</th><th>الخدمة</th><th style="width:100px">المسؤول</th><th style="width:90px">التاريخ</th><th style="width:90px">الأولوية</th><th style="width:90px">المدة</th>`;
+  const personOptions=hasAssignee?[...new Set(arr.map(o=>o[assigneeField]).filter(v=>v&&v!=='none'))]
+    .map(u=>`<option value="${esc(u)}">${esc(USERS[u]?.name||u)}</option>`).join(''):'';
   document.getElementById('deptstage-content').innerHTML=`
     ${backBtnHtml()}
     <div class="page-header"><div class="ptitle"><i class="ti ${meta.icon}" style="color:${meta.color}"></i> مرحلة ${meta.label} — ${isCompleted?'أرشيف الطلبات المكتملة':'الطلبات النشطة'} (${arr.length})</div>
     ${canDelete?`<button class="btn btn-red btn-sm" id="deptstage-bulk-del-btn" style="display:none;" onclick="bulkDeleteDeptStage()"><i class="ti ti-trash"></i> حذف المحدد (<span id="deptstage-sel-count">0</span>)</button>`:''}</div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;">
+      <input id="deptstage-search" placeholder="ابحث عن عميل أو خدمة أو رقم طلب..." oninput="filterDeptStageRows()" style="flex:1;min-width:220px;"/>
+      ${hasAssignee?`<select id="deptstage-person-filter" onchange="filterDeptStageRows()" style="min-width:180px;">
+        <option value="">كل الموظفين</option>
+        ${personOptions}
+      </select>`:''}
+    </div>
     <div class="card"><div class="tbl-wrap"><table><thead><tr>${thead}</tr></thead>
-    <tbody>${rows||'<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text-3)">لا توجد طلبات في هذه المرحلة حالياً</td></tr>'}</tbody></table></div></div>`;
+    <tbody>${rows||`<tr><td colspan="${isCompleted?(6+(canDelete?2:0)):7}" style="text-align:center;padding:24px;color:var(--text-3)">لا توجد طلبات في هذه المرحلة حالياً</td></tr>`}</tbody></table></div></div>`;
+}
+function filterDeptStageRows(){
+  const q=(document.getElementById('deptstage-search')?.value||'').trim().toLowerCase();
+  const person=document.getElementById('deptstage-person-filter')?.value||'';
+  document.querySelectorAll('#deptstage-content tbody tr[data-search]').forEach(r=>{
+    const matchesSearch=!q||(r.getAttribute('data-search')||'').includes(q);
+    const matchesPerson=!person||r.getAttribute('data-assignee')===person;
+    r.style.display=(matchesSearch&&matchesPerson)?'':'none';
+  });
 }
 function toggleRowMenu(id){
   document.querySelectorAll('.row-menu').forEach(m=>{if(m.id!==id)m.style.display='none';});
@@ -5043,7 +5065,7 @@ function onPayChannelInput(el){
   recalcOrderPaidChannels();
 }
 function recalcOrderTotal(){
-  const sum=(window._orderLines||[]).reduce((s,l)=>s+(parseFloat(normalizeDigits(l.price))||0),0);
+  const sum=(window._orderLines||[]).reduce((s,l)=>s+orderLineTotal(l),0);
   const totEl=document.getElementById('f-total-amount');
   if(totEl)totEl.value=fmtMoney(sum);
   if(document.getElementById('fpay')?.value==='تم الدفع'){
@@ -5186,7 +5208,7 @@ function openWhatsapp(phone){if(!phone){toast('⚠️ يرجى إدخال رقم
 function addOrderLine(){
   if(!window._orderLines)window._orderLines=[];
   const id='ol'+Date.now();
-  window._orderLines.push({id,name:'',details:'',price:'',files:[]});
+  window._orderLines.push({id,name:'',details:'',price:'',qty:1,files:[]});
   renderOrderLines();
   renderProductionLines();
   renderPrimaryLineItems();
@@ -5211,7 +5233,21 @@ function updateOrderLinePrice(el,id){
   const norm=normalizeDigits(el.value);
   if(norm!==el.value){const pos=el.selectionStart;el.value=norm;try{el.setSelectionRange(pos,pos);}catch(e){}}
   updateOrderLine(id,'price',norm);
+  updateOrderLineTotalDisplay(id);
   recalcOrderTotal();
+}
+function updateOrderLineQty(el,id){
+  const norm=normalizeDigits(el.value);
+  if(norm!==el.value){const pos=el.selectionStart;el.value=norm;try{el.setSelectionRange(pos,pos);}catch(e){}}
+  updateOrderLine(id,'qty',norm);
+  updateOrderLineTotalDisplay(id);
+  recalcOrderTotal();
+}
+function orderLineTotal(l){return(parseFloat(normalizeDigits(l.price))||0)*(parseFloat(normalizeDigits(l.qty))||0);}
+function updateOrderLineTotalDisplay(id){
+  const l=(window._orderLines||[]).find(x=>x.id===id);if(!l)return;
+  const totEl=document.getElementById('ol-line-total-'+id);
+  if(totEl)totEl.textContent=fmtMoney(orderLineTotal(l))+' ر.س';
 }
 function renderOrderLines(){
   const wrap=document.getElementById('order-lines-wrap');if(!wrap)return;
@@ -5232,7 +5268,9 @@ function renderOrderLines(){
       <div style="display:flex;flex-direction:column;gap:10px;">
         <div class="oi-grid">
           <div class="fg"><label>اسم البند *</label><input placeholder="مثال: لوحة إعلانية" value="${l.name.replace(/"/g,'&quot;')}" oninput="updateOrderLine('${l.id}','name',this.value)"/></div>
-          <div class="fg"><label>سعر البند (ر.س)</label><input type="text" inputmode="decimal" placeholder="0" min="0" value="${(l.price||'').toString().replace(/"/g,'&quot;')}" oninput="updateOrderLinePrice(this,'${l.id}')" onfocus="this.select()"/></div>
+          <div class="fg"><label>سعر الحبة (ر.س)</label><input type="text" inputmode="decimal" placeholder="0" min="0" value="${(l.price||'').toString().replace(/"/g,'&quot;')}" oninput="updateOrderLinePrice(this,'${l.id}')" onfocus="this.select()"/></div>
+          <div class="fg"><label>الكمية</label><input type="text" inputmode="decimal" placeholder="1" min="1" value="${(l.qty??1).toString().replace(/"/g,'&quot;')}" oninput="updateOrderLineQty(this,'${l.id}')" onfocus="this.select()"/></div>
+          <div class="fg"><label>الإجمالي</label><div id="ol-line-total-${l.id}" style="display:flex;align-items:center;min-height:34px;font-size:12px;font-weight:800;color:var(--maroon);background:var(--surface-2);border:1.5px solid var(--border);border-radius:8px;padding:0 10px;">${fmtMoney(orderLineTotal(l))} ر.س</div></div>
         </div>
         <div class="fg"><label>التفاصيل والمواصفات</label><textarea placeholder="المقاسات، المواد، عدد النسخ..." style="min-height:40px;" oninput="updateOrderLine('${l.id}','details',this.value)">${esc(l.details)}</textarea></div>
         <div class="fg"><label>مرفقات البند (يمكن إرفاق أكثر من ملف)</label>
@@ -5317,7 +5355,7 @@ async function submitOrder(isUrgentQuick=false){
   const primaryLines=(window._orderLines||[]).filter(l=>!claimedItemIds.has(l.id));
   const primaryService=(primaryLines.find(l=>l.name.trim())||_lines[0]).name.trim()||s;
   const ord={
-    client:c,service:primaryService,orderItems:primaryLines.map(l=>({name:l.name,details:l.details,files:l.files||[]})),date:today,createdAt:new Date().toISOString(),stageStartDate:new Date().toISOString(),
+    client:c,service:primaryService,orderItems:primaryLines.map(l=>({name:l.name,details:l.details,price:parseFloat(normalizeDigits(l.price))||0,qty:parseFloat(normalizeDigits(l.qty))||1,files:l.files||[]})),date:today,createdAt:new Date().toISOString(),stageStartDate:new Date().toISOString(),
     priority:document.getElementById('fpr').value,phone:normalizeSaudiPhone(phone),
     paymentStatus:payStatus,paidAmount:paidAmt,
     paidNetwork,paidCash,paidTransfer,paymentMethod:payChannelsText,
@@ -5357,7 +5395,7 @@ async function submitOrder(isUrgentQuick=false){
       if(l.design==='none'){if(l.external!=='none')lineDept='external';else if(l.print!=='none')lineDept='print';else lineDept='workshop';}
       const lineOrd={
         client:c,service:(lineItems.length?lineItems.map(x=>x.name).join(' + '):s)+' — خط إنتاج موازٍ #'+(i+2),
-        orderItems:lineItems.map(x=>({name:x.name,details:x.details,files:x.files||[]})),
+        orderItems:lineItems.map(x=>({name:x.name,details:x.details,price:parseFloat(normalizeDigits(x.price))||0,qty:parseFloat(normalizeDigits(x.qty))||1,files:x.files||[]})),
         date:today,createdAt:new Date().toISOString(),stageStartDate:new Date().toISOString(),
         priority:document.getElementById('fpr').value,phone:normalizeSaudiPhone(phone),
         deadline:document.getElementById('fd').value||'—',notes:'خط إنتاج موازٍ مرتبط بالطلب '+newId,
