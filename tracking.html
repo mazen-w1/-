@@ -1,316 +1,364 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-<meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
-<title>روائع الأفكار للإعلانات — بوابة العملاء الذكية</title>
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='48' fill='%234A0E17'/%3E%3Ctext x='50' y='50' text-anchor='middle' dominant-baseline='central' font-family='Changa,sans-serif' font-weight='800' font-size='62' fill='%23fff'%3E%D8%B1%3C/text%3E%3Crect x='24' y='31' width='5' height='38' rx='2.5' fill='%23D4AF37'/%3E%3C/svg%3E"/>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>تتبع الطلب — روائع الأفكار</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&family=Changa:wght@700;800&display=swap" rel="stylesheet">
+  <style>
+    :root{
+      --maroon:#4A0E17;
+      --maroon-mid:#631420;
+      --gold:#D4AF37;
+      --gold-soft:rgba(212,175,55,.12);
+      --surface:#FFFFFF;
+      --surface-2:#FDFBF7;
+      --border:#E8E2D9;
+      --border-soft:#F0EBE3;
+      --text-1:#1A0F0A;
+      --text-2:#5C4A3A;
+      --text-3:#9B8878;
+      --radius-lg:18px;
+      --radius-xl:24px;
+    }
+    *{margin:0;padding:0;box-sizing:border-box;}
+    html,body{height:100%;width:100%;}
+    body{
+      font-family:'Cairo',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+      color:var(--text-1);
+      line-height:1.6;
+      min-height:100vh;
+      position:relative;
+    }
+    /* Same dark radial-gradient background as the app's unified login portal */
+    .portal-bg{position:fixed;inset:0;background:radial-gradient(ellipse at 30% 40%,#3a1016 0%,#1a0a0c 60%,#0d0507 100%);z-index:0;}
+    .portal-wrap{position:relative;z-index:1;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 20px;}
+    .page{display:none;width:100%;max-width:520px;flex-direction:column;align-items:center;}
+    .page.active{display:flex;}
 
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css"/>
-<link rel="preconnect" href="https://fonts.googleapis.com"/>
-<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&family=Changa:wght@700;800&display=swap" rel="stylesheet"/>
+    .portal-header{text-align:center;margin-bottom:28px;}
+    .p-logo{width:82px;height:82px;margin:0 auto 14px;border-radius:50%;border:2px solid rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.03);}
+    .p-logo svg{width:100%;height:100%;display:block;}
+    .p-title{font-size:24px;font-weight:900;color:#fff;text-shadow:0 2px 14px rgba(0,0,0,.5);}
+    .p-title span{color:var(--gold);}
+    .p-sub{font-size:11px;color:var(--gold);font-weight:700;letter-spacing:.5px;margin:4px 0 14px;}
+    .p-badge{display:inline-block;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.2);color:rgba(255,255,255,.85);padding:6px 20px;border-radius:30px;font-size:11.5px;font-weight:700;backdrop-filter:blur(8px);}
 
-<style>
-:root {
-  --maroon:       #4A0E17;
-  --maroon-dark:  #1D0509;
-  --maroon-mid:   #631420;
-  --gold:         #D4AF37;
-  --gold-light:   #F0D060;
-  --gold-soft:    rgba(212,175,55,0.12);
-  --bg:           #140507;
-  --surface:      #FFFFFF;
-  --surface-2:    #FAFAFB;
-  --border:       #E8E2D9;
-  --text-1:       #1A0F0A;
-  --text-2:       #5C4A3A;
-  --text-3:       #9B8878;
-  --radius-md:    14px;
-  --radius-lg:    18px;
-  --radius-xl:    24px;
-}
+    .card{
+      background:var(--surface);border-radius:var(--radius-xl);
+      padding:28px;width:100%;
+      box-shadow:0 16px 50px rgba(0,0,0,.5);
+      border:2px solid var(--gold);
+      text-align:right;
+      position:relative;z-index:2;
+    }
+    .card + .card{margin-top:16px;}
 
-* { box-sizing: border-box; margin: 0; padding: 0; }
-body {
-  font-family: 'Cairo', sans-serif;
-  background: radial-gradient(ellipse at 50% 30%, #3a1016 0%, #140507 70%, #080203 100%);
-  color: var(--text-1);
-  min-height: 100vh;
-  padding: 20px;
-}
+    .fg{display:flex;flex-direction:column;gap:6px;margin-bottom:14px;}
+    .fg label{font-size:12px;color:var(--text-2);font-weight:700;}
+    .fg input{
+      border:1.5px solid var(--border);border-radius:var(--radius-lg);
+      padding:13px 44px 13px 16px;font-size:14px;background:var(--surface-2);color:var(--text-1);
+      width:100%;font-family:inherit;transition:.15s;
+    }
+    .fg input:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 3px var(--gold-soft);}
+    .input-wrap{position:relative;}
+    .input-wrap i{position:absolute;top:50%;right:15px;transform:translateY(-50%);color:var(--text-3);font-size:16px;pointer-events:none;}
 
-/* 1. WELCOME LOGIN SCREEN */
-.welcome-screen {
-  max-width: 480px;
-  margin: 80px auto 0;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(212, 175, 55, 0.25);
-  border-radius: var(--radius-xl);
-  padding: 35px 24px;
-  backdrop-filter: blur(15px);
-  text-align: center;
-  box-shadow: 0 20px 50px rgba(0,0,0,0.5);
-}
-.p-logo {
-  width: 80px; height: 80px; margin: 0 auto 16px;
-  border-radius: 50%; border: 2px solid rgba(255,255,255,0.15);
-  display: flex; align-items: center; justify-content: center;
-}
-.welcome-title { font-size: 24px; font-weight: 900; color: #fff; margin-bottom: 4px; }
-.welcome-sub { font-size: 11px; color: var(--gold); font-weight: 700; letter-spacing: 1px; margin-bottom: 24px; }
+    .btn{width:100%;padding:14px;font-size:15px;font-weight:800;border:none;border-radius:var(--radius-lg);cursor:pointer;font-family:inherit;transition:.15s;}
+    .btn-primary{background:var(--maroon);color:#fff;}
+    .btn-primary:hover{background:var(--maroon-mid);}
+    .btn-secondary{background:var(--surface-2);color:var(--maroon);border:1.5px solid var(--border);}
+    .btn-secondary:hover{border-color:var(--gold);}
+    .action-row{display:flex;gap:10px;margin-top:6px;}
 
-/* 2. PREMIUM MAIN PORTAL VIEW */
-.portal-layout { display: none; max-width: 1200px; margin: 0 auto; }
+    .privacy-note{font-size:11px;color:var(--text-3);text-align:center;margin-top:16px;}
+    .error-message{background:#FEF2F2;border:1px solid #FCA5A5;color:#991B1B;padding:12px 16px;border-radius:var(--radius-lg);text-align:center;font-weight:600;font-size:12.5px;margin-bottom:14px;}
 
-.app-header {
-  background: rgba(74, 14, 23, 0.85);
-  border: 1px solid rgba(212, 175, 55, 0.3);
-  border-radius: var(--radius-lg);
-  padding: 12px 24px;
-  display: flex; align-items: center; justify-content: space-between;
-  margin-bottom: 20px; backdrop-filter: blur(10px);
-}
-.brand { display: flex; align-items: center; gap: 12px; }
-.brand-title { font-size: 16px; font-weight: 800; color: #fff; }
-.brand-sub { font-size: 9.5px; color: var(--gold); font-weight: 600; }
+    .success-badge{display:flex;align-items:center;justify-content:center;width:52px;height:52px;background:rgba(34,197,94,.1);border-radius:50%;margin:0 auto 14px;font-size:26px;color:#10B981;}
+    .result-title{font-size:17px;font-weight:900;color:var(--text-1);text-align:center;margin-bottom:2px;}
+    .result-sub{font-size:11.5px;color:var(--text-3);text-align:center;margin-bottom:18px;}
 
-.user-badge { display: flex; align-items: center; gap: 8px; }
-.user-name { color: #fff; font-size: 13px; font-weight: 700; }
-.badge-tag { background: var(--gold); color: var(--maroon-dark); font-size: 9.5px; font-weight: 800; padding: 2px 10px; border-radius: 12px; }
+    .dg{display:grid;grid-template-columns:repeat(auto-fit,minmax(115px,1fr));gap:0;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:var(--radius-lg);padding:4px 2px;margin-bottom:16px;}
+    .di{display:flex;flex-direction:column;gap:2px;padding:8px 10px;}
+    .dk{font-size:9px;color:var(--text-3);font-weight:800;letter-spacing:.3px;text-transform:uppercase;}
+    .dv{font-size:13px;font-weight:700;color:var(--text-1);}
 
-/* GRID CONTAINER */
-.main-grid { display: grid; grid-template-columns: 1fr 1.1fr 1fr; gap: 16px; align-items: start; }
-@media(max-width: 950px) { .main-grid { grid-template-columns: 1fr; } }
+    /* Sleek circles + thin lines track — same visual language as the internal system's order view */
+    .track-row{display:flex;align-items:flex-start;overflow-x:auto;padding:4px 2px 0;margin-bottom:4px;}
+    .track-node{display:flex;flex-direction:column;align-items:center;gap:5px;flex:0 0 auto;min-width:52px;}
+    .track-dot{width:13px;height:13px;border-radius:50%;background:var(--surface);border:2px solid var(--border);flex-shrink:0;box-sizing:border-box;transition:.25s;}
+    .track-dot.done{background:#10B981;border-color:#10B981;}
+    .track-dot.active{background:var(--gold);border-color:var(--gold);box-shadow:0 0 0 4px var(--gold-soft);}
+    .track-label{font-size:9.5px;font-weight:700;color:var(--text-3);white-space:nowrap;text-align:center;}
+    .track-label.done{color:#059669;}
+    .track-label.active{color:var(--maroon);font-weight:800;}
+    .track-line{flex:1 1 18px;height:2px;background:var(--border-soft);margin-top:5.5px;min-width:12px;}
+    .track-line.done{background:#10B981;}
 
-.card { background: var(--surface); border-radius: var(--radius-lg); padding: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); border: 1px solid var(--border); }
-.card-title { font-size: 15px; font-weight: 800; color: var(--maroon); margin-bottom: 16px; display: flex; align-items: center; gap: 6px; border-bottom: 2px solid var(--border-soft); padding-bottom: 8px; }
+    .details-section{margin-top:6px;padding-top:16px;border-top:1px solid var(--border-soft);}
+    .details-section h3{font-size:11px;font-weight:800;color:var(--text-2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px;}
+    .detail-row{display:flex;justify-content:space-between;gap:14px;padding:6px 0;font-size:12.5px;}
+    .detail-row + .detail-row{border-top:1px solid var(--border-soft);}
+    .detail-label{color:var(--text-3);font-weight:700;flex-shrink:0;}
+    .detail-value{color:var(--text-1);text-align:left;}
 
-/* REPRODUCTION OF WORKFLOW CARDS */
-.wf-block { background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px; padding: 14px; margin-bottom: 12px; }
-.wf-head { display: flex; justify-content: space-between; align-items: center; font-size: 11px; font-weight: 800; color: var(--text-3); }
-.wf-name { font-size: 13px; font-weight: 800; color: var(--text-1); margin: 6px 0 12px; }
-
-.track-row { display: flex; justify-content: space-between; position: relative; padding: 0 4px; }
-.track-node { display: flex; flex-direction: column; align-items: center; gap: 4px; position: relative; z-index: 2; }
-.track-dot { width: 10px; height: 10px; border-radius: 50%; background: #E2E8F0; border: 2px solid #fff; }
-.track-node.done .track-dot { background: #10B981; }
-.track-node.active .track-dot { background: var(--gold); box-shadow: 0 0 0 3px var(--gold-soft); }
-.track-text { font-size: 9px; font-weight: 700; color: var(--text-3); }
-.track-node.active .track-text { color: var(--maroon); font-weight: 800; }
-.track-node.done .track-text { color: #059669; }
-
-/* FINANCIALS MATRIX */
-.fin-card { border-right: 4px solid var(--gold); }
-.fin-row { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 6px; }
-.fin-label { color: var(--text-2); font-weight: 600; }
-.fin-val { font-weight: 800; color: var(--text-1); }
-.fin-total { font-weight: 900; color: var(--maroon); font-size: 13.5px; }
-
-.split-details { font-size: 10.5px; color: var(--text-2); background: #FAF7F2; padding: 8px; border-radius: 6px; margin: 8px 0; border: 1px solid var(--border); }
-
-/* FORMS */
-.fg { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; text-align: right; }
-.fg label { font-size: 11.5px; color: var(--text-2); font-weight: 700; }
-.btn { width: 100%; padding: 10px; border-radius: 8px; font-size: 12px; font-weight: 700; border: none; cursor: pointer; font-family: inherit; transition: .15s; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
-.btn-brand { background: var(--maroon); color: #fff; }
-.btn-brand:hover { background: var(--maroon-mid); }
-.btn-gold { background: var(--gold); color: var(--maroon-dark); font-weight: 800; }
-.btn-out { background: transparent; border: 1px solid var(--border); color: var(--text-1); }
-</style>
+    @media (max-width:640px){
+      .card{padding:20px;}
+      .p-title{font-size:20px;}
+    }
+  </style>
 </head>
 <body>
-
-<!-- WATERMARK -->
-<div class="site-watermark" aria-hidden="true"><span>ر</span></div>
-
-<!-- 1. TACTICAL WELCOME LOGIN PHASE -->
-<div class="welcome-screen" id="welcomePhase">
-  <div class="p-logo">
-    <svg viewBox="0 0 100 100" width="50" height="50">
-      <circle cx="50" cy="50" r="48" fill="#4A0E17"/>
-      <text x="50" y="52" text-anchor="middle" dominant-baseline="central" font-family="'Cairo', sans-serif" font-weight="900" font-size="55" fill="#fff">ر</text>
-      <rect x="24" y="31" width="5" height="38" rx="2.5" fill="#D4AF37"/>
-    </svg>
-  </div>
-  <div class="welcome-title">روائع الأفكار للإعلانات</div>
-  <div class="welcome-sub">بوابة تتبع الطلبات والخدمات الذكية</div>
-  
-  <div class="fg">
-    <input type="text" id="accessInput" placeholder="أدخل رقم الطلب أو رقم الجوال..." style="text-align: center; font-weight: 700; padding: 12px; border-radius: 10px;"/>
-  </div>
-  <button class="btn btn-gold" style="padding: 12px; font-size: 13.5px;" onclick="authenticateClientPortal()"><i class="ti ti-login"></i> الدخول للبوابة</button>
-</div>
-
-<!-- 2. LUXURY CLIENT PORTAL DASHBOARD -->
-<div class="portal-layout" id="portalDashboardPhase">
-  <header class="app-header">
-    <div class="brand">
-      <div class="brand-title">روائع الأفكار للإعلانات</div>
-      <div class="brand-sub">بوابة تتبع الطلبات والخدمات الذكية</div>
+  <div class="portal-bg"></div>
+  <div class="portal-wrap">
+    <div class="portal-header">
+      <div class="p-logo">
+        <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="روائع الأفكار">
+          <text x="50" y="50" text-anchor="middle" dominant-baseline="central" font-family="'Changa',sans-serif" font-weight="800" font-size="62" fill="#fff">ر</text>
+          <rect x="24" y="12" width="5" height="38" rx="2.5" fill="#D4AF37"/>
+        </svg>
+      </div>
+      <div class="p-title"><span>•</span> روائع الأفكار الإعلانية</div>
+      <div class="p-sub">RAWAEE AL-AFKAR FOR ADVERTISING</div>
+      <div class="p-badge">بوابة تتبع الطلبات العامة</div>
     </div>
-    <div class="user-badge">
-      <span class="user-name" id="clientProfileName">العميل</span>
-      <span class="badge-tag" id="employeeTag" style="display:none;">عميل / موظف</span>
-    </div>
-  </header>
 
-  <div class="main-grid">
-    
-    <!-- COLUMN 1 (FAR LEFT): WARRANTY & MAINTENANCE -->
-    <div class="card" id="maintenanceCardContainer" style="display: none;">
-      <div class="card-title"><i class="ti ti-tool"></i> الضمان وطلب الصيانة</div>
-      <form onsubmit="event.preventDefault(); alert('تم إرسال طلب الصيانة الفنية الفورية للورشة بنجاح.');">
+    <!-- PAGE 1: SEARCH -->
+    <div id="searchPage" class="page active">
+      <div class="card">
+        <div id="searchErrorSlot"></div>
         <div class="fg">
-          <label>رقم الطلب / العقد</label>
-          <select id="maintOrderSelect" onchange="loadOrderSubItems(this.value)"><option value="">اختر رقم الطلب...</option></select>
+          <label>رقم الطلب أو رقم الجوال</label>
+          <div class="input-wrap">
+            <input type="search" id="searchInput" placeholder="مثال: ORD-014 أو 05XXXXXXXX" autocomplete="off"/>
+          </div>
         </div>
-        <div class="fg">
-          <label>البند / اللوحة المطلوبة للصيانة</label>
-          <select id="maintItemSelect"><option value="">اختر البند المخصص...</option></select>
-        </div>
-        <div class="fg">
-          <label>وصف المشكلة / التعديل</label>
-          <textarea placeholder="اكتب الملاحظات والتفاصيل هنا..." style="min-height: 70px; resize: none;"></textarea>
-        </div>
-        <div class="fg">
-          <label>إرفاق صورة (اختياري)</label>
-          <input type="file" accept="image/*" style="padding: 5px; font-size: 11px;"/>
-        </div>
-        <button type="submit" class="btn btn-brand"><i class="ti ti-send"></i> إرسال طلب الصيانة</button>
-      </form>
-    </div>
-
-    <!-- COLUMN 2 (CENTER): QUOTATIONS & NEW QUOTE REQUEST -->
-    <div class="card">
-      <div class="card-title"><i class="ti ti-receipt-2"></i> عروض الأسعار والطلبات</div>
-      
-      <!-- Trigger for new quote request -->
-      <button class="btn btn-out" style="margin-bottom: 14px; background: var(--gold-soft); border-color: var(--gold);" onclick="requestNewQuotationPopup()"><i class="ti ti-file-plus"></i> طلب عرض سعر جديد</button>
-      
-      <div id="quotationsListSlot"></div>
-    </div>
-
-    <!-- COLUMN 3 (FAR RIGHT): LIVE PRODUCTION WORKFLOW LINE -->
-    <div class="card">
-      <div class="card-title"><i class="ti ti-git-commit"></i> سير الأعمال المباشر</div>
-      <div id="productionWorkflowSlot"></div>
-    </div>
-
-  </div>
-</div>
-
-<script>
-// Isolated Mock Data Mapping to reflect the attached screenshot structure
-const portalDatabase = {
-  "0550000000": {
-    name: "عبدالعزيز محمد",
-    isEmployee: true,
-    orders: [
-      {
-        id: "ORD-9081",
-        title: "كلادينج وحروف زنكور",
-        phase: "print", // design | print | execution
-        total: 12500, remaining: 3500,
-        splitPayments: "كاش: 5000 ريال | شبكة: 4000 ريال",
-        items: ["لوحة واجهة رئيسية کلادينج", "حروف زنكور مضيئة"],
-        linkedToWorkshop: true // This enforces showing the maintenance card
-      },
-      {
-        id: "ORD-9082",
-        title: "مطبوعات واستيكرات",
-        phase: "design",
-        total: 1800, remaining: 0,
-        splitPayments: "تحويل: 1800 ريال",
-        items: ["استيكر سيارات داخلي"],
-        linkedToWorkshop: false
-      }
-    ]
-  }
-};
-
-function authenticateClientPortal() {
-  const input = document.getElementById("accessInput").value.trim();
-  if (!input) return;
-
-  // Search profile by phone or specific hardcoded id match
-  const profile = portalDatabase[input] || portalDatabase["0550000000"]; 
-  
-  document.getElementById("welcomePhase").style.display = "none";
-  document.getElementById("portalDashboardPhase").style.display = "block";
-  
-  // Set Client Visual Profile Details
-  document.getElementById("clientProfileName").textContent = profile.name;
-  if (profile.isEmployee) document.getElementById("employeeTag").style.display = "inline-block";
-
-  // Check if any order touches the workshop to display the maintenance section
-  const hasWorkshopLink = profile.orders.some(o => o.linkedToWorkshop);
-  if (hasWorkshopLink) {
-    document.getElementById("maintenanceCardContainer").style.display = "block";
-    populateMaintenanceDropdowns(profile.orders);
-  }
-
-  renderWorkflowSection(profile.orders);
-  renderFinancialSection(profile.orders);
-}
-
-function renderWorkflowSection(orders) {
-  const slot = document.getElementById("productionWorkflowSlot");
-  slot.innerHTML = orders.map(o => `
-    <div class="wf-block">
-      <div class="wf-head"><span>رقم الطلب</span><strong>${o.id}</strong></div>
-      <div class="wf-name">${o.title}</div>
-      <div class="track-row">
-        <div class="track-node ${o.phase==='design'?'active': 'done'}"><div class="track-dot"></div><span class="track-text">تصميم</span></div>
-        <div class="track-node ${o.phase==='print'?'active': (o.phase==='execution'?'done':'')}"><div class="track-dot"></div><span class="track-text">طباعة</span></div>
-        <div class="track-node ${o.phase==='execution'?'active':''}"><div class="track-dot"></div><span class="track-text">تنفيذ</span></div>
+        <button class="btn btn-primary" id="searchBtn" onclick="searchOrder()">تتبع الطلب</button>
+        <div class="privacy-note">لن يتم استخدام بياناتك إلا لعرض حالة طلبك.</div>
       </div>
     </div>
-  `).join('');
-}
 
-function renderFinancialSection(orders) {
-  const slot = document.getElementById("quotationsListSlot");
-  slot.innerHTML = orders.map(o => `
-    <div class="wf-block fin-card">
-      <div class="fin-row"><span class="fin-label">${o.id} - ${o.title}</span><span class="fin-total">${o.total} ريال</span></div>
-      <div class="fin-row"><span class="fin-label">المتبقي:</span><span class="fin-val" style="color:var(--maroon); font-weight:800;">${o.remaining} ريال</span></div>
-      <div class="split-details"><strong>تفاصيل المدفوعات:</strong> ${o.splitPayments}</div>
-      <button class="btn btn-brand btn-xs" style="margin-top:4px;" onclick="alert('جاري تنزيل ملف العرض الصافي...')"><i class="ti ti-download"></i> تنزيل العرض PDF</button>
+    <!-- PAGE 2: RESULT -->
+    <div id="statusPage" class="page">
+      <div class="card">
+        <div class="success-badge">✓</div>
+        <div class="result-title" id="resultClient">—</div>
+        <div class="result-sub" id="resultMeta">—</div>
+
+        <div class="dg">
+          <div class="di"><span class="dk">رقم الطلب</span><span class="dv" id="orderNumber">—</span></div>
+          <div class="di"><span class="dk">تاريخ الطلب</span><span class="dv" id="orderDate">—</span></div>
+          <div class="di"><span class="dk">تاريخ التسليم المتوقع</span><span class="dv" id="estimatedDelivery">—</span></div>
+        </div>
+
+        <div id="progressTrack"></div>
+
+        <div class="details-section">
+          <h3>تفاصيل الطلب</h3>
+          <div class="detail-row"><span class="detail-label">الخدمة</span><span class="detail-value" id="detailService">—</span></div>
+          <div class="detail-row"><span class="detail-label">أنشئ بواسطة</span><span class="detail-value" id="detailCreatedBy">—</span></div>
+          <div class="detail-row"><span class="detail-label">ملاحظات</span><span class="detail-value" id="detailNotes">—</span></div>
+        </div>
+      </div>
+      <div class="action-row">
+        <button class="btn btn-secondary" onclick="backToSearch()">تتبع طلب آخر</button>
+      </div>
     </div>
-  `).join('');
-}
+  </div>
 
-function populateMaintenanceDropdowns(orders) {
-  const select = document.getElementById("maintOrderSelect");
-  orders.filter(o => o.linkedToWorkshop).forEach(o => {
-    const opt = document.createElement("option");
-    opt.value = o.id; opt.textContent = `${o.id} - ${o.title} (تحت الضمان)`;
-    select.appendChild(opt);
-  });
-}
+  <script>
+    const FIREBASE_DB_URL = "https://rawaee-alafkar-default-rtdb.firebaseio.com";
+    // Mirrors the main system's department sequence (index.html getActiveDepts) so the
+    // progress shown here always matches the real record instead of a fixed generic list.
+    const DEPT_META = {
+      design:   {label:'التصميم'},
+      external: {label:'التنفيذ الخارجي'},
+      print:    {label:'الطباعة'},
+      workshop: {label:'الورشة'}
+    };
+    var currentOrder = null;
 
-function loadOrderSubItems(orderId) {
-  const itemSelect = document.getElementById("maintItemSelect");
-  itemSelect.innerHTML = '<option value="">اختر البند المخصص...</option>';
-  if (!orderId) return;
+    function toEnglishDigits(str){
+      const map={'٠':'0','١':'1','٢':'2','٣':'3','٤':'4','٥':'5','٦':'6','٧':'7','٨':'8','٩':'9','۰':'0','۱':'1','۲':'2','۳':'3','۴':'4','۵':'5','۶':'6','۷':'7','۸':'8','۹':'9'};
+      return String(str||'').replace(/[٠-٩۰-۹]/g,ch=>map[ch]!==undefined?map[ch]:ch);
+    }
+    function normalizeSaudiPhone(v){
+      let s=toEnglishDigits(v).trim().replace(/[^\d+]/g,'');
+      if(s.startsWith('+966'))s='0'+s.slice(4);
+      else if(s.startsWith('00966'))s='0'+s.slice(5);
+      else if(s.startsWith('966')&&s.length>=12)s='0'+s.slice(3);
+      else if(/^5\d{8}$/.test(s))s='0'+s;
+      return s;
+    }
+    function getActiveDepts(o){
+      const seq=[];
+      if(o.designTo&&o.designTo!=='none')seq.push('design');
+      if(o.externalTo&&o.externalTo!=='none')seq.push('external');
+      if(o.printTo&&o.printTo!=='none')seq.push('print');
+      if(o.workshopTo&&o.workshopTo!=='none')seq.push('workshop');
+      return seq;
+    }
 
-  // Pull mock profile again to extract specific item lines
-  const orders = portalDatabase["0550000000"].orders;
-  const match = orders.find(o => o.id === orderId);
-  if (match && match.items) {
-    match.items.forEach(it => {
-      const opt = document.createElement("option");
-      opt.value = it; opt.textContent = it;
-      itemSelect.appendChild(opt);
+    async function fetchOrders(){
+      const res = await fetch(FIREBASE_DB_URL + '/orders.json');
+      if(!res.ok) throw new Error('http_' + res.status);
+      const data = await res.json();
+      return data || {};
+    }
+    // Narrow Firebase REST queries (equalTo) for exact-match lookups (order key,
+    // id field, phone field) so a typical ID/phone search downloads only the
+    // matching record(s) instead of the entire /orders collection. Client-name
+    // search still requires the full collection as a fallback (see searchOrder),
+    // since equalTo needs an exact match and can't express the trimmed/contains
+    // comparison used for names.
+    function fbEqualToUrl(orderBy, value){
+      return FIREBASE_DB_URL + '/orders.json?orderBy=' + encodeURIComponent('"' + orderBy + '"') + '&equalTo=' + encodeURIComponent(JSON.stringify(value));
+    }
+    async function fbQuery(orderBy, value){
+      try{
+        const res = await fetch(fbEqualToUrl(orderBy, value));
+        if(!res.ok) return {};
+        const data = await res.json();
+        return data || {};
+      }catch(e){ return {}; }
+    }
+    async function fetchOrdersNarrow(raw, normalizedPhone){
+      const merged = {};
+      Object.assign(merged, await fbQuery('$key', raw));
+      Object.assign(merged, await fbQuery('id', raw));
+      Object.assign(merged, await fbQuery('phone', raw));
+      if(normalizedPhone && normalizedPhone !== raw){
+        Object.assign(merged, await fbQuery('phone', normalizedPhone));
+      }
+      return merged;
+    }
+    function findMatch(orders, raw, normalizedPhone){
+      const activeOrders = Object.entries(orders || {}).filter(([, order]) => order.currentDept !== 'done');
+      return activeOrders.find(([key, order]) =>
+        key === raw ||
+        (order.id && order.id === raw) ||
+        (order.phone && (order.phone === raw || order.phone === normalizedPhone)) ||
+        (order.client && order.client.trim() === raw)
+      );
+    }
+
+    function setSearchError(message){
+      const slot = document.getElementById('searchErrorSlot');
+      slot.innerHTML = message ? `<div class="error-message"><i class="ti ti-alert-circle"></i> ${message}</div>` : '';
+    }
+
+    async function searchOrder(){
+      const raw = document.getElementById('searchInput').value.trim();
+      if(!raw){ setSearchError('الرجاء إدخال رقم الطلب أو رقم الجوال'); return; }
+      setSearchError('');
+      const btn = document.getElementById('searchBtn');
+      btn.disabled = true; btn.textContent = 'جاري البحث...';
+      try{
+        const normalizedPhone = normalizeSaudiPhone(raw);
+        // Public tracking only surfaces active/ongoing orders — completed ones are
+        // intentionally excluded from search results entirely.
+        let orders = await fetchOrdersNarrow(raw, normalizedPhone);
+        let found = findMatch(orders, raw, normalizedPhone);
+        if(!found){
+          // Narrow key/id/phone queries found nothing — the input may be a client
+          // name, which equalTo can't express (trimmed/exact-string match), so
+          // fall back to the full collection only in this case.
+          orders = await fetchOrders();
+          found = findMatch(orders, raw, normalizedPhone);
+        }
+        if(!found){ setSearchError('لم يتم العثور على طلب جارٍ مطابق. تحقق من رقم الطلب أو الجوال.'); return; }
+        currentOrder = { _key: found[0], ...found[1] };
+        displayOrder();
+      }catch(e){
+        setSearchError('تعذّر الاتصال بقاعدة البيانات، حاول مرة أخرى.');
+      }finally{
+        btn.disabled = false; btn.textContent = 'تتبع الطلب';
+      }
+    }
+
+    function formatDate(v){
+      if(!v) return '—';
+      try{
+        const d = new Date(v);
+        if(isNaN(d.getTime())) return v;
+        return d.toLocaleDateString('ar-SA', { year:'numeric', month:'long', day:'numeric' });
+      }catch(e){ return v; }
+    }
+
+    function renderTrack(o){
+      const seq = getActiveDepts(o);
+      const nodes = [...seq.map(dk => ({key:dk, label:DEPT_META[dk].label})), {key:'done', label:'تسليم'}];
+      const cur = o.currentDept || seq[0] || 'done';
+      const curIdx = cur === 'done' ? nodes.length - 1 : nodes.findIndex(n => n.key === cur);
+      let html = '<div class="track-row">';
+      nodes.forEach((n, i) => {
+        let st = '';
+        if(cur === 'done'){ st = 'done'; }
+        else if(i < curIdx){ st = 'done'; }
+        else if(n.key === cur){ st = 'active'; }
+        html += `<div class="track-node"><div class="track-dot ${st}"></div><div class="track-label ${st}">${n.label}</div></div>`;
+        if(i < nodes.length - 1) html += `<div class="track-line ${st === 'done' ? 'done' : ''}"></div>`;
+      });
+      html += '</div>';
+      return html;
+    }
+
+    function displayOrder(){
+      const o = currentOrder;
+      document.getElementById('resultClient').textContent = o.client || '—';
+      document.getElementById('resultMeta').textContent = o.currentDept === 'done' ? 'تم إنجاز طلبك بالكامل' : 'طلبك قيد التنفيذ حالياً';
+      document.getElementById('orderNumber').textContent = o.id || o._key || '—';
+      document.getElementById('orderDate').textContent = formatDate(o.date || o.createdAt);
+      document.getElementById('estimatedDelivery').textContent = (o.deadline && o.deadline !== '—') ? formatDate(o.deadline) : '—';
+      document.getElementById('detailService').textContent = (o.orderItems && o.orderItems.length ? o.orderItems[0].name : o.service) || '—';
+      document.getElementById('detailCreatedBy').textContent = o.createdBy || '—';
+      document.getElementById('detailNotes').textContent = (o.notes && o.notes !== '—') ? o.notes : 'لا توجد ملاحظات';
+      document.getElementById('progressTrack').innerHTML = renderTrack(o);
+      document.getElementById('searchPage').classList.remove('active');
+      document.getElementById('statusPage').classList.add('active');
+    }
+
+    function backToSearch(){
+      document.getElementById('searchInput').value = '';
+      setSearchError('');
+      document.getElementById('statusPage').classList.remove('active');
+      document.getElementById('searchPage').classList.add('active');
+    }
+
+    document.getElementById('searchInput').addEventListener('keydown', (e) => {
+      if(e.key === 'Enter') searchOrder();
     });
-  }
-}
 
-function requestNewQuotationPopup() {
-  const desc = prompt("يرجى كتابة مواصفات اللوحة أو المطبوعات المطلوبة لرفعها لقسم المبيعات:");
-  if (desc) alert("تم رفع طلبك بنجاح. سيقوم مسؤول المبيعات بإصدار عرض السعر وإرساله لحسابك هنا فوراً.");
-}
-</script>
-
+    // Auto-load if an order id is passed in the URL (?id=ORD-014)
+    (function(){
+      const params = new URLSearchParams(window.location.search);
+      const orderId = params.get('id');
+      if(!orderId) return;
+      window.addEventListener('load', async () => {
+        try{
+          let orders = await fbQuery('$key', orderId);
+          if(!Object.keys(orders).length) Object.assign(orders, await fbQuery('id', orderId));
+          let activeOrders = Object.entries(orders).filter(([, o]) => o.currentDept !== 'done');
+          let found = activeOrders.find(([key, o]) => key === orderId || o.id === orderId);
+          if(!found){
+            const full = await fetchOrders();
+            activeOrders = Object.entries(full).filter(([, o]) => o.currentDept !== 'done');
+            found = activeOrders.find(([key, o]) => key === orderId || o.id === orderId);
+          }
+          if(found){
+            currentOrder = { _key: found[0], ...found[1] };
+            displayOrder();
+          }else{
+            setSearchError('لم يتم العثور على طلب جارٍ بهذا الرقم.');
+          }
+        }catch(e){
+          setSearchError('تعذّر الاتصال بقاعدة البيانات، حاول مرة أخرى.');
+        }
+      });
+    })();
+  </script>
 </body>
 </html>

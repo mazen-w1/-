@@ -405,6 +405,7 @@ input[type="password"]{direction:rtl;text-align:right;padding-left:40px;padding-
 .quote-box-title{font-size:13px;font-weight:700;color:var(--maroon);margin-bottom:14px;display:flex;align-items:center;gap:7px;}
 .quote-line{display:grid;grid-template-columns:2fr 1fr 1fr 0.5fr;gap:8px;margin-bottom:10px;align-items:center;}
 .quote-line input{padding:8px 10px;font-size:12px;}
+@media(max-width:768px){#quote-grid-header,.quote-line{min-width:640px;}}
 .quote-total-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);padding:16px 20px;margin-top:16px;}
 .qt-row{display:flex;justify-content:space-between;font-size:13px;font-weight:600;color:var(--text-2);margin-bottom:8px;}
 .qt-row.grand{font-size:16px;font-weight:900;color:var(--maroon);border-top:2px solid var(--gold);padding-top:12px;margin-top:4px;}
@@ -2351,7 +2352,7 @@ function buildWfGrid(tab){
         <div class="wf-card-svc">${esc(o.service)}</div>
         ${o.isQuickTask?`<div style="font-size:11px;color:var(--maroon);font-weight:700;margin-bottom:4px;"><i class="ti ti-user"></i> اسم العميل: ${esc(o.client||'—')} &nbsp; <i class="ti ti-phone"></i> رقم الجوال: ${esc(o.phone||'—')}</div>`:''}
         <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;margin-bottom:6px;">${deptBadge(o.currentDept)} ${gpbadge(o.priority)} ${timeBadge(hoursAgo(o.stageStartDate||o.date))}</div>
-        <div style="font-size:11px;color:var(--text-3);">المسؤول: ${currentPersonName(o)}</div>
+        <div style="font-size:11px;color:var(--text-3);">المسؤول: ${esc(currentPersonName(o))}</div>
         ${o.deadline&&o.deadline!=='—'?`<div style="font-size:10.5px;color:var(--text-3);"><i class="ti ti-calendar-time"></i> التسليم: ${deadlineDateTime(o)}</div>`:''}
         ${deadlineBadge(o.deadline)}
         ${qtActions}
@@ -2749,7 +2750,7 @@ function buildMyWork(){
       <td><strong style="color:var(--maroon)">${o.id||o._key}</strong></td>
       <td style="font-size:12px;">${esc(o.client||'—')}</td>
       <td style="font-size:12px;">${esc(o.service||'—')}</td>
-      <td style="font-size:11px;">${currentPersonName(o)}</td>
+      <td style="font-size:11px;">${esc(currentPersonName(o))}</td>
       <td style="font-size:11px;">${o.date||'—'}</td>
     </tr>`).join('');
     return`<div class="page-header" style="margin-top:20px;"><div class="ptitle" style="font-size:15px;"><i class="ti ti-list-details"></i> سجل مختصر لكامل أعمال القسم (${deptJobs.length})</div></div>
@@ -3109,6 +3110,7 @@ function goToQuoteWithPrefill(client,phone,quickTaskKey){
 function buildQuotePage(){
   window._quoteLines=[];
   window._quoteCalcMode='combined';
+  window._quoteShowMeters=false;
   window._quoteAttachmentB64='';window._quoteAttachmentName='';
   const cArr=Object.values(clients);
   // Auto-generate quote number (RA-0001 format, locked)
@@ -3168,17 +3170,14 @@ function buildQuotePage(){
           <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;cursor:pointer;">
             <input type="radio" name="q-calc-mode" value="separate" onchange="onQuoteCalcModeChange(this.value)"/> خيار منفصل (كل بند سعره منفصل عن الآخر)
           </label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;cursor:pointer;">
+            <input type="checkbox" id="q-show-meters" onchange="onQuoteShowMetersChange(this.checked)"/> إظهار خانة الأمتار
+          </label>
         </div>
-        <div style="display:grid;grid-template-columns:2fr 0.8fr 1fr 1fr 1fr 1fr 0.5fr;gap:8px;margin-bottom:8px;padding:0 4px;">
-          <span style="font-size:11px;font-weight:800;color:var(--text-3);">وصف البند</span>
-          <span style="font-size:11px;font-weight:800;color:var(--text-3);">الامتار</span>
-          <span style="font-size:11px;font-weight:800;color:var(--text-3);">الكمية</span>
-          <span style="font-size:11px;font-weight:800;color:var(--text-3);">السعر غير شامل الضريبة</span>
-          <span style="font-size:11px;font-weight:800;color:var(--text-3);">السعر شامل الضريبة</span>
-          <span style="font-size:11px;font-weight:800;color:var(--text-3);">الإجمالي</span>
-          <span></span>
+        <div style="overflow-x:auto;">
+          <div id="quote-grid-header"></div>
+          <div id="quote-lines-wrap"></div>
         </div>
-        <div id="quote-lines-wrap"></div>
         <button class="btn btn-out btn-sm" onclick="addQuoteLine()" style="margin-top:8px;"><i class="ti ti-plus"></i> إضافة بند</button>
         <!-- Grand Total Only (simplified) -->
         <div style="margin-top:14px;text-align:center;">
@@ -3213,6 +3212,7 @@ function buildQuotePage(){
       </div>
     </div>
     ${quoteArchiveSectionHtml()}`;
+  renderQuoteGridHeader();
   addQuoteLine();
   if(window._quotePrefillClient||window._quotePrefillPhone){
     const ce=document.getElementById('q-client');if(ce)ce.value=window._quotePrefillClient||'';
@@ -3311,6 +3311,8 @@ async function editQuote(key){
   window._quoteAttachmentB64=q.attachmentFile||'';window._quoteAttachmentName=q.attachmentFileName||'';
   const attNote=document.getElementById('q-attachment-note');
   if(attNote)attNote.textContent=window._quoteAttachmentName?('✓ تم: '+window._quoteAttachmentName):'';
+  window._quoteShowMeters=q.showMeters!==undefined?!!q.showMeters:(q.lines||[]).some(l=>l.m!==undefined&&l.m!==1);
+  renderQuoteGridHeader();
   window._quoteLines=(q.lines||[]).map(l=>({...l,id:'q'+Date.now()+Math.random().toString(36).slice(2)}));
   renderQuoteLines();
   document.getElementById('page-quote')?.scrollIntoView({behavior:'smooth',block:'start'});
@@ -3344,15 +3346,40 @@ function updateQuoteLineFromTax(id,v){
     renderQuoteTotals();
   }
 }
+function quoteGridCols(){
+  return window._quoteShowMeters?'2fr 0.8fr 1fr 1fr 1fr 1fr 0.5fr':'2fr 1fr 1fr 1fr 1fr 0.5fr';
+}
+function renderQuoteGridHeader(){
+  const wrap=document.getElementById('quote-grid-header');if(!wrap)return;
+  const showMeters=window._quoteShowMeters;
+  const chk=document.getElementById('q-show-meters');if(chk)chk.checked=!!showMeters;
+  wrap.style.display='grid';
+  wrap.style.gridTemplateColumns=quoteGridCols();
+  wrap.style.gap='8px';wrap.style.marginBottom='8px';wrap.style.padding='0 4px';
+  wrap.innerHTML=`
+    <span style="font-size:11px;font-weight:800;color:var(--text-3);">وصف البند</span>
+    ${showMeters?'<span style="font-size:11px;font-weight:800;color:var(--text-3);">الامتار</span>':''}
+    <span style="font-size:11px;font-weight:800;color:var(--text-3);">الكمية</span>
+    <span style="font-size:11px;font-weight:800;color:var(--text-3);">السعر غير شامل الضريبة</span>
+    <span style="font-size:11px;font-weight:800;color:var(--text-3);">السعر شامل الضريبة</span>
+    <span style="font-size:11px;font-weight:800;color:var(--text-3);">الإجمالي</span>
+    <span></span>`;
+}
+function onQuoteShowMetersChange(checked){
+  window._quoteShowMeters=!!checked;
+  renderQuoteGridHeader();
+  renderQuoteLines();
+}
 function renderQuoteLines(){
   const wrap=document.getElementById('quote-lines-wrap');if(!wrap)return;
-  wrap.innerHTML=window._quoteLines.map(l=>`<div class="quote-line" style="grid-template-columns:2fr 0.8fr 1fr 1fr 1fr 1fr auto auto;gap:6px;">
-    <input placeholder="وصف البند" value="${l.lbl}" oninput="updateQuoteLine('${l.id}','lbl',this.value)"/>
-    <input type="text" inputmode="decimal" id="q-line-m-${l.id}" placeholder="الامتار" value="${l.m??1}" oninput="updateQuoteLine('${l.id}','m',this.value)" min="0" onfocus="this.select()"/>
+  const showMeters=window._quoteShowMeters;
+  wrap.innerHTML=window._quoteLines.map(l=>`<div class="quote-line" style="grid-template-columns:${quoteGridCols()} auto auto;gap:6px;">
+    <input placeholder="وصف البند" value="${esc(l.lbl)}" oninput="updateQuoteLine('${l.id}','lbl',this.value)"/>
+    ${showMeters?`<input type="text" inputmode="decimal" id="q-line-m-${l.id}" placeholder="الامتار" value="${l.m??1}" oninput="updateQuoteLine('${l.id}','m',this.value)" min="0" onfocus="this.select()"/>`:''}
     <input type="text" inputmode="decimal" id="q-line-qty-${l.id}" placeholder="الكمية" value="${l.q}" oninput="updateQuoteLine('${l.id}','q',this.value)" min="1" onfocus="this.select()"/>
     <input type="text" inputmode="decimal" id="q-line-notax-${l.id}" placeholder="السعر غير شامل الضريبة" value="${l.p}" oninput="updateQuoteLine('${l.id}','p',this.value)" min="0" onfocus="this.select()"/>
     <input type="text" inputmode="decimal" id="q-line-wtax-${l.id}" placeholder="السعر شامل الضريبة" value="${fmtMoney((l.p*1.15))}" oninput="updateQuoteLineFromTax('${l.id}',this.value)" min="0" onfocus="this.select()"/>
-    <div id="q-line-total-${l.id}" style="display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:var(--maroon);background:var(--surface-2);border:1.5px solid var(--border);border-radius:8px;padding:8px 6px;text-align:center;">${fmtMoney(((l.m??1)*(l.q||0)*(l.p||0)*1.15))}</div>
+    <div id="q-line-total-${l.id}" style="display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:var(--maroon);background:var(--surface-2);border:1.5px solid var(--border);border-radius:8px;padding:8px 6px;text-align:center;">${fmtMoney((showMeters?(l.m??1):1)*(l.q||0)*(l.p||0)*1.15)}</div>
     <label title="إرفاق صورة للبند" style="cursor:pointer;display:flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:8px;border:1px dashed var(--border);background:var(--bg);flex-shrink:0;transition:.12s;" onmouseover="this.style.borderColor='var(--gold)'" onmouseout="this.style.borderColor='var(--border)'">
       ${l.img?`<img src="${l.img}" style="width:28px;height:28px;object-fit:cover;border-radius:6px;"/>`:
       `<i class="ti ti-photo" style="font-size:14px;color:var(--text-3);"></i>`}
@@ -3407,6 +3434,7 @@ function renderQuoteTotals(){
   // Re-reading the rounded text back in would bake that rounding into every
   // future calculation and compound into a noticeably wrong total. ──
   let subtotal=0;
+  const showMeters=window._quoteShowMeters;
   window._quoteLines.forEach(l=>{
     const qEl=document.getElementById('q-line-qty-'+l.id);
     const mEl=document.getElementById('q-line-m-'+l.id);
@@ -3414,9 +3442,10 @@ function renderQuoteTotals(){
     const m=mEl?(parseFloat(mEl.value)||0):(l.m??1);
     const p=l.p||0;
     l.q=q;l.m=m;
-    subtotal+=m*q*p;
+    const effectiveM=showMeters?m:1;
+    subtotal+=effectiveM*q*p;
     const totEl=document.getElementById('q-line-total-'+l.id);
-    if(totEl)totEl.textContent=fmt(m*q*p*1.15);
+    if(totEl)totEl.textContent=fmt(effectiveM*q*p*1.15);
   });
   const vat=subtotal*0.15;const total=subtotal+vat;
   const g=document.getElementById('q-grand-total');
@@ -3445,13 +3474,14 @@ function getQuoteData(){
   const paymentTerms=document.getElementById('q-payment-terms')?.value||'';
   const terms=document.getElementById('q-terms')?.value||'';
   const bank=document.getElementById('q-bank')?.value||'';
+  const showMeters=!!window._quoteShowMeters;
   const lines=window._quoteLines.filter(l=>l.lbl.trim()!=='').map(l=>({...l}));
-  const subtotal=lines.reduce((s,l)=>s+((l.m??1)*l.q*l.p),0);
+  const subtotal=lines.reduce((s,l)=>s+((showMeters?(l.m??1):1)*l.q*l.p),0);
   const vat=subtotal*0.15;const totalWithVat=subtotal+vat;
   const paidAmount=parseFloat(document.getElementById('q-paid-amount')?.value)||0;
   const remainingAmount=Math.max(0,totalWithVat-paidAmount);
   const qDate=document.getElementById('q-date')?.value||new Date().toISOString().split('T')[0];
-  return{client,ref,phone:normalizeSaudiPhone(phone),validity,sales,delivery,paymentTerms,terms,bank,lines,subtotal,vat,totalWithVat,paidAmount,remainingAmount,date:qDate,createdBy:cu.name,calcMode,
+  return{client,ref,phone:normalizeSaudiPhone(phone),validity,sales,delivery,paymentTerms,terms,bank,lines,subtotal,vat,totalWithVat,paidAmount,remainingAmount,date:qDate,createdBy:cu.name,calcMode,showMeters,
     attachmentFile:window._quoteAttachmentB64||'',attachmentFileName:window._quoteAttachmentName||''};
 }
 async function saveQuoteToDb(){
@@ -3529,7 +3559,8 @@ function renderA4Quote(data,key=''){
   const issueDate=data.date||new Date().toISOString().split('T')[0];
   const expiryDate=data.validity||'';
   const lines=(data.lines||[]);
-  const subtotal=lines.reduce((s,l)=>s+(Number(l.m??1)*Number(l.q||0)*Number(l.p||0)),0);
+  const showMeters=data.showMeters!==undefined?!!data.showMeters:lines.some(l=>l.m!==undefined&&l.m!==1);
+  const subtotal=lines.reduce((s,l)=>s+((showMeters?Number(l.m??1):1)*Number(l.q||0)*Number(l.p||0)),0);
   const vat=subtotal*0.15;
   const totalWithVat=Number(data.totalWithVat||0)||(subtotal+vat);
   const paidAmt=Number(data.paidAmount||0);
@@ -3541,14 +3572,14 @@ function renderA4Quote(data,key=''){
   const linesHtml=lines.map((l,i)=>{
     const meters=Number(l.m??1),qty=Number(l.q||0),price=Number(l.p||0);
     const priceAfterTax=price*1.15;
-    const lineTotal=meters*qty*price*1.15;
+    const lineTotal=(showMeters?meters:1)*qty*price*1.15;
     const imgCell=hasAnyImg?(l.img
       ?`<td style="padding:8px;text-align:center;"><img src="${l.img}" style="width:44px;height:44px;object-fit:cover;border-radius:8px;border:1px solid #EDE3D0;"/></td>`
       :`<td style="padding:8px;text-align:center;"><div style="width:44px;height:44px;border-radius:8px;background:#F3EEE4;display:inline-flex;align-items:center;justify-content:center;"><i class="ti ti-photo" style="color:#C9A227;font-size:16px;"></i></div></td>`):'';
     return `<tr style="background:${i%2===0?'#ffffff':'#FBF8F2'};">
       ${imgCell}
       <td style="padding:10px 12px;text-align:right;font-size:12.5px;color:#2A2A2A;font-weight:600;line-height:1.4;">${esc(l.lbl||'—')}</td>
-      <td style="padding:10px 12px;text-align:center;font-size:12.5px;color:#5B0F19;font-weight:700;">${meters}</td>
+      ${showMeters?`<td style="padding:10px 12px;text-align:center;font-size:12.5px;color:#5B0F19;font-weight:700;">${meters}</td>`:''}
       <td style="padding:10px 12px;text-align:center;font-size:12.5px;color:#5B0F19;font-weight:700;">${qty}</td>
       <td style="padding:10px 12px;text-align:center;font-size:12.5px;color:#2A2A2A;">${fmt(price)} <span style="font-size:9.5px;color:#9B8F80;">ر.س</span></td>
       <td style="padding:10px 12px;text-align:center;font-size:12.5px;color:#2A2A2A;">${fmt(priceAfterTax)} <span style="font-size:9.5px;color:#9B8F80;">ر.س</span></td>
@@ -3661,14 +3692,14 @@ function renderA4Quote(data,key=''){
           <tr style="background:#5B0F19;">
             ${hasAnyImg?`<th style="padding:10px 12px;color:#C9A227;font-size:11px;font-weight:800;text-align:center;width:66px;">الصورة</th>`:''}
             <th style="padding:10px 12px;color:#fff;font-size:11px;font-weight:800;text-align:right;">وصف الصنف</th>
-            <th style="padding:10px 12px;color:#C9A227;font-size:11px;font-weight:800;text-align:center;width:55px;">الامتار</th>
+            ${showMeters?`<th style="padding:10px 12px;color:#C9A227;font-size:11px;font-weight:800;text-align:center;width:55px;">الامتار</th>`:''}
             <th style="padding:10px 12px;color:#C9A227;font-size:11px;font-weight:800;text-align:center;width:60px;">الكمية</th>
             <th style="padding:10px 12px;color:#C9A227;font-size:11px;font-weight:800;text-align:center;width:95px;">السعر غير شامل الضريبة</th>
             <th style="padding:10px 12px;color:#C9A227;font-size:11px;font-weight:800;text-align:center;width:95px;">السعر شامل الضريبة</th>
             <th style="padding:10px 12px;color:#fff;font-size:11px;font-weight:800;text-align:center;width:105px;">الإجمالي</th>
           </tr>
         </thead>
-        <tbody>${linesHtml||`<tr><td colspan="${hasAnyImg?7:6}" style="text-align:center;padding:24px;color:#BBB;font-size:12.5px;">لا توجد بنود</td></tr>`}</tbody>
+        <tbody>${linesHtml||`<tr><td colspan="${5+(hasAnyImg?1:0)+(showMeters?1:0)}" style="text-align:center;padding:24px;color:#BBB;font-size:12.5px;">لا توجد بنود</td></tr>`}</tbody>
       </table>
     </div>
   </div>
@@ -4499,7 +4530,7 @@ function openOrderModal(key){
     <span class="dv">${paymentBadge(o.paymentStatus)||'—'} ${(o.paymentStatus==='تم الدفع'||o.paymentStatus==='دفع جزئي')?`<span style="font-size:12px;color:#065F46">(${fmtMoney(Number(o.paidAmount||0))} ر.س)</span>`:''}${orderPaymentChannelsHtml(o)}</span>
   </div>`:'';
   const canLogMaintenance=['admin','receiver','workshop'].includes(t);
-  const _lastVisit=(o.maintenanceVisits&&o.maintenanceVisits.length)?o.maintenanceVisits[o.maintenanceVisits.length-1]:null;const _lastVisitDate=_lastVisit?(typeof _lastVisit==='object'?_lastVisit.date:_lastVisit):null;const _visitsHistory=(o.maintenanceVisits||[]).slice().reverse().map(v=>{const vd=typeof v==='object'?v:{date:v,reason:'',photo:''};return `<div style="border:1px solid var(--border-soft);border-radius:8px;padding:8px;margin-top:4px;width:100%;"><div style="font-size:11px;color:var(--text-3);">${vd.date?new Date(vd.date).toLocaleDateString('ar-SA'):'—'}</div>${vd.reason?`<div style="font-size:13px;margin-top:4px;">${vd.reason}</div>`:''}${vd.photo?`<a href="${vd.photo}" target="_blank" style="font-size:12px;color:var(--maroon);display:inline-block;margin-top:4px;"><i class="ti ti-photo"></i> عرض الصورة</a>`:''}</div>`;}).join('');
+  const _lastVisit=(o.maintenanceVisits&&o.maintenanceVisits.length)?o.maintenanceVisits[o.maintenanceVisits.length-1]:null;const _lastVisitDate=_lastVisit?(typeof _lastVisit==='object'?_lastVisit.date:_lastVisit):null;const _visitsHistory=(o.maintenanceVisits||[]).slice().reverse().map(v=>{const vd=typeof v==='object'?v:{date:v,reason:'',photo:''};return `<div style="border:1px solid var(--border-soft);border-radius:8px;padding:8px;margin-top:4px;width:100%;"><div style="font-size:11px;color:var(--text-3);">${vd.date?new Date(vd.date).toLocaleDateString('ar-SA'):'—'}</div>${vd.reason?`<div style="font-size:13px;margin-top:4px;">${esc(vd.reason)}</div>`:''}${vd.photo?`<a href="${vd.photo}" target="_blank" style="font-size:12px;color:var(--maroon);display:inline-block;margin-top:4px;"><i class="ti ti-photo"></i> عرض الصورة</a>`:''}</div>`;}).join('');
   const maintenanceRow=o.maintenanceContract?`<div class="di" style="grid-column:1/-1;border-top:1px solid var(--border-soft);padding-top:10px;">
     <span class="dk" style="color:#065F46"><i class="ti ti-shield-check"></i> عقد الصيانة</span>
     <div class="dv" style="display:flex;flex-direction:column;gap:6px;">
@@ -4512,7 +4543,7 @@ function openOrderModal(key){
     <span class="dk" style="color:#DC2626"><i class="ti ti-tool"></i> طلب صيانة</span>
     <div class="dv" style="display:flex;flex-direction:column;gap:6px;">
       <span style="font-size:12px;"><strong>وصف المشكلة:</strong> ${esc(o.notes||'—')}</span>
-      ${o.maintenanceResolutionNote?`<div style="background:#F0FDF4;border:1px solid #BBF7D0;border-radius:8px;padding:8px 10px;font-size:12px;"><strong style="color:#065F46;"><i class="ti ti-check"></i> الحل المسجّل:</strong> ${o.maintenanceResolutionNote}${o.maintenanceResolvedBy?`<div style="font-size:10px;color:var(--text-3);margin-top:3px;">بواسطة ${o.maintenanceResolvedBy}</div>`:''}</div>`:''}
+      ${o.maintenanceResolutionNote?`<div style="background:#F0FDF4;border:1px solid #BBF7D0;border-radius:8px;padding:8px 10px;font-size:12px;"><strong style="color:#065F46;"><i class="ti ti-check"></i> الحل المسجّل:</strong> ${esc(o.maintenanceResolutionNote)}${o.maintenanceResolvedBy?`<div style="font-size:10px;color:var(--text-3);margin-top:3px;">بواسطة ${esc(o.maintenanceResolvedBy)}</div>`:''}</div>`:''}
     </div>
   </div>`:'';
   const trackingUrl=`${location.origin}${location.pathname.replace(/[^/]*$/,'tracking.html')}?id=${o.id||key}`;
@@ -4564,7 +4595,7 @@ function openOrderModal(key){
       ${getActiveDepts(o).includes('workshop')?`<div class="di" style="grid-column:1/-1"><span class="dk" style="color:#3730A3">📦 مخطط قياسات الورشة</span><span class="dv">${wLink}</span></div>
       <div class="di" style="grid-column:1/-1"><span class="dk" style="color:#9A3412">📷 توثيق التركيب النهائي</span><span class="dv">${dLink}</span></div>`:''}
       ${o.workshopDeptFile?`<div class="di" style="grid-column:1/-1"><span class="dk" style="color:#9A3412">📎 ملف الورشة عند التسجيل</span><span class="dv">${wdLink}</span></div>`:''}
-      ${o.workshopFeedback?`<div class="di" style="grid-column:1/-1;border-top:1px solid var(--border-soft);padding-top:10px;"><span class="dk" style="color:#9A3412">📐 بيانات القياسات الميدانية</span><span class="dv" style="font-weight:400;background:#FFEDD5;padding:8px;border-radius:6px;display:block;margin-top:4px;">${o.workshopFeedback}</span>${o.workshopSitePhoto?`<a href="${o.workshopSitePhoto}" download class="file-download-link" style="margin-top:6px;display:inline-flex;"><i class="ti ti-photo"></i> صورة الموقع</a>`:''}</div>`:''}
+      ${o.workshopFeedback?`<div class="di" style="grid-column:1/-1;border-top:1px solid var(--border-soft);padding-top:10px;"><span class="dk" style="color:#9A3412">📐 بيانات القياسات الميدانية</span><span class="dv" style="font-weight:400;background:#FFEDD5;padding:8px;border-radius:6px;display:block;margin-top:4px;">${esc(o.workshopFeedback)}</span>${o.workshopSitePhoto?`<a href="${o.workshopSitePhoto}" download class="file-download-link" style="margin-top:6px;display:inline-flex;"><i class="ti ti-photo"></i> صورة الموقع</a>`:''}</div>`:''}
       ${maintOrderRow}
       ${paymentRow}
       ${maintenanceRow}
@@ -4606,7 +4637,7 @@ function openAddItemModal(key,editIdx){
     <div style="display:flex;flex-direction:column;gap:10px;">
       <div class="fg"><label>اسم البند *</label><input id="new-item-name" placeholder="مثال: لوحة إعلانية إضافية" value="${nameVal}"/></div>
       <div class="fg"><label>سعر البند (ر.س) <span style="color:#EF4444">*</span></label><input type="text" inputmode="decimal" id="new-item-price" placeholder="0" min="0" value="${isEdit?(existing.price||''):''}" oninput="normalizeAmountInput(this)" onfocus="this.select()"/></div>
-      <div class="fg"><label>التفاصيل والمواصفات</label><textarea id="new-item-details" placeholder="المقاسات، المواد..." style="min-height:60px;">${detailsVal}</textarea></div>
+      <div class="fg"><label>التفاصيل والمواصفات</label><textarea id="new-item-details" placeholder="المقاسات، المواد..." style="min-height:60px;">${esc(detailsVal)}</textarea></div>
       <div class="fg"><label>إرفاق ملف (اختياري)</label>
         <div class="dept-upload-box" onclick="document.getElementById('new-item-file-input').click()"><i class="ti ti-upload" style="font-size:20px;color:var(--gold);"></i><br>اضغط لإرفاق ملف أو أكثر</div>
         <input type="file" id="new-item-file-input" style="display:none" accept="image/*,.pdf,.doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" multiple onchange="handleNewItemFiles(this.files,'${key}')"/>
@@ -5199,7 +5230,7 @@ function renderOrderLines(){
           <div class="fg"><label>اسم البند *</label><input placeholder="مثال: لوحة إعلانية" value="${l.name.replace(/"/g,'&quot;')}" oninput="updateOrderLine('${l.id}','name',this.value)"/></div>
           <div class="fg"><label>سعر البند (ر.س)</label><input type="text" inputmode="decimal" placeholder="0" min="0" value="${(l.price||'').toString().replace(/"/g,'&quot;')}" oninput="updateOrderLinePrice(this,'${l.id}')" onfocus="this.select()"/></div>
         </div>
-        <div class="fg"><label>التفاصيل والمواصفات</label><textarea placeholder="المقاسات، المواد، عدد النسخ..." style="min-height:40px;" oninput="updateOrderLine('${l.id}','details',this.value)">${l.details}</textarea></div>
+        <div class="fg"><label>التفاصيل والمواصفات</label><textarea placeholder="المقاسات، المواد، عدد النسخ..." style="min-height:40px;" oninput="updateOrderLine('${l.id}','details',this.value)">${esc(l.details)}</textarea></div>
         <div class="fg"><label>مرفقات البند (يمكن إرفاق أكثر من ملف)</label>
           <label style="cursor:pointer;border:1.5px dashed var(--border);border-radius:8px;padding:7px 14px;font-size:11px;display:inline-flex;align-items:center;gap:6px;">
             <i class="ti ti-plus" style="color:var(--gold)"></i> إضافة ملف
