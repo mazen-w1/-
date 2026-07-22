@@ -238,6 +238,9 @@ body{font-family:'Cairo','Segoe UI',Tahoma,Arial,sans-serif;background:var(--bg)
 .btn-sm{padding:6px 11px;font-size:11px;border-radius:6px;}
 .btn-xs{padding:4px 8px;font-size:10px;border-radius:5px;}
 .btn-icon{padding:8px;border-radius:var(--radius-sm);width:36px;height:36px;display:inline-flex;align-items:center;justify-content:center;}
+.task-check-btn{flex-shrink:0;width:26px;height:26px;border-radius:50%;border:2px solid var(--border);background:var(--surface);color:transparent;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:14px;transition:.15s;margin-top:2px;}
+.task-check-btn:hover{border-color:var(--gold);}
+.task-check-btn.checked{background:#10B981;border-color:#10B981;color:#fff;}
 /* ============================================================ TABLE */
 table{width:100%;border-collapse:collapse;table-layout:fixed;}
 th{background:var(--surface-2);font-size:11px;font-weight:800;color:var(--text-2);padding:12px 14px;text-align:right;border-bottom:1px solid var(--border);letter-spacing:.3px;text-transform:uppercase;}
@@ -1160,6 +1163,7 @@ input:focus,select:focus,textarea:focus{box-shadow:inset 0 1px 3px rgba(74,14,23
         <div class="page" id="page-govcat"><div id="govcat-content"></div></div>
         <div class="page" id="page-maintreq"><div id="maintreq-content"></div></div>
         <div class="page" id="page-urgent"><div id="urgent-content"></div></div>
+        <div class="page" id="page-tasks"><div id="tasks-content"></div></div>
       </div>
     </div>
   </div>
@@ -1171,6 +1175,7 @@ input:focus,select:focus,textarea:focus{box-shadow:inset 0 1px 3px rgba(74,14,23
 <div class="modal-overlay" id="timeline-modal"><div class="modal-box" dir="rtl" id="timeline-modal-body" style="max-width:480px;"></div></div>
 <div class="modal-overlay" id="add-item-modal"><div class="modal-box" dir="rtl" id="add-item-modal-body" style="max-width:480px;"></div></div>
 <div class="modal-overlay" id="gov-modal"><div class="modal-box" dir="rtl" id="gov-modal-body" style="max-width:480px;"></div></div>
+<div class="modal-overlay" id="task-modal"><div class="modal-box" dir="rtl" id="task-modal-body" style="max-width:440px;"></div></div>
 <div class="modal-overlay" id="notif-modal">
   <div class="modal-box" dir="rtl" style="max-width:480px;">
     <div class="modal-header"><span class="modal-title"><i class="ti ti-bell"></i> التنبيهات</span><button class="btn-close" onclick="closeModal('notif-modal')">×</button></div>
@@ -1337,7 +1342,7 @@ const INITIAL_USERS={
   external1:{pass:'1234',name:'منفذ خارجي',role:'تنفيذ خارجي',color:'#713F12',type:'external',photo:''},
 };
 let cu=null,orders={},clients={},USERS={},currentSortMode='date-desc',_pendingPortalType=null;
-let submittedRequests={},chats={},standaloneQuotes={},warranties={},teamChat={},govRecords={},urgentRequests={};
+let submittedRequests={},chats={},standaloneQuotes={},warranties={},teamChat={},govRecords={},urgentRequests={},tasksData={};
 let _lastAssignSnapshot=null,_audioCtx=null,_audioUnlocked=false;
 let _navHistory=[];
 let _nuPhotoB64='',_euPhotoB64='',_euSelectedColor='',_nuSelectedColor='';
@@ -1456,7 +1461,7 @@ async function syncUsers(){
 }
 async function loadData(){
   try{
-    const [ord,cli,req,cht,sqt,wrt,tch,gov,urg]=await Promise.all([
+    const [ord,cli,req,cht,sqt,wrt,tch,gov,urg,tsk]=await Promise.all([
       fbGet('orders').catch(()=>null),
       fbGet('clients').catch(()=>null),
       fbGet('requests').catch(()=>null),
@@ -1465,7 +1470,8 @@ async function loadData(){
       fbGet('warranties').catch(()=>null),
       fbGet('team_chat').catch(()=>null),
       fbGet('govRecords').catch(()=>null),
-      fbGet('urgentRequests').catch(()=>null)
+      fbGet('urgentRequests').catch(()=>null),
+      fbGet('tasks').catch(()=>null)
     ]);
     orders=(ord&&typeof ord==='object')?ord:{};
     clients=(cli&&typeof cli==='object')?cli:{};
@@ -1476,10 +1482,11 @@ async function loadData(){
     teamChat=(tch&&typeof tch==='object')?tch:{};
     govRecords=(gov&&typeof gov==='object')?gov:{};
     urgentRequests=(urg&&typeof urg==='object')?urg:{};
+    tasksData=(tsk&&typeof tsk==='object')?tsk:{};
     updateNotifBell();updateRequestsBadgeSidebar();updateTeamChatBadge();updatePrepBadgeSidebar();
     checkNewAssignments();
     cleanExpiredWarranties();
-  }catch(e){orders={};clients={};submittedRequests={};chats={};standaloneQuotes={};warranties={};teamChat={};govRecords={};urgentRequests={};}
+  }catch(e){orders={};clients={};submittedRequests={};chats={};standaloneQuotes={};warranties={};teamChat={};govRecords={};urgentRequests={};tasksData={};}
 }
 // ============================================================
 // NOTIFICATION SOUND (new-assignment beep)
@@ -1711,6 +1718,7 @@ function buildSidebar(){
       ni('warranty','ti-shield-check','ضمان اللوحات'),
       ni('urgent','ti-bolt','طلب عاجل'),
       ni('request','ti-send','رفع طلب'),
+      ni('tasks','ti-list-check','مهام'),
     ]);
   }else if(t==='external'){
     h+=navGroup('أعمالي',[ni('my','ti-user-check','أعمالي الحالية')]);
@@ -1745,6 +1753,7 @@ function buildSidebar(){
       ni('emp','ti-chart-bar','الاحصائيات'),
       ni('warranty','ti-shield-check','ضمان اللوحات'),
       ni('govobligations','ti-building-bank','الالتزامات الحكومية والتشغيلية'),
+      ni('tasks','ti-list-check','مهام'),
       ni('export','ti-table-export','تصدير Excel'),
       ni('users','ti-users','الموظفين'),
     ]);
@@ -6898,6 +6907,140 @@ document.addEventListener('input',function(e){
     try{t.setSelectionRange(pos,pos);}catch(_){}
   }
 });
+// ============================================================
+// TASKS / REMINDERS (مهام) — shared list for admin + receiver
+// ============================================================
+function taskPrioBadge(p){
+  const m={'عاجلة':'b-urg','مهمة':'b-proc','عادية':'b-new'};
+  return `<span class="badge ${m[p]||'b-new'}">${esc(p||'عادية')}</span>`;
+}
+function fmtTaskDue(v){
+  if(!v)return'';
+  try{const d=new Date(v);if(isNaN(d.getTime()))return esc(v);return d.toLocaleString('ar-SA',{dateStyle:'medium',timeStyle:'short'});}catch(e){return esc(v);}
+}
+function taskCardHtml(t){
+  const overdue=(!t.done&&t.dueDate&&new Date(t.dueDate)<new Date());
+  return`<div class="card task-card" style="padding:14px 16px;margin-bottom:10px;${t.done?'opacity:.7;':''}${overdue?'border-color:#EF4444;':''}">
+    <div style="display:flex;align-items:flex-start;gap:12px;">
+      <button class="task-check-btn${t.done?' checked':''}" onclick="toggleTaskDone('${t._key}')" title="${t.done?'إلغاء الإنجاز':'تحديد كمنجزة'}">
+        <i class="ti ti-${t.done?'check':'circle'}"></i>
+      </button>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:13.5px;font-weight:700;color:var(--text-1);${t.done?'text-decoration:line-through;color:var(--text-3);':''}">${esc(t.text)}</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;align-items:center;">
+          ${taskPrioBadge(t.priority)}
+          ${t.dueDate?`<span style="font-size:11px;color:${overdue?'#EF4444':'var(--text-3)'};font-weight:${overdue?'800':'400'};"><i class="ti ti-calendar-time"></i> ${fmtTaskDue(t.dueDate)}${overdue?' (متأخرة)':''}</span>`:''}
+          <span style="font-size:10.5px;color:var(--text-3);"><i class="ti ti-user"></i> ${esc(t.createdBy||'—')}</span>
+        </div>
+      </div>
+      <div style="display:flex;gap:6px;flex-shrink:0;">
+        <button class="btn btn-out btn-xs btn-icon" onclick="openEditTaskModal('${t._key}')" title="تعديل"><i class="ti ti-pencil"></i></button>
+        <button class="btn btn-red btn-xs btn-icon" onclick="deleteTask('${t._key}')" title="حذف"><i class="ti ti-trash"></i></button>
+      </div>
+    </div>
+  </div>`;
+}
+function buildTasksPage(){
+  const arr=Object.entries(tasksData).map(([k,v])=>({...v,_key:k}));
+  const w={'عاجلة':3,'مهمة':2,'عادية':1};
+  const pending=arr.filter(t=>!t.done).sort((a,b)=>(w[b.priority]||0)-(w[a.priority]||0)||new Date(b.createdAt||0)-new Date(a.createdAt||0));
+  const completed=arr.filter(t=>t.done).sort((a,b)=>new Date(b.completedAt||b.createdAt||0)-new Date(a.completedAt||a.createdAt||0));
+  document.getElementById('tasks-content').innerHTML=`
+    <div class="page-header"><div class="ptitle"><i class="ti ti-list-check"></i> مهام وتذكيرات</div></div>
+    <div class="card" style="padding:16px;margin-bottom:18px;">
+      <div style="font-size:12.5px;font-weight:800;color:var(--maroon);margin-bottom:10px;"><i class="ti ti-plus"></i> إضافة تذكير جديد</div>
+      <div style="display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:8px;align-items:end;">
+        <div class="fg" style="margin-bottom:0;"><label>عنوان التذكير / المهمة *</label><input id="task-text-input" placeholder="مثال: التواصل مع العميل غداً" onkeydown="if(event.key==='Enter')addTask()"/></div>
+        <div class="fg" style="margin-bottom:0;"><label>تاريخ ووقت التذكير (اختياري)</label><input type="datetime-local" id="task-due-input"/></div>
+        <div class="fg" style="margin-bottom:0;"><label>الأولوية</label>
+          <select id="task-priority-input">
+            <option value="عادية">عادية</option>
+            <option value="مهمة">مهمة</option>
+            <option value="عاجلة">عاجلة</option>
+          </select>
+        </div>
+        <button class="btn btn-brand btn-sm" onclick="addTask()" style="height:38px;"><i class="ti ti-plus"></i> إضافة</button>
+      </div>
+    </div>
+    <div class="tab-bar" style="margin-bottom:14px;">
+      <button class="tab-btn active" id="task-tab-pending" onclick="showTaskTab('pending')"><i class="ti ti-hourglass"></i> قيد الانتظار (${pending.length})</button>
+      <button class="tab-btn" id="task-tab-done" onclick="showTaskTab('done')"><i class="ti ti-circle-check"></i> المكتملة (${completed.length})</button>
+    </div>
+    <div id="task-pane-pending">
+      ${pending.length?pending.map(taskCardHtml).join(''):'<div class="card" style="text-align:center;padding:30px;color:var(--text-3);"><i class="ti ti-list-check" style="font-size:32px;display:block;margin-bottom:8px;"></i>لا توجد مهام قيد الانتظار</div>'}
+    </div>
+    <div id="task-pane-done" style="display:none;">
+      ${completed.length?completed.map(taskCardHtml).join(''):'<div class="card" style="text-align:center;padding:30px;color:var(--text-3);">لا توجد مهام مكتملة</div>'}
+    </div>`;
+}
+function showTaskTab(tab){
+  const pp=document.getElementById('task-pane-pending'),pd=document.getElementById('task-pane-done');
+  const tp=document.getElementById('task-tab-pending'),td=document.getElementById('task-tab-done');
+  if(pp)pp.style.display=tab==='pending'?'':'none';
+  if(pd)pd.style.display=tab==='done'?'':'none';
+  if(tp)tp.classList.toggle('active',tab==='pending');
+  if(td)td.classList.toggle('active',tab==='done');
+}
+async function addTask(){
+  const textEl=document.getElementById('task-text-input');
+  const text=(textEl?.value||'').trim();
+  if(!text){toast('⚠️ يرجى إدخال عنوان التذكير');return;}
+  const due=document.getElementById('task-due-input')?.value||'';
+  const priority=document.getElementById('task-priority-input')?.value||'عادية';
+  showSaving('جاري الإضافة...');
+  try{
+    await fbPush('tasks',{text,dueDate:due,priority,done:false,createdBy:cu.name,createdByUname:cu._uname,createdAt:new Date().toISOString()});
+    await loadData();hideSaving();toast('✓ تم إضافة التذكير');
+    buildTasksPage();
+  }catch(e){hideSaving();toast('❌ فشل الإضافة');}
+}
+async function toggleTaskDone(key){
+  const t=tasksData[key];if(!t)return;
+  const nowDone=!t.done;
+  try{
+    await fbPatch('tasks/'+key,{done:nowDone,completedAt:nowDone?new Date().toISOString():null});
+    await loadData();buildTasksPage();
+  }catch(e){toast('❌ فشل التحديث');}
+}
+async function deleteTask(key){
+  if(!confirm('حذف هذا التذكير نهائياً؟ لا يمكن التراجع عن هذا الإجراء.'))return;
+  showSaving('جاري الحذف...');
+  try{
+    await fbDelete('tasks/'+key);
+    await loadData();hideSaving();toast('✓ تم الحذف');
+    buildTasksPage();
+  }catch(e){hideSaving();toast('❌ فشل الحذف');}
+}
+function openEditTaskModal(key){
+  const t=tasksData[key];if(!t)return;
+  document.getElementById('task-modal-body').innerHTML=`
+    <div class="modal-header"><span class="modal-title"><i class="ti ti-pencil"></i> تعديل التذكير</span><button class="btn-close" onclick="closeModal('task-modal')">×</button></div>
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <div class="fg"><label>عنوان التذكير / المهمة *</label><input id="edit-task-text" value="${esc(t.text)}"/></div>
+      <div class="fg"><label>تاريخ ووقت التذكير</label><input type="datetime-local" id="edit-task-due" value="${t.dueDate||''}"/></div>
+      <div class="fg"><label>الأولوية</label>
+        <select id="edit-task-priority">
+          <option value="عادية"${t.priority==='عادية'?' selected':''}>عادية</option>
+          <option value="مهمة"${t.priority==='مهمة'?' selected':''}>مهمة</option>
+          <option value="عاجلة"${t.priority==='عاجلة'?' selected':''}>عاجلة</option>
+        </select>
+      </div>
+      <button class="btn btn-brand" style="width:100%;justify-content:center;" onclick="saveEditTask('${key}')"><i class="ti ti-device-floppy"></i> حفظ التعديلات</button>
+    </div>`;
+  openModal('task-modal');
+}
+async function saveEditTask(key){
+  const text=(document.getElementById('edit-task-text')?.value||'').trim();
+  if(!text){toast('⚠️ يرجى إدخال عنوان التذكير');return;}
+  const due=document.getElementById('edit-task-due')?.value||'';
+  const priority=document.getElementById('edit-task-priority')?.value||'عادية';
+  showSaving('جاري الحفظ...');
+  try{
+    await fbPatch('tasks/'+key,{text,dueDate:due,priority});
+    await loadData();hideSaving();closeModal('task-modal');toast('✓ تم حفظ التعديلات');
+    buildTasksPage();
+  }catch(e){hideSaving();toast('❌ فشل الحفظ');}
+}
 function _buildPage(p){
   if(p==='dash')       buildDash();
   else if(p==='wf')    buildWfGrid(_currentWfTab||'active');
@@ -6920,6 +7063,7 @@ function _buildPage(p){
   else if(p==='govcat') buildGovCategoryPage();
   else if(p==='urgent') buildUrgentPage();
   else if(p==='prep') buildPrepPhasePage();
+  else if(p==='tasks') buildTasksPage();
 }
    </script>
 <script>
