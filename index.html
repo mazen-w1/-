@@ -3209,14 +3209,9 @@ function buildQuotePage(){
         ${window._editingQuoteKey?`
         <div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap;">
           <button class="btn btn-out btn-sm" onclick="saveAndPreviewQuote()"><i class="ti ti-eye"></i> معاينة وطباعة A4</button>
-          <button class="btn btn-teal btn-sm" onclick="downloadQuotePDF()"><i class="ti ti-download"></i> تنزيل PDF</button>
-          <button class="btn btn-brand btn-sm" onclick="saveQuoteToDb()"><i class="ti ti-edit"></i> تعديل</button>
-          <button class="btn btn-purple btn-sm" onclick="convertQuoteToOrder()"><i class="ti ti-transfer"></i> تحويل لأمر تشغيل</button>
-          <button class="btn btn-red btn-sm" onclick="deleteQuoteFromForm()"><i class="ti ti-trash"></i> حذف</button>
         </div>`:`
         <div style="display:flex;gap:10px;margin-top:16px;">
           <button class="btn btn-brand btn-sm" onclick="saveQuoteToDb()"><i class="ti ti-device-floppy"></i> حفظ العرض</button>
-          <button class="btn btn-teal btn-sm" onclick="downloadQuotePDF()"><i class="ti ti-download"></i> تنزيل العرض</button>
         </div>`}
       </div>
     </div>
