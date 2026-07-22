@@ -371,13 +371,16 @@ input[type="password"]{direction:rtl;text-align:right;padding-left:40px;padding-
 .dept-track-line.done{background:#10B981;}
 /* ============================================================ WF CARDS */
 .wf-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px;margin-bottom:20px;}
-.wf-kanban{display:grid;grid-template-columns:repeat(5,minmax(230px,1fr));gap:14px;margin-bottom:20px;align-items:start;}
-.wf-kanban-col{background:var(--bg);border:1px solid var(--border-soft);border-radius:var(--radius-lg);padding:10px;display:flex;flex-direction:column;gap:10px;min-width:0;}
+.wf-kanban{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(230px,1fr);gap:14px;margin-bottom:8px;align-items:start;}
+.wf-kanban-col{background:var(--bg);border:1px solid var(--border-soft);border-radius:var(--radius-lg);padding:10px;display:flex;flex-direction:column;gap:10px;min-width:230px;}
 .wf-kanban-col-header{display:flex;align-items:center;justify-content:space-between;padding:2px 4px 8px;border-bottom:1px solid var(--border-soft);}
 .wf-kanban-count{font-size:12px;font-weight:800;color:var(--text-3);background:var(--surface);border-radius:20px;padding:2px 9px;}
 .wf-kanban-list{display:flex;flex-direction:column;gap:10px;max-height:70vh;overflow-y:auto;padding-left:2px;}
-@media (max-width:1100px){.wf-kanban{grid-template-columns:repeat(2,1fr);}}
-@media (max-width:640px){.wf-kanban{grid-template-columns:1fr;}}
+#wf-cards-wrap{overflow-x:auto;padding-bottom:12px;margin-bottom:12px;scrollbar-width:thin;scrollbar-color:var(--maroon) var(--surface-2);}
+#wf-cards-wrap::-webkit-scrollbar{height:10px;}
+#wf-cards-wrap::-webkit-scrollbar-track{background:var(--surface-2);border-radius:10px;}
+#wf-cards-wrap::-webkit-scrollbar-thumb{background:linear-gradient(90deg,var(--maroon),var(--gold));border-radius:10px;}
+#wf-cards-wrap::-webkit-scrollbar-thumb:hover{background:var(--maroon);}
 .wf-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:visible;cursor:pointer;transition:.2s;position:relative;}
 .order-update-dot{position:absolute;top:9px;right:9px;width:10px;height:10px;border-radius:50%;background:#F59E0B;box-shadow:0 0 0 2px #fff,0 0 0 3px #F59E0B55;z-index:2;animation:chatPulse 1.6s infinite;}
 @keyframes chatPulse{0%{transform:scale(1);opacity:1;}50%{transform:scale(1.3);opacity:.7;}100%{transform:scale(1);opacity:1;}}
