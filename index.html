@@ -4,11 +4,11 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>روائع الأفكار الإعلانية — النظام الداخلي</title>
-<link rel="icon" type="image/svg+xml" href="logo.svg"/>
-<link rel="alternate icon" href="logo.svg"/>
-<link rel="apple-touch-icon" href="logo.svg"/>
-<link rel="icon" sizes="32x32" href="logo.svg"/>
-<link rel="icon" sizes="192x192" href="logo.svg"/>
+<link rel="icon" type="image/svg+xml" href="/logo.svg"/>
+<link rel="alternate icon" href="/logo.svg"/>
+<link rel="apple-touch-icon" href="/logo.svg"/>
+<link rel="icon" sizes="32x32" href="/logo.svg"/>
+<link rel="icon" sizes="192x192" href="/logo.svg"/>
 <meta name="description" content="روائع الأفكار الإعلانية — نظام إدارة الإنتاج والطلبات الداخلي"/>
 <meta property="og:title" content="روائع الأفكار الإعلانية"/>
 <meta property="og:type" content="website"/>
@@ -1289,7 +1289,7 @@ const fbUrl='https://rawaee-alafkar-default-rtdb.firebaseio.com';
 // Obligations sheet) to turn on auto-export of رفع طلب/الالتمامات المالية submissions.
 // Left blank, syncFinancialObligationToSheet() below is a safe no-op — nothing breaks,
 // it simply doesn't sync until a real endpoint is supplied.
-const FINANCIAL_SHEET_ENDPOINT='';
+const FINANCIAL_SHEET_ENDPOINT='https://script.google.com/macros/s/AKfycbxr4fQAfjtR5z3PkUzQVzhCunCYAVX__gdqORdbaznSy6Ng7yRZr-ZbroWwvIRZ0TM/exec';
 window.globalAttachedFiles=[];
 window.reqFileB64='';window.reqFileName='';
 window.externalFileB64='';window.externalFileName='';
@@ -1981,7 +1981,7 @@ async function syncOrderToSheet(orderNo,clientName,clientPhone,paymentStatus,ite
     // time payment status changes. paymentMethod carries the exact channel
     // breakdown (شبكة/كاش/تحويل) so it lands in its own dedicated sheet column
     // instead of being folded into paymentStatus.
-    await fetch('https://script.google.com/macros/s/AKfycbyfV3KMj8lJuHK5-JHrcbBTXILf7cVfZV8Lsg19YFJb8tCCKfWX_cQp_Ua-Pq7yLscaUA/exec',{
+    await fetch('https://script.google.com/macros/s/AKfycbzQxHJXHtYAZqwYxBEbr1t7CXbwDxtel9801xfw5bgwGM-hQcrBoYy-3tNERhVZSpM4Ig/exec',{
       method:'POST',
       mode:'no-cors',
       body:JSON.stringify({orderNo,clientName,clientPhone,paymentStatus,paymentMethod:(extra&&extra.paymentMethod)||'',items,totalAmount:(extra&&extra.totalAmount)||0,paidAmount:(extra&&extra.paidAmount)||0,remainingAmount:(extra&&extra.remainingAmount)||0,date:(extra&&extra.date)||'',deadline:(extra&&extra.deadline)||'',createdBy:(extra&&extra.createdBy)||'',rowColor:(extra&&extra.rowColor)||'red'})
@@ -3109,7 +3109,6 @@ function goToQuoteWithPrefill(client,phone,quickTaskKey){
 function buildQuotePage(){
   window._quoteLines=[];
   window._quoteCalcMode='combined';
-  window._quoteShowMeters=false;
   window._quoteAttachmentB64='';window._quoteAttachmentName='';
   const cArr=Object.values(clients);
   // Auto-generate quote number (RA-0001 format, locked)
@@ -3169,11 +3168,16 @@ function buildQuotePage(){
           <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;cursor:pointer;">
             <input type="radio" name="q-calc-mode" value="separate" onchange="onQuoteCalcModeChange(this.value)"/> خيار منفصل (كل بند سعره منفصل عن الآخر)
           </label>
-          <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;cursor:pointer;border-right:1px solid var(--border-soft);padding-right:16px;">
-            <input type="checkbox" id="q-show-meters" onchange="onQuoteShowMetersChange(this.checked)"/> إظهار خانة الأمتار
-          </label>
         </div>
-        <div id="quote-grid-header"></div>
+        <div style="display:grid;grid-template-columns:2fr 0.8fr 1fr 1fr 1fr 1fr 0.5fr;gap:8px;margin-bottom:8px;padding:0 4px;">
+          <span style="font-size:11px;font-weight:800;color:var(--text-3);">وصف البند</span>
+          <span style="font-size:11px;font-weight:800;color:var(--text-3);">الامتار</span>
+          <span style="font-size:11px;font-weight:800;color:var(--text-3);">الكمية</span>
+          <span style="font-size:11px;font-weight:800;color:var(--text-3);">السعر غير شامل الضريبة</span>
+          <span style="font-size:11px;font-weight:800;color:var(--text-3);">السعر شامل الضريبة</span>
+          <span style="font-size:11px;font-weight:800;color:var(--text-3);">الإجمالي</span>
+          <span></span>
+        </div>
         <div id="quote-lines-wrap"></div>
         <button class="btn btn-out btn-sm" onclick="addQuoteLine()" style="margin-top:8px;"><i class="ti ti-plus"></i> إضافة بند</button>
         <!-- Grand Total Only (simplified) -->
@@ -3209,7 +3213,6 @@ function buildQuotePage(){
       </div>
     </div>
     ${quoteArchiveSectionHtml()}`;
-  renderQuoteGridHeader();
   addQuoteLine();
   if(window._quotePrefillClient||window._quotePrefillPhone){
     const ce=document.getElementById('q-client');if(ce)ce.value=window._quotePrefillClient||'';
@@ -3308,13 +3311,6 @@ async function editQuote(key){
   window._quoteAttachmentB64=q.attachmentFile||'';window._quoteAttachmentName=q.attachmentFileName||'';
   const attNote=document.getElementById('q-attachment-note');
   if(attNote)attNote.textContent=window._quoteAttachmentName?('✓ تم: '+window._quoteAttachmentName):'';
-  // Older saved quotes have no showMeters flag at all — fall back to whether any
-  // line actually used a non-default meters value, so a quote that never touched
-  // "الامتار" doesn't suddenly show the column just because the field now exists.
-  window._quoteShowMeters=q.showMeters!==undefined?!!q.showMeters:(q.lines||[]).some(l=>l.m!==undefined&&l.m!==1);
-  const showMetersCb=document.getElementById('q-show-meters');
-  if(showMetersCb)showMetersCb.checked=window._quoteShowMeters;
-  renderQuoteGridHeader();
   window._quoteLines=(q.lines||[]).map(l=>({...l,id:'q'+Date.now()+Math.random().toString(36).slice(2)}));
   renderQuoteLines();
   document.getElementById('page-quote')?.scrollIntoView({behavior:'smooth',block:'start'});
@@ -3348,39 +3344,15 @@ function updateQuoteLineFromTax(id,v){
     renderQuoteTotals();
   }
 }
-// The "الامتار" column is optional — quoteGridCols() keeps the live grid header
-// and every line row on the same column layout (with or without the meters
-// input) so toggling the checkbox never leaves them out of alignment.
-function quoteGridCols(){
-  return window._quoteShowMeters?'2fr 0.8fr 1fr 1fr 1fr 1fr':'2fr 1fr 1fr 1fr 1fr';
-}
-function renderQuoteGridHeader(){
-  const wrap=document.getElementById('quote-grid-header');if(!wrap)return;
-  wrap.innerHTML=`<div style="display:grid;grid-template-columns:${quoteGridCols()} 0.5fr;gap:8px;margin-bottom:8px;padding:0 4px;">
-    <span style="font-size:11px;font-weight:800;color:var(--text-3);">وصف البند</span>
-    ${window._quoteShowMeters?'<span style="font-size:11px;font-weight:800;color:var(--text-3);">الامتار</span>':''}
-    <span style="font-size:11px;font-weight:800;color:var(--text-3);">الكمية</span>
-    <span style="font-size:11px;font-weight:800;color:var(--text-3);">السعر غير شامل الضريبة</span>
-    <span style="font-size:11px;font-weight:800;color:var(--text-3);">السعر شامل الضريبة</span>
-    <span style="font-size:11px;font-weight:800;color:var(--text-3);">الإجمالي</span>
-    <span></span>
-  </div>`;
-}
-function onQuoteShowMetersChange(checked){
-  window._quoteShowMeters=checked;
-  renderQuoteGridHeader();
-  renderQuoteLines();
-}
 function renderQuoteLines(){
   const wrap=document.getElementById('quote-lines-wrap');if(!wrap)return;
-  const showM=window._quoteShowMeters;
-  wrap.innerHTML=window._quoteLines.map(l=>`<div class="quote-line" style="grid-template-columns:${quoteGridCols()} auto auto;gap:6px;">
+  wrap.innerHTML=window._quoteLines.map(l=>`<div class="quote-line" style="grid-template-columns:2fr 0.8fr 1fr 1fr 1fr 1fr auto auto;gap:6px;">
     <input placeholder="وصف البند" value="${l.lbl}" oninput="updateQuoteLine('${l.id}','lbl',this.value)"/>
-    ${showM?`<input type="text" inputmode="decimal" id="q-line-m-${l.id}" placeholder="الامتار" value="${l.m??1}" oninput="updateQuoteLine('${l.id}','m',this.value)" min="0" onfocus="this.select()"/>`:''}
+    <input type="text" inputmode="decimal" id="q-line-m-${l.id}" placeholder="الامتار" value="${l.m??1}" oninput="updateQuoteLine('${l.id}','m',this.value)" min="0" onfocus="this.select()"/>
     <input type="text" inputmode="decimal" id="q-line-qty-${l.id}" placeholder="الكمية" value="${l.q}" oninput="updateQuoteLine('${l.id}','q',this.value)" min="1" onfocus="this.select()"/>
     <input type="text" inputmode="decimal" id="q-line-notax-${l.id}" placeholder="السعر غير شامل الضريبة" value="${l.p}" oninput="updateQuoteLine('${l.id}','p',this.value)" min="0" onfocus="this.select()"/>
     <input type="text" inputmode="decimal" id="q-line-wtax-${l.id}" placeholder="السعر شامل الضريبة" value="${fmtMoney((l.p*1.15))}" oninput="updateQuoteLineFromTax('${l.id}',this.value)" min="0" onfocus="this.select()"/>
-    <div id="q-line-total-${l.id}" style="display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:var(--maroon);background:var(--surface-2);border:1.5px solid var(--border);border-radius:8px;padding:8px 6px;text-align:center;">${fmtMoney(((showM?(l.m??1):1)*(l.q||0)*(l.p||0)*1.15))}</div>
+    <div id="q-line-total-${l.id}" style="display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:var(--maroon);background:var(--surface-2);border:1.5px solid var(--border);border-radius:8px;padding:8px 6px;text-align:center;">${fmtMoney(((l.m??1)*(l.q||0)*(l.p||0)*1.15))}</div>
     <label title="إرفاق صورة للبند" style="cursor:pointer;display:flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:8px;border:1px dashed var(--border);background:var(--bg);flex-shrink:0;transition:.12s;" onmouseover="this.style.borderColor='var(--gold)'" onmouseout="this.style.borderColor='var(--border)'">
       ${l.img?`<img src="${l.img}" style="width:28px;height:28px;object-fit:cover;border-radius:6px;"/>`:
       `<i class="ti ti-photo" style="font-size:14px;color:var(--text-3);"></i>`}
@@ -3435,17 +3407,13 @@ function renderQuoteTotals(){
   // Re-reading the rounded text back in would bake that rounding into every
   // future calculation and compound into a noticeably wrong total. ──
   let subtotal=0;
-  // Meters only factors into the total while the column is actually shown — a
-  // leftover l.m value from before the checkbox was unchecked must not silently
-  // keep affecting the total once the column (and the whole idea of "per meter"
-  // pricing) is hidden again.
   window._quoteLines.forEach(l=>{
     const qEl=document.getElementById('q-line-qty-'+l.id);
-    const mEl=window._quoteShowMeters?document.getElementById('q-line-m-'+l.id):null;
+    const mEl=document.getElementById('q-line-m-'+l.id);
     const q=qEl?(parseFloat(qEl.value)||0):(l.q||0);
-    const m=window._quoteShowMeters?(mEl?(parseFloat(mEl.value)||0):(l.m??1)):1;
+    const m=mEl?(parseFloat(mEl.value)||0):(l.m??1);
     const p=l.p||0;
-    l.q=q;if(window._quoteShowMeters)l.m=m;
+    l.q=q;l.m=m;
     subtotal+=m*q*p;
     const totEl=document.getElementById('q-line-total-'+l.id);
     if(totEl)totEl.textContent=fmt(m*q*p*1.15);
@@ -3477,14 +3445,13 @@ function getQuoteData(){
   const paymentTerms=document.getElementById('q-payment-terms')?.value||'';
   const terms=document.getElementById('q-terms')?.value||'';
   const bank=document.getElementById('q-bank')?.value||'';
-  const showMeters=!!window._quoteShowMeters;
   const lines=window._quoteLines.filter(l=>l.lbl.trim()!=='').map(l=>({...l}));
-  const subtotal=lines.reduce((s,l)=>s+((showMeters?(l.m??1):1)*l.q*l.p),0);
+  const subtotal=lines.reduce((s,l)=>s+((l.m??1)*l.q*l.p),0);
   const vat=subtotal*0.15;const totalWithVat=subtotal+vat;
   const paidAmount=parseFloat(document.getElementById('q-paid-amount')?.value)||0;
   const remainingAmount=Math.max(0,totalWithVat-paidAmount);
   const qDate=document.getElementById('q-date')?.value||new Date().toISOString().split('T')[0];
-  return{client,ref,phone:normalizeSaudiPhone(phone),validity,sales,delivery,paymentTerms,terms,bank,lines,subtotal,vat,totalWithVat,paidAmount,remainingAmount,date:qDate,createdBy:cu.name,calcMode,showMeters,
+  return{client,ref,phone:normalizeSaudiPhone(phone),validity,sales,delivery,paymentTerms,terms,bank,lines,subtotal,vat,totalWithVat,paidAmount,remainingAmount,date:qDate,createdBy:cu.name,calcMode,
     attachmentFile:window._quoteAttachmentB64||'',attachmentFileName:window._quoteAttachmentName||''};
 }
 async function saveQuoteToDb(){
@@ -3562,12 +3529,7 @@ function renderA4Quote(data,key=''){
   const issueDate=data.date||new Date().toISOString().split('T')[0];
   const expiryDate=data.validity||'';
   const lines=(data.lines||[]);
-  // Quotes saved before this toggle existed have no showMeters flag — infer it
-  // from whether any line actually used a non-default meters value, so the
-  // printed/PDF total's per-row breakdown never silently disagrees with the
-  // already-saved grand total below it.
-  const showMeters=data.showMeters!==undefined?!!data.showMeters:lines.some(l=>l.m!==undefined&&l.m!==1);
-  const subtotal=lines.reduce((s,l)=>s+((showMeters?Number(l.m??1):1)*Number(l.q||0)*Number(l.p||0)),0);
+  const subtotal=lines.reduce((s,l)=>s+(Number(l.m??1)*Number(l.q||0)*Number(l.p||0)),0);
   const vat=subtotal*0.15;
   const totalWithVat=Number(data.totalWithVat||0)||(subtotal+vat);
   const paidAmt=Number(data.paidAmount||0);
@@ -3575,18 +3537,18 @@ function renderA4Quote(data,key=''){
   const trackingUrl=`${location.origin}${location.pathname.replace(/[^/]*$/,'tracking.html')}?id=${key||data.ref}`;
   const hasAnyImg=lines.some(l=>l.img);
   const isExpired=!!(expiryDate&&new Date(expiryDate)<new Date());
-  /* ── Products rows — Image | Description | [Meters] | Qty | Unit Price | Total ── */
+  /* ── Products rows — Image | Description | Qty | Unit Price | Total (per spec: 5 cols) ── */
   const linesHtml=lines.map((l,i)=>{
     const meters=Number(l.m??1),qty=Number(l.q||0),price=Number(l.p||0);
     const priceAfterTax=price*1.15;
-    const lineTotal=(showMeters?meters:1)*qty*price*1.15;
+    const lineTotal=meters*qty*price*1.15;
     const imgCell=hasAnyImg?(l.img
       ?`<td style="padding:8px;text-align:center;"><img src="${l.img}" style="width:44px;height:44px;object-fit:cover;border-radius:8px;border:1px solid #EDE3D0;"/></td>`
       :`<td style="padding:8px;text-align:center;"><div style="width:44px;height:44px;border-radius:8px;background:#F3EEE4;display:inline-flex;align-items:center;justify-content:center;"><i class="ti ti-photo" style="color:#C9A227;font-size:16px;"></i></div></td>`):'';
     return `<tr style="background:${i%2===0?'#ffffff':'#FBF8F2'};">
       ${imgCell}
       <td style="padding:10px 12px;text-align:right;font-size:12.5px;color:#2A2A2A;font-weight:600;line-height:1.4;">${esc(l.lbl||'—')}</td>
-      ${showMeters?`<td style="padding:10px 12px;text-align:center;font-size:12.5px;color:#5B0F19;font-weight:700;">${meters}</td>`:''}
+      <td style="padding:10px 12px;text-align:center;font-size:12.5px;color:#5B0F19;font-weight:700;">${meters}</td>
       <td style="padding:10px 12px;text-align:center;font-size:12.5px;color:#5B0F19;font-weight:700;">${qty}</td>
       <td style="padding:10px 12px;text-align:center;font-size:12.5px;color:#2A2A2A;">${fmt(price)} <span style="font-size:9.5px;color:#9B8F80;">ر.س</span></td>
       <td style="padding:10px 12px;text-align:center;font-size:12.5px;color:#2A2A2A;">${fmt(priceAfterTax)} <span style="font-size:9.5px;color:#9B8F80;">ر.س</span></td>
@@ -3699,14 +3661,14 @@ function renderA4Quote(data,key=''){
           <tr style="background:#5B0F19;">
             ${hasAnyImg?`<th style="padding:10px 12px;color:#C9A227;font-size:11px;font-weight:800;text-align:center;width:66px;">الصورة</th>`:''}
             <th style="padding:10px 12px;color:#fff;font-size:11px;font-weight:800;text-align:right;">وصف الصنف</th>
-            ${showMeters?`<th style="padding:10px 12px;color:#C9A227;font-size:11px;font-weight:800;text-align:center;width:55px;">الامتار</th>`:''}
+            <th style="padding:10px 12px;color:#C9A227;font-size:11px;font-weight:800;text-align:center;width:55px;">الامتار</th>
             <th style="padding:10px 12px;color:#C9A227;font-size:11px;font-weight:800;text-align:center;width:60px;">الكمية</th>
             <th style="padding:10px 12px;color:#C9A227;font-size:11px;font-weight:800;text-align:center;width:95px;">السعر غير شامل الضريبة</th>
             <th style="padding:10px 12px;color:#C9A227;font-size:11px;font-weight:800;text-align:center;width:95px;">السعر شامل الضريبة</th>
             <th style="padding:10px 12px;color:#fff;font-size:11px;font-weight:800;text-align:center;width:105px;">الإجمالي</th>
           </tr>
         </thead>
-        <tbody>${linesHtml||`<tr><td colspan="${5+(hasAnyImg?1:0)+(showMeters?1:0)}" style="text-align:center;padding:24px;color:#BBB;font-size:12.5px;">لا توجد بنود</td></tr>`}</tbody>
+        <tbody>${linesHtml||`<tr><td colspan="${hasAnyImg?7:6}" style="text-align:center;padding:24px;color:#BBB;font-size:12.5px;">لا توجد بنود</td></tr>`}</tbody>
       </table>
     </div>
   </div>
