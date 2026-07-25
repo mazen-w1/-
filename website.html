@@ -829,22 +829,61 @@ function shiftTestimonial(delta){_testiIndex+=delta;renderTestimonials();}
 function gotoTestimonial(i){_testiIndex=i;renderTestimonials();}
 setInterval(()=>{ if(testimonialsData.length>1) shiftTestimonial(1); },7000);
 
-/* ============================================================ ORDER TRACKING — narrowed Firebase queries only
-   (exact order number or phone match — no full-collection fetch, deliberately
-   more restrictive than a name-search would require, to minimize public data
-   exposure on this fully public page). */
+/* ============================================================ ORDER TRACKING — narrowed Firebase queries first
+   (exact/prefix order-number or phone match via orderBy/equalTo|startAt-endAt),
+   falling back to a single full-collection fetch only when those return nothing
+   (missing index, or a stored phone/ID format the indexed query can't express) —
+   mirrors the same fallback tracking.html already relies on. */
 function fbEqualToUrl(orderBy,value){
   return `${fbUrl}/orders.json?orderBy=${encodeURIComponent('"'+orderBy+'"')}&equalTo=${encodeURIComponent(JSON.stringify(value))}`;
 }
-async function fbTrackQuery(orderBy,value){
+async function fbAuthQS(sep){
   try{
     if(window._fbAuthReady) await window._fbAuthReady;
-    let authQS='';
-    try{ if(firebase.auth().currentUser){ const tok=await firebase.auth().currentUser.getIdToken(); authQS='&auth='+tok; } }catch(e){}
-    const res=await fetch(fbEqualToUrl(orderBy,value)+authQS);
+    if(firebase.auth().currentUser){ const tok=await firebase.auth().currentUser.getIdToken(); return sep+'auth='+tok; }
+  }catch(e){}
+  return '';
+}
+async function fbTrackQuery(orderBy,value){
+  try{
+    const res=await fetch(fbEqualToUrl(orderBy,value)+await fbAuthQS('&'));
     if(!res.ok)return{};
     return (await res.json())||{};
   }catch(e){ return {}; }
+}
+async function fbTrackPrefixQuery(orderBy,prefix){
+  try{
+    const url=`${fbUrl}/orders.json?orderBy=${encodeURIComponent('"'+orderBy+'"')}&startAt=${encodeURIComponent(JSON.stringify(prefix))}&endAt=${encodeURIComponent(JSON.stringify(prefix+''))}`;
+    const res=await fetch(url+await fbAuthQS('&'));
+    if(!res.ok)return{};
+    return (await res.json())||{};
+  }catch(e){ return {}; }
+}
+async function fbTrackAll(){
+  try{
+    const res=await fetch(`${fbUrl}/orders.json`+await fbAuthQS('?'));
+    if(!res.ok)return{};
+    return (await res.json())||{};
+  }catch(e){ return {}; }
+}
+function cleanPhoneDigits(v){
+  let s=toEnglishDigits(v).replace(/\D/g,'');
+  if(s.startsWith('00966'))s=s.slice(5);
+  else if(s.startsWith('966')&&s.length>9)s=s.slice(3);
+  else if(s.startsWith('0'))s=s.slice(1);
+  return s;
+}
+function trackOrderMatches(key,o,raw,normalizedPhone,rawDigits){
+  if(key===raw)return true;
+  if(o.id){
+    const id=String(o.id);
+    if(id===raw||id.toUpperCase().startsWith(raw.toUpperCase()))return true;
+  }
+  if(o.phone){
+    if(o.phone===raw||o.phone===normalizedPhone)return true;
+    if(rawDigits&&rawDigits.length>=8&&cleanPhoneDigits(o.phone)===rawDigits)return true;
+  }
+  return false;
 }
 const TRACK_STEPS=[
   {key:'received',label:'استلام الطلب',dept:null},
@@ -872,12 +911,23 @@ async function searchTrackOrder(){
   btn.disabled=true;const origLabel=btn.innerHTML;btn.innerHTML='<i class="ti ti-loader-2"></i> جاري البحث...';
   try{
     const normalizedPhone=normalizeSaudiPhone(raw);
+    const rawDigits=cleanPhoneDigits(raw);
     let merged={};
     Object.assign(merged,await fbTrackQuery('$key',raw));
     Object.assign(merged,await fbTrackQuery('id',raw));
     Object.assign(merged,await fbTrackQuery('phone',raw));
     if(normalizedPhone&&normalizedPhone!==raw)Object.assign(merged,await fbTrackQuery('phone',normalizedPhone));
-    const found=Object.entries(merged).find(([key,o])=>key===raw||o.id===raw||o.phone===raw||o.phone===normalizedPhone);
+    Object.assign(merged,await fbTrackPrefixQuery('id',raw));
+    let found=Object.entries(merged).find(([key,o])=>trackOrderMatches(key,o,raw,normalizedPhone,rawDigits));
+    if(!found){
+      // Indexed queries came back empty — could be a missing DB index, a prefix
+      // that startAt/endAt can't express past the first character run, or a stored
+      // phone in a different format than what equalTo can match exactly. Fall back
+      // to a single full-collection fetch and match locally, so a legitimate client
+      // still finds their order (same fallback tracking.html already relies on).
+      const all=await fbTrackAll();
+      found=Object.entries(all).find(([key,o])=>trackOrderMatches(key,o,raw,normalizedPhone,rawDigits));
+    }
     if(!found){setTrackError('لم يتم العثور على طلب مطابق. تحقق من رقم الطلب أو الجوال.');return;}
     renderTrackResult(found[0],found[1]);
   }catch(e){
