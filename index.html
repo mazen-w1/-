@@ -381,6 +381,40 @@ input[type="password"]{direction:rtl;text-align:right;padding-left:40px;padding-
 #wf-cards-wrap::-webkit-scrollbar-track{background:var(--surface-2);border-radius:10px;}
 #wf-cards-wrap::-webkit-scrollbar-thumb{background:linear-gradient(90deg,var(--maroon),var(--gold));border-radius:10px;}
 #wf-cards-wrap::-webkit-scrollbar-thumb:hover{background:var(--maroon);}
+/* ── Workflow: Calendar / List / Timeline views ── */
+.wf-cal-legend{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:10px;font-size:11px;color:var(--text-2);align-items:center;}
+.wf-cal-legend span{display:inline-flex;align-items:center;gap:5px;}
+.wf-cal-dot{display:inline-block;width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+.wf-cal-weekdays{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-bottom:6px;}
+.wf-cal-weekdays>div{text-align:center;font-size:11px;font-weight:800;color:var(--text-3);padding:4px 0;}
+.wf-cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;}
+.wf-cal-cell{min-height:86px;border:1px solid var(--border-soft);border-radius:var(--radius-md);padding:6px;position:relative;background:var(--bg);transition:.15s;}
+.wf-cal-cell-empty{background:transparent;border-color:transparent;}
+.wf-cal-has-jobs{cursor:pointer;background:var(--surface);}
+.wf-cal-has-jobs:hover{border-color:var(--gold);box-shadow:var(--shadow-sm);}
+.wf-cal-today{border-color:var(--maroon);border-width:2px;}
+.wf-cal-daynum{font-size:12px;font-weight:800;color:var(--text-2);}
+.wf-cal-count{position:absolute;top:6px;left:6px;background:var(--maroon);color:#fff;font-size:10px;font-weight:800;border-radius:20px;padding:1px 7px;}
+.wf-cal-dots{display:flex;gap:3px;flex-wrap:wrap;margin-top:22px;}
+@media(max-width:768px){
+  .wf-cal-cell{min-height:56px;padding:4px;}
+  .wf-cal-weekdays>div{font-size:9.5px;}
+  .wf-cal-daynum{font-size:10.5px;}
+}
+.wf-day-panel-overlay{position:fixed;inset:0;background:rgba(20,10,8,.4);z-index:200;display:none;}
+.wf-day-panel-overlay.open{display:block;}
+.wf-day-panel{position:fixed;top:0;bottom:0;right:-420px;width:400px;max-width:92vw;background:var(--surface);box-shadow:var(--shadow-lg);z-index:201;transition:right .28s cubic-bezier(.22,1,.36,1);overflow-y:auto;padding:20px;}
+.wf-day-panel.open{right:0;}
+@media(max-width:520px){.wf-day-panel{width:100%;max-width:100vw;right:-100vw;}}
+.wf-day-group{margin-bottom:16px;}
+.wf-day-group-header{font-size:12px;font-weight:800;margin-bottom:8px;display:flex;align-items:center;gap:6px;}
+.wf-day-job-card{background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-md);padding:10px 12px;margin-bottom:8px;}
+.wf-tl-day{display:flex;gap:14px;padding:10px 0;border-bottom:1px solid var(--border-soft);}
+.wf-tl-date{min-width:110px;font-size:12px;font-weight:800;color:var(--maroon);flex-shrink:0;}
+.wf-tl-items{display:flex;flex-direction:column;gap:6px;flex:1;min-width:0;}
+.wf-tl-item{display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer;padding:6px 8px;border-radius:8px;transition:.12s;flex-wrap:wrap;}
+.wf-tl-item:hover{background:var(--surface-2);}
+@media(max-width:640px){.wf-tl-day{flex-direction:column;gap:6px;}.wf-tl-date{min-width:0;}}
 .wf-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:visible;cursor:pointer;transition:.2s;position:relative;}
 .order-update-dot{position:absolute;top:9px;right:9px;width:10px;height:10px;border-radius:50%;background:#F59E0B;box-shadow:0 0 0 2px #fff,0 0 0 3px #F59E0B55;z-index:2;animation:chatPulse 1.6s infinite;}
 @keyframes chatPulse{0%{transform:scale(1);opacity:1;}50%{transform:scale(1.3);opacity:.7;}100%{transform:scale(1);opacity:1;}}
@@ -2353,6 +2387,23 @@ async function dashGoto(mode){
 // ============================================================
 function buildWfGrid(tab){
   _currentWfTab=tab||'active';
+  const view=window._wfView||'kanban';
+  document.getElementById('page-wf').innerHTML=`
+    <div class="page-header"><div class="ptitle"><i class="ti ti-grid-dots"></i> متابعة سير العمل</div></div>
+    <div class="tab-bar" style="margin-bottom:14px;">
+      <button class="tab-btn ${view==='kanban'?'active':''}" onclick="setWfView('kanban')"><i class="ti ti-layout-kanban"></i> كانبان</button>
+      <button class="tab-btn ${view==='calendar'?'active':''}" onclick="setWfView('calendar')"><i class="ti ti-calendar"></i> التقويم</button>
+      <button class="tab-btn ${view==='list'?'active':''}" onclick="setWfView('list')"><i class="ti ti-list"></i> القائمة</button>
+      <button class="tab-btn ${view==='timeline'?'active':''}" onclick="setWfView('timeline')"><i class="ti ti-timeline"></i> الخط الزمني</button>
+    </div>
+    <div id="wf-view-body"></div>`;
+  if(view==='kanban')renderWfKanbanView();
+  else if(view==='calendar')renderWfCalendarView();
+  else if(view==='list')renderWfListView();
+  else if(view==='timeline')renderWfTimelineView();
+}
+function setWfView(v){window._wfView=v;buildWfGrid(_currentWfTab||'active');}
+function renderWfKanbanView(){
   const arr=ordersArr();
   const cardHtml=o=>{
     const pct=orderProgress(o);const col=progressColor(o);
@@ -2417,8 +2468,7 @@ function buildWfGrid(tab){
       <div class="wf-kanban-list">${cardsHtml}</div>
     </div>`;
   }).join('');
-  document.getElementById('page-wf').innerHTML=`
-    <div class="page-header"><div class="ptitle"><i class="ti ti-grid-dots"></i> متابعة سير العمل</div></div>
+  document.getElementById('wf-view-body').innerHTML=`
     <div id="wf-content">
       ${controlsRow(true,'wf-search','ابحث عن عميل أو رقم طلب...')}
       ${(cu.type==='admin'||cu.type==='receiver')?`<div style="display:flex;justify-content:flex-end;margin-bottom:10px;"><button class="tab-btn" id="wf-multi-btn" onclick="toggleWfMultiMode()" style="color:var(--maroon);"><i class="ti ti-checklist"></i> تحديد</button></div>`:''}
@@ -2429,6 +2479,213 @@ function buildWfGrid(tab){
       </div>
       <div id="wf-cards-wrap"><div id="wf-cards" class="wf-kanban">${colsHtml}</div></div>
     </div>`;
+}
+// ============================================================
+// WORKFLOW — CALENDAR / LIST / TIMELINE VIEWS
+// Alternate visualizations of the exact same `orders` data the Kanban board
+// reads — no separate store, so any mutation (status change, delete, etc.)
+// made from any view is picked up by every other view on its next render via
+// the shared loadData()/refreshCurrentPage() cycle.
+// ============================================================
+const WF_DEPT_META={
+  design:{label:'التصميم',color:'#6B21A8',icon:'ti-brush'},
+  print:{label:'الطباعة',color:'#3730A3',icon:'ti-printer'},
+  workshop:{label:'الورشة',color:'#9A3412',icon:'ti-tools'},
+  external:{label:'تنفيذ خارجي',color:'#713F12',icon:'ti-world'},
+  done:{label:'التسليم',color:'#10B981',icon:'ti-circle-check'}
+};
+function wfEffectiveDate(o){
+  const d=(o.deadline&&o.deadline!=='—')?o.deadline:o.date;
+  if(!d)return null;
+  try{const dt=new Date(d);if(isNaN(dt.getTime()))return null;return dt.toISOString().slice(0,10);}catch(e){return null;}
+}
+function wfMatchesFilters(o,f){
+  if(f.dept&&(o.currentDept||'design')!==f.dept)return false;
+  if(f.status&&o.status!==f.status)return false;
+  if(f.priority&&o.priority!==f.priority)return false;
+  if(f.employee){
+    const assignees=[o.designTo,o.printTo,o.workshopTo,o.externalTo].filter(v=>v&&v!=='none');
+    if(!assignees.includes(f.employee))return false;
+  }
+  return true;
+}
+function wfFiltersBarHtml(f){
+  const employeeOptions=Object.entries(USERS).filter(([,u])=>['designer','printer','workshop','external'].includes(u.type))
+    .map(([uname,u])=>`<option value="${esc(uname)}"${f.employee===uname?' selected':''}>${esc(u.name)}</option>`).join('');
+  const statusOptions=['قيد المتابعة','قيد التشغيل','قيد التنفيذ','مكتمل','مؤرشف','غير مكتمل']
+    .map(s=>`<option value="${s}"${f.status===s?' selected':''}>${s}</option>`).join('');
+  const deptOptions=['design','print','workshop','external','done']
+    .map(k=>`<option value="${k}"${f.dept===k?' selected':''}>${WF_DEPT_META[k].label}</option>`).join('');
+  const priorityOptions=['عادية','متوسطة','عاجلة'].map(p=>`<option value="${p}"${f.priority===p?' selected':''}>${p}</option>`).join('');
+  return `<div style="display:flex;gap:8px;flex-wrap:wrap;">
+    <select onchange="setWfFilter('dept',this.value)" style="font-size:11.5px;"><option value="">كل الأقسام</option>${deptOptions}</select>
+    <select onchange="setWfFilter('status',this.value)" style="font-size:11.5px;"><option value="">كل الحالات</option>${statusOptions}</select>
+    <select onchange="setWfFilter('employee',this.value)" style="font-size:11.5px;"><option value="">كل الموظفين</option>${employeeOptions}</select>
+    <select onchange="setWfFilter('priority',this.value)" style="font-size:11.5px;"><option value="">كل الأولويات</option>${priorityOptions}</select>
+  </div>`;
+}
+function setWfFilter(key,val){
+  window._wfFilters=window._wfFilters||{};
+  window._wfFilters[key]=val;
+  const view=window._wfView||'kanban';
+  if(view==='calendar')renderWfCalendarView();
+  else if(view==='list')renderWfListView();
+  else if(view==='timeline')renderWfTimelineView();
+}
+function wfDayJobCardHtml(o){
+  const next=o.currentDept!=='done'?getNextDept(o):null;
+  return `<div class="wf-day-job-card">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px;">
+      <strong style="color:var(--maroon);font-size:12.5px;">${esc(o.client||'—')}</strong>
+      ${gpbadge(o.priority)}
+    </div>
+    <div style="font-size:11px;color:var(--text-3);margin-bottom:4px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+      <span><i class="ti ti-hash"></i> ${esc(o.id||o._key)}</span>${deptBadge(o.currentDept)}
+    </div>
+    <div style="font-size:10.5px;color:var(--text-3);margin-bottom:8px;"><i class="ti ti-calendar-time"></i> وقت التسليم: ${deadlineDateTime(o)}</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;">
+      <button class="btn btn-out btn-xs" onclick="openOrderModal('${o._key}')"><i class="ti ti-eye"></i> فتح الطلب</button>
+      <button class="btn btn-out btn-xs" onclick="openOrderModal('${o._key}')"><i class="ti ti-edit"></i> تعديل</button>
+      ${next?`<button class="btn btn-brand btn-xs" onclick="sendToNextDept('${o._key}','${next}');closeWfDayPanel();"><i class="ti ti-arrow-left"></i> تغيير الحالة</button>`:''}
+    </div>
+  </div>`;
+}
+function renderWfCalendarView(){
+  const bodyEl=document.getElementById('wf-view-body');if(!bodyEl)return;
+  if(!window._wfCalMonth){const d=new Date();window._wfCalMonth=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;}
+  const f=window._wfFilters||{};
+  const [y,m]=window._wfCalMonth.split('-').map(Number);
+  const firstOfMonth=new Date(y,m-1,1);
+  const startWeekday=firstOfMonth.getDay();
+  const daysInMonth=new Date(y,m,0).getDate();
+  const monthLabel=firstOfMonth.toLocaleDateString('ar-SA',{month:'long',year:'numeric'});
+  const arr=ordersArr().filter(o=>wfMatchesFilters(o,f));
+  const byDay={};
+  arr.forEach(o=>{const d=wfEffectiveDate(o);if(!d)return;(byDay[d]=byDay[d]||[]).push(o);});
+  window._wfCalByDay=byDay;
+  const cells=[];
+  for(let i=0;i<startWeekday;i++)cells.push(null);
+  for(let d=1;d<=daysInMonth;d++)cells.push(d);
+  while(cells.length%7!==0)cells.push(null);
+  const todayStr=new Date().toISOString().slice(0,10);
+  const weekdayLabels=['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
+  const dayCellHtml=dayNum=>{
+    if(!dayNum)return `<div class="wf-cal-cell wf-cal-cell-empty"></div>`;
+    const dateStr=`${y}-${String(m).padStart(2,'0')}-${String(dayNum).padStart(2,'0')}`;
+    const jobs=byDay[dateStr]||[];
+    const isToday=dateStr===todayStr;
+    const deptsPresent=[...new Set(jobs.map(o=>o.currentDept||'design'))].filter(d=>WF_DEPT_META[d]);
+    const dotsHtml=deptsPresent.map(d=>`<span class="wf-cal-dot" style="background:${WF_DEPT_META[d].color}" title="${WF_DEPT_META[d].label}"></span>`).join('');
+    return `<div class="wf-cal-cell${isToday?' wf-cal-today':''}${jobs.length?' wf-cal-has-jobs':''}"${jobs.length?` onclick="openWfDayPanel('${dateStr}')"`:''}>
+      <div class="wf-cal-daynum">${dayNum}</div>
+      ${jobs.length?`<div class="wf-cal-count">${jobs.length}</div>`:''}
+      <div class="wf-cal-dots">${dotsHtml}</div>
+    </div>`;
+  };
+  bodyEl.innerHTML=`
+    <div class="card" style="padding:14px 16px;margin-bottom:14px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:12px;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <button class="btn btn-out btn-sm btn-icon" onclick="shiftWfCalMonth(-1)"><i class="ti ti-chevron-right"></i></button>
+          <div style="font-size:15px;font-weight:800;color:var(--maroon);min-width:150px;text-align:center;">${monthLabel}</div>
+          <button class="btn btn-out btn-sm btn-icon" onclick="shiftWfCalMonth(1)"><i class="ti ti-chevron-left"></i></button>
+          <button class="btn btn-out btn-sm" onclick="goWfCalToday()">اليوم</button>
+        </div>
+        ${wfFiltersBarHtml(f)}
+      </div>
+      <div class="wf-cal-legend">
+        <span><span class="wf-cal-dot" style="background:${WF_DEPT_META.design.color}"></span> التصميم</span>
+        <span><span class="wf-cal-dot" style="background:${WF_DEPT_META.print.color}"></span> الطباعة</span>
+        <span><span class="wf-cal-dot" style="background:${WF_DEPT_META.workshop.color}"></span> الورشة</span>
+        <span><span class="wf-cal-dot" style="background:${WF_DEPT_META.done.color}"></span> التسليم</span>
+      </div>
+      <div class="wf-cal-weekdays">${weekdayLabels.map(w=>`<div>${w}</div>`).join('')}</div>
+      <div class="wf-cal-grid">${cells.map(dayCellHtml).join('')}</div>
+    </div>
+    <div class="wf-day-panel-overlay" id="wf-day-panel-overlay" onclick="closeWfDayPanel()"></div>
+    <div class="wf-day-panel" id="wf-day-panel"></div>`;
+}
+function shiftWfCalMonth(delta){
+  const [y,m]=window._wfCalMonth.split('-').map(Number);
+  const d=new Date(y,m-1+delta,1);
+  window._wfCalMonth=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+  renderWfCalendarView();
+}
+function goWfCalToday(){
+  const d=new Date();
+  window._wfCalMonth=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+  renderWfCalendarView();
+}
+function openWfDayPanel(dateStr){
+  const jobs=(window._wfCalByDay&&window._wfCalByDay[dateStr])||[];
+  const groups={design:[],print:[],workshop:[],external:[],done:[]};
+  jobs.forEach(o=>{const d=o.currentDept||'design';(groups[d]=groups[d]||[]).push(o);});
+  const dateLabel=new Date(dateStr).toLocaleDateString('ar-SA',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+  const groupSection=key=>{
+    const list=groups[key]||[];if(!list.length)return'';
+    const meta=WF_DEPT_META[key];
+    return `<div class="wf-day-group">
+      <div class="wf-day-group-header" style="color:${meta.color};"><i class="ti ${meta.icon}"></i> ${meta.label} (${list.length})</div>
+      ${list.map(wfDayJobCardHtml).join('')}
+    </div>`;
+  };
+  const panel=document.getElementById('wf-day-panel');if(!panel)return;
+  panel.innerHTML=`
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+      <div style="font-size:14px;font-weight:800;color:var(--maroon);">${dateLabel}</div>
+      <button class="btn-close" onclick="closeWfDayPanel()">×</button>
+    </div>
+    <div style="font-size:12px;color:var(--text-3);margin-bottom:14px;">إجمالي الطلبات: <strong style="color:var(--maroon);">${jobs.length}</strong></div>
+    ${groupSection('design')}${groupSection('print')}${groupSection('workshop')}${groupSection('external')}${groupSection('done')}
+    ${!jobs.length?'<div style="text-align:center;color:var(--text-3);padding:30px;">لا توجد طلبات في هذا اليوم</div>':''}`;
+  document.getElementById('wf-day-panel-overlay')?.classList.add('open');
+  panel.classList.add('open');
+}
+function closeWfDayPanel(){
+  document.getElementById('wf-day-panel-overlay')?.classList.remove('open');
+  document.getElementById('wf-day-panel')?.classList.remove('open');
+}
+function renderWfListView(){
+  const bodyEl=document.getElementById('wf-view-body');if(!bodyEl)return;
+  const f=window._wfFilters||{};
+  const arr=ordersArr().filter(o=>wfMatchesFilters(o,f));
+  const rows=arr.map(o=>`<tr onclick="openOrderModal('${o._key}')" style="cursor:pointer;">
+    <td><strong style="color:var(--maroon)">${o.id||o._key}</strong></td>
+    <td><strong style="font-size:12.5px;">${esc(o.client||'—')}</strong></td>
+    <td style="font-size:12px;">${esc(o.service||'—')}</td>
+    <td>${deptBadge(o.currentDept)}</td>
+    <td style="font-size:12px;">${esc(currentPersonName(o))}</td>
+    <td style="font-size:11px;">${deadlineDateTime(o)}</td>
+    <td>${gpbadge(o.priority)}</td>
+  </tr>`).join('');
+  bodyEl.innerHTML=`
+    <div style="margin-bottom:12px;">${wfFiltersBarHtml(f)}</div>
+    <div class="card"><div class="tbl-wrap"><table>
+    <thead><tr><th style="width:80px">رقم الطلب</th><th>العميل</th><th>الخدمة</th><th style="width:110px">القسم</th><th style="width:110px">المسؤول</th><th style="width:140px">موعد التسليم</th><th style="width:90px">الأولوية</th></tr></thead>
+    <tbody>${rows||'<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text-3)">لا توجد طلبات مطابقة</td></tr>'}</tbody>
+    </table></div></div>`;
+}
+function renderWfTimelineView(){
+  const bodyEl=document.getElementById('wf-view-body');if(!bodyEl)return;
+  const f=window._wfFilters||{};
+  const arr=ordersArr().filter(o=>wfMatchesFilters(o,f)).slice().sort((a,b)=>new Date(a.date)-new Date(b.date));
+  const byDate={};
+  arr.forEach(o=>{const d=(o.date||'').slice(0,10)||'—';(byDate[d]=byDate[d]||[]).push(o);});
+  const dates=Object.keys(byDate).sort();
+  const html=dates.map(d=>`
+    <div class="wf-tl-day">
+      <div class="wf-tl-date">${formatDate(d)}</div>
+      <div class="wf-tl-items">${byDate[d].map(o=>{
+        const meta=WF_DEPT_META[o.currentDept]||{color:'#94A3B8'};
+        return `<div class="wf-tl-item" onclick="openOrderModal('${o._key}')">
+          <span class="wf-cal-dot" style="background:${meta.color}"></span>
+          <strong>${esc(o.client||'—')}</strong> — <span style="color:var(--text-2)">${esc(o.service||'—')}</span> ${deptBadge(o.currentDept)} ${gpbadge(o.priority)}
+        </div>`;
+      }).join('')}</div>
+    </div>`).join('');
+  bodyEl.innerHTML=`
+    <div style="margin-bottom:12px;">${wfFiltersBarHtml(f)}</div>
+    <div class="card" style="padding:16px;">${html||'<div style="text-align:center;color:var(--text-3);padding:30px;">لا توجد طلبات مطابقة</div>'}</div>`;
 }
 window._wfSelected=new Set();
 window._wfMultiMode=false;
