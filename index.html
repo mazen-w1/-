@@ -2134,11 +2134,13 @@ async function submitQuickTask(type){
     workshopFeedback:'',workshopFeedbackDate:''
   };
   showSaving('جاري التكليف...');
-  const res=await fbPush('orders',ord);
-  const newId='QT-'+String(Date.now()).slice(-4);
-  await fbPatch(`orders/${res.name}`,{id:newId});
-  await loadData();hideSaving();closeModal('quick-task-modal');
-  toast('✓ تم إرسال المهمة');refreshCurrentPage();
+  try{
+    const res=await fbPush('orders',ord);
+    const newId='QT-'+String(Date.now()).slice(-4);
+    await fbPatch(`orders/${res.name}`,{id:newId});
+    await loadData();hideSaving();closeModal('quick-task-modal');
+    toast('✓ تم إرسال المهمة');refreshCurrentPage();
+  }catch(e){hideSaving();toast('❌ فشل إرسال المهمة، حاول مرة أخرى');}
 }
 // Workshop Feedback
 function openWorkshopFeedback(key){
@@ -2171,14 +2173,16 @@ async function submitWorkshopFeedback(key){
   const siteStatus=document.getElementById('fb-site-status').value;
   const notes=document.getElementById('fb-notes').value.trim();
   showSaving('جاري الحفظ...');
-  await fbPatch(`orders/${key}`,{
-    workshopFeedback:`${dims} | ${siteStatus} | ${notes}`,
-    workshopFeedbackDate:new Date().toISOString(),
-    workshopSitePhoto:window._wfSitePhotoB64,
-    workshopSitePhotoName:window._wfSitePhotoName||'',
-    workshopFeedbackDone:true
-  });
-  await loadData();hideSaving();closeModal('workshop-feedback-modal');toast('✓ تم حفظ البيانات وإرسال التقرير');
+  try{
+    await fbPatch(`orders/${key}`,{
+      workshopFeedback:`${dims} | ${siteStatus} | ${notes}`,
+      workshopFeedbackDate:new Date().toISOString(),
+      workshopSitePhoto:window._wfSitePhotoB64,
+      workshopSitePhotoName:window._wfSitePhotoName||'',
+      workshopFeedbackDone:true
+    });
+    await loadData();hideSaving();closeModal('workshop-feedback-modal');toast('✓ تم حفظ البيانات وإرسال التقرير');
+  }catch(e){hideSaving();toast('❌ فشل حفظ البيانات، حاول مرة أخرى');}
 }
 async function handleWfSitePhoto(files){
   if(!files||!files.length)return;
@@ -2264,10 +2268,10 @@ function buildDash(){
     const bgRow=isOverdue?'#FFF8F8':'';
     const icon=isUrgent?'ti-bolt':isOverdue?'ti-alert-triangle':'ti-clock-exclamation';
     const tag=isUrgent?'عاجل':isOverdue?'تجاوز الموعد':(()=>{const h=Math.round((new Date(o.deadline)-now)/3600000);return h<24?h+' ساعة':Math.round(h/24)+' يوم';})();
-    const avatarLetter=(o.client||'؟').charAt(0);
+    const avatarLetter=esc((o.client||'؟').charAt(0));
     return`<div onclick="openOrderModal('${o._key}')" style="display:flex;align-items:center;gap:12px;padding:8px 14px;border-bottom:1px solid var(--border-soft);cursor:pointer;transition:background .12s;${bgRow?'background:'+bgRow+';':''}" onmouseover="this.style.background='#F9F5F0'" onmouseout="this.style.background='${bgRow}'">
       <div style="width:32px;height:32px;border-radius:50%;background:${accent}18;border:2px solid ${accent}40;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px;font-weight:800;color:${accent};">${avatarLetter}</div>
-      <div style="flex:1;min-width:0;"><div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;flex-wrap:wrap;"><span style="background:${accent};color:#fff;padding:1px 7px;border-radius:6px;font-size:9px;font-weight:800;display:inline-flex;align-items:center;gap:2px;white-space:nowrap;"><i class="ti ${icon}" style="font-size:9px;"></i> ${tag}</span><strong style="font-size:12px;color:var(--maroon);">${o.id||o._key}</strong></div><div style="font-size:11px;color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(o.client)} ${o.service?'· '+o.service:''}</div></div>
+      <div style="flex:1;min-width:0;"><div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;flex-wrap:wrap;"><span style="background:${accent};color:#fff;padding:1px 7px;border-radius:6px;font-size:9px;font-weight:800;display:inline-flex;align-items:center;gap:2px;white-space:nowrap;"><i class="ti ${icon}" style="font-size:9px;"></i> ${tag}</span><strong style="font-size:12px;color:var(--maroon);">${o.id||o._key}</strong></div><div style="font-size:11px;color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(o.client)} ${o.service?'· '+esc(o.service):''}</div></div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0;">${deptBadge(o.currentDept)}${timeBadge(hoursAgo(o.stageStartDate||o.date))}</div>
     </div>`;
   };
@@ -2473,7 +2477,7 @@ function waitForPrintImages(root){
 async function downloadQuotePDF(savedKey){
   let data;
   if(savedKey){
-    const q=standaloneQuotes[savedKey]||await fbGet(`standalone_quotes/${savedKey}`);
+    const q=standaloneQuotes[savedKey]||await fbGet(`standalone_quotes/${savedKey}`).catch(()=>null);
     if(!q){toast('تعذر العثور على عرض السعر');return;}
     data=q;
   } else {
@@ -2701,6 +2705,7 @@ function toggleWfSelect(key,checked){
   if(bar){n>0?bar.classList.add('show'):bar.classList.remove('show');}
 }
 async function bulkDeleteSelected(){
+  if(cu.type!=='admin'&&cu.type!=='receiver'){toast('⚠️ الحذف غير متاح لهذا الدور');return;}
   if(!window._wfSelected.size){toast('لم يتم تحديد أي طلبات');return;}
   if(!confirm('حذف '+window._wfSelected.size+' طلبات؟ لا يمكن التراجع عن هذا الإجراء.'))return;
   showSaving('جاري الحذف...');
@@ -2828,7 +2833,7 @@ function onMaintOrderChange(prefix){
   const o=orders[orderKey];
   if(!o){itemSel.innerHTML='<option value="">— اختر رقم الطلب أولاً —</option>';if(infoEl)infoEl.textContent='';return;}
   const items=maintOrderItemNames(o);
-  itemSel.innerHTML='<option value="">— اختر البند —</option>'+items.map(n=>`<option value="${n}">${n}</option>`).join('');
+  itemSel.innerHTML='<option value="">— اختر البند —</option>'+items.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('');
   if(infoEl)infoEl.innerHTML=`<i class="ti ti-user"></i> ${esc(o.client||'—')} &nbsp; <i class="ti ti-phone"></i> ${esc(o.phone||'—')}`;
 }
 // Single merged search+select combo (input+datalist): typing filters the native
@@ -2866,7 +2871,7 @@ function buildMaintRequestPage(){
         <div class="card-header" style="background:#FEF3C7;"><span class="card-title" style="color:#92400E;"><i class="ti ti-shield-check"></i> تسجيل الضمان</span></div>
         <div style="padding:16px;display:flex;flex-direction:column;gap:12px;">
           <div class="fg"><label>رقم الطلب / اسم العميل * <span style="font-size:10px;color:var(--text-3);font-weight:600;">(اكتب للبحث ثم اختر — عملاء الضمان المسجّلين فقط)</span></label>
-            <datalist id="mntw-order-list">${warrantyOrderData.map(d=>`<option value="${d.label}">`).join('')}</datalist>
+            <datalist id="mntw-order-list">${warrantyOrderData.map(d=>`<option value="${esc(d.label)}">`).join('')}</datalist>
             <input id="mntw-order-input" list="mntw-order-list" autocomplete="off" placeholder="اكتب رقم الطلب أو اسم العميل..." oninput="onMaintOrderPick('w',this.value)"/>
             <input type="hidden" id="mntw-order"/>
           </div>
@@ -2886,7 +2891,7 @@ function buildMaintRequestPage(){
         <div class="card-header"><span class="card-title"><i class="ti ti-tool"></i> الصيانة الباقية</span></div>
         <div style="padding:16px;display:flex;flex-direction:column;gap:12px;">
           <div class="fg"><label>رقم الطلب / اسم العميل * <span style="font-size:10px;color:var(--text-3);font-weight:600;">(اكتب للبحث ثم اختر)</span></label>
-            <datalist id="mntg-order-list">${generalOrderData.map(d=>`<option value="${d.label}">`).join('')}</datalist>
+            <datalist id="mntg-order-list">${generalOrderData.map(d=>`<option value="${esc(d.label)}">`).join('')}</datalist>
             <input id="mntg-order-input" list="mntg-order-list" autocomplete="off" placeholder="اكتب رقم الطلب أو اسم العميل..." oninput="onMaintOrderPick('g',this.value)"/>
             <input type="hidden" id="mntg-order"/>
           </div>
@@ -3324,7 +3329,7 @@ function buildQuoteArchiveRows(){
   }).join('');
 }
 async function editQuote(key){
-  const q=standaloneQuotes[key]||await fbGet(`standalone_quotes/${key}`);
+  const q=standaloneQuotes[key]||await fbGet(`standalone_quotes/${key}`).catch(()=>null);
   if(!q){toast('⚠️ تعذر العثور على العرض');return;}
   window._editingQuoteKey=key;
   buildQuotePage();
@@ -3574,7 +3579,7 @@ async function saveAndPreviewQuote(){
   setTimeout(()=>document.title=origTitle,2000);
 }
 async function previewSavedQuote(key){
-  const q=standaloneQuotes[key]||await fbGet(`standalone_quotes/${key}`);
+  const q=standaloneQuotes[key]||await fbGet(`standalone_quotes/${key}`).catch(()=>null);
   if(!q)return;
   renderA4Quote(q,key);
   await waitForPrintImages(document.getElementById('print-area'));
@@ -3839,13 +3844,15 @@ async function convertQuoteToOrder(){
   if(!data.phone||!isValidSaudiPhone(data.phone)){toast('⚠️ يرجى إدخال رقم الجوال ويجب أن يكون رقم سعودي صحيح (05XXXXXXXX)');return;}
   if(!data.lines.length){toast('يرجى إضافة بنود للعرض');return;}
   showSaving('جاري الحفظ...');
-  const res=await fbPush('standalone_quotes',data);
-  await loadData();hideSaving();
-  await convertSavedQuoteToOrder(res.name,data);
+  try{
+    const res=await fbPush('standalone_quotes',data);
+    await loadData();hideSaving();
+    await convertSavedQuoteToOrder(res.name,data);
+  }catch(e){hideSaving();toast('❌ فشل الحفظ، حاول مرة أخرى');}
 }
 async function convertSavedQuoteToOrder(key,preloadedData=null){
   showSaving('جاري التحضير...');
-  const data=preloadedData||(standaloneQuotes[key]||await fbGet(`standalone_quotes/${key}`));
+  const data=preloadedData||(standaloneQuotes[key]||await fbGet(`standalone_quotes/${key}`).catch(()=>null));
   if(!data){hideSaving();toast('خطأ: لم يتم العثور على العرض');return;}
   const dw=getDeptWorkers('design');const pw=getDeptWorkers('print');const ww=getDeptWorkers('workshop');const ew=getDeptWorkers('external');
   window._coItemFiles={};
@@ -3998,8 +4005,8 @@ async function finalizeConvertToOrder(quoteKey){
   const _extraLines=(window._coProdLines||[]).filter(l=>l.design!=='none'||l.external!=='none'||l.print!=='none'||l.workshop!=='none');
   if(_extraLines.some(l=>!l.itemIdxs||!l.itemIdxs.length)){toast('⚠️ يرجى تحديد بند واحد على الأقل لكل خط إنتاج موازٍ');return;}
   const claimedIdxs=new Set(_extraLines.flatMap(l=>l.itemIdxs).map(String));
-  const q=standaloneQuotes[quoteKey]||await fbGet(`standalone_quotes/${quoteKey}`);
-  if(!q)return;
+  const q=standaloneQuotes[quoteKey]||await fbGet(`standalone_quotes/${quoteKey}`).catch(()=>null);
+  if(!q){toast('⚠️ تعذر العثور على عرض السعر');return;}
   const primaryQLines=(q.lines||[]).filter((l,i)=>!claimedIdxs.has(String(i)));
   const service=primaryQLines.map(l=>l.lbl).filter(Boolean).join(' + ')||(q.lines||[]).map(l=>l.lbl).filter(Boolean).join(' + ')||'—';
   let startDept='design';
@@ -4025,6 +4032,7 @@ async function finalizeConvertToOrder(quoteKey){
     approvedPrintFile:'',approvedWorkshopFile:'',finalWorkshopDoneFile:''
   };
   showSaving('جاري الإنشاء...');
+  try{
   const res=await fbPush('orders',ord);
   const newId='ORD-'+String(Object.keys(orders).length+1).padStart(3,'0');
   await fbPatch(`orders/${res.name}`,{id:newId});
@@ -4064,6 +4072,7 @@ async function finalizeConvertToOrder(quoteKey){
   window._coItemFiles={};window._coProdLines=[];
   await loadData();hideSaving();closeModal('order-modal');
   toast('✓ تم إنشاء أمر التشغيل: '+newId);nav('wf');
+  }catch(e){hideSaving();toast('❌ فشل إنشاء أمر التشغيل، حاول مرة أخرى');}
 }
 // ============================================================
 // INTERNAL CHAT
@@ -4095,7 +4104,7 @@ async function loadAndRenderChat(orderKey){
     if(freshData)chats[orderKey]=freshData;
     if(!msgs.length){container.innerHTML='<div style="text-align:center;color:var(--text-3);font-size:11px;padding:20px;"><i class="ti ti-message-off" style="font-size:24px;display:block;margin-bottom:6px;color:var(--border)"></i>لا توجد رسائل بعد</div>';return;}
     container.innerHTML=msgs.map(m=>{const isMine=m.senderUname===cu._uname;
-      return`<div class="chat-msg ${isMine?'mine':'other'}"><div class="chat-meta">${m.senderName} · ${new Date(m.timestamp).toLocaleTimeString('ar-SA',{hour:'2-digit',minute:'2-digit'})}</div><div>${m.text}</div></div>`;
+      return`<div class="chat-msg ${isMine?'mine':'other'}"><div class="chat-meta">${esc(m.senderName)} · ${new Date(m.timestamp).toLocaleTimeString('ar-SA',{hour:'2-digit',minute:'2-digit'})}</div><div>${esc(m.text)}</div></div>`;
     }).join('');
     container.scrollTop=container.scrollHeight;
     markChatSeen(orderKey);
@@ -4120,12 +4129,14 @@ async function sendChatMsg(orderKey){
   if(container){
     const div=document.createElement('div');
     div.className='chat-msg mine';
-    div.innerHTML=`<div class="chat-meta">${esc(cu.name)} · الآن</div><div>${txt}</div>`;
+    div.innerHTML=`<div class="chat-meta">${esc(cu.name)} · الآن</div><div>${esc(txt)}</div>`;
     container.appendChild(div);container.scrollTop=container.scrollHeight;
   }
-  await fbPush(`chats/${orderKey}`,msg);
-  // Refresh to confirm from server
-  setTimeout(()=>loadAndRenderChat(orderKey),500);
+  try{
+    await fbPush(`chats/${orderKey}`,msg);
+    // Refresh to confirm from server
+    setTimeout(()=>loadAndRenderChat(orderKey),500);
+  }catch(e){toast('❌ فشل إرسال الرسالة');}
 }
 // ============================================================
 // TEEM RAWAEE — global cross-department chat (not tied to an order)
@@ -4154,7 +4165,7 @@ async function loadAndRenderTeamChat(){
     teamChat=freshData||{};
     if(!msgs.length){container.innerHTML='<div style="text-align:center;color:var(--text-3);font-size:12px;padding:30px;"><i class="ti ti-messages" style="font-size:28px;display:block;margin-bottom:8px;color:var(--border)"></i>لا توجد رسائل بعد — كن أول من يشارك إنجازاً!</div>';return;}
     container.innerHTML=msgs.map(m=>{const isMine=m.senderUname===cu._uname;
-      return`<div class="chat-msg ${isMine?'mine':'other'}"><div class="chat-meta">${m.senderName} · ${m.senderRole||''} · ${new Date(m.timestamp).toLocaleString('ar-SA',{hour:'2-digit',minute:'2-digit',day:'2-digit',month:'2-digit'})}</div>${m.audioUrl?`<audio controls src="${m.audioUrl}" style="max-width:220px;height:32px;"></audio>`:`<div>${highlightMentions(m.text)}</div>`}</div>`;
+      return`<div class="chat-msg ${isMine?'mine':'other'}"><div class="chat-meta">${esc(m.senderName)} · ${esc(m.senderRole||'')} · ${new Date(m.timestamp).toLocaleString('ar-SA',{hour:'2-digit',minute:'2-digit',day:'2-digit',month:'2-digit'})}</div>${m.audioUrl?`<audio controls src="${esc(m.audioUrl)}" style="max-width:220px;height:32px;"></audio>`:`<div>${highlightMentions(m.text)}</div>`}</div>`;
     }).join('');
     container.scrollTop=container.scrollHeight;
     markTeamChatSeen();
@@ -4175,7 +4186,7 @@ function extractMentionUnames(text){
 }
 function highlightMentions(text){
   if(!text)return text;
-  let out=text;
+  let out=esc(text);
   if(typeof USERS!=='undefined'){
     Object.keys(USERS).forEach(function(uname){
       const u=USERS[uname];
@@ -4263,8 +4274,10 @@ async function sendTeamChatMsg(){
     div.innerHTML=`<div class="chat-meta">${esc(cu.name)} · ${cu.role||''} · الآن</div><div>${highlightMentions(txt)}</div>`;
     container.appendChild(div);container.scrollTop=container.scrollHeight;
   }
-  await fbPush('team_chat',msg);
-  setTimeout(()=>loadAndRenderTeamChat(),500);
+  try{
+    await fbPush('team_chat',msg);
+    setTimeout(()=>loadAndRenderTeamChat(),500);
+  }catch(e){toast('❌ فشل إرسال الرسالة');}
 }
 let __voiceRecorder=null;
 let __voiceChunks=[];
@@ -4774,8 +4787,10 @@ async function sendToNextDept(key,next){
   const upd={currentDept:next,stageStartDate:new Date().toISOString()};
   if(timeField[curDept])upd[timeField[curDept]]=new Date().toISOString();
   if(startField[next])upd[startField[next]]=new Date().toISOString();
-  await fbPatch(`orders/${key}`,upd);await loadData();hideSaving();closeModal('order-modal');
-  toast('✓ تم النقل للمرحلة التالية');refreshCurrentPage();
+  try{
+    await fbPatch(`orders/${key}`,upd);await loadData();hideSaving();closeModal('order-modal');
+    toast('✓ تم النقل للمرحلة التالية');refreshCurrentPage();
+  }catch(e){hideSaving();toast('❌ فشل النقل، حاول مرة أخرى');}
 }
 async function createWarrantyIfNeeded(key,o){
   if(!o||!o.maintenanceContract||o.warrantyAdded)return;
@@ -4831,44 +4846,52 @@ async function resolveMaintenanceOrder(key){
   const note=ta?ta.value.trim():'';
   if(!note){toast('⚠️ يرجى تسجيل وصف حل المشكلة قبل الإتمام');return;}
   showSaving('جاري الحفظ...');
-  await fbPatch(`orders/${key}`,{maintenanceResolutionNote:note,maintenanceResolvedBy:cu.name,maintenanceResolvedAt:new Date().toISOString()});
-  hideSaving();
-  await finishOrder(key);
+  try{
+    await fbPatch(`orders/${key}`,{maintenanceResolutionNote:note,maintenanceResolvedBy:cu.name,maintenanceResolvedAt:new Date().toISOString()});
+    hideSaving();
+    await finishOrder(key);
+  }catch(e){hideSaving();toast('❌ فشل الحفظ، حاول مرة أخرى');}
 }
 async function finishOrder(key){
   showSaving('جاري الإغلاق...');
   const o=orders[key];
-  await fbPatch(`orders/${key}`,{currentDept:'done',status:'مكتمل',workshopDoneAt:new Date().toISOString()});
-  await createWarrantyIfNeeded(key,o);
-  if(o.phone&&o.phone!=='—'){
-    const n=o.phone.replace(/[^0-9]/g,'');
-    const full=n.startsWith('0')?'966'+n.substring(1):n;
-    const waMsg=encodeURIComponent('شكراً لثقتكم بنا، طلبكم جاهز للاستلام');
-    window.open(`https://wa.me/${full}?text=${waMsg}`,'_blank');
-  }
-  await loadData();hideSaving();closeModal('order-modal');
-  resyncOrderToSheet(key);
-  toast('✓ تم إغلاق الطلب');refreshCurrentPage();
+  try{
+    await fbPatch(`orders/${key}`,{currentDept:'done',status:'مكتمل',workshopDoneAt:new Date().toISOString()});
+    await createWarrantyIfNeeded(key,o);
+    if(o.phone&&o.phone!=='—'){
+      const n=o.phone.replace(/[^0-9]/g,'');
+      const full=n.startsWith('0')?'966'+n.substring(1):n;
+      const waMsg=encodeURIComponent('شكراً لثقتكم بنا، طلبكم جاهز للاستلام');
+      window.open(`https://wa.me/${full}?text=${waMsg}`,'_blank');
+    }
+    await loadData();hideSaving();closeModal('order-modal');
+    resyncOrderToSheet(key);
+    toast('✓ تم إغلاق الطلب');refreshCurrentPage();
+  }catch(e){hideSaving();toast('❌ فشل إغلاق الطلب، حاول مرة أخرى');}
 }
 async function archiveOrder(key){
   const o=orders[key];
   if(!confirm(`إنهاء وأرشفة الطلب "${o?.id||key}"؟`))return;
   showSaving('جاري الأرشفة...');
-  await fbPatch(`orders/${key}`,{currentDept:'done',status:'مؤرشف',archivedAt:new Date().toISOString(),archivedBy:cu.name});
-  await createWarrantyIfNeeded(key,o);
-  if(o?.phone&&o.phone!=='—')await sendSmsNotification(o.phone,`مرحباً ${esc(o.client)}، طلبكم ${o.id||key} تم إغلاقه. روائع الأفكار الإعلانية.`);
-  await loadData();hideSaving();closeModal('order-modal');
-  resyncOrderToSheet(key);
-  toast('✓ تم إنهاء الطلب وأرشفته');refreshCurrentPage();
+  try{
+    await fbPatch(`orders/${key}`,{currentDept:'done',status:'مؤرشف',archivedAt:new Date().toISOString(),archivedBy:cu.name});
+    await createWarrantyIfNeeded(key,o);
+    if(o?.phone&&o.phone!=='—')await sendSmsNotification(o.phone,`مرحباً ${esc(o.client)}، طلبكم ${o.id||key} تم إغلاقه. روائع الأفكار الإعلانية.`);
+    await loadData();hideSaving();closeModal('order-modal');
+    resyncOrderToSheet(key);
+    toast('✓ تم إنهاء الطلب وأرشفته');refreshCurrentPage();
+  }catch(e){hideSaving();toast('❌ فشل إنهاء الطلب، حاول مرة أخرى');}
 }
 async function markAsIncomplete(key){
   const o=orders[key];if(!o)return;
   if(!confirm('تأكيد: العميل لم يرغب بالاستمرار في الطلب؟'))return;
   showSaving('جاري التحديث...');
-  await fbPatch(`orders/${key}`,{incompleteClient:true,incompleteAt:new Date().toISOString(),currentDept:'done',status:'غير مكتمل'});
-  await loadData();hideSaving();closeModal('order-modal');
-  resyncOrderToSheet(key);
-  toast('✓ تم نقل الطلب لقائمة غير المكتملة');refreshCurrentPage();
+  try{
+    await fbPatch(`orders/${key}`,{incompleteClient:true,incompleteAt:new Date().toISOString(),currentDept:'done',status:'غير مكتمل'});
+    await loadData();hideSaving();closeModal('order-modal');
+    resyncOrderToSheet(key);
+    toast('✓ تم نقل الطلب لقائمة غير المكتملة');refreshCurrentPage();
+  }catch(e){hideSaving();toast('❌ فشل التحديث، حاول مرة أخرى');}
 }
 // ============================================================
 // ADD ORDER FORM
@@ -5534,8 +5557,8 @@ function openCustomerProfile(nameEncoded){
   document.getElementById('order-modal-body').innerHTML=`
     <div class="modal-header">
       <div>
-        <div class="modal-title"><i class="ti ti-user-circle"></i> ${name}</div>
-        <div style="font-size:11px;color:var(--text-3);margin-top:2px;">${ords.length} طلب مسجل باسم هذا العميل${phone&&phone!=='—'?' · '+phone:''}</div>
+        <div class="modal-title"><i class="ti ti-user-circle"></i> ${esc(name)}</div>
+        <div style="font-size:11px;color:var(--text-3);margin-top:2px;">${ords.length} طلب مسجل باسم هذا العميل${phone&&phone!=='—'?' · '+esc(phone):''}</div>
       </div>
       <button class="btn-close" onclick="closeModal('order-modal')">×</button>
     </div>
@@ -5606,7 +5629,7 @@ function fillQtOrderSelect(){
   const running=ordersArr().filter(o=>!o.isQuickTask&&o.currentDept!=='done')
     .sort((a,b)=>new Date(b.date)-new Date(a.date));
   sel.innerHTML='<option value="">— بدون ربط —</option>'+
-    running.map(o=>'<option value="'+o._key+'">'+(o.id||o._key)+' — '+o.client+'</option>').join('');
+    running.map(o=>'<option value="'+esc(o._key)+'">'+esc(o.id||o._key)+' — '+esc(o.client)+'</option>').join('');
   if(window._qtLinkedOrderKey)sel.value=window._qtLinkedOrderKey;
 }
 function openQuickTaskForOrder(orderKey){
@@ -5619,10 +5642,10 @@ function openQuickTaskForOrder(orderKey){
   if(relTasks.length){
     relHtml='<div style="border-top:1px solid var(--border-soft);padding-top:10px;margin-top:4px;">'
       +'<div style="font-size:11px;font-weight:800;color:var(--text-2);margin-bottom:8px;">مهام سريعة جارية ('+relTasks.length+')</div>'
-      +relTasks.map(t=>`<div onclick="closeModal('quick-task-modal');openOrderModal('${t._key}')" style="display:flex;align-items:center;justify-content:space-between;padding:7px 10px;background:var(--bg);border-radius:7px;margin-bottom:4px;cursor:pointer;font-size:12px;"><span><i class="ti ti-bolt" style="color:var(--gold);margin-left:5px;"></i>${t.service}</span>${deptBadge(t.currentDept)}</div>`).join('')
+      +relTasks.map(t=>`<div onclick="closeModal('quick-task-modal');openOrderModal('${t._key}')" style="display:flex;align-items:center;justify-content:space-between;padding:7px 10px;background:var(--bg);border-radius:7px;margin-bottom:4px;cursor:pointer;font-size:12px;"><span><i class="ti ti-bolt" style="color:var(--gold);margin-left:5px;"></i>${esc(t.service)}</span>${deptBadge(t.currentDept)}</div>`).join('')
       +'</div>';
   }
-  document.getElementById('qt-modal-body').innerHTML=`<div style="background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:11px 14px;margin-bottom:14px;"><strong style="color:var(--maroon)">${client}</strong><span style="color:var(--text-3);font-size:11px;margin-right:8px;">(${orderKey})</span></div><div style="display:flex;flex-direction:column;gap:10px;"><button class="btn btn-purple" style="justify-content:center;" onclick="openQuickTaskLinked('proof','${orderKey}')"><i class="ti ti-brush"></i> بروفة عاجلة للمصممين</button><button class="btn btn-orange" style="justify-content:center;" onclick="openQuickTaskLinked('measure','${orderKey}')"><i class="ti ti-ruler"></i> قياسات ميدانية للورشة</button>${relHtml}</div>`;
+  document.getElementById('qt-modal-body').innerHTML=`<div style="background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:11px 14px;margin-bottom:14px;"><strong style="color:var(--maroon)">${esc(client)}</strong><span style="color:var(--text-3);font-size:11px;margin-right:8px;">(${esc(orderKey)})</span></div><div style="display:flex;flex-direction:column;gap:10px;"><button class="btn btn-purple" style="justify-content:center;" onclick="openQuickTaskLinked('proof','${orderKey}')"><i class="ti ti-brush"></i> بروفة عاجلة للمصممين</button><button class="btn btn-orange" style="justify-content:center;" onclick="openQuickTaskLinked('measure','${orderKey}')"><i class="ti ti-ruler"></i> قياسات ميدانية للورشة</button>${relHtml}</div>`;
   openModal('quick-task-modal');
 }
 function openQuickTaskLinked(type,orderKey){
@@ -5661,6 +5684,7 @@ function buildColorPicker(containerId,selectedColor,onSelectFn){
 function selectEuColor(c,el){_euSelectedColor=c;document.querySelectorAll('#eu-color-row .color-swatch').forEach(s=>s.classList.remove('selected'));if(el)el.classList.add('selected');const prev=document.getElementById('eu-avatar-preview');if(prev&&!prev.querySelector('img'))prev.style.background=c;}
 function selectNuColor(c,el){_nuSelectedColor=c;document.querySelectorAll('#nu-color-row .color-swatch').forEach(s=>s.classList.remove('selected'));if(el)el.classList.add('selected');const prev=document.getElementById('nu-avatar-preview');if(prev)prev.style.background=c;}
 function openEditUser(uname){
+  if(cu.type!=='admin'){toast('⚠️ إدارة الموظفين متاحة للمدير فقط');return;}
   const u=USERS[uname];if(!u)return;
   document.getElementById('eu-uname').value=uname;document.getElementById('eu-name').value=u.name||'';document.getElementById('eu-pass').value='';document.getElementById('eu-role').value=u.type||'follower';
   _euPhotoB64=u.photo||'';_euSelectedColor=u.color||'#10B981';
@@ -5672,18 +5696,25 @@ function openEditUser(uname){
 }
 async function handleEuPhoto(input){if(!input.files||!input.files.length)return;showSaving('جاري رفع الصورة...');try{_euPhotoB64=await convertFileToBase64(input.files[0]);const prev=document.getElementById('eu-avatar-preview');prev.innerHTML=`<img src="${_euPhotoB64}" alt=""/>`;prev.style.background='transparent';}catch(e){toast(e&&e.message?e.message:'⚠️ فشل رفع الصورة');}hideSaving();}
 async function saveEditUser(){
+  if(cu.type!=='admin'){toast('⚠️ إدارة الموظفين متاحة للمدير فقط');return;}
   const uname=document.getElementById('eu-uname').value;const name=document.getElementById('eu-name').value.trim();const pass=document.getElementById('eu-pass').value;const role=document.getElementById('eu-role').value;
   if(!name){toast('⚠️ يرجى إدخال الاسم');return;}
   const upd={name,type:role,role:ROLE_LABELS[role]||role,color:_euSelectedColor||USERS[uname].color,photo:_euPhotoB64};
   if(pass)upd.pass=await makeSessionToken(uname,pass);
-  showSaving('جاري التحديث...');await fbPatch(`users/${uname}`,upd);await syncUsers();await loadData();hideSaving();closeModal('edit-user-modal');toast('✓ تم التحديث');buildUsersPage();
+  showSaving('جاري التحديث...');
+  try{await fbPatch(`users/${uname}`,upd);await syncUsers();await loadData();hideSaving();closeModal('edit-user-modal');toast('✓ تم التحديث');buildUsersPage();}
+  catch(e){hideSaving();toast('❌ فشل التحديث، حاول مرة أخرى');}
 }
 async function deleteUser(uname){
+  if(cu.type!=='admin'){toast('⚠️ إدارة الموظفين متاحة للمدير فقط');return;}
   if(uname===cu._uname){toast('⚠️ لا يمكنك حذف حسابك النشط');return;}
   if(!confirm(`حذف الموظف "${uname}"؟`))return;
-  showSaving('جاري الحذف...');await fbDelete(`users/${uname}`);await syncUsers();hideSaving();toast('تم الحذف');buildUsersPage();
+  showSaving('جاري الحذف...');
+  try{await fbDelete(`users/${uname}`);await syncUsers();hideSaving();toast('تم الحذف');buildUsersPage();}
+  catch(e){hideSaving();toast('❌ فشل الحذف، حاول مرة أخرى');}
 }
 function openAddUser(){
+  if(cu.type!=='admin'){toast('⚠️ إدارة الموظفين متاحة للمدير فقط');return;}
   _nuPhotoB64='';_nuSelectedColor=PRESET_COLORS[0];
   document.getElementById('nu-uname').value='';document.getElementById('nu-name').value='';document.getElementById('nu-pass').value='';document.getElementById('nu-role').value='follower';
   const prev=document.getElementById('nu-avatar-preview');prev.innerHTML='<i class="ti ti-user-plus"></i>';prev.style.background='var(--gold)';
@@ -5691,11 +5722,14 @@ function openAddUser(){
 }
 async function handleNuPhoto(input){if(!input.files||!input.files.length)return;showSaving('جاري تجهيز الصورة...');try{_nuPhotoB64=await convertFileToBase64(input.files[0]);const prev=document.getElementById('nu-avatar-preview');prev.innerHTML=`<img src="${_nuPhotoB64}" alt=""/>`;prev.style.background='transparent';}catch(e){toast(e&&e.message?e.message:'⚠️ فشل قراءة الصورة');}hideSaving();}
 async function saveNewUser(){
+  if(cu.type!=='admin'){toast('⚠️ إدارة الموظفين متاحة للمدير فقط');return;}
   const uname=document.getElementById('nu-uname').value.trim().toLowerCase().replace(/\s/g,'').replace(/[.#$\[\]/]/g,'');const name=document.getElementById('nu-name').value.trim();const pass=document.getElementById('nu-pass').value;const role=document.getElementById('nu-role').value;
   if(!uname||!name||!pass){toast('⚠️ يرجى إدخال جميع البيانات');return;}
   if(USERS[uname]){toast('⚠️ اسم المستخدم مستخدم بالفعل');return;}
   const newUser={name,pass:await makeSessionToken(uname,pass),type:role,role:ROLE_LABELS[role]||role,color:_nuSelectedColor||PRESET_COLORS[0],photo:_nuPhotoB64};
-  showSaving('جاري إنشاء الحساب...');await fbPatch(`users/${uname}`,newUser);await syncUsers();hideSaving();closeModal('add-user-modal');toast('✓ تم إنشاء الحساب');buildUsersPage();
+  showSaving('جاري إنشاء الحساب...');
+  try{await fbPatch(`users/${uname}`,newUser);await syncUsers();hideSaving();closeModal('add-user-modal');toast('✓ تم إنشاء الحساب');buildUsersPage();}
+  catch(e){hideSaving();toast('❌ فشل إنشاء الحساب، حاول مرة أخرى');}
 }
 // ============================================================
 // EXCEL EXPORT
@@ -6025,11 +6059,13 @@ function applyRevenueDateFilter(){
 function clearRevenueDateFilter(){window._revenueDateFrom='';window._revenueDateTo='';buildRevenuePage();}
 function applyRevenueMetricFilter(metric){window._revenueMetricFilter=metric;buildRevenuePage();}
 async function accountantApproveRequest(key){
+  if(cu.type!=='admin'&&cu.type!=='accountant'){toast('⚠️ الموافقة غير متاحة لهذا الدور');return;}
   showSaving('جاري الموافقة المبدئية...');
   try{await fbPatch('requests/'+key,{status:'accountant_approved',accountantApprovedAt:new Date().toISOString(),accountantName:cu.name});await loadData();hideSaving();toast('✓ تمت الموافقة المبدئية');buildRequestsPage();syncFinancialObligationToSheet(key);}
   catch(e){hideSaving();toast('❌ خطأ');}
 }
 async function managerApproveRequest(key){
+  if(cu.type!=='admin'){toast('⚠️ الموافقة النهائية متاحة للمدير فقط');return;}
   const selectEl=document.getElementById('us-'+key);if(!selectEl)return;
   const chosenStatus=selectEl.value;showSaving('جاري الموافقة النهائية...');
   try{
@@ -6057,7 +6093,7 @@ async function managerApproveRequest(key){
     toast('✓ تمت الموافقة النهائية — الحالة: '+chosenStatus);buildRequestsPage();
   }catch(e){hideSaving();toast('❌ خطأ');}
 }
-async function deleteRequest(key){if(!confirm('شطب هذا الطلب؟'))return;showSaving('جاري الحذف...');await fbDelete(`requests/${key}`);await loadData();hideSaving();toast('تم الحذف');buildRequestsPage();}
+async function deleteRequest(key){if(cu.type!=='admin'&&cu.type!=='accountant'){toast('⚠️ الحذف غير متاح لهذا الدور');return;}if(!confirm('شطب هذا الطلب؟'))return;showSaving('جاري الحذف...');try{await fbDelete(`requests/${key}`);await loadData();hideSaving();toast('تم الحذف');buildRequestsPage();}catch(e){hideSaving();toast('❌ فشل الحذف، حاول مرة أخرى');}}
 // ============================================================
 // PAGE ROUTER
 // ============================================================
@@ -6283,7 +6319,7 @@ function openEmpDetail(uname){
   document.getElementById('order-modal-body').innerHTML=`
     <div class="modal-header">
       <div>
-        <div class="modal-title"><i class="ti ti-user"></i> ${name} — جميع الأعمال</div>
+        <div class="modal-title"><i class="ti ti-user"></i> ${esc(name)} — جميع الأعمال</div>
         <div style="font-size:11px;color:var(--text-3);margin-top:2px;">${empOrds.length} طلب إجمالاً · <span style="color:#F59E0B">${active.length} جارية</span> · <span style="color:#10B981">${done.length} مكتملة</span></div>
       </div>
       <button class="btn-close" onclick="closeModal('order-modal')">×</button>
@@ -6729,8 +6765,8 @@ function buildGovObligationsPage(){
     const d=govDaysUntil(r.expiryDate);
     const priority=d===null?'':(d<0?`<span class="badge" style="background:#FEE2E2;color:#991B1B;">عاجل</span>`:d<=7?`<span class="badge" style="background:#FEE2E2;color:#991B1B;">عاجل</span>`:d<=30?`<span class="badge" style="background:#FEF3C7;color:#92400E;">متوسط</span>`:`<span class="badge" style="background:#D1FAE5;color:#065F46;">منخفض</span>`);
     return`<tr>
-      <td style="font-size:12px;">${name}</td>
-      <td style="font-size:11.5px;">${owner}</td>
+      <td style="font-size:12px;">${esc(name)}</td>
+      <td style="font-size:11.5px;">${esc(owner)}</td>
       <td style="font-size:11px;">${r.expiryDate||'—'}</td>
       <td style="font-size:11px;font-weight:800;color:var(--maroon);">${d===null?'—':(d<0?'منتهي':d+' يوم')}</td>
       <td>${priority}</td>
@@ -6740,7 +6776,7 @@ function buildGovObligationsPage(){
   // ── Recent Activities ──
   const recentActs=allRecsUnfiltered.slice().sort((a,b)=>new Date(b.createdAt||0)-new Date(a.createdAt||0)).slice(0,6).map(r=>{
     const name=r.section==='employees'?(r.employeeName||GOV_EMP_CATS[r.category]?.label):(r.section==='contracts'?'عقد جديد':(GOV_REGISTRY_CATS[r.category]?.label||r.category));
-    return`<div class="gov-activity-row"><i class="ti ti-circle-plus" style="color:#10B981;"></i><div><div style="font-size:12px;font-weight:700;">${name||'—'}</div><div style="font-size:10px;color:var(--text-3);">بواسطة ${esc(r.createdBy||'—')} — ${(r.createdAt||'').split('T')[0]||'—'}</div></div></div>`;
+    return`<div class="gov-activity-row"><i class="ti ti-circle-plus" style="color:#10B981;"></i><div><div style="font-size:12px;font-weight:700;">${esc(name||'—')}</div><div style="font-size:10px;color:var(--text-3);">بواسطة ${esc(r.createdBy||'—')} — ${(r.createdAt||'').split('T')[0]||'—'}</div></div></div>`;
   }).join('')||'<div style="font-size:12px;color:var(--text-3);text-align:center;padding:12px;">لا يوجد نشاط حديث</div>';
 
   // ── Notifications (expiring + expired) ──
@@ -6748,7 +6784,7 @@ function buildGovObligationsPage(){
   const notifHtml=notifRecs.map(r=>{
     const name=r.section==='employees'?(r.employeeName||GOV_EMP_CATS[r.category]?.label):(GOV_REGISTRY_CATS[r.category]?.label||r.category||'عقد');
     const d=govDaysUntil(r.expiryDate);
-    return`<div class="gov-activity-row"><i class="ti ${d<0?'ti-alert-circle':'ti-bell'}" style="color:${d<0?'#DC2626':'#F59E0B'};"></i><div><div style="font-size:12px;font-weight:700;">${name}</div><div style="font-size:10px;color:var(--text-3);">${d<0?'منتهي منذ '+Math.abs(d)+' يوم':'ينتهي خلال '+d+' يوم'}</div></div></div>`;
+    return`<div class="gov-activity-row"><i class="ti ${d<0?'ti-alert-circle':'ti-bell'}" style="color:${d<0?'#DC2626':'#F59E0B'};"></i><div><div style="font-size:12px;font-weight:700;">${esc(name)}</div><div style="font-size:10px;color:var(--text-3);">${d<0?'منتهي منذ '+Math.abs(d)+' يوم':'ينتهي خلال '+d+' يوم'}</div></div></div>`;
   }).join('')||'<div style="font-size:12px;color:var(--text-3);text-align:center;padding:12px;">لا توجد تنبيهات حالياً</div>';
 
   // ── Compliance score ──
@@ -6842,13 +6878,13 @@ function openWarrantyClientProfile(client){
     const daysLeft=Math.ceil((new Date(w.expiryAt).getTime()-Date.now())/86400000);
     const expired=daysLeft<0;
     return`<div style="display:flex;align-items:center;justify-content:space-between;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;margin-bottom:6px;">
-      <span style="font-size:12px;font-weight:700;">${w.boardItem||'—'}</span>
+      <span style="font-size:12px;font-weight:700;">${esc(w.boardItem||'—')}</span>
       <span class="badge" style="background:${expired?'#FEE2E2':'#D1FAE5'};color:${expired?'#991B1B':'#065F46'};font-size:10px;">${expired?'منتهي':'ساري'}</span>
     </div>`;
   }).join(''):'<div style="font-size:12px;color:var(--text-3);">لا توجد لوحات مسجلة تحت الضمان لهذا العميل</div>';
   window._maintHistoryData=history;
   document.getElementById('gov-modal-body').innerHTML=`
-    <div class="modal-header"><span class="modal-title"><i class="ti ti-user"></i> ${client}</span><button class="btn-close" onclick="closeModal('gov-modal')">×</button></div>
+    <div class="modal-header"><span class="modal-title"><i class="ti ti-user"></i> ${esc(client)}</span><button class="btn-close" onclick="closeModal('gov-modal')">×</button></div>
     <div style="display:flex;flex-direction:column;gap:12px;">
       <div><div style="font-size:11px;font-weight:800;color:var(--text-2);margin-bottom:6px;">اللوحات تحت الضمان</div>${itemsHtml}</div>
       <div class="stat-card c-red" style="cursor:pointer;" onclick="toggleMaintHistoryPanel()">
@@ -6872,8 +6908,8 @@ function toggleMaintHistoryPanel(){
         <span class="badge" style="background:var(--gold-soft);color:var(--maroon);font-size:9px;">${h.source}</span>
         <span style="font-size:10px;color:var(--text-3);">${h.date?new Date(h.date).toLocaleDateString('ar-SA'):'—'}</span>
       </div>
-      <div style="font-size:12px;margin-bottom:4px;"><strong>المشكلة:</strong> ${h.issue}</div>
-      <div style="font-size:12px;color:#065F46;"><strong>الرد عليها:</strong> ${h.response}</div>
+      <div style="font-size:12px;margin-bottom:4px;"><strong>المشكلة:</strong> ${esc(h.issue)}</div>
+      <div style="font-size:12px;color:#065F46;"><strong>الرد عليها:</strong> ${esc(h.response)}</div>
       ${h.warrantyRequested?`<div style="margin-top:4px;"><span class="badge" style="background:#FEF3C7;color:#92400E;font-size:9px;"><i class="ti ti-shield-check"></i> تحت الضمان</span></div>`:''}
     </div>`).join(''):'<div style="font-size:12px;color:var(--text-3);text-align:center;padding:16px;">لا يوجد سجل صيانة بعد</div>';
   panel.style.display='flex';
@@ -6897,8 +6933,8 @@ function buildWarrantyPage(){
           :`<span class="badge" style="background:#D1FAE5;color:#065F46;">ساري (${daysLeft} يوم متبقي)</span>`;
       return`<div class="warranty-card" style="border-top:4px solid ${accent};">
         <div class="warranty-card-icon" style="color:${accent};" ${w.orderKey?`onclick="openOrderModal('${w.orderKey}')" style="cursor:pointer;"`:''}><i class="ti ti-photo-shield"></i></div>
-        <div class="warranty-card-item" ${w.orderKey?`onclick="openOrderModal('${w.orderKey}')" style="cursor:pointer;"`:''}>${w.boardItem||'—'}</div>
-        <div class="warranty-card-client" onclick="openWarrantyClientProfile('${(w.client||'').replace(/'/g,"\\'")}')" style="cursor:pointer;text-decoration:underline;text-decoration-color:transparent;" onmouseover="this.style.textDecorationColor='var(--gold)'" onmouseout="this.style.textDecorationColor='transparent'"><i class="ti ti-user"></i> ${w.client||'—'}</div>
+        <div class="warranty-card-item" ${w.orderKey?`onclick="openOrderModal('${w.orderKey}')" style="cursor:pointer;"`:''}>${esc(w.boardItem||'—')}</div>
+        <div class="warranty-card-client" onclick="openWarrantyClientProfile('${(w.client||'').replace(/'/g,"\\'")}')" style="cursor:pointer;text-decoration:underline;text-decoration-color:transparent;" onmouseover="this.style.textDecorationColor='var(--gold)'" onmouseout="this.style.textDecorationColor='transparent'"><i class="ti ti-user"></i> ${esc(w.client||'—')}</div>
         <div class="warranty-card-dates">
           <span><i class="ti ti-calendar-check"></i> ${w.completedAt?new Date(w.completedAt).toLocaleDateString('ar-SA'):'—'}</span>
           <span><i class="ti ti-calendar-x"></i> ${w.expiryAt?new Date(w.expiryAt).toLocaleDateString('ar-SA'):'—'}</span>
