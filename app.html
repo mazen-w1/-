@@ -939,6 +939,15 @@ input[type="password"]{direction:rtl;text-align:right;padding-left:40px;padding-
 #order-modal .btn-green{border-radius:999px;box-shadow:0 4px 14px rgba(16,185,129,.22);}
 #order-modal .file-download-link{border-radius:999px;background:rgba(74,14,23,.08);padding:4px 12px;transition:background .15s,color .15s;display:inline-flex;align-items:center;gap:4px;}
 #order-modal .file-download-link:hover{background:var(--maroon-mid);color:#fff;}
+/* Order modal accordion sections — collapse heavy data blocks (client info,
+   items/attachments, financial+timeline) so the modal opens uncluttered. */
+.om-accordion{border:1px solid var(--border-soft);border-radius:var(--radius-sm);margin-bottom:10px;overflow:hidden;background:var(--surface);}
+.om-acc-header{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:11px 14px;cursor:pointer;user-select:none;background:var(--surface-2);font-weight:800;font-size:12.5px;color:var(--maroon);transition:background .15s;}
+.om-acc-header:hover{background:rgba(74,14,23,.06);}
+.om-acc-header .om-acc-caret{transition:transform .2s;font-size:14px;color:var(--maroon-mid);}
+.om-acc-header.open .om-acc-caret{transform:rotate(-90deg);}
+.om-acc-body{padding:12px 14px;border-top:1px solid var(--border-soft);}
+.om-acc-body.dg{margin-bottom:0;}
 /* ================================================================
    PREMIUM SOFT 3D — global visual-only design system pass.
    Cascades across every page via the shared classes the whole app
@@ -1435,6 +1444,24 @@ async function doLogin(){
   }else{e.textContent='بيانات الدخول غير صحيحة';e.style.display='block';}
 }
 document.addEventListener('keydown',e=>{if(e.key==='Enter'&&document.getElementById('portal-password-card').style.display==='block')doLogin();});
+// ── There are no <form> elements anywhere in this app — every input is a
+// bare, independently-wired field. Without this guard, pressing Enter inside
+// any plain text input has no defined behavior of its own, but can still get
+// interpreted by the browser/OS (mobile "Go" keys, autofill, etc.) as an
+// implicit submit/navigate action. Neutralize Enter on plain single-line
+// inputs by default; inputs that intentionally react to Enter (chat send,
+// quick-add task, etc.) already carry their own inline onkeydown and are
+// left untouched here so their behavior is unaffected. <textarea> keeps its
+// native Enter-for-newline behavior. ──
+document.addEventListener('keydown',function(e){
+  if(e.key!=='Enter')return;
+  const t=e.target;
+  if(!t||t.tagName!=='INPUT')return;
+  if(t.hasAttribute('onkeydown'))return;
+  const type=(t.type||'text').toLowerCase();
+  if(['button','submit','reset','checkbox','radio','range','color','file','image'].includes(type))return;
+  e.preventDefault();
+},true);
 document.addEventListener('keydown',e=>{
   if(e.key!=='Escape')return;
   const orderModal=document.getElementById('order-modal');
@@ -1635,6 +1662,24 @@ function openNotifPanel(){
 function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2800);}
 function closeModal(id){document.getElementById(id).classList.remove('open');}
 function openModal(id){document.getElementById(id).classList.add('open');}
+// ── Shared debounce for oninput handlers that trigger a full page rebuild
+// (e.g. buildGovObligationsPage) instead of a lightweight row-hide — without
+// this, typing a search term rebuilds the whole page on every keystroke. ──
+function debounce(fn,delay){
+  let timer=null;
+  return function(...args){
+    clearTimeout(timer);
+    timer=setTimeout(()=>fn.apply(this,args),delay);
+  };
+}
+function toggleOmAccordion(headerEl){
+  const body=headerEl.nextElementSibling;if(!body)return;
+  const isOpen=headerEl.classList.toggle('open');
+  body.style.display=isOpen?'':'none';
+}
+function omAccordion(icon,title,bodyHtml,startOpen){
+  return`<div class="om-accordion"><div class="om-acc-header${startOpen?' open':''}" onclick="toggleOmAccordion(this)"><span><i class="ti ${icon}"></i> ${title}</span><i class="ti ti-chevron-down om-acc-caret"></i></div><div class="om-acc-body dg" style="display:${startOpen?'':'none'};">${bodyHtml}</div></div>`;
+}
 function showSaving(msg='جاري...'){document.getElementById('saving-msg').textContent=msg;document.getElementById('saving-overlay').classList.add('show');}
 function hideSaving(){document.getElementById('saving-overlay').classList.remove('show');}
 function _readFileAsDataUrl(file){return new Promise((res,rej)=>{const r=new FileReader();r.readAsDataURL(file);r.onload=()=>res(r.result);r.onerror=()=>rej(new Error('read-failed'));});}
@@ -2410,6 +2455,7 @@ function buildWfGrid(tab){
 function setWfView(v){window._wfView=v;buildWfGrid(_currentWfTab||'active');}
 function renderWfKanbanView(){
   const arr=ordersArr();
+  const _canSeeCardTotal=['admin','follower','receiver'].includes(cu.type);
   const cardHtml=o=>{
     const pct=orderProgress(o);const col=progressColor(o);
     const showQtActions=o.isQuickTask&&!o.incompleteClient&&o.currentDept!=='done'&&(cu.type==='admin'||cu.type==='receiver');
@@ -2426,6 +2472,7 @@ function renderWfKanbanView(){
         <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;margin-bottom:6px;">${deptBadge(o.currentDept)} ${gpbadge(o.priority)} ${timeBadge(hoursAgo(o.stageStartDate||o.date))}</div>
         <div style="font-size:11px;color:var(--text-3);">المسؤول: ${esc(currentPersonName(o))}</div>
         <div style="font-size:10.5px;color:var(--text-3);"><i class="ti ti-calendar-time"></i> التسليم: ${deadlineDateTime(o)}</div>
+        ${_canSeeCardTotal&&o.totalAmount?`<div style="font-size:11px;font-weight:800;color:var(--maroon);margin-top:3px;"><i class="ti ti-cash"></i> إجمالي المبلغ: ${fmtMoney(Number(o.totalAmount))} ر.س</div>`:''}
         ${deadlineBadge(o.deadline)}
         ${qtActions}
       </div><div class="wf-card-prog"><div class="wf-card-fill" style="width:${pct}%;background:${col}"></div></div></div>`;
@@ -2466,7 +2513,8 @@ function renderWfKanbanView(){
     } else {
       cardsHtml=list.length?list.map(cardHtml).join(''):'<div style="color:var(--text-3);padding:20px 10px;text-align:center;font-size:12px;"><i class="ti ti-inbox" style="font-size:26px;display:block;margin-bottom:6px;"></i>لا توجد أعمال</div>';
     }
-    const isStageLink=['design','external','print','workshop','done','completed'].includes(c.key);
+    const _deptRoleKey={designer:'design',printer:'print',workshop:'workshop',external:'external'}[cu.type];
+    const isStageLink=['design','external','print','workshop','done','completed'].includes(c.key)&&(!_deptRoleKey||['done','completed'].includes(c.key)||c.key===_deptRoleKey);
     const stageLinkKey=c.key==='completed'?'done':c.key;
     return `<div class="wf-kanban-col">
       <div class="wf-kanban-col-header"${isStageLink?` onclick="openDeptStagePage('${stageLinkKey}')" style="cursor:pointer;" title="عرض صفحة مستقلة كاملة للطلبات المكتملة"`:''}><span class="badge ${c.cls}"><i class="ti ${c.icon}"></i> ${c.label}</span><span class="wf-kanban-count">${list.length}</span></div>
@@ -2654,6 +2702,7 @@ function renderWfListView(){
   const bodyEl=document.getElementById('wf-view-body');if(!bodyEl)return;
   const f=window._wfFilters||{};
   const arr=ordersArr().filter(o=>wfMatchesFilters(o,f));
+  const canSeeTotal=['admin','follower','receiver'].includes(cu.type);
   const rows=arr.map(o=>`<tr onclick="openOrderModal('${o._key}')" style="cursor:pointer;">
     <td><strong style="color:var(--maroon)">${o.id||o._key}</strong></td>
     <td><strong style="font-size:12.5px;">${esc(o.client||'—')}</strong></td>
@@ -2662,12 +2711,13 @@ function renderWfListView(){
     <td style="font-size:12px;">${esc(currentPersonName(o))}</td>
     <td style="font-size:11px;">${deadlineDateTime(o)}</td>
     <td>${gpbadge(o.priority)}</td>
+    ${canSeeTotal?`<td style="font-size:12px;font-weight:800;">${o.totalAmount?fmtMoney(Number(o.totalAmount))+' ر.س':'—'}</td>`:''}
   </tr>`).join('');
   bodyEl.innerHTML=`
     <div style="margin-bottom:12px;">${wfFiltersBarHtml(f)}</div>
     <div class="card"><div class="tbl-wrap"><table>
-    <thead><tr><th style="width:80px">رقم الطلب</th><th>العميل</th><th>الخدمة</th><th style="width:110px">القسم</th><th style="width:110px">المسؤول</th><th style="width:140px">موعد التسليم</th><th style="width:90px">الأولوية</th></tr></thead>
-    <tbody>${rows||'<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text-3)">لا توجد طلبات مطابقة</td></tr>'}</tbody>
+    <thead><tr><th style="width:80px">رقم الطلب</th><th>العميل</th><th>الخدمة</th><th style="width:110px">القسم</th><th style="width:110px">المسؤول</th><th style="width:140px">موعد التسليم</th><th style="width:90px">الأولوية</th>${canSeeTotal?'<th style="width:110px">إجمالي المبلغ</th>':''}</tr></thead>
+    <tbody>${rows||`<tr><td colspan="${canSeeTotal?8:7}" style="text-align:center;padding:24px;color:var(--text-3)">لا توجد طلبات مطابقة</td></tr>`}</tbody>
     </table></div></div>`;
 }
 function renderWfTimelineView(){
@@ -2870,7 +2920,24 @@ function buildDeptStagePage(){
   const canDelete=isCompleted&&cu.type==='admin';
   const assigneeField=deptKey+'To';
   const hasAssignee=['design','external','print','workshop'].includes(deptKey);
-  const arr=ordersArr().filter(o=>(o.currentDept||'design')===deptKey).sort((a,b)=>new Date(b.date)-new Date(a.date));
+  // ── Strict department isolation: designer/printer/workshop/external staff can
+  // only reach this shared stage-queue page for their OWN department, and only
+  // ever see the orders assigned to them there — never another department's
+  // queue or a colleague's assigned work. Admin/receiver/follower/accountant
+  // keep the full unfiltered oversight view (including the completed archive). ──
+  const deptRoleKey={designer:'design',printer:'print',workshop:'workshop',external:'external'}[cu.type];
+  const isDeptRestricted=!!deptRoleKey;
+  if(isDeptRestricted&&!isCompleted&&deptKey!==deptRoleKey){
+    document.getElementById('deptstage-content').innerHTML=`${backBtnHtml()}
+    <div class="card" style="text-align:center;padding:44px 20px;color:var(--text-3);">
+      <i class="ti ti-lock" style="font-size:34px;display:block;margin-bottom:12px;"></i>
+      هذه القائمة خاصة بقسم آخر — لا يمكنك عرضها
+    </div>`;
+    return;
+  }
+  const arr=ordersArr().filter(o=>(o.currentDept||'design')===deptKey)
+    .filter(o=>(isDeptRestricted&&!isCompleted)?isMyOrder(o):true)
+    .sort((a,b)=>new Date(b.date)-new Date(a.date));
   window._deptStageSelected=new Set();
   const searchBlob=o=>esc([o.id,o._key,o.client,o.service].filter(Boolean).join(' ').toLowerCase());
   const rows=arr.map(o=>isCompleted?`<tr data-search="${searchBlob(o)}" onclick="openOrderTimelineView('${o._key}')" style="cursor:pointer;">
@@ -3008,6 +3075,7 @@ function filterWfDept(dept){document.querySelectorAll('.wf-card').forEach(c=>{c.
 function setMyWorkFilter(f){window._myWorkFilter=f;buildMyWork();}
 function buildMyWork(){
   const isWorkshop=cu.type==='workshop';
+  const _canSeeCardTotal=['admin','follower','receiver'].includes(cu.type);
   const allMyOrders=ordersArr().filter(o=>isMyOrder(o));
   const wfFilter=isWorkshop?(window._myWorkFilter||'all'):'all';
   const myOrders=wfFilter==='all'?allMyOrders:wfFilter==='maintenance'?allMyOrders.filter(o=>o.orderKind==='maintenance'):allMyOrders.filter(o=>o.orderKind!=='maintenance');
@@ -3034,6 +3102,7 @@ function buildMyWork(){
       <div style="display:flex;gap:5px;flex-wrap:wrap;">${deptBadge(o.currentDept)} ${gpbadge(o.priority)} ${timeBadge(hoursAgo(o.stageStartDate||o.date))}</div>
       <div style="font-size:11px;color:var(--text-3);">المسؤول: ${esc(currentPersonName(o))}</div>
       <div style="font-size:10.5px;color:var(--text-3);"><i class="ti ti-calendar-time"></i> التسليم: ${deadlineDateTime(o)}</div>
+      ${_canSeeCardTotal&&o.totalAmount?`<div style="font-size:11px;font-weight:800;color:var(--maroon);margin-top:3px;"><i class="ti ti-cash"></i> إجمالي المبلغ: ${fmtMoney(Number(o.totalAmount))} ر.س</div>`:''}
       ${deadlineBadge(o.deadline)}
       ${o.quickTaskLocation?`<div style="font-size:11px;color:#9A3412;margin-top:6px;"><i class="ti ti-map-pin"></i> ${o.quickTaskLocation}</div>`:''}
       ${isWorkshop&&o.isQuickTask&&!o.workshopFeedbackDone?`<div style="margin-top:8px;"><button class="btn btn-orange btn-sm" onclick="event.stopPropagation();openWorkshopFeedback('${o._key}')"><i class="ti ti-clipboard-check"></i> إدخال القياسات</button></div>`:''}
@@ -4886,25 +4955,31 @@ function openOrderModal(key){
     ${fromQuoteHtml}
     ${updateBannerHtml}
     ${stageBar(o,key)}
-    <div class="dg" style="margin-bottom:14px;">
-      <div class="di"><span class="dk">اسم العميل</span><span class="dv">${esc(o.client)}</span></div>
-      <div class="di"><span class="dk">تاريخ ووقت الطلب</span><span class="dv">${orderDateTime(o)}</span></div>
-      <div class="di"><span class="dk">رقم الهاتف</span><span class="dv">${esc(o.phone||'—')} ${o.phone&&o.phone!=='—'?`<button class="btn btn-whatsapp btn-xs" style="margin-right:4px" onclick="openWhatsapp('${o.phone}')"><i class="ti ti-brand-whatsapp"></i></button>`:''}</span></div>
+    <div class="dg" style="margin-bottom:10px;">
+      <div class="di"><span class="dk">اسم العميل</span><span class="dv" style="font-weight:800;">${esc(o.client)}</span></div>
       <div class="di"><span class="dk">الخدمة</span><span class="dv">${esc(o.service)}</span></div>
       <div class="di"><span class="dk">الأولوية</span><span class="dv">${gpbadge(o.priority)}</span></div>
       <div class="di"><span class="dk">تاريخ التسليم</span><span class="dv">${deadlineDateTime(o)} ${deadlineBadge(o.deadline)}</span></div>
+    </div>
+    ${omAccordion('ti-address-book','بيانات العميل',`
+      <div class="di"><span class="dk">تاريخ ووقت الطلب</span><span class="dv">${orderDateTime(o)}</span></div>
+      <div class="di"><span class="dk">رقم الهاتف</span><span class="dv">${esc(o.phone||'—')} ${o.phone&&o.phone!=='—'?`<button class="btn btn-whatsapp btn-xs" style="margin-right:4px" onclick="openWhatsapp('${o.phone}')"><i class="ti ti-brand-whatsapp"></i></button>`:''}</span></div>
       <div class="di"><span class="dk">منشئ الطلب</span><span class="dv">${esc(o.createdBy||'—')}</span></div>
       <div class="di" style="grid-column:1/-1;border-top:1px solid var(--border-soft);padding-top:10px;"><span class="dk">ملاحظات ومواصفات</span><span class="dv" style="font-weight:400;background:var(--surface-2);padding:8px 12px;border-radius:var(--radius-sm);border:1px solid var(--border);display:block;margin-top:4px;">${esc(o.notes||'—')}</span></div>
+    `)}
+    ${omAccordion('ti-package','بنود الطلب والمرفقات',`
       ${itemsSection}
       ${getActiveDepts(o).includes('print')?`<div class="di" style="grid-column:1/-1;border-top:1px solid var(--border-soft);padding-top:10px;"><span class="dk" style="color:#6B21A8">🎨 ملف التصميم المعتمد للطباعة</span><span class="dv">${pLink}</span></div>`:''}
       ${getActiveDepts(o).includes('workshop')?`<div class="di" style="grid-column:1/-1"><span class="dk" style="color:#3730A3">📦 مخطط قياسات الورشة</span><span class="dv">${wLink}</span></div>
       <div class="di" style="grid-column:1/-1"><span class="dk" style="color:#9A3412">📷 توثيق التركيب النهائي</span><span class="dv">${dLink}</span></div>`:''}
       ${o.workshopDeptFile?`<div class="di" style="grid-column:1/-1"><span class="dk" style="color:#9A3412">📎 ملف الورشة عند التسجيل</span><span class="dv">${wdLink}</span></div>`:''}
       ${o.workshopFeedback?`<div class="di" style="grid-column:1/-1;border-top:1px solid var(--border-soft);padding-top:10px;"><span class="dk" style="color:#9A3412">📐 بيانات القياسات الميدانية</span><span class="dv" style="font-weight:400;background:#FFEDD5;padding:8px;border-radius:6px;display:block;margin-top:4px;">${esc(o.workshopFeedback)}</span>${o.workshopSitePhoto?`<a href="${o.workshopSitePhoto}" download class="file-download-link" style="margin-top:6px;display:inline-flex;"><i class="ti ti-photo"></i> صورة الموقع</a>`:''}</div>`:''}
+    `)}
+    ${omAccordion('ti-cash','الموقف المالي والجدول الزمني',`
       ${maintOrderRow}
       ${paymentRow}
       ${maintenanceRow}
-      <div class="di" style="grid-column:1/-1;background:var(--surface-2);border-radius:var(--radius-sm);padding:10px;border:1px solid var(--border);border-top:none;">
+      <div class="di" style="grid-column:1/-1;background:var(--surface-2);border-radius:var(--radius-sm);padding:10px;border:1px solid var(--border);">
         <span class="dk" style="color:var(--maroon);"><i class="ti ti-clock"></i> النافذة الزمنية</span>
         <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:6px;">
           <span style="font-size:12px;">📅 الفاتورة: <strong>${o.date||'—'}</strong></span>
@@ -4912,8 +4987,7 @@ function openOrderModal(key){
           <span style="font-size:12px;">⏳ في المرحلة: ${timeBadge(hoursAgo(o.stageStartDate||o.date))}</span>
         </div>
       </div>
-    </div>
-    
+    `)}
     ${buildReassignBox(o,key)}
     ${uploadArea}
     ${renderChatSection(key,o.currentDept==='done')}
@@ -6831,7 +6905,7 @@ function govAllRecsFiltered(){
 }
 function applyGovHubFilter(f){window._govHubFilter=(window._govHubFilter===f)?'':f;buildGovObligationsPage();}
 function applyGovHubCatFilter(v){window._govHubCatFilter=v;buildGovObligationsPage();}
-function filterGovHubTable(){window._govHubSearch=document.getElementById('gov-hub-search')?.value||'';buildGovObligationsPage();}
+const filterGovHubTable=debounce(function(){window._govHubSearch=document.getElementById('gov-hub-search')?.value||'';buildGovObligationsPage();},300);
 // The 14 hub dashboard cards — each maps onto the EXISTING generic data model
 // (GOV_EMP_CATS for per-employee items, GOV_REGISTRY_CATS for registry items,
 // or the standalone "contracts" section) rather than inventing separate
