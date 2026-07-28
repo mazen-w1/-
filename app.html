@@ -381,6 +381,48 @@ input[type="password"]{direction:rtl;text-align:right;padding-left:40px;padding-
 #wf-cards-wrap::-webkit-scrollbar-track{background:var(--surface-2);border-radius:10px;}
 #wf-cards-wrap::-webkit-scrollbar-thumb{background:linear-gradient(90deg,var(--maroon),var(--gold));border-radius:10px;}
 #wf-cards-wrap::-webkit-scrollbar-thumb:hover{background:var(--maroon);}
+/* ── Workflow: premium top stats + inline order-detail expansion panel ── */
+.wf-stats-row{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-bottom:16px;}
+@media(max-width:980px){.wf-stats-row{grid-template-columns:repeat(2,1fr);}}
+@media(max-width:520px){.wf-stats-row{grid-template-columns:1fr;}}
+.wf-stat-card{background:#fff;border:1px solid var(--border-soft);border-radius:20px;padding:16px 18px;display:flex;align-items:center;gap:12px;box-shadow:0 2px 8px rgba(20,10,10,.04),0 8px 20px rgba(106,17,32,.06);transition:transform .2s,box-shadow .2s;}
+.wf-stat-card:hover{transform:translateY(-3px);box-shadow:0 6px 16px rgba(20,10,10,.06),0 14px 28px rgba(106,17,32,.1);}
+.wf-stat-icon{width:46px;height:46px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:20px;color:#fff;box-shadow:inset 0 0 0 1px rgba(255,255,255,.25);}
+.wf-stat-num{font-size:24px;font-weight:900;color:#1A1210;line-height:1;}
+.wf-stat-lbl{font-size:11.5px;color:var(--text-3);font-weight:700;margin-top:3px;}
+.wf-card-active{outline:2px solid #6A1120;box-shadow:0 6px 20px rgba(106,17,32,.22)!important;}
+.wf-detail-panel{max-height:0;opacity:0;overflow:hidden;transition:max-height .38s cubic-bezier(.22,1,.36,1),opacity .3s;}
+.wf-detail-panel.open{max-height:none;opacity:1;overflow:visible;}
+.wf-detail-inner{background:#fff;border:1px solid var(--border-soft);border-radius:20px;box-shadow:0 4px 16px rgba(20,10,10,.05),0 14px 34px rgba(106,17,32,.08);padding:22px 24px;margin-top:16px;}
+.wf-detail-head{display:flex;flex-wrap:wrap;align-items:center;gap:12px;justify-content:space-between;padding-bottom:16px;border-bottom:1px solid var(--border-soft);margin-bottom:18px;}
+.wf-detail-head-id{font-size:20px;font-weight:900;color:#6A1120;}
+.wf-detail-head-client{font-size:14px;font-weight:800;color:#1A1210;margin-top:2px;}
+.wf-detail-close{background:var(--surface-2);border:1px solid var(--border-soft);border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text-2);transition:.15s;}
+.wf-detail-close:hover{background:#FEE2E2;color:#991B1B;}
+.wf-detail-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:20px;}
+@media(max-width:980px){.wf-detail-grid{grid-template-columns:repeat(2,1fr);}}
+@media(max-width:640px){.wf-detail-grid{grid-template-columns:1fr;}}
+.wf-detail-card{background:var(--surface-2);border:1px solid var(--border-soft);border-radius:18px;padding:16px 18px;}
+.wf-detail-card-title{font-size:12px;font-weight:800;color:#6A1120;display:flex;align-items:center;gap:6px;margin-bottom:12px;letter-spacing:.2px;}
+.wf-detail-row{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:12.5px;padding:6px 0;border-bottom:1px dashed var(--border-soft);}
+.wf-detail-row:last-child{border-bottom:none;}
+.wf-detail-row .wf-dk{color:var(--text-3);font-weight:700;}
+.wf-detail-row .wf-dv{color:#1A1210;font-weight:700;text-align:left;}
+.wf-detail-progress-track{height:8px;background:var(--border-soft);border-radius:20px;overflow:hidden;margin-top:10px;}
+.wf-detail-progress-fill{height:100%;border-radius:20px;transition:width .4s;}
+.wf-dropzone{border:2px dashed var(--border);border-radius:14px;padding:20px 12px;text-align:center;cursor:pointer;transition:.15s;background:#fff;}
+.wf-dropzone:hover,.wf-dropzone.dragover{border-color:#6A1120;background:#FBF0F1;}
+.wf-dropzone i{font-size:26px;color:#C89A4A;}
+.wf-file-preview-row{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;}
+.wf-htimeline{display:flex;align-items:flex-start;justify-content:space-between;gap:4px;padding:20px 6px 4px;position:relative;}
+.wf-htimeline::before{content:'';position:absolute;top:31px;right:6%;left:6%;height:2px;background:var(--border-soft);z-index:0;}
+.wf-htimeline-node{flex:1;display:flex;flex-direction:column;align-items:center;text-align:center;position:relative;z-index:1;gap:8px;}
+.wf-htimeline-dot{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:15px;background:var(--surface-2);color:var(--text-3);border:2px solid var(--border-soft);}
+.wf-htimeline-dot.done{background:#10B981;color:#fff;border-color:#10B981;}
+.wf-htimeline-dot.active{background:#6A1120;color:#fff;border-color:#6A1120;box-shadow:0 0 0 5px rgba(106,17,32,.14);}
+.wf-htimeline-lbl{font-size:11px;font-weight:700;color:var(--text-3);}
+.wf-htimeline-node.done .wf-htimeline-lbl,.wf-htimeline-node.active .wf-htimeline-lbl{color:#1A1210;}
+.wf-detail-actions{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding-top:18px;margin-top:18px;border-top:1px solid var(--border-soft);}
 /* ── Workflow: Calendar / List / Timeline views ── */
 .wf-cal-legend{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:10px;font-size:11px;color:var(--text-2);align-items:center;}
 .wf-cal-legend span{display:inline-flex;align-items:center;gap:5px;}
@@ -2521,8 +2563,21 @@ function renderWfKanbanView(){
       <div class="wf-kanban-list">${cardsHtml}</div>
     </div>`;
   }).join('');
+  const _wfStats=[
+    {label:'إجمالي الطلبات',num:arr.length,icon:'ti-inbox',grad:'linear-gradient(135deg,#6A1120,#8C2436)'},
+    {label:'التصميم',num:buckets.design.length,icon:'ti-brush',grad:'linear-gradient(135deg,#6B21A8,#8B3FC7)'},
+    {label:'الطباعة',num:buckets.print.length,icon:'ti-printer',grad:'linear-gradient(135deg,#3730A3,#4F46C4)'},
+    {label:'الورشة',num:buckets.workshop.length,icon:'ti-tool',grad:'linear-gradient(135deg,#9A3412,#C2571F)'},
+    {label:'التسليم',num:buckets.done.length+buckets.completed.length,icon:'ti-circle-check',grad:'linear-gradient(135deg,#10B981,#34D399)'}
+  ];
+  const statsHtml=`<div class="wf-stats-row">${_wfStats.map(s=>`
+    <div class="wf-stat-card">
+      <div class="wf-stat-icon" style="background:${s.grad};"><i class="ti ${s.icon}"></i></div>
+      <div><div class="wf-stat-num">${s.num}</div><div class="wf-stat-lbl">${s.label}</div></div>
+    </div>`).join('')}</div>`;
   document.getElementById('wf-view-body').innerHTML=`
     <div id="wf-content">
+      ${statsHtml}
       ${controlsRow(true,'wf-search','ابحث عن عميل أو رقم طلب...')}
       ${(cu.type==='admin'||cu.type==='receiver')?`<div style="display:flex;justify-content:flex-end;margin-bottom:10px;"><button class="tab-btn" id="wf-multi-btn" onclick="toggleWfMultiMode()" style="color:var(--maroon);"><i class="ti ti-checklist"></i> تحديد</button></div>`:''}
       <div id="bulk-bar"><span id="bulk-count">0 محدد</span>
@@ -2531,7 +2586,9 @@ function renderWfKanbanView(){
         <button class="btn btn-sm" style="background:rgba(255,255,255,.15);color:#fff;padding:6px 14px;" onclick="toggleWfMultiMode()"><i class="ti ti-x"></i> إلغاء</button>
       </div>
       <div id="wf-cards-wrap"><div id="wf-cards" class="wf-kanban">${colsHtml}</div></div>
-    </div>`;
+    </div>
+    <div id="wf-detail-panel-slot" class="wf-detail-panel"></div>`;
+  if(window._wfInlinePanelKey&&orders[window._wfInlinePanelKey])openWfInlinePanel(window._wfInlinePanelKey,true);
 }
 // ============================================================
 // WORKFLOW — CALENDAR / LIST / TIMELINE VIEWS
@@ -2749,8 +2806,156 @@ function wfCardClick(e,key){
     const cb=e.currentTarget.querySelector('.wf-check');
     if(cb){cb.checked=!cb.checked;toggleWfSelect(key,cb.checked);}
   }else{
-    openOrderModal(key);
+    openWfInlinePanel(key);
   }
+}
+// ============================================================
+// WORKFLOW — inline order-detail expansion panel (Kanban view only).
+// Reuses the exact same `orders` data/fields as the Kanban board and the
+// full order modal — no separate store, nothing renamed/added. Deeper
+// editing (items, chat, dept-file approvals, reassignment) still routes
+// through the existing openOrderModal(); this panel is the at-a-glance +
+// quick-action surface requested for inline expansion under the board.
+// ============================================================
+function wfRemainingLabel(o){
+  if(!o.deadline||o.deadline==='—'||o.currentDept==='done')return'—';
+  const d=new Date(o.deadline);
+  if(isNaN(d.getTime()))return'—';
+  const diffH=(d.getTime()-Date.now())/3600000;
+  const abs=Math.abs(diffH);
+  const span=abs<24?(Math.round(abs)+'س'):((abs/24).toFixed(1)+'ي');
+  return diffH<0?`متأخر ${span}`:`${span} متبقية`;
+}
+function closeWfInlinePanel(){
+  window._wfInlinePanelKey=null;
+  const slot=document.getElementById('wf-detail-panel-slot');
+  if(slot){slot.classList.remove('open');slot.innerHTML='';}
+  document.querySelectorAll('.wf-card.wf-card-active').forEach(c=>c.classList.remove('wf-card-active'));
+}
+function openWfInlinePanel(key,skipScroll){
+  const o=orders[key];
+  const slot=document.getElementById('wf-detail-panel-slot');
+  if(!slot)return;
+  if(!o){closeWfInlinePanel();return;}
+  if(!skipScroll&&window._wfInlinePanelKey===key){closeWfInlinePanel();return;}
+  window._wfInlinePanelKey=key;
+  document.querySelectorAll('.wf-card').forEach(c=>c.classList.toggle('wf-card-active',c.getAttribute('data-key')===key));
+  const t=cu.type,isMine=isMyOrder(o),canAct=t==='admin'||isMine;
+  const canSeePayment=['admin','follower','receiver'].includes(t);
+  const nd=getNextDept(o);
+  const _prevDept=getPrevDept(o);
+  const nextLabels={design:'اعتماد التصميم والإرسال للمرحلة التالية ➔',external:'إنهاء التوريد والنقل ➔',print:'إتمام الطباعة ➔',workshop:'اكتمال التركيب ✓'};
+  let nextBtn='';
+  if(canAct&&o.currentDept!=='done'){
+    if(nd==='done'&&o.currentDept==='workshop'){
+      nextBtn=o.finalWorkshopDoneFile?`<button class="btn btn-green btn-sm" onclick="finishOrder('${key}')"><i class="ti ti-circle-check"></i> إتمام الطلب وأرشفته</button>`:`<span style="font-size:11px;color:#EF4444;font-weight:700"><i class="ti ti-alert-triangle"></i> يرجى إرفاق صورة المنجز أولاً (من النافذة الكاملة)</span>`;
+    }else if(nd==='done'){
+      nextBtn=`<button class="btn btn-green btn-sm" onclick="finishOrder('${key}')"><i class="ti ti-circle-check"></i> إتمام وأرشفة الطلب</button>`;
+    }else{
+      nextBtn=`<button class="btn btn-brand btn-sm" onclick="sendToNextDept('${key}','${nd}')"><i class="ti ti-arrow-left"></i> ${nextLabels[o.currentDept]||'إرسال للمرحلة التالية'}</button>`;
+    }
+  }
+  const revertBtn=(t==='admin'&&_prevDept)?`<button class="btn btn-out btn-sm" onclick="revertOrderToPrevDept('${key}')"><i class="ti ti-arrow-right"></i> إرجاع للمرحلة السابقة</button>`:'';
+  const primaryItem=(o.orderItems&&o.orderItems.length)?o.orderItems[0]:null;
+  const pct=orderProgress(o);
+  const statusLabel=o.currentDept==='done'?'مكتمل':'قيد التنفيذ';
+  const remaining=Number(o.remainingAmount!=null?o.remainingAmount:Math.max(0,Number(o.totalAmount||0)-Number(o.paidAmount||0)));
+  const fileChipsHtml=(o.files&&Array.isArray(o.files)&&o.files.length)?`<div class="wf-file-preview-row">${o.files.map(f=>f&&f.data&&f.name?`<a href="${f.data}" download="${esc(f.name)}" class="file-download-link"><i class="ti ti-paperclip"></i> ${esc(f.name)}</a>`:'').join('')}</div>`:`<div style="font-size:11px;color:var(--text-3);margin-top:8px;">لا توجد مرفقات على مستوى الطلب</div>`;
+  const timelineSeq=[...getActiveDepts(o),'done'];
+  const curIdx=o.currentDept==='done'?timelineSeq.length-1:timelineSeq.indexOf(o.currentDept);
+  const tlNodesHtml=timelineSeq.map((dk,i)=>{
+    const st=i<curIdx?'done':(dk===o.currentDept?'active':'');
+    const meta=WF_DEPT_META[dk]||{label:dk};
+    return `<div class="wf-htimeline-node ${st}"><div class="wf-htimeline-dot ${st}"><i class="ti ${st==='done'?'ti-check':meta.icon||'ti-circle'}"></i></div><div class="wf-htimeline-lbl">${meta.label}</div></div>`;
+  }).join('');
+  slot.innerHTML=`
+    <div class="wf-detail-inner">
+      <div class="wf-detail-head">
+        <div>
+          <div class="wf-detail-head-id"><i class="ti ti-file-text"></i> ${o.id||key}</div>
+          <div class="wf-detail-head-client">${esc(o.client||'—')}${o.isQuickTask?'<span class="urgent-tag" style="margin-right:8px;font-size:9px;"><i class="ti ti-bolt"></i>مهمة سريعة</span>':''}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          ${gpbadge(o.priority)} ${deptBadge(o.currentDept)}
+          <span class="badge ${o.currentDept==='done'?'b-done':'b-new'}">${statusLabel}</span>
+          <div class="wf-detail-close" onclick="closeWfInlinePanel()" title="إغلاق"><i class="ti ti-x"></i></div>
+        </div>
+      </div>
+      <div class="wf-detail-grid">
+        <div class="wf-detail-card">
+          <div class="wf-detail-card-title"><i class="ti ti-user-circle"></i> العميل</div>
+          <div class="wf-detail-row"><span class="wf-dk">الاسم</span><span class="wf-dv">${esc(o.client||'—')}</span></div>
+          <div class="wf-detail-row"><span class="wf-dk">الهاتف</span><span class="wf-dv">${esc(o.phone||'—')} ${o.phone&&o.phone!=='—'?`<button class="btn btn-whatsapp btn-xs" onclick="event.stopPropagation();openWhatsapp('${o.phone}')"><i class="ti ti-brand-whatsapp"></i></button>`:''}</span></div>
+          <div class="wf-detail-row"><span class="wf-dk">البريد الإلكتروني</span><span class="wf-dv">—</span></div>
+          <div class="wf-detail-row"><span class="wf-dk">الشركة</span><span class="wf-dv">—</span></div>
+        </div>
+        <div class="wf-detail-card">
+          <div class="wf-detail-card-title"><i class="ti ti-package"></i> الطلب</div>
+          <div class="wf-detail-row"><span class="wf-dk">الخدمة</span><span class="wf-dv">${esc(o.service||'—')}</span></div>
+          <div class="wf-detail-row"><span class="wf-dk">المنتج</span><span class="wf-dv">${esc((primaryItem&&primaryItem.name)||o.service||'—')}</span></div>
+          <div class="wf-detail-row"><span class="wf-dk">الكمية</span><span class="wf-dv">${primaryItem&&primaryItem.qty?primaryItem.qty:'—'}</span></div>
+          <div class="wf-detail-row" style="display:block;"><span class="wf-dk">ملاحظات</span><div class="wf-dv" style="text-align:right;font-weight:400;margin-top:4px;">${esc(o.notes||'—')}</div></div>
+        </div>
+        <div class="wf-detail-card">
+          <div class="wf-detail-card-title"><i class="ti ti-user-cog"></i> الإسناد</div>
+          <div class="wf-detail-row"><span class="wf-dk">الموظف المسؤول</span><span class="wf-dv">${esc(currentPersonName(o))}</span></div>
+          <div class="wf-detail-row"><span class="wf-dk">القسم الحالي</span><span class="wf-dv">${deptBadge(o.currentDept)}</span></div>
+          <div class="wf-detail-row"><span class="wf-dk">تاريخ الإسناد</span><span class="wf-dv">${formatDate(o.stageStartDate||o.date)}</span></div>
+        </div>
+        <div class="wf-detail-card">
+          <div class="wf-detail-card-title"><i class="ti ti-calendar-time"></i> الجدولة</div>
+          <div class="wf-detail-row"><span class="wf-dk">تاريخ الطلب</span><span class="wf-dv">${orderDateTime(o)}</span></div>
+          <div class="wf-detail-row"><span class="wf-dk">تاريخ التسليم</span><span class="wf-dv">${deadlineDateTime(o)}</span></div>
+          <div class="wf-detail-row"><span class="wf-dk">الوقت المستغرق</span><span class="wf-dv">${fmtStageDuration(hoursAgo(o.stageStartDate||o.date))}</span></div>
+          <div class="wf-detail-row"><span class="wf-dk">الوقت المتبقي</span><span class="wf-dv">${wfRemainingLabel(o)}</span></div>
+          <div class="wf-detail-progress-track"><div class="wf-detail-progress-fill" style="width:${pct}%;background:${progressColor(o)};"></div></div>
+        </div>
+        ${canSeePayment?`<div class="wf-detail-card">
+          <div class="wf-detail-card-title"><i class="ti ti-cash"></i> المالية</div>
+          <div class="wf-detail-row"><span class="wf-dk">الإجمالي</span><span class="wf-dv">${fmtMoney(Number(o.totalAmount||0))} ر.س</span></div>
+          <div class="wf-detail-row"><span class="wf-dk">المدفوع</span><span class="wf-dv" style="color:#059669;">${fmtMoney(Number(o.paidAmount||0))} ر.س</span></div>
+          <div class="wf-detail-row"><span class="wf-dk">المتبقي</span><span class="wf-dv" style="color:${remaining>0?'#DC2626':'#059669'};">${fmtMoney(remaining)} ر.س</span></div>
+          <div class="wf-detail-row" style="display:block;"><span class="wf-dk">طريقة الدفع</span><div style="margin-top:4px;">${orderPaymentChannelsHtml(o)||paymentBadge(o.paymentStatus)||'—'}</div></div>
+        </div>`:''}
+        <div class="wf-detail-card">
+          <div class="wf-detail-card-title"><i class="ti ti-paperclip"></i> المرفقات</div>
+          <div class="wf-dropzone" ondragover="event.preventDefault();this.classList.add('dragover');" ondragleave="this.classList.remove('dragover');" ondrop="wfPanelFileDrop(event,'${key}')" onclick="document.getElementById('wf-panel-file-input').click()">
+            <i class="ti ti-cloud-upload"></i>
+            <div style="font-size:11.5px;color:var(--text-2);margin-top:6px;">اسحب الملفات هنا أو اضغط للرفع</div>
+          </div>
+          <input type="file" id="wf-panel-file-input" multiple style="display:none" onchange="handleWfPanelFiles(this.files,'${key}')"/>
+          ${fileChipsHtml}
+        </div>
+      </div>
+      <div class="wf-htimeline">${tlNodesHtml}</div>
+      <div class="wf-detail-actions">
+        ${nextBtn} ${revertBtn}
+        <button class="btn btn-out btn-sm" onclick="openTimelineModal('${key}')"><i class="ti ti-clock"></i> مراحل الطلب</button>
+        <button class="btn btn-out btn-sm" onclick="openOrderModal('${key}')"><i class="ti ti-arrows-maximize"></i> فتح النافذة الكاملة</button>
+      </div>
+    </div>`;
+  slot.classList.add('open');
+  if(!skipScroll)setTimeout(()=>slot.scrollIntoView({behavior:'smooth',block:'nearest'}),80);
+}
+async function wfPanelFileDrop(e,key){
+  e.preventDefault();e.currentTarget.classList.remove('dragover');
+  if(e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files.length)await handleWfPanelFiles(e.dataTransfer.files,key);
+}
+async function handleWfPanelFiles(files,key){
+  if(!files||!files.length)return;
+  const o=orders[key];if(!o)return;
+  showSaving('جاري رفع الملفات...');
+  try{
+    const existing=Array.isArray(o.files)?[...o.files]:[];
+    for(const f of Array.from(files)){
+      const b64=await convertFileToBase64(f,{order:key});
+      existing.push({data:b64,name:f.name});
+    }
+    await fbPatch(`orders/${key}`,{files:existing});
+    await loadData();hideSaving();
+    toast('✓ تم رفع '+files.length+' ملف');
+    openWfInlinePanel(key,true);
+  }catch(e){hideSaving();toast(e&&e.message?e.message:'⚠️ فشل رفع الملف');}
 }
 function toggleWfMultiMode(){
   window._wfMultiMode=!window._wfMultiMode;
