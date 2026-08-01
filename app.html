@@ -3775,7 +3775,9 @@ function buildQuotePage(){
         </div>
         ${window._editingQuoteKey?`
         <div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap;">
+          <button class="btn btn-green btn-sm" onclick="saveQuoteToDb()"><i class="ti ti-device-floppy"></i> حفظ التعديلات</button>
           <button class="btn btn-out btn-sm" onclick="saveAndPreviewQuote()"><i class="ti ti-eye"></i> معاينة وطباعة A4</button>
+          <button class="btn btn-out btn-sm" onclick="cancelEditQuote()"><i class="ti ti-x"></i> إلغاء التعديل</button>
         </div>`:`
         <div style="display:flex;gap:10px;margin-top:16px;">
           <button class="btn btn-brand btn-sm" onclick="saveQuoteToDb()"><i class="ti ti-device-floppy"></i> حفظ العرض</button>
@@ -4069,7 +4071,7 @@ async function saveQuoteToDb(){
   }
   if(window._editingQuoteKey){
     await fbPatch('standalone_quotes/'+window._editingQuoteKey,data);
-    await loadData();hideSaving();toast('✓ تم تحديث عرض السعر');
+    await loadData();hideSaving();toast('✓ تم تحديث عرض السعر بنجاح');
     // Reload the just-saved record back into the form (not a blank buildQuotePage())
     // so every field — including the attachment — stays visibly in sync with what
     // was actually persisted. Without this, the form went blank right after saving
