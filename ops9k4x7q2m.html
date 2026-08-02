@@ -1222,7 +1222,7 @@ input:focus,select:focus,textarea:focus{box-shadow:inset 0 1px 3px rgba(74,14,23
       </div>
       <div class="header-right">
         <div class="clock-chip" id="header-clock"></div>
-        <div class="notif-bell" id="gdrive-status-btn" title="ربط Google Drive لرفع الملفات الكبيرة (أكبر من 10 ميجابايت)">
+        <div class="notif-bell" id="gdrive-status-btn" onclick="showGDriveStatus()" title="ربط Google Drive لرفع الملفات الكبيرة (أكبر من 10 ميجابايت)">
           <i class="ti ti-cloud-upload"></i>
         </div>
         <div class="notif-bell" id="notif-bell" onclick="openNotifPanel()">
@@ -1409,6 +1409,24 @@ const fbUrl='https://rawaee-alafkar-default-rtdb.firebaseio.com';
 // Left blank, syncFinancialObligationToSheet() below is a safe no-op — nothing breaks,
 // it simply doesn't sync until a real endpoint is supplied.
 const FINANCIAL_SHEET_ENDPOINT='https://script.google.com/macros/s/AKfycbxr4fQAfjtR5z3PkUzQVzhCunCYAVX__gdqORdbaznSy6Ng7yRZr-ZbroWwvIRZ0TM/exec';
+// Set this to a deployed Google Apps Script Web App /exec URL (see gdrive-upload-script.gs
+// delivered alongside this file) bound to a Drive folder, to route large department uploads
+// (proof files, workshop plans, done photos, external files) to Google Drive instead of
+// storing them as base64 inside Firebase. Left as the placeholder below, isGDriveConfigured()
+// returns false and uploadFileDirect() safely falls back to the original Firebase-base64
+// behavior — nothing breaks, it simply doesn't use Drive until a real endpoint is supplied.
+const GDRIVE_UPLOAD_ENDPOINT='PASTE_YOUR_DEPLOYED_APPS_SCRIPT_URL_HERE';
+function isGDriveConfigured(){return!!GDRIVE_UPLOAD_ENDPOINT&&!GDRIVE_UPLOAD_ENDPOINT.includes('PASTE_YOUR');}
+async function uploadToGDrive(dataUrl,fileName){
+  const res=await fetch(GDRIVE_UPLOAD_ENDPOINT,{method:'POST',body:JSON.stringify({fileData:dataUrl,fileName})});
+  const j=await res.json();
+  if(!j||!j.success)throw new Error((j&&j.error)||'gdrive-upload-failed');
+  return j.url;
+}
+function showGDriveStatus(){
+  if(isGDriveConfigured()){toast('✓ Google Drive متصل — الملفات الكبيرة تُرفع إليه تلقائياً');return;}
+  toast(cu.type==='admin'?'⚠️ Google Drive غير مفعّل — يلزم نشر Apps Script وتعيين GDRIVE_UPLOAD_ENDPOINT في الكود':'⚠️ Google Drive غير مفعّل حالياً — يتم حفظ الملفات على الخادم الأساسي');
+}
 window.globalAttachedFiles=[];
 window.reqFileB64='';window.reqFileName='';
 window.externalFileB64='';window.externalFileName='';
@@ -2725,12 +2743,66 @@ function buildWfGrid(tab){
       <button class="tab-btn ${view==='calendar'?'active':''}" onclick="setWfView('calendar')"><i class="ti ti-calendar"></i> التقويم</button>
       <button class="tab-btn ${view==='list'?'active':''}" onclick="setWfView('list')"><i class="ti ti-list"></i> القائمة</button>
       <button class="tab-btn ${view==='timeline'?'active':''}" onclick="setWfView('timeline')"><i class="ti ti-timeline"></i> الخط الزمني</button>
+      <button class="tab-btn ${view==='files'?'active':''}" onclick="setWfView('files')"><i class="ti ti-files"></i> الملفات المرفوعة</button>
     </div>
     <div id="wf-view-body"></div>`;
   if(view==='kanban')renderWfKanbanView();
   else if(view==='calendar')renderWfCalendarView();
   else if(view==='list')renderWfListView();
   else if(view==='timeline')renderWfTimelineView();
+  else if(view==='files')renderWfFilesView();
+}
+function renderWfFilesView(){
+  const arr=ordersArr();
+  const rows=[];
+  const singleFileSlots=[
+    {ff:'approvedPrintFile',fn:'approvedPrintFileName',label:'ملف الطباعة المعتمد',icon:'ti-printer'},
+    {ff:'approvedWorkshopFile',fn:'approvedWorkshopFileName',label:'مخطط قياسات الورشة',icon:'ti-tools'},
+    {ff:'finalWorkshopDoneFile',fn:'finalWorkshopDoneFileName',label:'صورة المنجز',icon:'ti-photo'},
+    {ff:'externalFile',fn:'externalFileName',label:'ملف التنفيذ الخارجي',icon:'ti-world'},
+  ];
+  arr.forEach(o=>{
+    singleFileSlots.forEach(s=>{
+      if(o[s.ff]){
+        rows.push({key:o._key,orderId:o.id||o._key,client:o.client,label:s.label,icon:s.icon,
+          fileName:o[s.fn]||'ملف',fileData:o[s.ff],
+          uploadedBy:o[s.ff+'UploadedBy']||o.createdBy||'—',uploadedAt:o[s.ff+'UploadedAt']||o.date||''});
+      }
+    });
+    (o.orderItems||[]).forEach((it,i)=>{
+      itemVersions(it).forEach(v=>{
+        (v.files||[]).forEach(f=>{
+          if(f&&f.data&&f.name){
+            rows.push({key:o._key,orderId:o.id||o._key,client:o.client,label:`بند ${i+1}: ${it.name||'—'} — ${v.label||'نسخة'}`,icon:'ti-package',
+              fileName:f.name,fileData:f.data,uploadedBy:v.createdBy||'—',uploadedAt:v.createdAt||''});
+          }
+        });
+      });
+    });
+  });
+  rows.sort((a,b)=>new Date(b.uploadedAt||0)-new Date(a.uploadedAt||0));
+  const body=document.getElementById('wf-view-body');
+  body.innerHTML=`
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;">
+      <input id="wf-files-search" placeholder="ابحث عن رقم طلب أو عميل أو اسم ملف..." oninput="filterWfFilesRows()" style="flex:1;min-width:220px;"/>
+    </div>
+    <div class="card"><div class="tbl-wrap"><table><thead><tr>
+      <th style="width:90px;">رقم الطلب</th><th>العميل</th><th>الملف / البند</th><th style="width:130px;">رفع بواسطة</th><th style="width:130px;">التاريخ</th><th style="width:90px;"></th>
+    </tr></thead><tbody>${rows.length?rows.map(r=>`
+      <tr data-search="${esc((r.orderId+' '+r.client+' '+r.fileName).toLowerCase())}">
+        <td onclick="openOrderModal('${r.key}')" style="cursor:pointer;"><strong style="color:var(--maroon)">${esc(r.orderId)}</strong></td>
+        <td onclick="openOrderModal('${r.key}')" style="cursor:pointer;font-size:12px;">${esc(r.client||'—')}</td>
+        <td style="font-size:12px;"><i class="ti ${r.icon}"></i> ${esc(r.label)} <span style="color:var(--text-3);">(${esc(r.fileName)})</span></td>
+        <td style="font-size:11.5px;">${esc(r.uploadedBy)}</td>
+        <td style="font-size:11px;">${formatDate(r.uploadedAt)}</td>
+        <td><a href="${r.fileData}" download="${esc(r.fileName)}" class="btn btn-out btn-xs"><i class="ti ti-download"></i></a></td>
+      </tr>`).join(''):'<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text-3)">لا توجد ملفات مرفوعة بعد</td></tr>'}</tbody></table></div></div>`;
+}
+function filterWfFilesRows(){
+  const q=(document.getElementById('wf-files-search')?.value||'').trim().toLowerCase();
+  document.querySelectorAll('#wf-view-body tbody tr[data-search]').forEach(r=>{
+    r.style.display=(!q||(r.getAttribute('data-search')||'').includes(q))?'':'none';
+  });
 }
 function setWfView(v){window._wfView=v;buildWfGrid(_currentWfTab||'active');}
 function renderWfKanbanView(){
@@ -5544,9 +5616,24 @@ function openTimelineModal(key){
 }
 async function uploadFileDirect(key,ff,fn2,inputId){
   const el=document.getElementById(inputId);if(!el||!el.files||!el.files.length)return;
+  const file=el.files[0];
   showSaving('جاري حفظ الملف...');
   try{
-    const b64=await convertFileToBase64(el.files[0],{order:key});const upd={};upd[ff]=b64;upd[fn2]=el.files[0].name;
+    const b64=await convertFileToBase64(file,{order:key});
+    const upd={};
+    if(isGDriveConfigured()){
+      try{
+        upd[ff]=await uploadToGDrive(b64,file.name);
+        upd[ff+'Storage']='gdrive';
+      }catch(e){
+        console.warn('رفع Google Drive فشل، سيتم الحفظ في Firebase كخطة بديلة',e);
+        upd[ff]=b64;upd[ff+'Storage']='firebase';
+      }
+    }else{
+      upd[ff]=b64;upd[ff+'Storage']='firebase';
+    }
+    upd[fn2]=file.name;
+    upd[ff+'UploadedBy']=cu.name||cu._uname||'—';upd[ff+'UploadedAt']=new Date().toISOString();
     await fbPatch(`orders/${key}`,upd);await loadData();hideSaving();toast('✓ تم التحديث');
     if(ff==='approvedPrintFile'||ff==='approvedWorkshopFile')dispatchAutoWhatsapp(orders[key],'proof_ready');
     openOrderModal(key);
