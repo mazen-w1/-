@@ -439,6 +439,8 @@ input[type="password"]{direction:rtl;text-align:right;padding-left:40px;padding-
 .order-item-versions{display:flex;flex-direction:column;gap:10px;margin-top:10px;}
 .item-ver-card{background:var(--surface-2);border:1px solid var(--border-soft);border-radius:var(--radius-md);padding:12px 14px;border-right:3px solid var(--border);transition:.15s;}
 .item-ver-card.approved{background:#F0FDF4;border-color:#BBF7D0;border-right-color:#10B981;}
+.deptstage-action-box{display:flex;align-items:center;gap:8px;}
+.deptstage-action-box input[type="checkbox"]{width:16px;height:16px;cursor:pointer;accent-color:var(--maroon);flex-shrink:0;}
 /* ── Workflow: Calendar / List / Timeline views ── */
 .wf-cal-legend{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:10px;font-size:11px;color:var(--text-2);align-items:center;}
 .wf-cal-legend span{display:inline-flex;align-items:center;gap:5px;}
@@ -2033,6 +2035,7 @@ function getActiveDepts(o){
 function getNextDept(o){const seq=getActiveDepts(o);const idx=seq.indexOf(o.currentDept);if(idx===-1||idx===seq.length-1)return'done';return seq[idx+1];}
 function getPrevDept(o){const seq=getActiveDepts(o);if(o.currentDept==='done')return seq[seq.length-1]||null;const idx=seq.indexOf(o.currentDept);if(idx<=0)return null;return seq[idx-1];}
 async function revertOrderToPrevDept(key){
+  if(cu.type!=='admin'){toast('⚠️ هذا الإجراء متاح للمدير فقط');return;}
   const o=orders[key];if(!o)return;
   const prev=getPrevDept(o);
   if(!prev){toast('⚠️ لا توجد مرحلة سابقة للرجوع إليها');return;}
@@ -2220,12 +2223,14 @@ function renderOrderItemsCards(o,key,canAct){
       const meta=WF_DEPT_META[pk]||{label:pk};
       return omAccordion('ti-history',`سجل مرحلة ${meta.label} (${pv.length})`,pv.map(v=>renderVerCard(v,key,i,false)).join(''),false);
     }).join('');
-    const curStageHtml=curStageVersions.length?curStageVersions.map(v=>renderVerCard(v,key,i,canAct)).join(''):'<div style="font-size:11px;color:var(--text-3);">لا توجد نسخ لهذه المرحلة بعد</div>';
+    const curStageBody=curStageVersions.length?curStageVersions.map(v=>renderVerCard(v,key,i,canAct)).join(''):'<div style="font-size:11px;color:var(--text-3);">لا توجد نسخ لهذه المرحلة بعد</div>';
+    const curStageHtml=omAccordion('ti-files',`نسخ المرحلة الحالية${curStageVersions.length?' ('+curStageVersions.length+')':''}`,curStageBody,false);
     return `<div class="order-item-card">
       <div class="order-item-card-head">
         <strong style="font-size:13.5px;color:var(--maroon);">بند ${i+1}: ${esc(it.name||'—')}</strong>
         <span class="badge ${dept==='done'?'b-done':'b-new'}">${WF_DEPT_META[dept]?.label||dept}</span>
       </div>
+      ${it.details?`<div style="font-size:11.5px;color:var(--text-2);background:var(--surface-2);border-right:3px solid var(--gold);border-radius:8px;padding:6px 10px;margin-top:6px;line-height:1.6;"><strong style="color:var(--maroon-mid);">التفاصيل والمواصفات:</strong> ${esc(it.details)}</div>`:''}
       <div class="order-item-htimeline">${tlHtml}</div>
       ${advanceBtn?`<div style="margin:8px 0;">${advanceBtn}</div>`:''}
       ${it.requiredFiles?`<div style="font-size:11px;color:var(--text-2);margin-top:6px;"><strong style="color:var(--maroon-mid);">الملفات المطلوبة:</strong> ${esc(it.requiredFiles)}</div>`:''}
@@ -2253,6 +2258,15 @@ function progressColor(o){const m={new:'#CBD5E1',design:'#6B21A8',external:'#B45
 function currentPersonName(o){if(!o.currentDept||o.currentDept==='design')return o.designName||'—';if(o.currentDept==='external')return o.externalName||o.externalNote||'تنفيذ خارجي';if(o.currentDept==='print')return o.printName||'—';if(o.currentDept==='workshop')return o.workshopName||'—';if(o.currentDept==='done')return'✓ مكتمل';return'—';}
 function hoursAgo(dateStr){if(!dateStr)return 0;return Math.round((new Date()-new Date(dateStr))/3600000);}
 function timeBadge(hours){if(hours<24)return`<span class="time-badge time-ok"><i class="ti ti-clock"></i>${hours}س</span>`;const days=Math.round(hours/24);if(days<=3)return`<span class="time-badge time-warn"><i class="ti ti-clock"></i>${days}ي</span>`;return`<span class="time-badge time-over"><i class="ti ti-alarm"></i>${days}ي</span>`;}
+function orderTimerBadge(o){
+  if(o.currentDept==='done'){
+    const endTs=o.archivedAt||o.workshopDoneAt||o.externalDoneAt||o.printDoneAt||o.stageStartDate||o.date;
+    const hours=o.date&&endTs?Math.max(0,Math.round((new Date(endTs)-new Date(o.date))/3600000)):0;
+    const txt=hours<24?hours+'س':Math.round(hours/24)+'ي';
+    return`<span class="time-badge time-ok" title="مكتمل - الوقت متوقف"><i class="ti ti-player-pause"></i>${txt}</span>`;
+  }
+  return timeBadge(hoursAgo(o.stageStartDate||o.date));
+}
 function fmtStageDuration(hours){
   if(!hours||hours<=0)return'—';
   if(hours<1)return Math.round(hours*60)+' د';
@@ -2622,7 +2636,7 @@ function buildDash(){
     return`<div onclick="openOrderModal('${o._key}')" style="display:flex;align-items:center;gap:12px;padding:8px 14px;border-bottom:1px solid var(--border-soft);cursor:pointer;transition:background .12s;${bgRow?'background:'+bgRow+';':''}" onmouseover="this.style.background='#F9F5F0'" onmouseout="this.style.background='${bgRow}'">
       <div style="width:32px;height:32px;border-radius:50%;background:${accent}18;border:2px solid ${accent}40;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px;font-weight:800;color:${accent};">${avatarLetter}</div>
       <div style="flex:1;min-width:0;"><div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;flex-wrap:wrap;"><span style="background:${accent};color:#fff;padding:1px 7px;border-radius:6px;font-size:9px;font-weight:800;display:inline-flex;align-items:center;gap:2px;white-space:nowrap;"><i class="ti ${icon}" style="font-size:9px;"></i> ${tag}</span><strong style="font-size:12px;color:var(--maroon);">${o.id||o._key}</strong></div><div style="font-size:11px;color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(o.client)} ${o.service?'· '+esc(o.service):''}</div></div>
-      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0;">${deptBadge(o.currentDept)}${timeBadge(hoursAgo(o.stageStartDate||o.date))}</div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0;">${deptBadge(o.currentDept)}${orderTimerBadge(o)}</div>
     </div>`;
   };
   /* ── Section 1: urgent orders ── */
@@ -2656,7 +2670,7 @@ function buildDash(){
     <td style="font-size:11px;color:var(--text-2);">${esc(o.service)}</td>
     <td>${gpbadge(o.priority)}</td>
     <td>${deptBadge(o.currentDept)}</td>
-    <td>${timeBadge(hoursAgo(o.stageStartDate||o.date))}</td>
+    <td>${orderTimerBadge(o)}</td>
   </tr>`).join('');
   document.getElementById('page-dash').innerHTML=`
     <div class="page-header"><div><div class="ptitle"><i class="ti ti-layout-dashboard"></i> لوحة التحكم</div><div class="breadcrumb">مرحباً، ${esc(cu.name)}</div></div></div>
@@ -2742,7 +2756,7 @@ function renderWfKanbanView(){
         <div class="wf-card-name">${esc(o.client)}</div>
         <div class="wf-card-svc">${esc(o.service)}</div>
         ${o.isQuickTask?`<div style="font-size:11px;color:var(--maroon);font-weight:700;margin-bottom:4px;"><i class="ti ti-user"></i> اسم العميل: ${esc(o.client||'—')} &nbsp; <i class="ti ti-phone"></i> رقم الجوال: ${esc(o.phone||'—')}</div>`:''}
-        <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;margin-bottom:6px;">${deptBadge(o.currentDept)} ${gpbadge(o.priority)} ${timeBadge(hoursAgo(o.stageStartDate||o.date))}</div>
+        <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;margin-bottom:6px;">${deptBadge(o.currentDept)} ${gpbadge(o.priority)} ${orderTimerBadge(o)}</div>
         <div style="font-size:11px;color:var(--text-3);">المسؤول: ${esc(currentPersonName(o))}</div>
         <div style="font-size:10.5px;color:var(--text-3);"><i class="ti ti-calendar-time"></i> التسليم: ${deadlineDateTime(o)}</div>
         ${_canSeeCardTotal&&o.totalAmount?`<div style="font-size:11px;font-weight:800;color:var(--maroon);margin-top:3px;"><i class="ti ti-cash"></i> إجمالي المبلغ: ${fmtMoney(Number(o.totalAmount))} ر.س</div>`:''}
@@ -3327,21 +3341,18 @@ function buildDeptStagePage(){
   window._deptStageSelected=new Set();
   const searchBlob=o=>esc([o.id,o._key,o.client,o.service].filter(Boolean).join(' ').toLowerCase());
   const rows=arr.map(o=>isCompleted?`<tr data-search="${searchBlob(o)}" onclick="openOrderTimelineView('${o._key}')" style="cursor:pointer;">
-    ${canDelete?`<td style="width:34px;" onclick="event.stopPropagation()"><input type="checkbox" class="deptstage-check" data-key="${o._key}" onchange="toggleDeptStageSelect('${o._key}',this.checked)"/></td>`:''}
+    ${canDelete?`<td style="width:150px;" onclick="event.stopPropagation()">
+      <div class="deptstage-action-box">
+        <input type="checkbox" class="deptstage-check" data-key="${o._key}" onchange="toggleDeptStageSelect('${o._key}',this.checked)" title="تحديد للحذف الجماعي"/>
+        <button class="btn btn-out btn-xs" onclick="revertOrderToPrevDept('${o._key}')" title="إرجاع الطلب لمرحلة الإنتاج السابقة"><i class="ti ti-arrow-back-up"></i> إرجاع الطلب</button>
+      </div>
+    </td>`:''}
     <td><strong style="color:var(--maroon)">${o.id||o._key}</strong></td>
     <td><strong style="font-size:13px;">${esc(o.client||'—')}</strong>${hasLaterMaintenanceForOrder(o)?' <span class="badge" style="background:#FEE2E2;color:#991B1B;font-size:9px;"><i class="ti ti-tool"></i> طلب صيانة لاحق</span>':''}</td>
     <td style="font-weight:800;">${o.totalAmount?fmtMoney(Number(o.totalAmount))+' ر.س':'—'}</td>
     <td style="font-size:12px;">${esc(o.service||'—')}</td>
     <td style="font-size:12px;">${esc(o.createdBy||'—')}</td>
     <td style="font-size:11px;">${o.date||'—'}</td>
-    ${canDelete?`<td style="width:40px;" onclick="event.stopPropagation()">
-      <div class="row-menu-wrap">
-        <button class="btn btn-out btn-xs" style="padding:3px 7px;" onclick="toggleRowMenu('drm-${o._key}')" title="إجراءات سريعة"><i class="ti ti-dots-vertical"></i></button>
-        <div class="row-menu" id="drm-${o._key}" style="display:none;">
-          <button onclick="closeAllRowMenus();revertOrderToPrevDept('${o._key}')"><i class="ti ti-arrow-right"></i> إرجاع لمرحلة سابقة</button>
-        </div>
-      </div>
-    </td>`:''}
   </tr>`:`<tr data-search="${searchBlob(o)}"${hasAssignee?` data-assignee="${esc(o[assigneeField]||'')}"`:''} onclick="openOrderTimelineView('${o._key}')" style="cursor:pointer;">
     <td><strong style="color:var(--maroon)">${o.id||o._key}</strong></td>
     <td><strong style="font-size:13px;">${esc(o.client||'—')}</strong></td>
@@ -3349,7 +3360,7 @@ function buildDeptStagePage(){
     <td style="font-size:12px;">${esc(currentPersonName(o))}</td>
     <td style="font-size:11px;">${deadlineDateTime(o)}</td>
     <td>${gpbadge(o.priority)}</td>
-    <td>${timeBadge(hoursAgo(o.stageStartDate||o.date))}</td>
+    <td>${orderTimerBadge(o)}</td>
     ${cu.type==='admin'?`<td style="width:40px;" onclick="event.stopPropagation()">
       <div class="row-menu-wrap">
         <button class="btn btn-out btn-xs" style="padding:3px 7px;" onclick="toggleRowMenu('dsam-${o._key}')" title="إجراءات سريعة"><i class="ti ti-dots-vertical"></i></button>
@@ -3361,14 +3372,41 @@ function buildDeptStagePage(){
     </td>`:''}
   </tr>`).join('');
   const thead=isCompleted
-    ?`${canDelete?'<th style="width:34px;"></th>':''}<th style="width:80px">رقم الطلب</th><th>العميل</th><th style="width:100px">المبلغ</th><th>الخدمة</th><th style="width:120px">منشئ الطلب</th><th style="width:90px">التاريخ</th>${canDelete?'<th style="width:40px;"></th>':''}`
+    ?`${canDelete?'<th style="width:150px;">إجراءات</th>':''}<th style="width:80px">رقم الطلب</th><th>العميل</th><th style="width:100px">المبلغ</th><th>الخدمة</th><th style="width:120px">منشئ الطلب</th><th style="width:90px">التاريخ</th>`
     :`<th style="width:80px">رقم الطلب</th><th>العميل</th><th>الخدمة</th><th style="width:100px">المسؤول</th><th style="width:120px">تاريخ التسليم</th><th style="width:90px">الأولوية</th><th style="width:90px">المدة</th>${cu.type==='admin'?'<th style="width:40px;"></th>':''}`;
   const personOptions=hasAssignee?[...new Set(arr.map(o=>o[assigneeField]).filter(v=>v&&v!=='none'))]
     .map(u=>`<option value="${esc(u)}">${esc(USERS[u]?.name||u)}</option>`).join(''):'';
+  const externalControlPanel=(deptKey==='external'&&!isCompleted)?(()=>{
+    const now=new Date();
+    const overdueCount=arr.filter(o=>o.deadline&&new Date(o.deadline)<now).length;
+    const soonCount=arr.filter(o=>o.deadline&&new Date(o.deadline)>=now&&(new Date(o.deadline)-now)/3600000<=48).length;
+    const unassignedCount=arr.filter(o=>!o[assigneeField]||o[assigneeField]==='none').length;
+    const byAssignee={};
+    arr.forEach(o=>{const a=o[assigneeField]&&o[assigneeField]!=='none'?o[assigneeField]:null;if(a)byAssignee[a]=(byAssignee[a]||0)+1;});
+    const empChips=Object.entries(byAssignee).sort((a,b)=>b[1]-a[1]).map(([u,n])=>
+      `<span class="badge b-new" style="font-size:11px;"><i class="ti ti-user"></i> ${esc(USERS[u]?.name||u)}: ${n}</span>`).join(' ')||'<span style="font-size:12px;color:var(--text-3);">لا يوجد موظفون معينون حالياً</span>';
+    const statBox=(icon,label,val,color)=>`<div style="flex:1;min-width:120px;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:10px;padding:10px 14px;text-align:center;">
+      <i class="ti ${icon}" style="font-size:18px;color:${color};"></i>
+      <div style="font-size:20px;font-weight:800;color:${color};margin-top:4px;">${val}</div>
+      <div style="font-size:11px;color:var(--text-3);margin-top:2px;">${label}</div>
+    </div>`;
+    return `<div class="card" style="border-right:4px solid ${meta.color};margin-bottom:14px;">
+      <div style="font-size:14px;font-weight:800;color:${meta.color};margin-bottom:10px;"><i class="ti ti-layout-dashboard"></i> لوحة التحكم — تنفيذ الأعمال الخارجية</div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
+        ${statBox('ti-list-details','إجمالي الطلبات النشطة',arr.length,meta.color)}
+        ${statBox('ti-alert-triangle','متأخرة عن التسليم',overdueCount,'#DC2626')}
+        ${statBox('ti-clock','تسليم قريب (48س)',soonCount,'#D97706')}
+        ${statBox('ti-user-question','بدون مسؤول',unassignedCount,'#64748B')}
+      </div>
+      <div style="font-size:12px;color:var(--text-2);margin-bottom:6px;font-weight:700;"><i class="ti ti-users"></i> توزيع الأعمال حسب الموظف:</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;">${empChips}</div>
+    </div>`;
+  })():'';
   document.getElementById('deptstage-content').innerHTML=`
     ${backBtnHtml()}
     <div class="page-header"><div class="ptitle"><i class="ti ${meta.icon}" style="color:${meta.color}"></i> مرحلة ${meta.label} — ${isCompleted?'أرشيف الطلبات المكتملة':'الطلبات النشطة'} (${arr.length})</div>
     ${canDelete?`<button class="btn btn-red btn-sm" id="deptstage-bulk-del-btn" style="display:none;" onclick="bulkDeleteDeptStage()"><i class="ti ti-trash"></i> حذف المحدد (<span id="deptstage-sel-count">0</span>)</button>`:''}</div>
+    ${externalControlPanel}
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;">
       <input id="deptstage-search" placeholder="ابحث عن عميل أو خدمة أو رقم طلب..." oninput="filterDeptStageRows()" style="flex:1;min-width:220px;"/>
       ${hasAssignee?`<select id="deptstage-person-filter" onchange="filterDeptStageRows()" style="min-width:180px;">
@@ -3377,7 +3415,7 @@ function buildDeptStagePage(){
       </select>`:''}
     </div>
     <div class="card"><div class="tbl-wrap"><table><thead><tr>${thead}</tr></thead>
-    <tbody>${rows||`<tr><td colspan="${isCompleted?(6+(canDelete?2:0)):(7+(cu.type==='admin'?1:0))}" style="text-align:center;padding:24px;color:var(--text-3)">لا توجد طلبات في هذه المرحلة حالياً</td></tr>`}</tbody></table></div></div>`;
+    <tbody>${rows||`<tr><td colspan="${isCompleted?(6+(canDelete?1:0)):(7+(cu.type==='admin'?1:0))}" style="text-align:center;padding:24px;color:var(--text-3)">لا توجد طلبات في هذه المرحلة حالياً</td></tr>`}</tbody></table></div></div>`;
 }
 function filterDeptStageRows(){
   const q=(document.getElementById('deptstage-search')?.value||'').trim().toLowerCase();
@@ -3507,7 +3545,7 @@ function buildMyWork(){
       <div class="wf-card-name">${esc(o.client)}</div>
       <div class="wf-card-svc">${esc(o.service)}</div>
       ${o.isQuickTask?`<div style="font-size:11px;color:var(--maroon);font-weight:700;margin-bottom:4px;"><i class="ti ti-user"></i> اسم العميل: ${esc(o.client||'—')} &nbsp; <i class="ti ti-phone"></i> رقم الجوال: ${esc(o.phone||'—')}</div>`:''}
-      <div style="display:flex;gap:5px;flex-wrap:wrap;">${deptBadge(o.currentDept)} ${gpbadge(o.priority)} ${timeBadge(hoursAgo(o.stageStartDate||o.date))}</div>
+      <div style="display:flex;gap:5px;flex-wrap:wrap;">${deptBadge(o.currentDept)} ${gpbadge(o.priority)} ${orderTimerBadge(o)}</div>
       <div style="font-size:11px;color:var(--text-3);">المسؤول: ${esc(currentPersonName(o))}</div>
       <div style="font-size:10.5px;color:var(--text-3);"><i class="ti ti-calendar-time"></i> التسليم: ${deadlineDateTime(o)}</div>
       ${_canSeeCardTotal&&o.totalAmount?`<div style="font-size:11px;font-weight:800;color:var(--maroon);margin-top:3px;"><i class="ti ti-cash"></i> إجمالي المبلغ: ${fmtMoney(Number(o.totalAmount))} ر.س</div>`:''}
@@ -5199,10 +5237,39 @@ function orderPaymentBreakdownHtml(o){
   }
   return box;
 }
+function computeOrderStageTimeline(o){
+  const stages=[
+    {k:'date',label:'إنشاء الطلب',icon:'ti-flag'},
+    {k:'designStartAt',label:'بدء التصميم',icon:'ti-brush'},
+    {k:'designDoneAt',label:'اعتماد التصميم',icon:'ti-circle-check'},
+    {k:'externalStartAt',label:'بدء التنفيذ الخارجي',icon:'ti-world'},
+    {k:'externalDoneAt',label:'إنهاء التنفيذ الخارجي',icon:'ti-circle-check'},
+    {k:'printStartAt',label:'بدء الطباعة',icon:'ti-printer'},
+    {k:'printDoneAt',label:'إنهاء الطباعة',icon:'ti-circle-check'},
+    {k:'workshopStartAt',label:'بدء الورشة',icon:'ti-tools'},
+    {k:'workshopDoneAt',label:'اكتمال التركيب',icon:'ti-circle-check'},
+    {k:'archivedAt',label:'أرشفة الطلب',icon:'ti-archive'},
+  ];
+  const items=stages.filter(s=>o[s.k]).map(s=>({...s,at:o[s.k]})).sort((a,b)=>new Date(a.at)-new Date(b.at));
+  return items.map((s,i)=>({...s,durHours:i>0?Math.max(0,(new Date(s.at)-new Date(items[i-1].at))/3600000):0}));
+}
 function openOrderTimelineView(key){
   const o=orders[key];if(!o)return;
   const svc=(o.orderItems&&o.orderItems.length?o.orderItems[0].name:o.service)||'—';
   const statusHtml=o.currentDept==='done'?'<span class="badge b-done">تم الإنجاز</span>':deptBadge(o.currentDept);
+  const isDone=o.currentDept==='done';
+  const itemsList=(o.orderItems&&o.orderItems.length)?
+    '<div style="display:flex;flex-direction:column;gap:6px;">'+o.orderItems.map((it,i)=>
+      '<div style="background:var(--surface-2);border:1px solid var(--border-soft);border-radius:8px;padding:8px 10px;">'+
+      '<div style="font-size:12.5px;font-weight:800;color:var(--maroon);">بند '+(i+1)+': '+esc(it.name||'—')+'</div>'+
+      (it.details?'<div style="font-size:11px;color:var(--text-2);margin-top:3px;">'+esc(it.details)+'</div>':'')+
+      '</div>').join('')+'</div>':'<div style="font-size:12px;color:var(--text-3);">لا توجد بنود</div>';
+  const stageTl=isDone?computeOrderStageTimeline(o):[];
+  const stageDurationsHtml=(isDone&&stageTl.length>1)?
+    '<div style="display:flex;flex-direction:column;gap:5px;">'+stageTl.filter((s,i)=>i>0).map(s=>
+      '<div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;background:var(--surface-2);border-radius:6px;padding:6px 10px;">'+
+      '<span><i class="ti '+s.icon+'"></i> '+s.label+'</span>'+
+      '<span style="font-weight:800;color:#065F46;">'+fmtStageDuration(s.durHours)+'</span></div>').join('')+'</div>':'';
   document.getElementById('order-modal-body').innerHTML=
     '<div class="modal-header"><div class="mh-title"><i class="ti ti-file-invoice"></i> '+(o.id||key)+'</div>'+
     '<button class="modal-close" onclick="closeModal(\'order-modal\')"><i class="ti ti-x"></i></button></div>'+
@@ -5215,6 +5282,8 @@ function openOrderTimelineView(key){
     '<span style="font-size:12px;color:var(--text-3);"><i class="ti ti-calendar"></i> '+(o.date||'—')+'</span></div>'+
     orderPaymentBreakdownHtml(o)+
     stageBar(o,key)+
+    '<div><div style="font-size:12px;font-weight:800;color:var(--maroon);margin-bottom:6px;"><i class="ti ti-package"></i> بنود الطلب</div>'+itemsList+'</div>'+
+    (stageDurationsHtml?'<div><div style="font-size:12px;font-weight:800;color:var(--maroon);margin-bottom:6px;"><i class="ti ti-hourglass"></i> الوقت المستغرق في كل مرحلة</div>'+stageDurationsHtml+'</div>':'')+
     '<button class="btn btn-out btn-sm" style="width:100%;justify-content:center;" onclick="openOrderModal(\''+key+'\')"><i class="ti ti-file-text"></i> عرض تفاصيل الطلب كاملة</button>'+
     '</div>';
   openModal('order-modal');
@@ -5223,6 +5292,7 @@ function openOrderModal(key){
   const o=orders[key];if(!o)return;
   window._openOrderModalKey=key;
   const t=cu.type,isMine=isMyOrder(o),canAct=t==='admin'||isMine;
+  const _deptMinimalView=['designer','printer','workshop','external'].includes(t);
   const nd=getNextDept(o);
   const _prevDept=getPrevDept(o);
   const revertBtn=(t==='admin'&&_prevDept)?`<button class="btn btn-out btn-sm" onclick="revertOrderToPrevDept('${key}')"><i class="ti ti-arrow-right"></i> إرجاع للمرحلة السابقة</button>`:'';
@@ -5330,7 +5400,7 @@ function openOrderModal(key){
         <div class="wf-detail-progress-track" style="margin-top:4px;"><div class="wf-detail-progress-fill" style="width:${orderProgress(o)}%;background:${progressColor(o)};"></div></div>
       </div>
     </div>
-    ${omAccordion('ti-info-circle','تفاصيل إضافية',`
+    ${_deptMinimalView?'':omAccordion('ti-info-circle','تفاصيل إضافية',`
       <div class="di"><span class="dk">الخدمة</span><span class="dv">${esc(o.service)}</span></div>
       <div class="di"><span class="dk">الأولوية</span><span class="dv">${gpbadge(o.priority)}</span></div>
       <div class="di"><span class="dk">تاريخ ووقت الطلب</span><span class="dv">${orderDateTime(o)}</span></div>
@@ -5345,7 +5415,7 @@ function openOrderModal(key){
       ${o.workshopDeptFile?`<div class="di" style="grid-column:1/-1"><span class="dk" style="color:#9A3412">📎 ملف الورشة عند التسجيل</span><span class="dv">${wdLink}</span></div>`:''}
       ${o.workshopFeedback?`<div class="di" style="grid-column:1/-1;border-top:1px solid var(--border-soft);padding-top:10px;"><span class="dk" style="color:#9A3412">📐 بيانات القياسات الميدانية</span><span class="dv" style="font-weight:400;background:#FFEDD5;padding:8px;border-radius:6px;display:block;margin-top:4px;">${esc(o.workshopFeedback)}</span>${o.workshopSitePhoto?`<a href="${o.workshopSitePhoto}" download class="file-download-link" style="margin-top:6px;display:inline-flex;"><i class="ti ti-photo"></i> صورة الموقع</a>`:''}</div>`:''}
     `)}
-    ${omAccordion('ti-clock','الجدول الزمني',`
+    ${_deptMinimalView?(maintOrderRow||maintenanceRow?`${maintOrderRow}${maintenanceRow}`:''):omAccordion('ti-clock','الجدول الزمني',`
       ${maintOrderRow}
       ${maintenanceRow}
       <div class="di" style="grid-column:1/-1;background:var(--surface-2);border-radius:var(--radius-sm);padding:10px;border:1px solid var(--border);">
@@ -5353,7 +5423,7 @@ function openOrderModal(key){
         <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:6px;">
           <span style="font-size:12px;">📅 الفاتورة: <strong>${o.date||'—'}</strong></span>
           <span style="font-size:12px;">⏱ عمر الطلب: ${timeBadge(hoursAgo(o.date))}</span>
-          <span style="font-size:12px;">⏳ في المرحلة: ${timeBadge(hoursAgo(o.stageStartDate||o.date))}</span>
+          <span style="font-size:12px;">⏳ في المرحلة: ${orderTimerBadge(o)}</span>
         </div>
       </div>
     `)}
@@ -5452,19 +5522,7 @@ async function submitNewOrderItem(key){
 }
 function openTimelineModal(key){
   const o=orders[key];if(!o)return;
-  const stages=[
-    {k:'date',label:'إنشاء الطلب',icon:'ti-flag'},
-    {k:'designStartAt',label:'بدء التصميم',icon:'ti-brush'},
-    {k:'designDoneAt',label:'اعتماد التصميم',icon:'ti-circle-check'},
-    {k:'externalStartAt',label:'بدء التنفيذ الخارجي',icon:'ti-world'},
-    {k:'externalDoneAt',label:'إنهاء التنفيذ الخارجي',icon:'ti-circle-check'},
-    {k:'printStartAt',label:'بدء الطباعة',icon:'ti-printer'},
-    {k:'printDoneAt',label:'إنهاء الطباعة',icon:'ti-circle-check'},
-    {k:'workshopStartAt',label:'بدء الورشة',icon:'ti-tools'},
-    {k:'workshopDoneAt',label:'اكتمال التركيب',icon:'ti-circle-check'},
-    {k:'archivedAt',label:'أرشفة الطلب',icon:'ti-archive'},
-  ];
-  const items=stages.filter(s=>o[s.k]).map(s=>({...s,at:o[s.k]})).sort((a,b)=>new Date(a.at)-new Date(b.at));
+  const items=computeOrderStageTimeline(o);
   const fmt=d=>{try{return new Date(d).toLocaleString('ar-SA',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});}catch(e){return d;}};
   document.getElementById('timeline-modal-body').innerHTML=`
     <div class="modal-header"><span class="modal-title"><i class="ti ti-clock"></i> مراحل الطلب ${o.id||key}</span><button class="btn-close" onclick="closeModal('timeline-modal')">×</button></div>
@@ -5478,6 +5536,7 @@ function openTimelineModal(key){
           <div style="padding-top:4px;padding-bottom:${i<items.length-1?'14px':'0'};">
             <div style="font-size:13px;font-weight:800;color:var(--maroon);">${s.label}</div>
             <div style="font-size:11px;color:var(--text-3);margin-top:2px;">${fmt(s.at)}</div>
+            ${i>0?`<div style="font-size:10.5px;color:#065F46;margin-top:3px;"><i class="ti ti-hourglass"></i> استغرقت هذه المرحلة: ${fmtStageDuration(s.durHours)}</div>`:''}
           </div>
         </div>`).join(''):'<div style="text-align:center;color:var(--text-3);padding:24px;">لا توجد بيانات مراحل بعد</div>'}
     </div>`;
@@ -6993,7 +7052,7 @@ function buildEmpPage(){
             <div style="font-size:8px;color:var(--text-3);font-weight:800;letter-spacing:.5px;margin-bottom:4px;text-transform:uppercase;">آخر الطلبات</div>
             ${recent.map(o=>`<div onclick="${o.currentDept==='done'?'openOrderTimelineView':'openOrderStageView'}('${o._key}')" style="display:flex;align-items:center;justify-content:space-between;padding:4px 6px;border-radius:6px;cursor:pointer;margin-bottom:2px;transition:.12s;" onmouseover="this.style.background='var(--gold-soft)'" onmouseout="this.style.background=''">
               <div style="min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><span style="font-size:11px;font-weight:800;color:var(--maroon)">${o.id||o._key}</span>&nbsp;<span style="font-size:10px;color:var(--text-2)">${esc(o.client)}</span>&nbsp;<span style="font-size:9px;color:var(--text-3)">${o.date||'—'}</span></div>
-              <div style="display:flex;gap:4px;align-items:center;flex-shrink:0;margin-right:8px;">${deptBadge(o.currentDept)}&nbsp;${timeBadge(hoursAgo(o.stageStartDate||o.date))}</div>
+              <div style="display:flex;gap:4px;align-items:center;flex-shrink:0;margin-right:8px;">${deptBadge(o.currentDept)}&nbsp;${orderTimerBadge(o)}</div>
             </div>`).join('')}
           </div>`:''}
         </div>`;
@@ -7053,7 +7112,7 @@ function openEmpDetail(uname){
       <div style="font-size:10px;color:var(--text-3);margin-top:2px;">${esc(o.service)}</div>
       <div style="margin-top:3px;">${empStageDurationChip(o)}</div>
     </div>
-    <div style="display:flex;gap:6px;align-items:center;flex-shrink:0;">${deptBadge(o.currentDept)}&nbsp;${timeBadge(hoursAgo(o.stageStartDate||o.date))}</div>
+    <div style="display:flex;gap:6px;align-items:center;flex-shrink:0;">${deptBadge(o.currentDept)}&nbsp;${orderTimerBadge(o)}</div>
   </div>`;
   document.getElementById('order-modal-body').innerHTML=`
     <div class="modal-header">
@@ -7121,7 +7180,7 @@ function buildIncompletePage(){
       <div class="wf-card-id">${o.id||o._key} · ${orderDateTime(o)}<span class="urgent-tag" style="margin-right:6px;font-size:9px;background:#991B1B;"><i class="ti ti-user-off"></i>غير مكتمل</span></div>
       <div class="wf-card-name">${esc(o.client)}</div>
       <div class="wf-card-svc">${esc(o.service)}</div>
-      <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;margin-bottom:4px;">${gpbadge(o.priority)} ${timeBadge(hoursAgo(o.stageStartDate||o.date))}</div>
+      <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;margin-bottom:4px;">${gpbadge(o.priority)} ${orderTimerBadge(o)}</div>
       <div style="font-size:11px;color:#991B1B;margin-top:4px;font-weight:700;"><i class="ti ti-user-off"></i> العميل لم يرغب بالاستمرار ${o.incompleteAt?'· '+new Date(o.incompleteAt).toLocaleDateString('ar-SA'):''}</div>
     </div><div class="wf-card-prog"><div class="wf-card-fill" style="width:100%;background:#FECACA"></div></div></div>`).join('')}</div>`;
   }
