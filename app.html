@@ -423,6 +423,14 @@ input[type="password"]{direction:rtl;text-align:right;padding-left:40px;padding-
 .wf-htimeline-lbl{font-size:11px;font-weight:700;color:var(--text-3);}
 .wf-htimeline-node.done .wf-htimeline-lbl,.wf-htimeline-node.active .wf-htimeline-lbl{color:#1A1210;}
 .wf-detail-actions{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding-top:18px;margin-top:18px;border-top:1px solid var(--border-soft);}
+/* ── Per-item independent workflow cards + design versions ── */
+.order-items-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;}
+.order-item-card{background:#fff;border:1px solid var(--border-soft);border-radius:16px;padding:14px 16px;box-shadow:0 2px 8px rgba(20,10,10,.04);}
+.order-item-card-head{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;padding-bottom:8px;border-bottom:1px solid var(--border-soft);margin-bottom:8px;}
+.order-item-htimeline{display:flex;align-items:flex-start;gap:2px;margin:8px 0;}
+.order-item-versions{display:flex;flex-direction:column;gap:8px;margin-top:8px;}
+.item-ver-card{background:var(--surface-2);border:1px solid var(--border-soft);border-radius:10px;padding:8px 10px;}
+.item-ver-card.approved{background:#F0FDF4;border-color:#BBF7D0;}
 /* ── Workflow: Calendar / List / Timeline views ── */
 .wf-cal-legend{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:10px;font-size:11px;color:var(--text-2);align-items:center;}
 .wf-cal-legend span{display:inline-flex;align-items:center;gap:5px;}
@@ -2025,6 +2033,163 @@ function isMyOrder(o){
   return false;
 }
 function orderProgress(o){const seq=getActiveDepts(o);const total=seq.length;if(!total)return o.currentDept==='done'?100:0;if(o.currentDept==='done')return 100;const idx=seq.indexOf(o.currentDept);return idx===-1?0:Math.round((idx/total)*100);}
+// ============================================================
+// PER-ITEM WORKFLOW + DESIGN VERSIONS
+// Additive schema on top of orderItems[i]: `currentDept` (independent
+// per-item stage within the SAME department sequence/assignees as the
+// order — staff assignment stays order-level, only progress tracking is
+// per-item), `requiredFiles`, `internalNotes`, and `versions[]` (each with
+// its own status/files/notes/history). None of this touches o.currentDept
+// or any existing order-level field — the whole-order stage (which drives
+// Kanban buckets, isMyOrder, dashboards, financial reports, etc.) keeps
+// advancing exactly as before via the existing sendToNextDept()/finishOrder()
+// actions. This is purely an additional, finer-grained tracking layer.
+// ============================================================
+function itemDeptSeq(o){return[...getActiveDepts(o),'done'];}
+function itemCurrentDept(it,o){return it.currentDept||o.currentDept||itemDeptSeq(o)[0]||'design';}
+function itemNextDept(it,o){const seq=itemDeptSeq(o);const idx=seq.indexOf(itemCurrentDept(it,o));if(idx===-1||idx===seq.length-1)return null;return seq[idx+1];}
+// Pre-existing orders never had `versions` — synthesize a read-only "الأصلية"
+// version from the item's original files so old items still render sensibly
+// instead of an empty version list. Never written back to the DB.
+function itemVersions(it){
+  if(Array.isArray(it.versions)&&it.versions.length)return it.versions;
+  const legacyFiles=(it.files&&it.files.length)?it.files:(it.fileData&&it.fileName?[{data:it.fileData,name:it.fileName}]:[]);
+  if(!legacyFiles.length)return[];
+  return[{id:'legacy',label:'النسخة الأصلية',status:'قيد التنفيذ',files:legacyFiles,notes:it.details||'',createdBy:it.addedBy||it.createdBy||'—',createdAt:it.addedAt||it.createdAt||'',_legacy:true}];
+}
+async function advanceItemDept(key,idx){
+  const o=orders[key];if(!o)return;
+  const it=o.orderItems[idx];if(!it)return;
+  const nd=itemNextDept(it,o);if(!nd)return;
+  showSaving('جاري تحديث حالة البند...');
+  try{
+    const items=[...o.orderItems];items[idx]={...items[idx],currentDept:nd};
+    await fbPatch(`orders/${key}`,{orderItems:items});
+    await loadData();hideSaving();toast('✓ تم تحديث تقدّم البند');
+    _refreshOrderItemsViews(key);
+  }catch(e){hideSaving();toast('❌ فشل تحديث البند');}
+}
+function toggleAddItemVersionForm(idx){
+  const el=document.getElementById('add-ver-form-'+idx);
+  if(el)el.style.display=el.style.display==='none'?'flex':'none';
+}
+window._newVerFiles={};
+async function handleNewVersionFiles(idx,files){
+  if(!files||!files.length)return;
+  window._newVerFiles[idx]=window._newVerFiles[idx]||[];
+  showSaving('جاري تحميل الملفات...');
+  try{
+    for(const f of Array.from(files)){
+      const b64=await convertFileToBase64(f);
+      window._newVerFiles[idx].push({data:b64,name:f.name});
+    }
+    const note=document.getElementById('new-ver-file-note-'+idx);
+    if(note)note.textContent='✓ '+window._newVerFiles[idx].length+' ملف مرفق';
+  }catch(e){toast(e&&e.message?e.message:'⚠️ فشل تحميل الملف');}
+  hideSaving();
+}
+async function saveNewItemVersion(key,idx){
+  const o=orders[key];if(!o)return;
+  const it=o.orderItems[idx];if(!it)return;
+  const notesEl=document.getElementById('new-ver-notes-'+idx);
+  const notes=notesEl?notesEl.value.trim():'';
+  const files=(window._newVerFiles&&window._newVerFiles[idx])||[];
+  const existing=itemVersions(it).filter(v=>!v._legacy);
+  const newVersion={id:'v'+Date.now(),label:'نسخة '+(existing.length+1),status:'قيد التنفيذ',files,notes,createdBy:cu.name,createdAt:new Date().toISOString()};
+  showSaving('جاري حفظ النسخة...');
+  try{
+    const items=[...o.orderItems];
+    const priorVersions=Array.isArray(items[idx].versions)?items[idx].versions:itemVersions(items[idx]).filter(v=>!v._legacy);
+    items[idx]={...items[idx],versions:[...priorVersions,newVersion]};
+    await fbPatch(`orders/${key}`,{orderItems:items});
+    await loadData();hideSaving();toast('✓ تم إضافة نسخة تصميم جديدة');
+    if(window._newVerFiles)window._newVerFiles[idx]=[];
+    _refreshOrderItemsViews(key);
+  }catch(e){hideSaving();toast('❌ فشل حفظ النسخة');}
+}
+async function toggleVersionApproval(key,itemIdx,versionId){
+  const o=orders[key];if(!o)return;
+  const it=o.orderItems[itemIdx];if(!it)return;
+  const versions=itemVersions(it).filter(v=>!v._legacy);
+  const vIdx=versions.findIndex(v=>v.id===versionId);if(vIdx===-1)return;
+  const approved=versions[vIdx].status==='معتمد من العميل';
+  showSaving('جاري التحديث...');
+  try{
+    const items=[...o.orderItems];
+    const newVersions=[...versions];
+    newVersions[vIdx]={...newVersions[vIdx],status:approved?'قيد التنفيذ':'معتمد من العميل',approvedBy:approved?null:cu.name,approvedAt:approved?null:new Date().toISOString()};
+    items[itemIdx]={...items[itemIdx],versions:newVersions};
+    await fbPatch(`orders/${key}`,{orderItems:items});
+    await loadData();hideSaving();toast(approved?'تم إلغاء الاعتماد':'✓ تم اعتماد النسخة من العميل');
+    _refreshOrderItemsViews(key);
+  }catch(e){hideSaving();toast('❌ فشل التحديث');}
+}
+// Re-render whichever order-handling view is currently showing this order,
+// without a full page rebuild — keeps the user in place after a version/item
+// action, exactly like the rest of the order-detail actions already do.
+function _refreshOrderItemsViews(key){
+  if(window._openOrderModalKey===key&&document.getElementById('order-modal')?.classList.contains('open'))openOrderModal(key);
+  if(window._wfInlinePanelKey===key)openWfInlinePanel(key,true);
+}
+function renderOrderItemsCards(o,key,canAct){
+  const items=o.orderItems&&Array.isArray(o.orderItems)?o.orderItems:[];
+  const deptRestricted=['designer','printer','workshop'].includes(cu.type);
+  if(!items.length){
+    return `<div style="text-align:center;color:var(--text-3);padding:20px;">لا توجد بنود في هذا الطلب${deptRestricted?'':`<div style="margin-top:8px;"><button class="btn btn-out btn-xs" onclick="openAddItemModal('${key}')"><i class="ti ti-square-rounded-plus"></i> إضافة بند جديد</button></div>`}</div>`;
+  }
+  const cardsHtml=items.map((it,i)=>{
+    const dept=itemCurrentDept(it,o);
+    const seq=itemDeptSeq(o);
+    const curIdx=seq.indexOf(dept);
+    const tlHtml=seq.map((dk,si)=>{
+      const st=si<curIdx?'done':(dk===dept?'active':'');
+      const meta=WF_DEPT_META[dk]||{label:dk,icon:'ti-circle'};
+      return `<div class="wf-htimeline-node ${st}" style="flex:1;"><div class="wf-htimeline-dot ${st}" style="width:26px;height:26px;font-size:12px;"><i class="ti ${st==='done'?'ti-check':meta.icon}"></i></div><div class="wf-htimeline-lbl" style="font-size:9.5px;">${meta.label}</div></div>`;
+    }).join('');
+    const nd=itemNextDept(it,o);
+    const advanceBtn=(canAct&&nd)?`<button class="btn btn-out btn-xs" onclick="advanceItemDept('${key}',${i})"><i class="ti ti-arrow-left"></i> نقل البند لمرحلة ${WF_DEPT_META[nd]?.label||nd}</button>`:'';
+    const versions=itemVersions(it);
+    const versionsHtml=versions.length?versions.map(v=>{
+      const approved=v.status==='معتمد من العميل';
+      const filesHtml=(v.files&&v.files.length)?v.files.map(f=>`<a href="${f.data}" download="${esc(f.name)}" class="file-download-link"><i class="ti ti-download"></i>${esc(f.name)}</a>`).join(' '):'<span style="font-size:10px;color:var(--text-3);">لا توجد مرفقات</span>';
+      return `<div class="item-ver-card ${approved?'approved':''}">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
+          <strong style="font-size:11.5px;color:var(--maroon);">${esc(v.label||'نسخة')}</strong>
+          <span class="badge ${approved?'b-done':'b-proc'}">${approved?'✅ معتمد من العميل':'🟡 قيد التنفيذ'}</span>
+        </div>
+        ${v.notes?`<div style="font-size:11px;color:var(--text-2);margin-top:5px;line-height:1.6;">${esc(v.notes)}</div>`:''}
+        <div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px;">${filesHtml}</div>
+        <div style="font-size:9.5px;color:var(--text-3);margin-top:5px;">${esc(v.createdBy||'—')} ${v.createdAt?'· '+formatDate(v.createdAt):''}</div>
+        ${(canAct&&!v._legacy)?`<button class="btn ${approved?'btn-out':'btn-green'} btn-xs" style="margin-top:6px;" onclick="toggleVersionApproval('${key}',${i},'${v.id}')"><i class="ti ${approved?'ti-x':'ti-check'}"></i> ${approved?'إلغاء الاعتماد':'اعتماد من العميل'}</button>`:''}
+      </div>`;
+    }).join(''):'<div style="font-size:11px;color:var(--text-3);">لا توجد نسخ تصميم بعد</div>';
+    return `<div class="order-item-card">
+      <div class="order-item-card-head">
+        <div><strong style="font-size:13.5px;color:var(--maroon);">بند ${i+1}: ${esc(it.name||'—')}</strong>${it.price?` <span style="background:var(--gold-soft);color:var(--maroon);font-size:10px;font-weight:800;padding:2px 8px;border-radius:20px;">${fmtMoney(Number(it.price))} ر.س</span>`:''}</div>
+        <span class="badge ${dept==='done'?'b-done':'b-new'}">${WF_DEPT_META[dept]?.label||dept}</span>
+      </div>
+      <div class="order-item-htimeline">${tlHtml}</div>
+      ${advanceBtn?`<div style="margin:8px 0;">${advanceBtn}</div>`:''}
+      ${it.requiredFiles?`<div style="font-size:11px;color:var(--text-2);margin-top:6px;"><strong style="color:var(--maroon-mid);">الملفات المطلوبة:</strong> ${esc(it.requiredFiles)}</div>`:''}
+      <div class="order-item-versions">${versionsHtml}</div>
+      ${deptRestricted&&!canAct?'':`
+      <div style="margin-top:8px;">
+        <button class="btn btn-out btn-xs" onclick="toggleAddItemVersionForm(${i})"><i class="ti ti-plus"></i> إضافة نسخة تصميم</button>
+        <div id="add-ver-form-${i}" style="display:none;flex-direction:column;gap:8px;margin-top:8px;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:10px;padding:10px;">
+          <textarea id="new-ver-notes-${i}" placeholder="ملاحظات النسخة..." style="min-height:50px;font-size:12px;"></textarea>
+          <div class="dept-upload-box" onclick="document.getElementById('new-ver-file-${i}').click()" style="padding:10px;"><i class="ti ti-upload"></i> اضغط لإرفاق ملفات النسخة</div>
+          <input type="file" id="new-ver-file-${i}" multiple style="display:none" onchange="handleNewVersionFiles(${i},this.files)"/>
+          <div id="new-ver-file-note-${i}" style="font-size:10px;color:#10B981;font-weight:700;"></div>
+          <button class="btn btn-brand btn-xs" style="align-self:flex-start;" onclick="saveNewItemVersion('${key}',${i})"><i class="ti ti-device-floppy"></i> حفظ النسخة</button>
+        </div>
+      </div>`}
+      ${it.internalNotes?`<div style="font-size:10.5px;color:var(--text-3);margin-top:8px;border-top:1px dashed var(--border-soft);padding-top:6px;"><i class="ti ti-note"></i> ملاحظات داخلية: ${esc(it.internalNotes)}</div>`:''}
+      ${(!deptRestricted)?`<button class="btn btn-out btn-xs" style="margin-top:8px;" onclick="openAddItemModal('${key}',${i})" title="تعديل بيانات البند"><i class="ti ti-pencil"></i> تعديل بيانات البند</button>`:''}
+    </div>`;
+  }).join('');
+  return `<div class="order-items-grid">${cardsHtml}</div>
+    ${deptRestricted?'':`<button class="btn btn-out btn-xs" style="margin-top:10px;" onclick="openAddItemModal('${key}')"><i class="ti ti-square-rounded-plus"></i> إضافة بند جديد للطلب</button>`}`;
+}
 function progressColor(o){const m={new:'#CBD5E1',design:'#6B21A8',external:'#B45309',print:'#3730A3',workshop:'#9A3412',done:'#10B981'};return m[o.currentDept||'new']||'#475569';}
 function currentPersonName(o){if(!o.currentDept||o.currentDept==='design')return o.designName||'—';if(o.currentDept==='external')return o.externalName||o.externalNote||'تنفيذ خارجي';if(o.currentDept==='print')return o.printName||'—';if(o.currentDept==='workshop')return o.workshopName||'—';if(o.currentDept==='done')return'✓ مكتمل';return'—';}
 function hoursAgo(dateStr){if(!dateStr)return 0;return Math.round((new Date()-new Date(dateStr))/3600000);}
@@ -2926,6 +3091,10 @@ function openWfInlinePanel(key,skipScroll){
           <input type="file" id="wf-panel-file-input" multiple style="display:none" onchange="handleWfPanelFiles(this.files,'${key}')"/>
           ${fileChipsHtml}
         </div>
+      </div>
+      <div style="margin-top:6px;">
+        <div class="wf-detail-card-title" style="margin-bottom:10px;"><i class="ti ti-package"></i> بنود الطلب — كل بند له سير عمل ونسخ تصميم مستقلة</div>
+        ${renderOrderItemsCards(o,key,canAct)}
       </div>
       <div class="wf-htimeline">${tlNodesHtml}</div>
       <div class="wf-detail-actions">
@@ -5032,6 +5201,7 @@ function openOrderTimelineView(key){
 }
 function openOrderModal(key){
   const o=orders[key];if(!o)return;
+  window._openOrderModalKey=key;
   const t=cu.type,isMine=isMyOrder(o),canAct=t==='admin'||isMine;
   const deptRestricted=['designer','printer','workshop'].includes(t);
   const nd=getNextDept(o);
@@ -5060,33 +5230,9 @@ function openOrderModal(key){
   }
   const canSeePayment=['admin','follower','receiver'].includes(t);
   const fileChips=(o.files&&Array.isArray(o.files)&&o.files.length>0)?o.files.map(f=>f&&f.data&&f.name?`<a href="${f.data}" download="${esc(f.name)}" class="file-download-link"><i class="ti ti-download"></i>${esc(f.name)}</a>`:'').join(' '):'— لا توجد ملفات مرفقة بالطلب';
-  const itemsSection=(o.orderItems&&Array.isArray(o.orderItems)&&o.orderItems.length)?`
-    <div class="di" style="grid-column:1/-1;border-top:1px solid var(--border-soft);padding-top:10px;">
-      <span class="dk">📦 بنود الطلب والمرفقات</span>
-      <div style="display:flex;flex-direction:column;gap:8px;margin-top:6px;">
-        ${o.orderItems.map((it,i)=>{
-          const chips=(it.files&&it.files.length)?it.files.map(f=>`<a href="${f.data}" download="${esc(f.name)}" class="file-download-link"><i class="ti ti-download"></i>${esc(f.name)}</a>`).join(' ')
-            :(it.fileData&&it.fileName?`<a href="${it.fileData}" download="${esc(it.fileName)}" class="file-download-link"><i class="ti ti-download"></i>${esc(it.fileName)}</a>`:'');
-          return`<div style="background:${it.addedLater?'#FFFBEB':'var(--surface-2)'};border:1px solid ${it.addedLater?'#FDE68A':'var(--border)'};border-radius:8px;padding:10px 12px;">
-            <div style="font-size:12px;font-weight:800;color:var(--maroon);margin-bottom:3px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-              <span style="flex:1;">بند ${i+1}: ${esc(it.name||'—')}</span>
-              ${it.price?`<span style="background:var(--gold-soft);color:var(--maroon);font-size:10px;font-weight:800;padding:2px 8px;border-radius:20px;">${fmtMoney(Number(it.price))} ر.س</span>`:''}
-              ${it.addedLater?`<span style="background:#C89A4A;color:#fff;font-size:9px;font-weight:800;padding:2px 7px;border-radius:20px;"><i class="ti ti-sparkles"></i> جديد</span>`:''}
-              ${it.edited?`<span style="background:#2563EB;color:#fff;font-size:9px;font-weight:800;padding:2px 7px;border-radius:20px;"><i class="ti ti-pencil"></i> معدّل</span>`:''}
-              ${deptRestricted?'':`<button class="btn btn-out btn-xs" style="padding:2px 8px;" onclick="openAddItemModal('${key}',${i})" title="تعديل البند"><i class="ti ti-pencil"></i></button>`}
-              ${chips?`<button class="btn btn-out btn-xs" style="padding:2px 8px;" onclick="downloadAllItemFiles('${key}',${i})" title="تنزيل كل مرفقات البند"><i class="ti ti-download"></i> تنزيل الكل</button>`:''}
-            </div>
-            ${it.addedLater?`<div style="font-size:10px;color:#92400E;margin-bottom:5px;">أُضيف بواسطة ${esc(it.addedBy||'—')} بتاريخ ${(it.addedAt||'').split('T')[0]||'—'}</div>`:''}
-            ${it.edited?`<div style="font-size:10px;color:#1E40AF;margin-bottom:5px;">آخر تعديل بواسطة ${esc(it.editedBy||'—')} بتاريخ ${(it.editedAt||'').split('T')[0]||'—'}</div>`:''}
-            ${it.details?`<div style="font-size:11px;color:var(--text-2);margin-bottom:6px;line-height:1.6;">${esc(it.details)}</div>`:''}
-            <div style="display:flex;flex-wrap:wrap;gap:6px;">${chips||'<span style="font-size:10px;color:var(--text-3);">لا توجد مرفقات لهذا البند</span>'}</div>
-          </div>`;
-        }).join('')}
-      </div>
-      ${deptRestricted?'':`<button class="btn btn-out btn-xs" style="margin-top:8px;" onclick="openAddItemModal('${key}')"><i class="ti ti-square-rounded-plus"></i> إضافة بند جديد للطلب</button>`}
-    </div>`:`
-    <div class="di" style="grid-column:1/-1;border-top:1px solid var(--border-soft);padding-top:10px;">
-      ${deptRestricted?'':`<button class="btn btn-out btn-xs" onclick="openAddItemModal('${key}')"><i class="ti ti-square-rounded-plus"></i> إضافة بند جديد للطلب</button>`}
+  const itemsSection=`<div class="di" style="grid-column:1/-1;border-top:1px solid var(--border-soft);padding-top:10px;">
+      <span class="dk">📦 بنود الطلب — كل بند له سير عمل ونسخ تصميم مستقلة</span>
+      <div style="margin-top:8px;">${renderOrderItemsCards(o,key,canAct)}</div>
     </div>`;
   const pLink=o.approvedPrintFile?`<a href="${o.approvedPrintFile}" download class="file-download-link"><i class="ti ti-printer"></i> ملف الطباعة</a>`:o.printTo==='none'?'—':'— بانتظار الاعتماد';
   const wLink=o.approvedWorkshopFile?`<a href="${o.approvedWorkshopFile}" download class="file-download-link"><i class="ti ti-box"></i> مخطط الورشة</a>`:o.workshopTo==='none'?'—':'— بانتظار الاعتماد';
