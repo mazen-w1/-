@@ -99,7 +99,6 @@ section{position:relative;}
 .header-cta{display:flex;align-items:center;gap:12px;}
 .nav-toggle{display:none;width:42px;height:42px;border-radius:12px;align-items:center;justify-content:center;font-size:22px;color:var(--burgundy);background:var(--surface-2);}
 #site-header:not(.scrolled) .nav-toggle{color:#fff;background:rgba(255,255,255,.15);}
-#site-header:not(.scrolled) .staff-login-link{color:#fff;}
 @media(max-width:960px){
   .nav-links{position:fixed;top:0;bottom:0;left:0;width:78%;max-width:320px;background:#fff;flex-direction:column;align-items:flex-start;justify-content:flex-start;gap:6px;padding:100px 28px 28px;box-shadow:var(--shadow-lg);transform:translateX(-100%);transition:transform .35s cubic-bezier(.22,1,.36,1);z-index:600;}
   .nav-links.open{transform:translateX(0);}
@@ -339,10 +338,8 @@ footer{background:var(--burgundy-dark);color:rgba(255,255,255,.75);padding:70px 
       <a href="#about" onclick="closeMobileNav()">من نحن</a>
       <a href="#tracking" onclick="closeMobileNav()">تتبع الطلب</a>
       <a href="#contact" onclick="closeMobileNav()">تواصل معنا</a>
-      <a href="app.html">دخول الموظفين</a>
     </nav>
     <div class="header-cta">
-      <a href="app.html" class="btn btn-outline btn-sm btn-gold-desktop staff-login-link" title="دخول الموظفين"><i class="ti ti-login"></i> دخول الموظفين</a>
       <a href="#contact" class="btn btn-gold btn-sm btn-gold-desktop"><i class="ti ti-send-2"></i> طلب عرض سعر</a>
       <button class="nav-toggle" onclick="toggleMobileNav()"><i class="ti ti-menu-2"></i></button>
     </div>
@@ -581,7 +578,6 @@ footer{background:var(--burgundy-dark);color:rgba(255,255,255,.75);padding:70px 
           <a href="#portfolio">أعمالنا</a>
           <a href="#about">من نحن</a>
           <a href="#tracking">تتبع الطلب</a>
-          <a href="app.html">دخول الموظفين</a>
         </div>
       </div>
       <div>
