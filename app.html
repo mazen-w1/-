@@ -2057,10 +2057,25 @@ function itemVersions(it){
   if(!legacyFiles.length)return[];
   return[{id:'legacy',label:'النسخة الأصلية',status:'قيد التنفيذ',files:legacyFiles,notes:it.details||'',createdBy:it.addedBy||it.createdBy||'—',createdAt:it.addedAt||it.createdAt||'',_legacy:true}];
 }
+// Workflow control rule: an item cannot move to its next stage until the
+// required deliverable for its CURRENT stage exists — a client-approved
+// design version (with files) while at the design stage, or simply an
+// uploaded file at any other stage (print-ready file, workshop completion
+// photo, delivery proof, etc.). Versions are tagged with the stage they were
+// added at, so this check is scoped to the item's current stage only.
+function itemVersionsForStage(it,stageKey){return itemVersions(it).filter(v=>(v.stage||'design')===stageKey);}
+function itemStageRequirementMet(it,o){
+  const dept=itemCurrentDept(it,o);
+  if(dept==='done')return true;
+  const vers=itemVersionsForStage(it,dept);
+  if(dept==='design')return vers.some(v=>v.status==='معتمد من العميل'&&v.files&&v.files.length>0);
+  return vers.some(v=>v.files&&v.files.length>0);
+}
 async function advanceItemDept(key,idx){
   const o=orders[key];if(!o)return;
   const it=o.orderItems[idx];if(!it)return;
   const nd=itemNextDept(it,o);if(!nd)return;
+  if(!itemStageRequirementMet(it,o)){toast('⚠️ يجب رفع الملف المطلوب لهذه المرحلة'+(itemCurrentDept(it,o)==='design'?' واعتماد العميل عليه':'')+' أولاً');return;}
   showSaving('جاري تحديث حالة البند...');
   try{
     const items=[...o.orderItems];items[idx]={...items[idx],currentDept:nd};
@@ -2095,7 +2110,7 @@ async function saveNewItemVersion(key,idx){
   const notes=notesEl?notesEl.value.trim():'';
   const files=(window._newVerFiles&&window._newVerFiles[idx])||[];
   const existing=itemVersions(it).filter(v=>!v._legacy);
-  const newVersion={id:'v'+Date.now(),label:'نسخة '+(existing.length+1),status:'قيد التنفيذ',files,notes,createdBy:cu.name,createdAt:new Date().toISOString()};
+  const newVersion={id:'v'+Date.now(),label:'نسخة '+(existing.length+1),status:'قيد التنفيذ',stage:itemCurrentDept(it,o),files,notes,createdBy:cu.name,createdAt:new Date().toISOString()};
   showSaving('جاري حفظ النسخة...');
   try{
     const items=[...o.orderItems];
@@ -2137,6 +2152,20 @@ function renderOrderItemsCards(o,key,canAct){
   if(!items.length){
     return `<div style="text-align:center;color:var(--text-3);padding:20px;">لا توجد بنود في هذا الطلب${deptRestricted?'':`<div style="margin-top:8px;"><button class="btn btn-out btn-xs" onclick="openAddItemModal('${key}')"><i class="ti ti-square-rounded-plus"></i> إضافة بند جديد</button></div>`}</div>`;
   }
+  const renderVerCard=(v,key,i,allowEdit)=>{
+    const approved=v.status==='معتمد من العميل';
+    const filesHtml=(v.files&&v.files.length)?v.files.map(f=>`<a href="${f.data}" download="${esc(f.name)}" class="file-download-link"><i class="ti ti-download"></i>${esc(f.name)}</a>`).join(' '):'<span style="font-size:10px;color:var(--text-3);">لا توجد مرفقات</span>';
+    return `<div class="item-ver-card ${approved?'approved':''}">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
+        <strong style="font-size:11.5px;color:var(--maroon);">${esc(v.label||'نسخة')}</strong>
+        <span class="badge ${approved?'b-done':'b-proc'}">${approved?'✅ معتمد من العميل':'🟡 قيد التنفيذ'}</span>
+      </div>
+      ${v.notes?`<div style="font-size:11px;color:var(--text-2);margin-top:5px;line-height:1.6;">${esc(v.notes)}</div>`:''}
+      <div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px;">${filesHtml}</div>
+      <div style="font-size:9.5px;color:var(--text-3);margin-top:5px;">${esc(v.createdBy||'—')} ${v.createdAt?'· '+formatDate(v.createdAt):''}</div>
+      ${(allowEdit&&!v._legacy)?`<button class="btn ${approved?'btn-out':'btn-green'} btn-xs" style="margin-top:6px;" onclick="toggleVersionApproval('${key}',${i},'${v.id}')"><i class="ti ${approved?'ti-x':'ti-check'}"></i> ${approved?'إلغاء الاعتماد':'اعتماد من العميل'}</button>`:''}
+    </div>`;
+  };
   const cardsHtml=items.map((it,i)=>{
     const dept=itemCurrentDept(it,o);
     const seq=itemDeptSeq(o);
@@ -2147,34 +2176,35 @@ function renderOrderItemsCards(o,key,canAct){
       return `<div class="wf-htimeline-node ${st}" style="flex:1;"><div class="wf-htimeline-dot ${st}" style="width:26px;height:26px;font-size:12px;"><i class="ti ${st==='done'?'ti-check':meta.icon}"></i></div><div class="wf-htimeline-lbl" style="font-size:9.5px;">${meta.label}</div></div>`;
     }).join('');
     const nd=itemNextDept(it,o);
-    const advanceBtn=(canAct&&nd)?`<button class="btn btn-out btn-xs" onclick="advanceItemDept('${key}',${i})"><i class="ti ti-arrow-left"></i> نقل البند لمرحلة ${WF_DEPT_META[nd]?.label||nd}</button>`:'';
-    const versions=itemVersions(it);
-    const versionsHtml=versions.length?versions.map(v=>{
-      const approved=v.status==='معتمد من العميل';
-      const filesHtml=(v.files&&v.files.length)?v.files.map(f=>`<a href="${f.data}" download="${esc(f.name)}" class="file-download-link"><i class="ti ti-download"></i>${esc(f.name)}</a>`).join(' '):'<span style="font-size:10px;color:var(--text-3);">لا توجد مرفقات</span>';
-      return `<div class="item-ver-card ${approved?'approved':''}">
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
-          <strong style="font-size:11.5px;color:var(--maroon);">${esc(v.label||'نسخة')}</strong>
-          <span class="badge ${approved?'b-done':'b-proc'}">${approved?'✅ معتمد من العميل':'🟡 قيد التنفيذ'}</span>
-        </div>
-        ${v.notes?`<div style="font-size:11px;color:var(--text-2);margin-top:5px;line-height:1.6;">${esc(v.notes)}</div>`:''}
-        <div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px;">${filesHtml}</div>
-        <div style="font-size:9.5px;color:var(--text-3);margin-top:5px;">${esc(v.createdBy||'—')} ${v.createdAt?'· '+formatDate(v.createdAt):''}</div>
-        ${(canAct&&!v._legacy)?`<button class="btn ${approved?'btn-out':'btn-green'} btn-xs" style="margin-top:6px;" onclick="toggleVersionApproval('${key}',${i},'${v.id}')"><i class="ti ${approved?'ti-x':'ti-check'}"></i> ${approved?'إلغاء الاعتماد':'اعتماد من العميل'}</button>`:''}
-      </div>`;
-    }).join(''):'<div style="font-size:11px;color:var(--text-3);">لا توجد نسخ تصميم بعد</div>';
+    const reqMet=itemStageRequirementMet(it,o);
+    const advanceBtn=nd?(canAct?(reqMet
+        ?`<button class="btn btn-brand btn-xs" onclick="advanceItemDept('${key}',${i})"><i class="ti ti-arrow-left"></i> نقل البند لمرحلة ${WF_DEPT_META[nd]?.label||nd}</button>`
+        :`<button class="btn btn-out btn-xs" disabled style="opacity:.5;cursor:not-allowed;" title="يجب رفع الملف المطلوب${dept==='design'?' واعتماد العميل عليه':''} أولاً"><i class="ti ti-lock"></i> نقل البند لمرحلة ${WF_DEPT_META[nd]?.label||nd}</button>
+           <div style="font-size:10px;color:#DC2626;margin-top:4px;"><i class="ti ti-alert-triangle"></i> يتطلب رفع ${dept==='design'?'نسخة معتمدة من العميل':'ملف لهذه المرحلة'} قبل النقل</div>`)
+      :''):'';
+    const allVersions=itemVersions(it);
+    const curStageVersions=allVersions.filter(v=>(v.stage||'design')===dept);
+    const pastStages=seq.slice(0,curIdx);
+    const historyHtml=pastStages.map(pk=>{
+      const pv=allVersions.filter(v=>(v.stage||'design')===pk);
+      if(!pv.length)return'';
+      const meta=WF_DEPT_META[pk]||{label:pk};
+      return omAccordion('ti-history',`سجل مرحلة ${meta.label} (${pv.length})`,pv.map(v=>renderVerCard(v,key,i,false)).join(''),false);
+    }).join('');
+    const curStageHtml=curStageVersions.length?curStageVersions.map(v=>renderVerCard(v,key,i,canAct)).join(''):'<div style="font-size:11px;color:var(--text-3);">لا توجد نسخ لهذه المرحلة بعد</div>';
     return `<div class="order-item-card">
       <div class="order-item-card-head">
-        <div><strong style="font-size:13.5px;color:var(--maroon);">بند ${i+1}: ${esc(it.name||'—')}</strong>${it.price?` <span style="background:var(--gold-soft);color:var(--maroon);font-size:10px;font-weight:800;padding:2px 8px;border-radius:20px;">${fmtMoney(Number(it.price))} ر.س</span>`:''}</div>
+        <strong style="font-size:13.5px;color:var(--maroon);">بند ${i+1}: ${esc(it.name||'—')}</strong>
         <span class="badge ${dept==='done'?'b-done':'b-new'}">${WF_DEPT_META[dept]?.label||dept}</span>
       </div>
       <div class="order-item-htimeline">${tlHtml}</div>
       ${advanceBtn?`<div style="margin:8px 0;">${advanceBtn}</div>`:''}
       ${it.requiredFiles?`<div style="font-size:11px;color:var(--text-2);margin-top:6px;"><strong style="color:var(--maroon-mid);">الملفات المطلوبة:</strong> ${esc(it.requiredFiles)}</div>`:''}
-      <div class="order-item-versions">${versionsHtml}</div>
+      ${historyHtml}
+      <div class="order-item-versions">${curStageHtml}</div>
       ${deptRestricted&&!canAct?'':`
       <div style="margin-top:8px;">
-        <button class="btn btn-out btn-xs" onclick="toggleAddItemVersionForm(${i})"><i class="ti ti-plus"></i> إضافة نسخة تصميم</button>
+        <button class="btn btn-out btn-xs" onclick="toggleAddItemVersionForm(${i})"><i class="ti ti-plus"></i> إضافة نسخة لهذه المرحلة</button>
         <div id="add-ver-form-${i}" style="display:none;flex-direction:column;gap:8px;margin-top:8px;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:10px;padding:10px;">
           <textarea id="new-ver-notes-${i}" placeholder="ملاحظات النسخة..." style="min-height:50px;font-size:12px;"></textarea>
           <div class="dept-upload-box" onclick="document.getElementById('new-ver-file-${i}').click()" style="padding:10px;"><i class="ti ti-upload"></i> اضغط لإرفاق ملفات النسخة</div>
@@ -3006,7 +3036,6 @@ function openWfInlinePanel(key,skipScroll){
   window._wfInlinePanelKey=key;
   document.querySelectorAll('.wf-card').forEach(c=>c.classList.toggle('wf-card-active',c.getAttribute('data-key')===key));
   const t=cu.type,isMine=isMyOrder(o),canAct=t==='admin'||isMine;
-  const canSeePayment=['admin','follower','receiver'].includes(t);
   const nd=getNextDept(o);
   const _prevDept=getPrevDept(o);
   const nextLabels={design:'اعتماد التصميم والإرسال للمرحلة التالية ➔',external:'إنهاء التوريد والنقل ➔',print:'إتمام الطباعة ➔',workshop:'اكتمال التركيب ✓'};
@@ -3021,11 +3050,8 @@ function openWfInlinePanel(key,skipScroll){
     }
   }
   const revertBtn=(t==='admin'&&_prevDept)?`<button class="btn btn-out btn-sm" onclick="revertOrderToPrevDept('${key}')"><i class="ti ti-arrow-right"></i> إرجاع للمرحلة السابقة</button>`:'';
-  const primaryItem=(o.orderItems&&o.orderItems.length)?o.orderItems[0]:null;
   const pct=orderProgress(o);
   const statusLabel=o.currentDept==='done'?'مكتمل':'قيد التنفيذ';
-  const remaining=Number(o.remainingAmount!=null?o.remainingAmount:Math.max(0,Number(o.totalAmount||0)-Number(o.paidAmount||0)));
-  const fileChipsHtml=(o.files&&Array.isArray(o.files)&&o.files.length)?`<div class="wf-file-preview-row">${o.files.map(f=>f&&f.data&&f.name?`<a href="${f.data}" download="${esc(f.name)}" class="file-download-link"><i class="ti ti-paperclip"></i> ${esc(f.name)}</a>`:'').join('')}</div>`:`<div style="font-size:11px;color:var(--text-3);margin-top:8px;">لا توجد مرفقات على مستوى الطلب</div>`;
   const timelineSeq=[...getActiveDepts(o),'done'];
   const curIdx=o.currentDept==='done'?timelineSeq.length-1:timelineSeq.indexOf(o.currentDept);
   const tlNodesHtml=timelineSeq.map((dk,i)=>{
@@ -3046,50 +3072,17 @@ function openWfInlinePanel(key,skipScroll){
           <div class="wf-detail-close" onclick="closeWfInlinePanel()" title="إغلاق"><i class="ti ti-x"></i></div>
         </div>
       </div>
-      <div class="wf-detail-grid">
+      <div class="wf-detail-grid" style="grid-template-columns:repeat(2,1fr);">
         <div class="wf-detail-card">
           <div class="wf-detail-card-title"><i class="ti ti-user-circle"></i> العميل</div>
           <div class="wf-detail-row"><span class="wf-dk">الاسم</span><span class="wf-dv">${esc(o.client||'—')}</span></div>
-          <div class="wf-detail-row"><span class="wf-dk">الهاتف</span><span class="wf-dv">${esc(o.phone||'—')} ${o.phone&&o.phone!=='—'?`<button class="btn btn-whatsapp btn-xs" onclick="event.stopPropagation();openWhatsapp('${o.phone}')"><i class="ti ti-brand-whatsapp"></i></button>`:''}</span></div>
-          <div class="wf-detail-row"><span class="wf-dk">البريد الإلكتروني</span><span class="wf-dv">—</span></div>
-          <div class="wf-detail-row"><span class="wf-dk">الشركة</span><span class="wf-dv">—</span></div>
+          <div class="wf-detail-row"><span class="wf-dk">رقم الجوال</span><span class="wf-dv">${esc(o.phone||'—')} ${o.phone&&o.phone!=='—'?`<button class="btn btn-whatsapp btn-xs" onclick="event.stopPropagation();openWhatsapp('${o.phone}')"><i class="ti ti-brand-whatsapp"></i></button>`:''}</span></div>
         </div>
         <div class="wf-detail-card">
-          <div class="wf-detail-card-title"><i class="ti ti-package"></i> الطلب</div>
-          <div class="wf-detail-row"><span class="wf-dk">الخدمة</span><span class="wf-dv">${esc(o.service||'—')}</span></div>
-          <div class="wf-detail-row"><span class="wf-dk">المنتج</span><span class="wf-dv">${esc((primaryItem&&primaryItem.name)||o.service||'—')}</span></div>
-          <div class="wf-detail-row"><span class="wf-dk">الكمية</span><span class="wf-dv">${primaryItem&&primaryItem.qty?primaryItem.qty:'—'}</span></div>
-          <div class="wf-detail-row" style="display:block;"><span class="wf-dk">ملاحظات</span><div class="wf-dv" style="text-align:right;font-weight:400;margin-top:4px;">${esc(o.notes||'—')}</div></div>
-        </div>
-        <div class="wf-detail-card">
-          <div class="wf-detail-card-title"><i class="ti ti-user-cog"></i> الإسناد</div>
-          <div class="wf-detail-row"><span class="wf-dk">الموظف المسؤول</span><span class="wf-dv">${esc(currentPersonName(o))}</span></div>
-          <div class="wf-detail-row"><span class="wf-dk">القسم الحالي</span><span class="wf-dv">${deptBadge(o.currentDept)}</span></div>
-          <div class="wf-detail-row"><span class="wf-dk">تاريخ الإسناد</span><span class="wf-dv">${formatDate(o.stageStartDate||o.date)}</span></div>
-        </div>
-        <div class="wf-detail-card">
-          <div class="wf-detail-card-title"><i class="ti ti-calendar-time"></i> الجدولة</div>
-          <div class="wf-detail-row"><span class="wf-dk">تاريخ الطلب</span><span class="wf-dv">${orderDateTime(o)}</span></div>
+          <div class="wf-detail-card-title"><i class="ti ti-progress"></i> إجمالي تقدّم الطلب</div>
           <div class="wf-detail-row"><span class="wf-dk">تاريخ التسليم</span><span class="wf-dv">${deadlineDateTime(o)}</span></div>
-          <div class="wf-detail-row"><span class="wf-dk">الوقت المستغرق</span><span class="wf-dv">${fmtStageDuration(hoursAgo(o.stageStartDate||o.date))}</span></div>
-          <div class="wf-detail-row"><span class="wf-dk">الوقت المتبقي</span><span class="wf-dv">${wfRemainingLabel(o)}</span></div>
           <div class="wf-detail-progress-track"><div class="wf-detail-progress-fill" style="width:${pct}%;background:${progressColor(o)};"></div></div>
-        </div>
-        ${canSeePayment?`<div class="wf-detail-card">
-          <div class="wf-detail-card-title"><i class="ti ti-cash"></i> المالية</div>
-          <div class="wf-detail-row"><span class="wf-dk">الإجمالي</span><span class="wf-dv">${fmtMoney(Number(o.totalAmount||0))} ر.س</span></div>
-          <div class="wf-detail-row"><span class="wf-dk">المدفوع</span><span class="wf-dv" style="color:#059669;">${fmtMoney(Number(o.paidAmount||0))} ر.س</span></div>
-          <div class="wf-detail-row"><span class="wf-dk">المتبقي</span><span class="wf-dv" style="color:${remaining>0?'#DC2626':'#059669'};">${fmtMoney(remaining)} ر.س</span></div>
-          <div class="wf-detail-row" style="display:block;"><span class="wf-dk">طريقة الدفع</span><div style="margin-top:4px;">${orderPaymentChannelsHtml(o)||paymentBadge(o.paymentStatus)||'—'}</div></div>
-        </div>`:''}
-        <div class="wf-detail-card">
-          <div class="wf-detail-card-title"><i class="ti ti-paperclip"></i> المرفقات</div>
-          <div class="wf-dropzone" ondragover="event.preventDefault();this.classList.add('dragover');" ondragleave="this.classList.remove('dragover');" ondrop="wfPanelFileDrop(event,'${key}')" onclick="document.getElementById('wf-panel-file-input').click()">
-            <i class="ti ti-cloud-upload"></i>
-            <div style="font-size:11.5px;color:var(--text-2);margin-top:6px;">اسحب الملفات هنا أو اضغط للرفع</div>
-          </div>
-          <input type="file" id="wf-panel-file-input" multiple style="display:none" onchange="handleWfPanelFiles(this.files,'${key}')"/>
-          ${fileChipsHtml}
+          <div style="text-align:left;font-size:11px;color:var(--text-3);margin-top:4px;">${pct}%</div>
         </div>
       </div>
       <div style="margin-top:6px;">
@@ -3105,26 +3098,6 @@ function openWfInlinePanel(key,skipScroll){
     </div>`;
   slot.classList.add('open');
   if(!skipScroll)setTimeout(()=>slot.scrollIntoView({behavior:'smooth',block:'nearest'}),80);
-}
-async function wfPanelFileDrop(e,key){
-  e.preventDefault();e.currentTarget.classList.remove('dragover');
-  if(e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files.length)await handleWfPanelFiles(e.dataTransfer.files,key);
-}
-async function handleWfPanelFiles(files,key){
-  if(!files||!files.length)return;
-  const o=orders[key];if(!o)return;
-  showSaving('جاري رفع الملفات...');
-  try{
-    const existing=Array.isArray(o.files)?[...o.files]:[];
-    for(const f of Array.from(files)){
-      const b64=await convertFileToBase64(f,{order:key});
-      existing.push({data:b64,name:f.name});
-    }
-    await fbPatch(`orders/${key}`,{files:existing});
-    await loadData();hideSaving();
-    toast('✓ تم رفع '+files.length+' ملف');
-    openWfInlinePanel(key,true);
-  }catch(e){hideSaving();toast(e&&e.message?e.message:'⚠️ فشل رفع الملف');}
 }
 function toggleWfMultiMode(){
   window._wfMultiMode=!window._wfMultiMode;
@@ -5228,7 +5201,6 @@ function openOrderModal(key){
         :`<button class="btn btn-brand btn-sm" onclick="sendToNextDept('${key}','${nd}')"><i class="ti ti-arrow-left"></i> ${nextLabels[o.currentDept]||'إرسال للمرحلة التالية'}</button>`;
     }
   }
-  const canSeePayment=['admin','follower','receiver'].includes(t);
   const fileChips=(o.files&&Array.isArray(o.files)&&o.files.length>0)?o.files.map(f=>f&&f.data&&f.name?`<a href="${f.data}" download="${esc(f.name)}" class="file-download-link"><i class="ti ti-download"></i>${esc(f.name)}</a>`:'').join(' '):'— لا توجد ملفات مرفقة بالطلب';
   const itemsSection=`<div class="di" style="grid-column:1/-1;border-top:1px solid var(--border-soft);padding-top:10px;">
       <span class="dk">📦 بنود الطلب — كل بند له سير عمل ونسخ تصميم مستقلة</span>
@@ -5252,10 +5224,6 @@ function openOrderModal(key){
     else if(o.currentDept==='external')uploadArea=`<div class="dept-upload-box"><div class="dept-upload-title" style="color:#713F12"><i class="ti ti-world"></i> تحديث ملفات التوريد</div>
       <div class="fg"><input type="file" id="f-ext-input" accept="image/*,.pdf,.doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onchange="uploadFileDirect('${key}','externalFile','externalFileName','f-ext-input')"/></div></div>`;
   }
-  const paymentRow=canSeePayment?`<div class="di" style="grid-column:1/-1;border-top:1px solid var(--border-soft);padding-top:10px;">
-    <span class="dk">💳 الموقف المالي</span>
-    <span class="dv">${paymentBadge(o.paymentStatus)||'—'} ${(o.paymentStatus==='تم الدفع'||o.paymentStatus==='دفع جزئي')?`<span style="font-size:12px;color:#065F46">(${fmtMoney(Number(o.paidAmount||0))} ر.س)</span>`:''}${orderPaymentChannelsHtml(o)}</span>
-  </div>`:'';
   const canLogMaintenance=['admin','receiver','workshop'].includes(t);
   const _lastVisit=(o.maintenanceVisits&&o.maintenanceVisits.length)?o.maintenanceVisits[o.maintenanceVisits.length-1]:null;const _lastVisitDate=_lastVisit?(typeof _lastVisit==='object'?_lastVisit.date:_lastVisit):null;const _visitsHistory=(o.maintenanceVisits||[]).slice().reverse().map(v=>{const vd=typeof v==='object'?v:{date:v,reason:'',photo:''};return `<div style="border:1px solid var(--border-soft);border-radius:8px;padding:8px;margin-top:4px;width:100%;"><div style="font-size:11px;color:var(--text-3);">${vd.date?new Date(vd.date).toLocaleDateString('ar-SA'):'—'}</div>${vd.reason?`<div style="font-size:13px;margin-top:4px;">${esc(vd.reason)}</div>`:''}${vd.photo?`<a href="${vd.photo}" target="_blank" style="font-size:12px;color:var(--maroon);display:inline-block;margin-top:4px;"><i class="ti ti-photo"></i> عرض الصورة</a>`:''}</div>`;}).join('');
   const maintenanceRow=o.maintenanceContract?`<div class="di" style="grid-column:1/-1;border-top:1px solid var(--border-soft);padding-top:10px;">
@@ -5310,13 +5278,16 @@ function openOrderModal(key){
     ${stageBar(o,key)}
     <div class="dg" style="margin-bottom:10px;">
       <div class="di"><span class="dk">اسم العميل</span><span class="dv" style="font-weight:800;">${esc(o.client)}</span></div>
+      <div class="di"><span class="dk">رقم الجوال</span><span class="dv">${esc(o.phone||'—')} ${o.phone&&o.phone!=='—'?`<button class="btn btn-whatsapp btn-xs" style="margin-right:4px" onclick="openWhatsapp('${o.phone}')"><i class="ti ti-brand-whatsapp"></i></button>`:''}</span></div>
+      <div class="di"><span class="dk">تاريخ التسليم</span><span class="dv">${deadlineDateTime(o)} ${deadlineBadge(o.deadline)}</span></div>
+      <div class="di" style="grid-column:1/-1;"><span class="dk">إجمالي تقدّم الطلب</span>
+        <div class="wf-detail-progress-track" style="margin-top:4px;"><div class="wf-detail-progress-fill" style="width:${orderProgress(o)}%;background:${progressColor(o)};"></div></div>
+      </div>
+    </div>
+    ${omAccordion('ti-info-circle','تفاصيل إضافية',`
       <div class="di"><span class="dk">الخدمة</span><span class="dv">${esc(o.service)}</span></div>
       <div class="di"><span class="dk">الأولوية</span><span class="dv">${gpbadge(o.priority)}</span></div>
-      <div class="di"><span class="dk">تاريخ التسليم</span><span class="dv">${deadlineDateTime(o)} ${deadlineBadge(o.deadline)}</span></div>
-    </div>
-    ${omAccordion('ti-address-book','بيانات العميل',`
       <div class="di"><span class="dk">تاريخ ووقت الطلب</span><span class="dv">${orderDateTime(o)}</span></div>
-      <div class="di"><span class="dk">رقم الهاتف</span><span class="dv">${esc(o.phone||'—')} ${o.phone&&o.phone!=='—'?`<button class="btn btn-whatsapp btn-xs" style="margin-right:4px" onclick="openWhatsapp('${o.phone}')"><i class="ti ti-brand-whatsapp"></i></button>`:''}</span></div>
       <div class="di"><span class="dk">منشئ الطلب</span><span class="dv">${esc(o.createdBy||'—')}</span></div>
       <div class="di" style="grid-column:1/-1;border-top:1px solid var(--border-soft);padding-top:10px;"><span class="dk">ملاحظات ومواصفات</span><span class="dv" style="font-weight:400;background:var(--surface-2);padding:8px 12px;border-radius:var(--radius-sm);border:1px solid var(--border);display:block;margin-top:4px;">${esc(o.notes||'—')}</span></div>
     `)}
@@ -5328,9 +5299,8 @@ function openOrderModal(key){
       ${o.workshopDeptFile?`<div class="di" style="grid-column:1/-1"><span class="dk" style="color:#9A3412">📎 ملف الورشة عند التسجيل</span><span class="dv">${wdLink}</span></div>`:''}
       ${o.workshopFeedback?`<div class="di" style="grid-column:1/-1;border-top:1px solid var(--border-soft);padding-top:10px;"><span class="dk" style="color:#9A3412">📐 بيانات القياسات الميدانية</span><span class="dv" style="font-weight:400;background:#FFEDD5;padding:8px;border-radius:6px;display:block;margin-top:4px;">${esc(o.workshopFeedback)}</span>${o.workshopSitePhoto?`<a href="${o.workshopSitePhoto}" download class="file-download-link" style="margin-top:6px;display:inline-flex;"><i class="ti ti-photo"></i> صورة الموقع</a>`:''}</div>`:''}
     `)}
-    ${omAccordion('ti-cash','الموقف المالي والجدول الزمني',`
+    ${omAccordion('ti-clock','الجدول الزمني',`
       ${maintOrderRow}
-      ${paymentRow}
       ${maintenanceRow}
       <div class="di" style="grid-column:1/-1;background:var(--surface-2);border-radius:var(--radius-sm);padding:10px;border:1px solid var(--border);">
         <span class="dk" style="color:var(--maroon);"><i class="ti ti-clock"></i> النافذة الزمنية</span>
