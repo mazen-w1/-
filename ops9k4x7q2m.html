@@ -1421,7 +1421,7 @@ const FINANCIAL_SHEET_ENDPOINT='https://script.google.com/macros/s/AKfycbxr4fQAf
 // storing them as base64 inside Firebase. Left as the placeholder below, isGDriveConfigured()
 // returns false and uploadFileDirect() safely falls back to the original Firebase-base64
 // behavior — nothing breaks, it simply doesn't use Drive until a real endpoint is supplied.
-const GDRIVE_UPLOAD_ENDPOINT='https://script.google.com/macros/s/AKfycbwdOJ9rqJdBaRoiARcqgR4OA3lG0xtsbWeDfcp3iNPFQKNX9Q6wOTomg1JJ5unRo28h/exec';
+const GDRIVE_UPLOAD_ENDPOINT='https://script.google.com/macros/s/AKfycbzULmZEsbikLIkww7rvymETCWuVWhKu5CzO9oIhw_HsBT2JAN50rJVGkti06VYcPYSA/exec';
 // Must match SHARED_SECRET in gdrive-upload-script.gs exactly, once that script is
 // redeployed with the hardened version — the endpoint is "Anyone" access, so this
 // secret is what stops a stranger who finds the URL from uploading into the Drive
@@ -1430,8 +1430,22 @@ const GDRIVE_UPLOAD_ENDPOINT='https://script.google.com/macros/s/AKfycbwdOJ9rqJd
 const GDRIVE_UPLOAD_SECRET='PASTE_YOUR_SHARED_SECRET_HERE';
 function isGDriveConfigured(){return!!GDRIVE_UPLOAD_ENDPOINT&&!GDRIVE_UPLOAD_ENDPOINT.includes('PASTE_YOUR');}
 async function uploadToGDrive(dataUrl,fileName){
-  const res=await fetch(GDRIVE_UPLOAD_ENDPOINT,{method:'POST',body:JSON.stringify({secret:GDRIVE_UPLOAD_SECRET,fileData:dataUrl,fileName})});
-  const j=await res.json();
+  let res;
+  try{
+    res=await fetch(GDRIVE_UPLOAD_ENDPOINT,{method:'POST',body:JSON.stringify({secret:GDRIVE_UPLOAD_SECRET,fileData:dataUrl,fileName})});
+  }catch(networkErr){
+    // Offline, DNS failure, or blocked by CORS/a proxy before any response came back —
+    // the caller (uploadFileDirect) catches this and falls back to Firebase silently.
+    throw new Error('gdrive-network-error');
+  }
+  let j=null;
+  try{
+    j=await res.json();
+  }catch(parseErr){
+    // Some networks/devices hand back an HTML error or captive-portal login page
+    // instead of JSON on failure — treat that the same as any other failed call.
+    throw new Error('gdrive-invalid-response');
+  }
   if(!j||!j.success)throw new Error((j&&j.error)||'gdrive-upload-failed');
   return j.url;
 }
