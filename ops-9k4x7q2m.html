@@ -388,14 +388,37 @@ input[type="password"]{direction:rtl;text-align:right;padding-left:40px;padding-
 /* ── Workflow: premium top stats + inline order-detail expansion panel ──
    Uses the site's existing design tokens (--maroon/--gold/--radius-*/--shadow-*)
    throughout so this matches the current brand identity exactly. ── */
-.wf-stats-row{display:grid;grid-template-columns:repeat(5,1fr);gap:16px;margin-bottom:20px;}
-@media(max-width:980px){.wf-stats-row{grid-template-columns:repeat(2,1fr);}}
-@media(max-width:520px){.wf-stats-row{grid-template-columns:1fr;}}
-.wf-stat-card{background:var(--surface);border:1px solid var(--border-soft);border-radius:var(--radius-xl);padding:18px 20px;display:flex;align-items:center;gap:14px;box-shadow:var(--shadow-sm);transition:transform .2s,box-shadow .2s;}
-.wf-stat-card:hover{transform:translateY(-3px);box-shadow:var(--shadow-md);}
-.wf-stat-icon{width:48px;height:48px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:21px;color:#fff;box-shadow:inset 0 0 0 1px rgba(255,255,255,.25);}
-.wf-stat-num{font-size:25px;font-weight:900;color:var(--text-1);line-height:1;}
-.wf-stat-lbl{font-size:11.5px;color:var(--text-3);font-weight:700;margin-top:4px;}
+/* ── Premium 3D workflow stat cards ─────────────────────────────────────── */
+.wf-stats-row{display:flex;flex-wrap:wrap;gap:20px;margin-bottom:24px;perspective:1200px;}
+@media(max-width:600px){.wf-stats-row{justify-content:center;}}
+.wf-stat-card{
+  position:relative;width:250px;height:125px;flex:0 0 auto;box-sizing:border-box;
+  border-radius:24px;padding:16px 18px;display:flex;align-items:center;gap:14px;
+  background:linear-gradient(145deg,rgba(255,255,255,.78),rgba(255,255,255,.38));
+  backdrop-filter:blur(14px) saturate(160%);-webkit-backdrop-filter:blur(14px) saturate(160%);
+  border:1px solid rgba(255,255,255,.55);
+  box-shadow:0 1px 2px rgba(20,10,10,.06),0 8px 20px rgba(74,14,23,.10),0 20px 40px rgba(74,14,23,.06),inset 0 1px 0 rgba(255,255,255,.6);
+  overflow:hidden;cursor:pointer;transform-style:preserve-3d;will-change:transform,box-shadow;
+  transition:transform .35s cubic-bezier(.2,.8,.2,1),box-shadow .35s cubic-bezier(.2,.8,.2,1);
+  opacity:0;animation:wfStatFadeIn .55s cubic-bezier(.2,.8,.2,1) forwards;
+}
+.wf-stat-card::before{content:'';position:absolute;inset:0;background:var(--stat-grad,transparent);opacity:.10;z-index:0;border-radius:inherit;pointer-events:none;}
+.wf-stat-card.wf-stat-card-locked{cursor:default;}
+.wf-stat-card:hover{box-shadow:0 2px 4px rgba(20,10,10,.08),0 14px 28px rgba(74,14,23,.16),0 28px 56px rgba(74,14,23,.12),inset 0 1px 0 rgba(255,255,255,.7);}
+.wf-stat-card.wf-stat-pressed{transition:transform .12s ease,box-shadow .12s ease;}
+@keyframes wfStatFadeIn{from{opacity:0;transform:translateX(-18px) translateY(6px);}to{opacity:1;transform:translateX(0) translateY(0);}}
+.wf-stat-shine{position:absolute;inset:0;pointer-events:none;border-radius:inherit;transition:background .08s linear;mix-blend-mode:overlay;z-index:1;}
+.wf-stat-ripple{position:absolute;border-radius:50%;background:radial-gradient(circle,rgba(255,255,255,.55),rgba(255,255,255,0) 70%);transform:scale(0);animation:wfStatRipple .6s ease-out forwards;pointer-events:none;z-index:2;}
+@keyframes wfStatRipple{to{transform:scale(1);opacity:0;}}
+.wf-stat-icon{position:relative;z-index:2;width:52px;height:52px;border-radius:16px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:22px;color:#fff;box-shadow:0 6px 16px rgba(0,0,0,.18),inset 0 0 0 1px rgba(255,255,255,.3);animation:wfIconFloat 3.2s ease-in-out infinite,wfIconPulse 4.5s ease-in-out infinite;}
+@keyframes wfIconFloat{0%,100%{transform:translateY(0);}50%{transform:translateY(-4px);}}
+@keyframes wfIconPulse{0%,88%,100%{box-shadow:0 6px 16px rgba(0,0,0,.18),inset 0 0 0 1px rgba(255,255,255,.3),0 0 0 0 rgba(255,255,255,0);}94%{box-shadow:0 6px 16px rgba(0,0,0,.18),inset 0 0 0 1px rgba(255,255,255,.3),0 0 0 8px rgba(255,255,255,.12);}}
+.wf-stat-body{position:relative;z-index:2;flex:1;min-width:0;}
+.wf-stat-num{font-size:26px;font-weight:900;color:var(--text-1);line-height:1;}
+.wf-stat-lbl{font-size:11.5px;color:var(--text-3);font-weight:700;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.wf-stat-progress-track{margin-top:8px;height:5px;border-radius:6px;background:rgba(0,0,0,.07);overflow:hidden;}
+.wf-stat-progress-fill{display:block;height:100%;border-radius:6px;width:0%;transition:width 1.1s cubic-bezier(.2,.8,.2,1);box-shadow:0 0 10px rgba(212,175,55,.55);}
+@media(prefers-reduced-motion:reduce){.wf-stat-card,.wf-stat-icon{animation:none!important;transition:none!important;}}
 .wf-card-active{outline:2px solid var(--maroon);box-shadow:var(--shadow-lg)!important;}
 .wf-detail-panel{max-height:0;opacity:0;overflow:hidden;transition:max-height .38s cubic-bezier(.22,1,.36,1),opacity .3s;}
 .wf-detail-panel.open{max-height:none;opacity:1;overflow:visible;}
@@ -2285,6 +2308,35 @@ function _refreshOrderItemsViews(key){
   if(window._openOrderModalKey===key&&document.getElementById('order-modal')?.classList.contains('open'))openOrderModal(key);
   if(window._wfInlinePanelKey===key)openWfInlinePanel(key,true);
 }
+// Dedicated "Approved Design" / "Proof Design" summary for Print & Workshop staff —
+// pulls from the per-item design-stage version history (each version already
+// carries an approved/proof status + its own files), so print/workshop can go
+// straight to the right file without digging through every item's accordion.
+// Falls back to the legacy single order-level approvedPrintFile/approvedWorkshopFile
+// for older orders created before per-item design versioning existed.
+function renderPrintWorkshopDesignFiles(o){
+  const items=(o.orderItems&&Array.isArray(o.orderItems))?o.orderItems:[];
+  const approved=[],proof=[];
+  items.forEach((it,i)=>{
+    const versions=itemVersions(it).filter(v=>(v.stage||'design')==='design');
+    versions.forEach(v=>{
+      const files=(v.files&&v.files.length)?v.files:[];
+      const bucket=(v.status==='معتمد من العميل')?approved:proof;
+      files.forEach(f=>bucket.push({itemName:it.name||('بند '+(i+1)),fileName:f.name,fileData:f.data}));
+    });
+  });
+  if(!approved.length&&o.approvedPrintFile)approved.push({itemName:'ملف الطباعة',fileName:o.approvedPrintFileName||'ملف',fileData:o.approvedPrintFile});
+  if(!approved.length&&o.approvedWorkshopFile)approved.push({itemName:'مخطط الورشة',fileName:o.approvedWorkshopFileName||'ملف',fileData:o.approvedWorkshopFile});
+  const linkify=list=>list.length?list.map(e=>`<a href="${e.fileData}" download="${esc(e.fileName)}" class="file-download-link"><i class="ti ti-download"></i>${esc(e.itemName)} — ${esc(e.fileName)}</a>`).join(' '):'<span style="font-size:11px;color:var(--text-3);">لا توجد ملفات بعد</span>';
+  return `<div class="di" style="grid-column:1/-1;border-top:1px solid var(--border-soft);padding-top:10px;">
+      <span class="dk" style="color:#065F46">✅ تصميم معتمد</span>
+      <div class="dv" style="display:flex;flex-wrap:wrap;gap:6px;">${linkify(approved)}</div>
+    </div>
+    <div class="di" style="grid-column:1/-1;">
+      <span class="dk" style="color:#92400E">🎨 تصميم بروفة</span>
+      <div class="dv" style="display:flex;flex-wrap:wrap;gap:6px;">${linkify(proof)}</div>
+    </div>`;
+}
 function renderOrderItemsCards(o,key,canAct){
   const items=o.orderItems&&Array.isArray(o.orderItems)?o.orderItems:[];
   const deptRestricted=['designer','printer','workshop','follower'].includes(cu.type);
@@ -2974,18 +3026,30 @@ function renderWfKanbanView(){
       <div class="wf-kanban-list">${cardsHtml}</div>
     </div>`;
   }).join('');
+  const _deptRoleKeyOuter={designer:'design',printer:'print',workshop:'workshop',external:'external'}[cu.type];
   const _wfStats=[
-    {label:'إجمالي الطلبات',num:arr.length,icon:'ti-inbox',grad:'linear-gradient(135deg,var(--maroon),var(--maroon-mid))'},
-    {label:'التصميم',num:buckets.design.length,icon:'ti-brush',grad:'linear-gradient(135deg,#6B21A8,#8B3FC7)'},
-    {label:'الطباعة',num:buckets.print.length,icon:'ti-printer',grad:'linear-gradient(135deg,#3730A3,#4F46C4)'},
-    {label:'الورشة',num:buckets.workshop.length,icon:'ti-tool',grad:'linear-gradient(135deg,#9A3412,#C2571F)'},
-    {label:'التسليم',num:buckets.done.length+buckets.completed.length,icon:'ti-circle-check',grad:'linear-gradient(135deg,#10B981,#34D399)'}
+    {key:'total',label:'إجمالي الطلبات',num:arr.length,icon:'ti-inbox',grad:'linear-gradient(135deg,var(--maroon),var(--maroon-mid))'},
+    {key:'design',label:'التصميم',num:buckets.design.length,icon:'ti-brush',grad:'linear-gradient(135deg,#6B21A8,#8B3FC7)'},
+    {key:'print',label:'الطباعة',num:buckets.print.length,icon:'ti-printer',grad:'linear-gradient(135deg,#3730A3,#4F46C4)'},
+    {key:'workshop',label:'الورشة',num:buckets.workshop.length,icon:'ti-tool',grad:'linear-gradient(135deg,#9A3412,#C2571F)'},
+    {key:'done',label:'التسليم',num:buckets.done.length+buckets.completed.length,icon:'ti-circle-check',grad:'linear-gradient(135deg,#10B981,#34D399)'}
   ];
-  const statsHtml=`<div class="wf-stats-row">${_wfStats.map(s=>`
-    <div class="wf-stat-card">
+  const _wfStatsMax=Math.max(1,..._wfStats.map(s=>s.num));
+  const statsHtml=`<div class="wf-stats-row">${_wfStats.map((s,idx)=>{
+    const pct=Math.round((s.num/_wfStatsMax)*100);
+    const clickable=s.key==='total'||!_deptRoleKeyOuter||s.key===_deptRoleKeyOuter;
+    return `
+    <div class="wf-stat-card${clickable?'':' wf-stat-card-locked'}" style="--stat-grad:${s.grad};animation-delay:${(idx*.25).toFixed(2)}s;" data-key="${s.key}"
+      onmousemove="_wfStatTilt(event,this)" onmouseleave="_wfStatTiltReset(this)" onclick="_wfStatCardClick(event,this,'${s.key}')">
+      <div class="wf-stat-shine"></div>
       <div class="wf-stat-icon" style="background:${s.grad};"><i class="ti ${s.icon}"></i></div>
-      <div><div class="wf-stat-num">${s.num}</div><div class="wf-stat-lbl">${s.label}</div></div>
-    </div>`).join('')}</div>`;
+      <div class="wf-stat-body">
+        <div class="wf-stat-num" data-count-target="${s.num}">0</div>
+        <div class="wf-stat-lbl">${s.label}</div>
+        <div class="wf-stat-progress-track"><div class="wf-stat-progress-fill" data-target-pct="${pct}"></div></div>
+      </div>
+    </div>`;
+  }).join('')}</div>`;
   document.getElementById('wf-view-body').innerHTML=`
     <div id="wf-content">
       ${statsHtml}
@@ -3000,6 +3064,73 @@ function renderWfKanbanView(){
     </div>
     <div id="wf-detail-panel-slot" class="wf-detail-panel"></div>`;
   if(window._wfInlinePanelKey&&orders[window._wfInlinePanelKey])openWfInlinePanel(window._wfInlinePanelKey,true);
+  initWfStatsAnimations();
+}
+// ── Premium workflow stat cards: interactions & load-in animations ──
+function initWfStatsAnimations(){
+  document.querySelectorAll('#wf-content .wf-stat-num[data-count-target]').forEach(el=>{
+    const target=parseInt(el.getAttribute('data-count-target'),10)||0;
+    _wfStatCountUp(el,target);
+  });
+  requestAnimationFrame(()=>{
+    requestAnimationFrame(()=>{
+      document.querySelectorAll('#wf-content .wf-stat-progress-fill[data-target-pct]').forEach(el=>{
+        el.style.width=el.getAttribute('data-target-pct')+'%';
+      });
+    });
+  });
+}
+function _wfStatCountUp(el,target,duration){
+  duration=duration||900;
+  const start=performance.now();
+  function step(now){
+    const p=Math.min(1,(now-start)/duration);
+    const eased=1-Math.pow(1-p,3);
+    el.textContent=Math.round(eased*target);
+    if(p<1)requestAnimationFrame(step);else el.textContent=target;
+  }
+  requestAnimationFrame(step);
+}
+function _wfStatTilt(e,el){
+  const rect=el.getBoundingClientRect();
+  const x=e.clientX-rect.left,y=e.clientY-rect.top;
+  const cx=rect.width/2,cy=rect.height/2;
+  const rotY=((x-cx)/cx)*8;
+  const rotX=-((y-cy)/cy)*8;
+  el.style.transform=`translateY(-8px) scale(1.03) rotateX(${rotX}deg) rotateY(${rotY}deg)`;
+  const shine=el.querySelector('.wf-stat-shine');
+  if(shine)shine.style.background=`radial-gradient(circle at ${x}px ${y}px, rgba(255,255,255,.4), transparent 55%)`;
+}
+function _wfStatTiltReset(el){
+  el.style.transform='';
+  const shine=el.querySelector('.wf-stat-shine');
+  if(shine)shine.style.background='';
+}
+function _wfStatRipple(e,el){
+  const rect=el.getBoundingClientRect();
+  const ripple=document.createElement('span');
+  ripple.className='wf-stat-ripple';
+  const size=Math.max(rect.width,rect.height)*1.4;
+  ripple.style.width=ripple.style.height=size+'px';
+  ripple.style.left=(e.clientX-rect.left-size/2)+'px';
+  ripple.style.top=(e.clientY-rect.top-size/2)+'px';
+  el.appendChild(ripple);
+  ripple.addEventListener('animationend',()=>ripple.remove());
+}
+function _wfStatCardClick(e,el,key){
+  _wfStatRipple(e,el);
+  el.classList.add('wf-stat-pressed');
+  el.style.transform='translateY(-4px) scale(.98)';
+  setTimeout(()=>{el.classList.remove('wf-stat-pressed');el.style.transform='';},160);
+  if(el.classList.contains('wf-stat-card-locked'))return;
+  setTimeout(()=>{
+    if(key==='total'){
+      const wrap=document.getElementById('wf-cards-wrap');
+      if(wrap)wrap.scrollIntoView({behavior:'smooth',block:'start'});
+    }else{
+      openDeptStagePage(key);
+    }
+  },180);
 }
 // ============================================================
 // WORKFLOW — CALENDAR / LIST / TIMELINE VIEWS
@@ -3217,7 +3348,12 @@ function wfCardClick(e,key){
     const cb=e.currentTarget.querySelector('.wf-check');
     if(cb){cb.checked=!cb.checked;toggleWfSelect(key,cb.checked);}
   }else{
-    openWfInlinePanel(key);
+    // Standardized across every department (design/print/workshop/external) and
+    // admin alike: always open the same full order-detail modal (openOrderModal)
+    // instead of the older, slimmed-down inline side panel — this is the one
+    // place users open an order from the Kanban board, so routing everyone
+    // through the same function is what keeps the view from fragmenting again.
+    openOrderModal(key);
   }
 }
 // ============================================================
@@ -5576,6 +5712,7 @@ function openOrderModal(key){
     `)}
     ${omAccordion('ti-package','بنود الطلب والمرفقات',`
       ${itemsSection}
+      ${(getActiveDepts(o).includes('print')||getActiveDepts(o).includes('workshop'))?renderPrintWorkshopDesignFiles(o):''}
       ${getActiveDepts(o).includes('print')?`<div class="di" style="grid-column:1/-1;border-top:1px solid var(--border-soft);padding-top:10px;"><span class="dk" style="color:#6B21A8">🎨 ملف التصميم المعتمد للطباعة</span><span class="dv">${pLink}</span></div>`:''}
       ${getActiveDepts(o).includes('workshop')?`<div class="di" style="grid-column:1/-1"><span class="dk" style="color:#3730A3">📦 مخطط قياسات الورشة</span><span class="dv">${wLink}</span></div>
       <div class="di" style="grid-column:1/-1"><span class="dk" style="color:#9A3412">📷 توثيق التركيب النهائي</span><span class="dv">${dLink}</span></div>`:''}
