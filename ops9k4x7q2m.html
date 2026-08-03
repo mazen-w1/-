@@ -1415,7 +1415,7 @@ const FINANCIAL_SHEET_ENDPOINT='https://script.google.com/macros/s/AKfycbxr4fQAf
 // storing them as base64 inside Firebase. Left as the placeholder below, isGDriveConfigured()
 // returns false and uploadFileDirect() safely falls back to the original Firebase-base64
 // behavior — nothing breaks, it simply doesn't use Drive until a real endpoint is supplied.
-const GDRIVE_UPLOAD_ENDPOINT='PASTE_YOUR_DEPLOYED_APPS_SCRIPT_URL_HERE';
+const GDRIVE_UPLOAD_ENDPOINT='https://script.google.com/macros/s/AKfycbwdOJ9rqJdBaRoiARcqgR4OA3lG0xtsbWeDfcp3iNPFQKNX9Q6wOTomg1JJ5unRo28h/exec';
 function isGDriveConfigured(){return!!GDRIVE_UPLOAD_ENDPOINT&&!GDRIVE_UPLOAD_ENDPOINT.includes('PASTE_YOUR');}
 async function uploadToGDrive(dataUrl,fileName){
   const res=await fetch(GDRIVE_UPLOAD_ENDPOINT,{method:'POST',body:JSON.stringify({fileData:dataUrl,fileName})});
