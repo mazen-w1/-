@@ -1421,21 +1421,47 @@ const FINANCIAL_SHEET_ENDPOINT='https://script.google.com/macros/s/AKfycbxr4fQAf
 // storing them as base64 inside Firebase. Left as the placeholder below, isGDriveConfigured()
 // returns false and uploadFileDirect() safely falls back to the original Firebase-base64
 // behavior — nothing breaks, it simply doesn't use Drive until a real endpoint is supplied.
-const GDRIVE_UPLOAD_ENDPOINT='https://script.google.com/macros/s/AKfycbzULmZEsbikLIkww7rvymETCWuVWhKu5CzO9oIhw_HsBT2JAN50rJVGkti06VYcPYSA/exec';
-// Must match SHARED_SECRET in gdrive-upload-script.gs exactly, once that script is
-// redeployed with the hardened version — the endpoint is "Anyone" access, so this
-// secret is what stops a stranger who finds the URL from uploading into the Drive
-// folder. Left as the placeholder below, the deployed script (if still the older,
-// secret-less revision) still accepts requests as before; nothing breaks either way.
-const GDRIVE_UPLOAD_SECRET='PASTE_YOUR_SHARED_SECRET_HERE';
+const GDRIVE_UPLOAD_ENDPOINT='https://script.google.com/macros/s/AKfycbzLN6uAyPdLr9GEF6QpIGMs0zSlqg_f-g_frrb4ZO3cvFOzAWa9p7Y427hJccqyH8Ua/exec';
+// Must match SHARED_SECRET in gdrive-upload-script.gs exactly — the endpoint is "Anyone"
+// access, so this secret is what stops a stranger who finds the URL from uploading into
+// the Drive folder. This value is paired 1:1 with the copy in gdrive-upload-script.gs;
+// if you ever regenerate one, regenerate the other to match.
+const GDRIVE_UPLOAD_SECRET='04ef9776d579f99fc18830c1780d7df27fe6b51d8d605572';
 function isGDriveConfigured(){return!!GDRIVE_UPLOAD_ENDPOINT&&!GDRIVE_UPLOAD_ENDPOINT.includes('PASTE_YOUR');}
+// Files at or under this size keep using the fast Cloudinary path (with Drive only as a
+// fallback if that fails). Above it, large high-res PDFs/photos go straight to Drive via
+// chunked upload as the PRIMARY path, since a single giant base64 payload is what used to
+// risk hitting browser memory limits or an Apps Script execution timeout.
+const GDRIVE_LARGE_FILE_THRESHOLD=10*1024*1024;
+// Per-chunk size (raw bytes, before base64 inflates it ~4/3) — small enough that any one
+// request finishes quickly even on a slow connection, so a flaky network drops a single
+// chunk rather than the whole file.
+const GDRIVE_CHUNK_BYTES=6*1024*1024;
+// Any single fetch to the Apps Script endpoint (whole-file or one chunk) that hangs this
+// long is treated as failed so the caller can fall back immediately instead of leaving the
+// user staring at a spinner — this is what makes a Drive "timeout" actually fall back.
+const GDRIVE_FETCH_TIMEOUT_MS=20000;
+function _gdriveUploadId(){
+  if(typeof crypto!=='undefined'&&crypto.randomUUID)return crypto.randomUUID();
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,c=>{const r=Math.random()*16|0;const v=c==='x'?r:(r&0x3|0x8);return v.toString(16);});
+}
+async function _fetchWithTimeout(url,opts,timeoutMs){
+  const ctrl=new AbortController();
+  const timer=setTimeout(()=>ctrl.abort(),timeoutMs);
+  try{
+    return await fetch(url,Object.assign({},opts,{signal:ctrl.signal}));
+  }finally{
+    clearTimeout(timer);
+  }
+}
 async function uploadToGDrive(dataUrl,fileName){
   let res;
   try{
-    res=await fetch(GDRIVE_UPLOAD_ENDPOINT,{method:'POST',body:JSON.stringify({secret:GDRIVE_UPLOAD_SECRET,fileData:dataUrl,fileName})});
+    res=await _fetchWithTimeout(GDRIVE_UPLOAD_ENDPOINT,{method:'POST',body:JSON.stringify({secret:GDRIVE_UPLOAD_SECRET,fileData:dataUrl,fileName})},GDRIVE_FETCH_TIMEOUT_MS);
   }catch(networkErr){
-    // Offline, DNS failure, or blocked by CORS/a proxy before any response came back —
-    // the caller (uploadFileDirect) catches this and falls back to Firebase silently.
+    // Offline, DNS failure, CORS rejection, or our own timeout abort firing before any
+    // response came back — the caller (uploadFileDirect) catches this and falls back to
+    // the secondary storage path silently.
     throw new Error('gdrive-network-error');
   }
   let j=null;
@@ -1449,8 +1475,53 @@ async function uploadToGDrive(dataUrl,fileName){
   if(!j||!j.success)throw new Error((j&&j.error)||'gdrive-upload-failed');
   return j.url;
 }
+// Uploads a large file to GDRIVE_UPLOAD_ENDPOINT in fixed-size chunks instead of one giant
+// base64 payload. This keeps peak memory bounded to a single chunk (rather than holding the
+// whole file's base64 string in memory at once) and keeps every individual request small
+// enough that a slow connection or the Apps Script per-request quota can't turn one large
+// file into one big timeout. Any single chunk failing (network, CORS, timeout, an HTML
+// error page instead of JSON, a rejected/invalid response) aborts the whole upload
+// immediately — uploadFileDirect() catches that and falls back to secondary storage, it
+// never retries chunks itself, so a stuck upload can't leave the user waiting indefinitely.
+async function uploadToGDriveChunked(file,onProgress){
+  if(!isGDriveConfigured())throw new Error('gdrive-not-configured');
+  const totalChunks=Math.max(1,Math.ceil(file.size/GDRIVE_CHUNK_BYTES));
+  const uploadId=_gdriveUploadId();
+  let lastResult=null;
+  for(let i=0;i<totalChunks;i++){
+    const start=i*GDRIVE_CHUNK_BYTES;
+    const end=Math.min(file.size,start+GDRIVE_CHUNK_BYTES);
+    // Explicit contentType here matters: Blob.slice() without one drops the mime type
+    // (produces an empty-typed blob), which would turn the chunk's data URL into
+    // "data:;base64,..." and fail the server's data-URL parser on every chunk.
+    const chunkBlob=file.slice(start,end,file.type||'application/octet-stream');
+    const chunkData=await _readFileAsDataUrl(chunkBlob);
+    const payload={
+      secret:GDRIVE_UPLOAD_SECRET,mode:'chunk',uploadId,chunkIndex:i,totalChunks,
+      fileSize:file.size,mimeType:file.type||'application/octet-stream',
+      fileName:file.name||('file-'+Date.now()),chunkData
+    };
+    let res;
+    try{
+      res=await _fetchWithTimeout(GDRIVE_UPLOAD_ENDPOINT,{method:'POST',body:JSON.stringify(payload)},GDRIVE_FETCH_TIMEOUT_MS);
+    }catch(networkErr){
+      throw new Error('gdrive-network-error');
+    }
+    let j=null;
+    try{
+      j=await res.json();
+    }catch(parseErr){
+      throw new Error('gdrive-invalid-response');
+    }
+    if(!j||!j.success)throw new Error((j&&j.error)||'gdrive-upload-failed');
+    lastResult=j;
+    if(typeof onProgress==='function'){try{onProgress(Math.round(((i+1)/totalChunks)*100));}catch(_){}}
+  }
+  if(!lastResult||!lastResult.url)throw new Error('gdrive-upload-incomplete');
+  return lastResult.url;
+}
 function showGDriveStatus(){
-  if(isGDriveConfigured()){toast('✓ Google Drive متصل كمسار احتياطي — يُستخدم فقط إذا فشل الرفع الأساسي');return;}
+  if(isGDriveConfigured()){toast('✓ Google Drive متصل — يُستخدم مباشرة للملفات الكبيرة (أكبر من 10 ميجابايت) ومساراً احتياطياً لبقية الملفات');return;}
   toast(cu.type==='admin'?'⚠️ المسار الاحتياطي لـ Google Drive غير مفعّل — يلزم نشر Apps Script وتعيين GDRIVE_UPLOAD_ENDPOINT في الكود':'⚠️ المسار الاحتياطي لـ Google Drive غير مفعّل حالياً');
 }
 window.globalAttachedFiles=[];
@@ -5646,35 +5717,55 @@ function openTimelineModal(key){
 async function uploadFileDirect(key,ff,fn2,inputId){
   const el=document.getElementById(inputId);if(!el||!el.files||!el.files.length)return;
   const file=el.files[0];
-  showSaving('جاري حفظ الملف...');
+  const isLarge=file.size>GDRIVE_LARGE_FILE_THRESHOLD;
+  showSaving(isLarge?'جاري رفع الملف الكبير عبر Google Drive...':'جاري حفظ الملف...');
   try{
     const upd={};
-    // Primary path: the same Cloudinary/Google-Drive-proxy pipeline every other
-    // upload in the app uses. GDRIVE_UPLOAD_ENDPOINT (Apps Script) only kicks in
-    // below as a resilience fallback if that primary upload throws — it must not
-    // run on the happy path, since convertFileToBase64() returns a hosted URL
-    // here, not a base64 data URI.
-    try{
-      upd[ff]=await convertFileToBase64(file,{order:key});
-      upd[ff+'Storage']='cloud';
-    }catch(primaryErr){
-      console.warn('الرفع الأساسي فشل، تجربة المسار الاحتياطي',primaryErr);
-      const localB64=await _readFileAsDataUrl(file);
-      if(isGDriveConfigured()){
-        try{
-          upd[ff]=await uploadToGDrive(localB64,file.name);
-          upd[ff+'Storage']='gdrive';
-        }catch(gdriveErr){
-          console.warn('المسار الاحتياطي عبر Google Drive فشل أيضاً، سيتم الحفظ داخل قاعدة البيانات كخطة أخيرة',gdriveErr);
+    if(isLarge&&isGDriveConfigured()){
+      // Large high-res PDFs/photos skip Cloudinary entirely and go straight to Drive via
+      // chunked upload — a single giant base64 payload through the other path is exactly
+      // what used to risk hitting browser memory limits or an Apps Script timeout. Any
+      // failure here (network, CORS, timeout, bad response) falls straight through to the
+      // normal Cloudinary/Drive-legacy/Firebase chain below, so the submit action never
+      // stalls or fails outright — it just silently ends up on secondary storage.
+      try{
+        upd[ff]=await uploadToGDriveChunked(file,pct=>showSaving(`جاري رفع الملف الكبير عبر Google Drive... ${pct}%`));
+        upd[ff+'Storage']='gdrive';
+      }catch(largeGdriveErr){
+        console.warn('الرفع الكبير عبر Google Drive فشل أو انتهت مهلته، تجربة المسار الاحتياطي',largeGdriveErr);
+        toast('⚠️ تعذّر الرفع المباشر إلى Google Drive، جارٍ التبديل التلقائي إلى المسار الاحتياطي...');
+        showSaving('جاري الحفظ عبر المسار الاحتياطي...');
+      }
+    }
+    if(!upd[ff]){
+      // Primary path: the same Cloudinary/Google-Drive-proxy pipeline every other
+      // upload in the app uses. GDRIVE_UPLOAD_ENDPOINT (Apps Script) only kicks in
+      // below as a resilience fallback if that primary upload throws — it must not
+      // run on the happy path, since convertFileToBase64() returns a hosted URL
+      // here, not a base64 data URI.
+      try{
+        upd[ff]=await convertFileToBase64(file,{order:key});
+        upd[ff+'Storage']='cloud';
+      }catch(primaryErr){
+        console.warn('الرفع الأساسي فشل، تجربة المسار الاحتياطي',primaryErr);
+        const localB64=await _readFileAsDataUrl(file);
+        if(isGDriveConfigured()){
+          try{
+            upd[ff]=await uploadToGDrive(localB64,file.name);
+            upd[ff+'Storage']='gdrive';
+          }catch(gdriveErr){
+            console.warn('المسار الاحتياطي عبر Google Drive فشل أيضاً، سيتم الحفظ داخل قاعدة البيانات كخطة أخيرة',gdriveErr);
+            upd[ff]=localB64;upd[ff+'Storage']='firebase';
+          }
+        }else{
           upd[ff]=localB64;upd[ff+'Storage']='firebase';
         }
-      }else{
-        upd[ff]=localB64;upd[ff+'Storage']='firebase';
       }
     }
     upd[fn2]=file.name;
     upd[ff+'UploadedBy']=cu.name||cu._uname||'—';upd[ff+'UploadedAt']=new Date().toISOString();
-    await fbPatch(`orders/${key}`,upd);await loadData();hideSaving();toast('✓ تم التحديث');
+    await fbPatch(`orders/${key}`,upd);await loadData();hideSaving();
+    toast(upd[ff+'Storage']==='gdrive'?'✓ تم الرفع عبر Google Drive':'✓ تم التحديث');
     if(ff==='approvedPrintFile'||ff==='approvedWorkshopFile')dispatchAutoWhatsapp(orders[key],'proof_ready');
     openOrderModal(key);
   }catch(e){hideSaving();toast(e&&e.message?e.message:'❌ فشل الرفع');}
