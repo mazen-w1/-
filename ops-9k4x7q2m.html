@@ -388,17 +388,15 @@ input[type="password"]{direction:rtl;text-align:right;padding-left:40px;padding-
 /* ── Workflow: premium top stats + inline order-detail expansion panel ──
    Uses the site's existing design tokens (--maroon/--gold/--radius-*/--shadow-*)
    throughout so this matches the current brand identity exactly. ── */
-.wf-stats-row{display:grid;grid-template-columns:repeat(6,1fr);gap:14px;margin-bottom:20px;}
-@media(max-width:1200px){.wf-stats-row{grid-template-columns:repeat(3,1fr);}}
-@media(max-width:680px){.wf-stats-row{grid-template-columns:repeat(2,1fr);}}
-@media(max-width:420px){.wf-stats-row{grid-template-columns:1fr;}}
-.wf-stat-card{background:var(--surface);border:1px solid var(--border-soft);border-radius:var(--radius-xl);padding:16px 16px 14px;display:flex;flex-direction:column;gap:10px;box-shadow:var(--shadow-sm);transition:transform .2s,box-shadow .2s;}
-.wf-stat-card:hover{transform:translateY(-3px);box-shadow:var(--shadow-md);}
+.wf-stats-row{display:grid!important;grid-template-columns:repeat(auto-fit,minmax(130px,1fr))!important;gap:12px!important;align-items:center;width:100%!important;margin-bottom:20px;}
+.wf-stat-card{position:relative;background:var(--wf-stat-bg,var(--surface));border:2px solid transparent;border-radius:18px;padding:14px 14px 12px;display:flex;flex-direction:column;gap:9px;box-shadow:6px 6px 14px rgba(0,0,0,.08),-6px -6px 14px #ffffff;transition:all .2s ease;cursor:pointer;}
+.wf-stat-card:hover{transform:translateY(-4px) scale(1.02);box-shadow:8px 8px 18px rgba(0,0,0,.1),-8px -8px 18px #ffffff;}
+.wf-stat-card.wf-stat-active{transform:translateY(2px);box-shadow:inset 3px 3px 8px rgba(0,0,0,.15),inset -3px -3px 8px rgba(255,255,255,.7);border-color:var(--wf-stat-accent,var(--maroon));}
 .wf-stat-top{display:flex;align-items:center;gap:12px;}
 .wf-stat-icon{width:52px;height:52px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:22px;color:#fff;box-shadow:inset 0 -6px 10px rgba(0,0,0,.25),inset 0 4px 6px rgba(255,255,255,.35),0 6px 14px rgba(0,0,0,.18);}
 .wf-stat-num{font-size:25px;font-weight:900;color:var(--text-1);line-height:1;}
 .wf-stat-lbl{font-size:11.5px;color:var(--text-3);font-weight:700;margin-top:4px;}
-.wf-stat-bar-track{height:6px;border-radius:6px;background:var(--border-soft);overflow:hidden;}
+.wf-stat-bar-track{height:6px;border-radius:6px;background:rgba(0,0,0,.06);overflow:hidden;}
 .wf-stat-bar-fill{height:100%;border-radius:6px;transition:width .6s ease;}
 .wf-stat-pill{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:800;padding:3px 9px;border-radius:20px;align-self:flex-start;}
 .wf-card-active{outline:2px solid var(--maroon);box-shadow:var(--shadow-lg)!important;}
@@ -2946,8 +2944,13 @@ function filterWfFilesRows(){
   });
 }
 function setWfView(v){window._wfView=v;buildWfGrid(_currentWfTab||'active');}
+function setWfStatFilter(key){
+  window._wfStatFilter=(key==='all'||window._wfStatFilter===key)?null:key;
+  renderWfKanbanView();
+}
 function renderWfKanbanView(){
   const arr=ordersArr();
+  const _activeStatKey=window._wfStatFilter||'all';
   const _canSeeCardTotal=['admin','follower','receiver'].includes(cu.type);
   const cardHtml=o=>{
     const pct=orderProgress(o);const col=progressColor(o);
@@ -2997,7 +3000,8 @@ function renderWfKanbanView(){
       (buckets[d]||buckets.design).push(o);
     }
   });
-  const colsHtml=colsDef.map(c=>{
+  const _visibleColsDef=_activeStatKey==='all'?colsDef:colsDef.filter(c=>_activeStatKey==='delivery'?(c.key==='done'||c.key==='completed'):c.key===_activeStatKey);
+  const colsHtml=_visibleColsDef.map(c=>{
     const list=buckets[c.key]||[];
     let cardsHtml;
     if(c.key==='completed'){
@@ -3023,15 +3027,15 @@ function renderWfKanbanView(){
     </div>`;
   }).join('');
   const _wfStats=[
-    {label:'إجمالي الطلبات',num:arr.length,icon:'ti-inbox',grad:'radial-gradient(circle at 32% 26%,#8a2635 0%,var(--maroon) 55%,var(--maroon-dark) 100%)',bar:'var(--maroon)',pillBg:'var(--gold-soft)',pillFg:'var(--maroon)'},
-    {label:'التصميم',num:buckets.design.length,icon:'ti-brush',grad:'radial-gradient(circle at 32% 26%,#c084e8 0%,#8B3FC7 55%,#6B21A8 100%)',bar:'#8B3FC7',pillBg:'rgba(139,63,199,.12)',pillFg:'#6B21A8'},
-    {label:'الطباعة',num:buckets.print.length,icon:'ti-printer',grad:'radial-gradient(circle at 32% 26%,#818cf8 0%,#4F46C4 55%,#3730A3 100%)',bar:'#4F46C4',pillBg:'rgba(79,70,196,.12)',pillFg:'#3730A3'},
-    {label:'الورشة',num:buckets.workshop.length,icon:'ti-tool',grad:'radial-gradient(circle at 32% 26%,#f0a06e 0%,#C2571F 55%,#9A3412 100%)',bar:'#C2571F',pillBg:'rgba(194,87,31,.12)',pillFg:'#9A3412'},
-    {label:'قيد التنفيذ',num:buckets.external.length,icon:'ti-clock',grad:'radial-gradient(circle at 32% 26%,#F0D060 0%,var(--gold) 55%,#a9841f 100%)',bar:'var(--gold)',pillBg:'var(--gold-soft)',pillFg:'#8a6d1f'},
-    {label:'التسليم',num:buckets.done.length+buckets.completed.length,icon:'ti-circle-check',grad:'radial-gradient(circle at 32% 26%,#6EE7B7 0%,#34D399 55%,#10B981 100%)',bar:'#34D399',pillBg:'rgba(16,185,129,.12)',pillFg:'#047857'}
+    {key:'all',label:'إجمالي الطلبات',num:arr.length,icon:'ti-inbox',grad:'radial-gradient(circle at 32% 26%,#e8768a 0%,#9F1239 55%,#6b0c28 100%)',bar:'#9F1239',bg:'#FDF0F2',accent:'#9F1239',pillBg:'rgba(159,18,57,.12)',pillFg:'#9F1239'},
+    {key:'design',label:'التصميم',num:buckets.design.length,icon:'ti-brush',grad:'radial-gradient(circle at 32% 26%,#60a5fa 0%,#2563EB 55%,#1D4ED8 100%)',bar:'#2563EB',bg:'#EAF2FE',accent:'#2563EB',pillBg:'rgba(37,99,235,.12)',pillFg:'#1D4ED8'},
+    {key:'print',label:'الطباعة',num:buckets.print.length,icon:'ti-printer',grad:'radial-gradient(circle at 32% 26%,#818cf8 0%,#4F46C4 55%,#3730A3 100%)',bar:'#4F46C4',bg:'#E7E9FC',accent:'#3730A3',pillBg:'rgba(79,70,196,.12)',pillFg:'#3730A3'},
+    {key:'workshop',label:'الورشة',num:buckets.workshop.length,icon:'ti-tool',grad:'radial-gradient(circle at 32% 26%,#f0a06e 0%,#C2571F 55%,#9A3412 100%)',bar:'#C2571F',bg:'#FDEBDD',accent:'#9A3412',pillBg:'rgba(194,87,31,.12)',pillFg:'#9A3412'},
+    {key:'external',label:'قيد التنفيذ',num:buckets.external.length,icon:'ti-clock',grad:'radial-gradient(circle at 32% 26%,#F0D060 0%,var(--gold) 55%,#a9841f 100%)',bar:'var(--gold)',bg:'var(--gold-soft)',accent:'#8a6d1f',pillBg:'var(--gold-soft)',pillFg:'#8a6d1f'},
+    {key:'delivery',label:'التسليم',num:buckets.done.length+buckets.completed.length,icon:'ti-circle-check',grad:'radial-gradient(circle at 32% 26%,#6EE7B7 0%,#34D399 55%,#10B981 100%)',bar:'#34D399',bg:'#E6F7EE',accent:'#047857',pillBg:'rgba(16,185,129,.12)',pillFg:'#047857'}
   ].map(s=>({...s,pct:arr.length?Math.round(s.num/arr.length*100):0}));
   const statsHtml=`<div class="wf-stats-row">${_wfStats.map(s=>`
-    <div class="wf-stat-card">
+    <div class="wf-stat-card${s.key===_activeStatKey?' wf-stat-active':''}" style="--wf-stat-bg:${s.bg};--wf-stat-accent:${s.accent};" onclick="setWfStatFilter('${s.key}')" title="${s.key==='all'?'إظهار كل المراحل':'فلترة حسب '+s.label}">
       <div class="wf-stat-top">
         <div class="wf-stat-icon" style="background:${s.grad};"><i class="ti ${s.icon}"></i></div>
         <div><div class="wf-stat-num">${s.num}</div><div class="wf-stat-lbl">${s.label}</div></div>
