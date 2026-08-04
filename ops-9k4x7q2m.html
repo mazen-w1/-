@@ -1664,16 +1664,14 @@ function applyServicePreset(v){
     if(sel&&!p[k])sel.value='none';
   });
 }
-const INITIAL_USERS={
-  admin:{pass:'admin',name:'المدير العام',role:'مدير عام',color:'#10B981',type:'admin',photo:''},
-  mazen:{pass:'123456',name:'مازن',role:'مدير عام',color:'#10B981',type:'admin',photo:''},
-  accountant:{pass:'1234',name:'المحاسب',role:'محاسب',color:'#0EA5E9',type:'accountant',photo:''},
-  receiver:{pass:'1234',name:'مستقبل العميل',role:'مستقبل عميل',color:'#D4AF37',type:'receiver',photo:''},
-  designer1:{pass:'1234',name:'سالم القثمي',role:'مصمم',color:'#6B21A8',type:'designer',photo:''},
-  printer1:{pass:'1234',name:'الذرحاني',role:'طباعة',color:'#3730A3',type:'printer',photo:''},
-  workshop1:{pass:'1234',name:'أويس',role:'ورشة',color:'#9A3412',type:'workshop',photo:''},
-  external1:{pass:'1234',name:'منفذ خارجي',role:'تنفيذ خارجي',color:'#713F12',type:'external',photo:''},
-};
+// Security note: this used to hardcode a set of default admin/employee
+// passwords here so a fresh/empty /users table could self-seed on first
+// run. That meant real plaintext defaults sat permanently in this
+// public repo's source and git history. The database is already
+// populated with real accounts, so that seeding path is removed —
+// if /users is ever genuinely empty, an admin must create the first
+// account directly from the Firebase console rather than the app
+// silently reintroducing known credentials.
 let cu=null,orders={},clients={},USERS={},currentSortMode='date-desc',_pendingPortalType=null;
 let submittedRequests={},chats={},standaloneQuotes={},warranties={},teamChat={},govRecords={},urgentRequests={},tasksData={};
 let _lastAssignSnapshot=null,_audioCtx=null,_audioUnlocked=false;
@@ -1705,12 +1703,13 @@ function openLoginBox(portalKey){
 }
 function backToPortalGrid(){document.getElementById('portal-main-view').style.display='block';document.getElementById('portal-password-card').style.display='none';}
 async function doLogin(){
-  await syncUsers();
   const u=document.getElementById('lu').value.trim().toLowerCase();
   const p=document.getElementById('lp').value;
   const e=document.getElementById('lerr');
   const allowed=PORTAL_ROLE_MAP[_pendingPortalType]||[];
-  const rec=USERS[u];
+  // Only the one username being attempted is fetched here — the full
+  // /users table (every account's hash) is never downloaded pre-login.
+  const rec=await fetchOneUserRecord(u);
   const hash=rec?await makeSessionToken(u,p):null;
   // rec.pass may still be a legacy plaintext value for accounts that haven't logged in
   // since password hashing was introduced — verify against it directly this one time,
@@ -1720,6 +1719,7 @@ async function doLogin(){
     if(legacyMatch){try{await fbPatch(`users/${u}`,{pass:hash});rec.pass=hash;}catch(err){}}
     if(allowed.length>0&&!allowed.includes(rec.type)){e.style.display='block';e.textContent='هذا الحساب لا ينتمي لهذا القسم';return;}
     showSaving('جاري الدخول...');
+    await syncUsers();
     await loadData();hideSaving();
     localStorage.setItem(SESSION_KEY,JSON.stringify({uname:u,tok:hash}));
     enterApp(u);e.style.display='none';
@@ -1800,15 +1800,21 @@ const fbSet=(p,d)=>fbReq(p,'PUT',d);
 const fbPush=(p,d)=>fbReq(p,'POST',d);
 const fbPatch=(p,d)=>fbReq(p,'PATCH',d);
 const fbDelete=p=>fbReq(p,'DELETE');
+// Full user table (all names/roles/password hashes) — only ever fetched
+// once someone is already authenticated (a valid session token, or a
+// just-verified login). Never call this to check a login attempt itself.
 async function syncUsers(){
   try{
     const r=await fbGet('users');
-    if(!r||Object.keys(r).length===0){
-      const seeded={};
-      for(const uname in INITIAL_USERS){seeded[uname]={...INITIAL_USERS[uname],pass:await makeSessionToken(uname,INITIAL_USERS[uname].pass)};}
-      await fbSet('users',seeded);USERS=seeded;
-    }else USERS=r;
-  }catch(e){USERS={...INITIAL_USERS};}
+    USERS=r||{};
+  }catch(e){/* keep last-known USERS rather than wiping it on a network blip */}
+}
+// Single-record lookup used for the actual credential check, so an
+// unauthenticated visitor's browser only ever pulls the one username
+// being attempted — never every account's password hash at once.
+async function fetchOneUserRecord(uname){
+  if(!uname)return null;
+  try{return await fbGet('users/'+encodeURIComponent(uname));}catch(e){return null;}
 }
 async function loadData(){
   // Each fetch is tracked individually so a single failing endpoint (network
@@ -1888,17 +1894,18 @@ function checkNewAssignments(){
 // ============================================================
 window.addEventListener('load',async()=>{
   showSaving('جاري التحميل...');
-  await syncUsers();
   const sess=localStorage.getItem(SESSION_KEY);
   if(sess){
     try{
       const s=JSON.parse(sess);
-      const rec=USERS[s.uname];
+      // Same principle as doLogin(): re-validating a saved session only
+      // ever needs that one account's record, not the whole /users table.
+      const rec=await fetchOneUserRecord(s.uname);
       // rec.pass is a hash post-migration, so the stored token can be compared to it
       // directly; a not-yet-migrated legacy account still needs one re-derivation.
       const stillValid=rec&&s.tok&&(isHashedPass(rec.pass)?s.tok===rec.pass:s.tok===await makeSessionToken(s.uname,rec.pass));
       if(s.uname&&stillValid){
-        await loadData();hideSaving();enterApp(s.uname);return;
+        await syncUsers();await loadData();hideSaving();enterApp(s.uname);return;
       }
     }catch(e){}
     localStorage.removeItem(SESSION_KEY);
@@ -2248,9 +2255,26 @@ async function nav(p,skipHistory=false){
 }
 function navBack(){if(_navHistory.length===0)return;const prev=_navHistory.pop();nav(prev,true);}
 function backBtnHtml(){return`<div style="margin-bottom:16px;"><button class="btn btn-out btn-sm" onclick="navBack()"><i class="ti ti-arrow-right"></i> رجوع</button></div>`;}
+if(!window._interactionTrackerInstalled){
+  window._interactionTrackerInstalled=true;
+  window._lastUserInteractionAt=0;
+  // General safety net for the background auto-refresh below: any recent
+  // click/keystroke/checkbox toggle/custom-dropdown interaction anywhere on
+  // the page counts as "user is busy", regardless of which specific widget
+  // it happened in. This catches cases the narrower checks in
+  // refreshCurrentPage() can't enumerate (custom checkboxes, dropdowns,
+  // momentary focus loss between fields in a multi-step form, etc).
+  ['input','change','mousedown','keydown','touchstart'].forEach(evt=>{
+    document.addEventListener(evt,()=>{window._lastUserInteractionAt=Date.now();},{passive:true,capture:true});
+  });
+}
 function refreshCurrentPage(){
   const p=_curPage;
   if(p==='add'||p==='request'||p==='quote')return;
+  // If the user touched/typed/clicked anywhere on the page in the last few
+  // seconds, assume they're mid-task and skip this cycle's rebuild — a
+  // background refresh should never be able to interrupt active work.
+  if(Date.now()-(window._lastUserInteractionAt||0)<8000)return;
   if(document.querySelector('.modal-overlay.open'))return;
   if(window._wfSelected&&window._wfSelected.size>0)return;
   // Skip while the user has an in-page dropdown/menu open, an ongoing save
