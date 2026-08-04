@@ -388,14 +388,19 @@ input[type="password"]{direction:rtl;text-align:right;padding-left:40px;padding-
 /* ── Workflow: premium top stats + inline order-detail expansion panel ──
    Uses the site's existing design tokens (--maroon/--gold/--radius-*/--shadow-*)
    throughout so this matches the current brand identity exactly. ── */
-.wf-stats-row{display:grid;grid-template-columns:repeat(5,1fr);gap:16px;margin-bottom:20px;}
-@media(max-width:980px){.wf-stats-row{grid-template-columns:repeat(2,1fr);}}
-@media(max-width:520px){.wf-stats-row{grid-template-columns:1fr;}}
-.wf-stat-card{background:var(--surface);border:1px solid var(--border-soft);border-radius:var(--radius-xl);padding:18px 20px;display:flex;align-items:center;gap:14px;box-shadow:var(--shadow-sm);transition:transform .2s,box-shadow .2s;}
+.wf-stats-row{display:grid;grid-template-columns:repeat(6,1fr);gap:14px;margin-bottom:20px;}
+@media(max-width:1200px){.wf-stats-row{grid-template-columns:repeat(3,1fr);}}
+@media(max-width:680px){.wf-stats-row{grid-template-columns:repeat(2,1fr);}}
+@media(max-width:420px){.wf-stats-row{grid-template-columns:1fr;}}
+.wf-stat-card{background:var(--surface);border:1px solid var(--border-soft);border-radius:var(--radius-xl);padding:16px 16px 14px;display:flex;flex-direction:column;gap:10px;box-shadow:var(--shadow-sm);transition:transform .2s,box-shadow .2s;}
 .wf-stat-card:hover{transform:translateY(-3px);box-shadow:var(--shadow-md);}
-.wf-stat-icon{width:48px;height:48px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:21px;color:#fff;box-shadow:inset 0 0 0 1px rgba(255,255,255,.25);}
+.wf-stat-top{display:flex;align-items:center;gap:12px;}
+.wf-stat-icon{width:52px;height:52px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:22px;color:#fff;box-shadow:inset 0 -6px 10px rgba(0,0,0,.25),inset 0 4px 6px rgba(255,255,255,.35),0 6px 14px rgba(0,0,0,.18);}
 .wf-stat-num{font-size:25px;font-weight:900;color:var(--text-1);line-height:1;}
 .wf-stat-lbl{font-size:11.5px;color:var(--text-3);font-weight:700;margin-top:4px;}
+.wf-stat-bar-track{height:6px;border-radius:6px;background:var(--border-soft);overflow:hidden;}
+.wf-stat-bar-fill{height:100%;border-radius:6px;transition:width .6s ease;}
+.wf-stat-pill{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:800;padding:3px 9px;border-radius:20px;align-self:flex-start;}
 .wf-card-active{outline:2px solid var(--maroon);box-shadow:var(--shadow-lg)!important;}
 .wf-detail-panel{max-height:0;opacity:0;overflow:hidden;transition:max-height .38s cubic-bezier(.22,1,.36,1),opacity .3s;}
 .wf-detail-panel.open{max-height:none;opacity:1;overflow:visible;}
@@ -3018,16 +3023,21 @@ function renderWfKanbanView(){
     </div>`;
   }).join('');
   const _wfStats=[
-    {label:'إجمالي الطلبات',num:arr.length,icon:'ti-inbox',grad:'linear-gradient(135deg,var(--maroon),var(--maroon-mid))'},
-    {label:'التصميم',num:buckets.design.length,icon:'ti-brush',grad:'linear-gradient(135deg,#6B21A8,#8B3FC7)'},
-    {label:'الطباعة',num:buckets.print.length,icon:'ti-printer',grad:'linear-gradient(135deg,#3730A3,#4F46C4)'},
-    {label:'الورشة',num:buckets.workshop.length,icon:'ti-tool',grad:'linear-gradient(135deg,#9A3412,#C2571F)'},
-    {label:'التسليم',num:buckets.done.length+buckets.completed.length,icon:'ti-circle-check',grad:'linear-gradient(135deg,#10B981,#34D399)'}
-  ];
+    {label:'إجمالي الطلبات',num:arr.length,icon:'ti-inbox',grad:'radial-gradient(circle at 32% 26%,#8a2635 0%,var(--maroon) 55%,var(--maroon-dark) 100%)',bar:'var(--maroon)',pillBg:'var(--gold-soft)',pillFg:'var(--maroon)'},
+    {label:'التصميم',num:buckets.design.length,icon:'ti-brush',grad:'radial-gradient(circle at 32% 26%,#c084e8 0%,#8B3FC7 55%,#6B21A8 100%)',bar:'#8B3FC7',pillBg:'rgba(139,63,199,.12)',pillFg:'#6B21A8'},
+    {label:'الطباعة',num:buckets.print.length,icon:'ti-printer',grad:'radial-gradient(circle at 32% 26%,#818cf8 0%,#4F46C4 55%,#3730A3 100%)',bar:'#4F46C4',pillBg:'rgba(79,70,196,.12)',pillFg:'#3730A3'},
+    {label:'الورشة',num:buckets.workshop.length,icon:'ti-tool',grad:'radial-gradient(circle at 32% 26%,#f0a06e 0%,#C2571F 55%,#9A3412 100%)',bar:'#C2571F',pillBg:'rgba(194,87,31,.12)',pillFg:'#9A3412'},
+    {label:'قيد التنفيذ',num:buckets.external.length,icon:'ti-clock',grad:'radial-gradient(circle at 32% 26%,#F0D060 0%,var(--gold) 55%,#a9841f 100%)',bar:'var(--gold)',pillBg:'var(--gold-soft)',pillFg:'#8a6d1f'},
+    {label:'التسليم',num:buckets.done.length+buckets.completed.length,icon:'ti-circle-check',grad:'radial-gradient(circle at 32% 26%,#6EE7B7 0%,#34D399 55%,#10B981 100%)',bar:'#34D399',pillBg:'rgba(16,185,129,.12)',pillFg:'#047857'}
+  ].map(s=>({...s,pct:arr.length?Math.round(s.num/arr.length*100):0}));
   const statsHtml=`<div class="wf-stats-row">${_wfStats.map(s=>`
     <div class="wf-stat-card">
-      <div class="wf-stat-icon" style="background:${s.grad};"><i class="ti ${s.icon}"></i></div>
-      <div><div class="wf-stat-num">${s.num}</div><div class="wf-stat-lbl">${s.label}</div></div>
+      <div class="wf-stat-top">
+        <div class="wf-stat-icon" style="background:${s.grad};"><i class="ti ${s.icon}"></i></div>
+        <div><div class="wf-stat-num">${s.num}</div><div class="wf-stat-lbl">${s.label}</div></div>
+      </div>
+      <div class="wf-stat-bar-track"><div class="wf-stat-bar-fill" style="width:${s.pct}%;background:${s.bar};"></div></div>
+      <span class="wf-stat-pill" style="background:${s.pillBg};color:${s.pillFg};">مكتمل ${s.pct}%</span>
     </div>`).join('')}</div>`;
   document.getElementById('wf-view-body').innerHTML=`
     <div id="wf-content">
