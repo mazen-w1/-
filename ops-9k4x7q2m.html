@@ -388,10 +388,13 @@ input[type="password"]{direction:rtl;text-align:right;padding-left:40px;padding-
 /* ── Workflow: premium top stats + inline order-detail expansion panel ──
    Uses the site's existing design tokens (--maroon/--gold/--radius-*/--shadow-*)
    throughout so this matches the current brand identity exactly. ── */
-.wf-stats-row{display:grid!important;grid-template-columns:repeat(auto-fit,minmax(130px,1fr))!important;gap:12px!important;align-items:center;width:100%!important;margin-bottom:20px;}
-.wf-stat-card{position:relative;background:var(--wf-stat-bg,var(--surface));border:2px solid transparent;border-radius:18px;padding:14px 14px 12px;display:flex;flex-direction:column;gap:9px;box-shadow:6px 6px 14px rgba(0,0,0,.08),-6px -6px 14px #ffffff;transition:all .2s ease;cursor:pointer;}
-.wf-stat-card:hover{transform:translateY(-4px) scale(1.02);box-shadow:8px 8px 18px rgba(0,0,0,.1),-8px -8px 18px #ffffff;}
-.wf-stat-card.wf-stat-active{transform:translateY(2px);box-shadow:inset 3px 3px 8px rgba(0,0,0,.15),inset -3px -3px 8px rgba(255,255,255,.7);border-color:var(--wf-stat-accent,var(--maroon));}
+.wf-stats-row{display:grid!important;grid-template-columns:repeat(6,1fr)!important;flex-direction:row!important;gap:10px!important;width:100%!important;clear:both!important;align-items:stretch;margin-bottom:20px;}
+.wf-stat-card{position:relative;width:100%!important;max-width:none!important;margin:0!important;min-height:110px;background:var(--wf-stat-bg,var(--surface));border:2px solid transparent;border-radius:16px!important;padding:14px 14px 12px;display:flex;flex-direction:column;gap:9px;box-shadow:5px 5px 12px rgba(0,0,0,.08),-5px -5px 12px #ffffff!important;transition:transform .2s ease,box-shadow .2s ease!important;cursor:pointer!important;}
+.wf-stat-card:hover{transform:translateY(-3px)!important;box-shadow:7px 7px 16px rgba(0,0,0,.1),-7px -7px 16px #ffffff!important;}
+.wf-stat-card:active{transform:translateY(2px)!important;box-shadow:inset 2px 2px 5px rgba(0,0,0,.15)!important;}
+.wf-stat-card.wf-stat-active{transform:translateY(2px);box-shadow:inset 3px 3px 8px rgba(0,0,0,.15),inset -3px -3px 8px rgba(255,255,255,.7)!important;border-color:var(--wf-stat-accent,var(--maroon));}
+@media(max-width:900px){.wf-stats-row{grid-template-columns:repeat(3,1fr)!important;}}
+@media(max-width:520px){.wf-stats-row{grid-template-columns:repeat(2,1fr)!important;}}
 .wf-stat-top{display:flex;align-items:center;gap:12px;}
 .wf-stat-icon{width:52px;height:52px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:22px;color:#fff;box-shadow:inset 0 -6px 10px rgba(0,0,0,.25),inset 0 4px 6px rgba(255,255,255,.35),0 6px 14px rgba(0,0,0,.18);}
 .wf-stat-num{font-size:25px;font-weight:900;color:var(--text-1);line-height:1;}
@@ -1194,6 +1197,14 @@ input:focus,select:focus,textarea:focus{box-shadow:inset 0 1px 3px rgba(74,14,23
   firebase.auth().signInAnonymously().catch(function(e){ console.error("Anon auth failed", e); });
 })();
 </script>
+<style>
+/* Strict end-of-head override: guarantees the workflow stat cards never stack
+   vertically, regardless of any earlier rule in the cascade. */
+.wf-stats-row{display:grid!important;grid-template-columns:repeat(6,1fr)!important;gap:10px!important;width:100%!important;clear:both!important;}
+.wf-stat-card{display:flex!important;flex-direction:column!important;width:100%!important;max-width:none!important;margin:0!important;}
+@media(max-width:900px){.wf-stats-row{grid-template-columns:repeat(3,1fr)!important;}}
+@media(max-width:520px){.wf-stats-row{grid-template-columns:repeat(2,1fr)!important;}}
+</style>
 </head>
 <body>
 <div class="site-watermark" aria-hidden="true"><span>ر</span></div>
