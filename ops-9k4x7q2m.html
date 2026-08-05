@@ -4116,27 +4116,20 @@ function myAssignedItems(){
   });
   return out;
 }
-function buildMyWorkItemsHtml(){
+function buildMyWorkItemCards(){
   const rows=myAssignedItems();
-  if(!rows.length)return'';
-  return `<div class="order-items-grid" style="margin-bottom:18px;">${rows.map(({o,idx,it})=>{
+  return rows.map(({o,idx,it})=>{
     const dept=itemCurrentDept(it,o);
-    return `<div class="order-item-card" style="cursor:pointer;" onclick="openItemWorkspace('${o._key}',${idx})">
-      <div class="oi-card-head">
-        <div class="oi-card-head-left">
-          <span class="oi-badge">${esc(o.id||o._key)}</span>
-          <strong class="oi-card-name" title="${esc(it.name||'—')}">${esc(it.name||'—')}</strong>
-        </div>
-        <span class="badge ${dept==='done'?'b-done':'b-new'}">${WF_DEPT_META[dept]?.label||dept}</span>
-      </div>
-      <div class="oi-card-metrics">
-        <span title="العميل"><i class="ti ti-user"></i> ${esc(o.client||'—')}</span>
-        ${gpbadge(o.priority)}
-        <span title="التسليم"><i class="ti ti-calendar-time"></i> ${deadlineDateTime(o)}</span>
-      </div>
-      <button class="btn btn-brand btn-sm" style="width:100%;justify-content:center;margin-top:10px;" onclick="event.stopPropagation();openItemWorkspace('${o._key}',${idx})"><i class="ti ti-arrow-left"></i> فتح البند</button>
-    </div>`;
-  }).join('')}</div>`;
+    return `<div class="wf-card" style="cursor:pointer;" onclick="openItemWorkspace('${o._key}',${idx})"><div class="wf-card-top">
+      <div class="wf-card-id">${esc(o.id||o._key)} <span class="badge ${dept==='done'?'b-done':'b-new'}" style="margin-right:4px;">${WF_DEPT_META[dept]?.label||dept}</span></div>
+      <div class="wf-card-name">${esc(it.name||'—')}</div>
+      <div class="wf-card-svc"><i class="ti ti-user"></i> ${esc(o.client||'—')}</div>
+      <div style="display:flex;gap:5px;flex-wrap:wrap;">${gpbadge(o.priority)}</div>
+      <div style="font-size:10.5px;color:var(--text-3);"><i class="ti ti-calendar-time"></i> التسليم: ${deadlineDateTime(o)}</div>
+      ${(canSeeWhatsappBtn()&&o.phone&&o.phone!=='—')?`<div style="margin-top:8px"><button class="btn btn-whatsapp btn-sm" onclick="event.stopPropagation();openWhatsapp('${encodeURIComponent(o.phone)}')"><i class="ti ti-brand-whatsapp"></i> واتساب</button></div>`:''}
+      <button class="btn btn-brand btn-sm" style="width:100%;justify-content:center;margin-top:8px;" onclick="event.stopPropagation();openItemWorkspace('${o._key}',${idx})"><i class="ti ti-arrow-left"></i> فتح البند</button>
+    </div></div>`;
+  });
 }
 function buildMyWork(){
   const isWorkshop=cu.type==='workshop';
@@ -4146,7 +4139,7 @@ function buildMyWork(){
   // legacy order without a per-item breakdown — don't fit the item-workspace
   // model above, so they keep the original whole-order card treatment.
   const simpleOrders=allMyOrders.filter(o=>!o.orderItems||!o.orderItems.length);
-  const itemCardsHtml=buildMyWorkItemsHtml();
+  const itemCards=buildMyWorkItemCards();
   const wfFilter=isWorkshop?(window._myWorkFilter||'all'):'all';
   const myOrders=wfFilter==='all'?simpleOrders:wfFilter==='maintenance'?simpleOrders.filter(o=>o.orderKind==='maintenance'):simpleOrders.filter(o=>o.orderKind!=='maintenance');
   // Workshop gets a quick filter bar to instantly separate regular production jobs
@@ -4160,8 +4153,7 @@ function buildMyWork(){
       <button class="tab-btn ${wfFilter==='maintenance'?'active':''}" onclick="setMyWorkFilter('maintenance')"><i class="ti ti-tool"></i> طلبات الصيانة (${mntCount})</button>
     </div>`;
   })():'';
-  const cards=myOrders.length===0?(itemCardsHtml?'':'<div style="color:var(--text-3);padding:30px;text-align:center;"><i class="ti ti-check-circle" style="font-size:36px;display:block;margin-bottom:10px;color:#10B981;"></i>لا توجد أعمال موكلة إليك حالياً</div>')
-    :`<div class="wf-grid">${myOrders.map(o=>{
+  const simpleCards=myOrders.map(o=>{
       const isMnt=o.orderKind==='maintenance';
       const cardBorder=isMnt?'border:2px solid #DC2626;background:linear-gradient(135deg,#FEF2F2,#FFF5F5);':o.isQuickTask?'border:2px solid #C89A4A;background:linear-gradient(135deg,#FFFDF8,#FFF5E0);':'';
       return`<div class="wf-card" style="${cardBorder}" onclick="openOrderModal('${o._key}')">${hasOrderUpdate(o)?'<span class="order-update-dot" title="تم تحديث بيانات الطلب"></span>':''}<div class="wf-card-top">
@@ -4178,7 +4170,12 @@ function buildMyWork(){
       ${isWorkshop&&o.isQuickTask&&!o.workshopFeedbackDone?`<div style="margin-top:8px;"><button class="btn btn-orange btn-sm" onclick="event.stopPropagation();openWorkshopFeedback('${o._key}')"><i class="ti ti-clipboard-check"></i> إدخال القياسات</button></div>`:''}
       ${o.workshopFeedbackDone?`<div style="margin-top:6px;background:#F0FDF4;border:1px solid #BBF7D0;border-radius:6px;padding:6px 10px;font-size:11px;"><i class="ti ti-check" style="color:#10B981"></i> تم رفع التقرير — بانتظار الإجراء</div>`:''}
       ${(canSeeWhatsappBtn()&&o.phone&&o.phone!=='—')?`<div style="margin-top:8px"><button class="btn btn-whatsapp btn-sm" onclick="event.stopPropagation();openWhatsapp('${encodeURIComponent(o.phone)}')"><i class="ti ti-brand-whatsapp"></i> واتساب</button></div>`:''}
-    </div><div class="wf-card-prog"><div class="wf-card-fill" style="width:${orderProgress(o)}%;background:${progressColor(o)}"></div></div></div>`;}).join('')}</div>`;
+    </div><div class="wf-card-prog"><div class="wf-card-fill" style="width:${orderProgress(o)}%;background:${progressColor(o)}"></div></div></div>`;
+  });
+  // Item-cards and whole-order "simple task" cards are merged into one unified
+  // grid/section (not two separate blocks) per the employee dashboard request.
+  const allCards=[...itemCards,...simpleCards];
+  const cards=allCards.length?`<div class="wf-grid">${allCards.join('')}</div>`:'<div style="color:var(--text-3);padding:30px;text-align:center;"><i class="ti ti-check-circle" style="font-size:36px;display:block;margin-bottom:10px;color:#10B981;"></i>لا توجد أعمال موكلة إليك حالياً</div>';
   // Strict automatic department isolation: "أعمالي" shows ONLY orders
   // actively assigned to this specific person in their current stage
   // (isMyOrder already enforces o.currentDept===myDept && assignee===me).
@@ -4186,7 +4183,6 @@ function buildMyWork(){
   // removed so unassigned/other-employee tasks are never visible here.
   document.getElementById('my-content').innerHTML=`
     <div class="page-header"><div class="ptitle"><i class="ti ti-user-check"></i> أعمالي — ${esc(cu.name)}</div></div>
-    ${itemCardsHtml?`<div style="font-size:13px;font-weight:800;color:var(--text-2);margin-bottom:10px;">البنود الموكلة إليك</div>${itemCardsHtml}`:''}
     ${filterBar}
     ${controlsRow(false)}<div>${cards}</div>`;
 }
