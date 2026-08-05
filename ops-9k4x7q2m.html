@@ -705,6 +705,10 @@ input[type="password"]{direction:rtl;text-align:right;padding-left:40px;padding-
 .saving-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(15,5,5,.8);z-index:500;align-items:center;justify-content:center;flex-direction:column;gap:12px;color:var(--gold);font-size:14px;font-weight:700;backdrop-filter:blur(4px);}
 .saving-overlay.show{display:flex;}
 .spinner{width:40px;height:40px;border:4px solid rgba(212,175,55,.25);border-top-color:var(--gold);border-radius:50%;animation:spin .7s linear infinite;}
+.upload-progress-wrap{display:flex;align-items:center;gap:10px;width:min(280px,80vw);}
+.upload-progress-track{flex:1;height:8px;border-radius:6px;background:rgba(212,175,55,.2);overflow:hidden;}
+.upload-progress-fill{height:100%;width:0%;background:var(--gold);border-radius:6px;transition:width .15s linear;}
+#upload-progress-pct{font-size:12px;font-weight:800;color:var(--gold);min-width:34px;text-align:left;}
 @keyframes spin{to{transform:rotate(360deg);}}
 .toast-el{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--maroon);color:var(--gold);padding:12px 24px;border-radius:var(--radius-md);font-size:13px;font-weight:700;border:1px solid var(--gold);transition:transform .28s;z-index:9999;pointer-events:none;white-space:nowrap;}
 .toast-el.show{transform:translateX(-50%) translateY(0);}
@@ -1494,7 +1498,12 @@ input:focus,select:focus,textarea:focus{box-shadow:inset 0 1px 3px rgba(74,14,23
     <div id="wf-feedback-body"></div>
   </div>
 </div>
-<div class="saving-overlay" id="saving-overlay"><div class="spinner"></div><span id="saving-msg">جاري التحديث...</span></div>
+<div class="saving-overlay" id="saving-overlay"><div class="spinner"></div><span id="saving-msg">جاري التحديث...</span>
+  <div class="upload-progress-wrap" id="upload-progress-wrap" style="display:none;">
+    <div class="upload-progress-track"><div class="upload-progress-fill" id="upload-progress-fill" style="width:0%;"></div></div>
+    <span id="upload-progress-pct">0%</span>
+  </div>
+</div>
 <div class="toast-el" id="toast"></div>
 <script>
 // ============================================================
@@ -2089,7 +2098,29 @@ function omAccordion(icon,title,bodyHtml,startOpen){
   return`<div class="om-accordion"><div class="om-acc-header${startOpen?' open':''}" onclick="toggleOmAccordion(this)"><span><i class="ti ${icon}"></i> ${title}</span><i class="ti ti-chevron-down om-acc-caret"></i></div><div class="om-acc-body dg" style="display:${startOpen?'':'none'};">${bodyHtml}</div></div>`;
 }
 function showSaving(msg='جاري...'){document.getElementById('saving-msg').textContent=msg;document.getElementById('saving-overlay').classList.add('show');}
-function hideSaving(){document.getElementById('saving-overlay').classList.remove('show');}
+function hideSaving(){document.getElementById('saving-overlay').classList.remove('show');clearUploadProgress();}
+// Real upload-percentage readout for the saving overlay — set by whichever
+// XHR-based upload is currently running (uploadToCloudinary/
+// uploadToGoogleDrive) via their onprogress handlers. Callers of
+// convertFileToBase64() don't need to change at all: they already call
+// showSaving() before starting the upload, and this bar simply appears
+// inside that same overlay once real byte progress starts coming in.
+function setUploadProgress(pct){
+  const wrap=document.getElementById('upload-progress-wrap');
+  const fill=document.getElementById('upload-progress-fill');
+  const pctEl=document.getElementById('upload-progress-pct');
+  if(!wrap||!fill||!pctEl)return;
+  const clamped=Math.max(0,Math.min(100,Math.round(pct)));
+  wrap.style.display='flex';
+  fill.style.width=clamped+'%';
+  pctEl.textContent=clamped+'%';
+}
+function clearUploadProgress(){
+  const wrap=document.getElementById('upload-progress-wrap');
+  const fill=document.getElementById('upload-progress-fill');
+  if(wrap)wrap.style.display='none';
+  if(fill)fill.style.width='0%';
+}
 function _readFileAsDataUrl(file){return new Promise((res,rej)=>{const r=new FileReader();r.readAsDataURL(file);r.onload=()=>res(r.result);r.onerror=()=>rej(new Error('read-failed'));});}
 function compressImage(dataUrl,maxDim=1600,quality=0.72){
   return new Promise((res,rej)=>{
@@ -2123,23 +2154,31 @@ function compressImage(dataUrl,maxDim=1600,quality=0.72){
 // large files no longer bloat the database or get rejected.
 const CLOUDINARY_CLOUD_NAME='xo8imy4r';
 const CLOUDINARY_UPLOAD_PRESET='rawaee_unsigned';
-async function uploadToCloudinary(fileOrDataUrl){
-  const fd=new FormData();
-  fd.append('file',fileOrDataUrl);
-  fd.append('upload_preset',CLOUDINARY_UPLOAD_PRESET);
-  let res;
-  try{
-    res=await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/auto/upload`,{method:'POST',body:fd});
-  }catch(netErr){
-    throw new Error('⚠️ تعذر الاتصال بخدمة رفع الملفات، تحقق من الإنترنت وحاول مجدداً.');
-  }
-  let data=null;
-  try{data=await res.json();}catch(e){}
-  if(!res.ok||!data||data.error){
-    const msg=(data&&data.error&&data.error.message)?data.error.message:('HTTP '+res.status);
-    throw new Error('⚠️ فشل رفع الملف: '+msg);
-  }
-  return data.secure_url;
+// XHR instead of fetch() specifically because fetch has no upload-progress
+// event — xhr.upload.onprogress is the only way in a browser to get a real,
+// live byte-level percentage while the request body is still being sent.
+function uploadToCloudinary(fileOrDataUrl){
+  return new Promise((resolve,reject)=>{
+    const fd=new FormData();
+    fd.append('file',fileOrDataUrl);
+    fd.append('upload_preset',CLOUDINARY_UPLOAD_PRESET);
+    const xhr=new XMLHttpRequest();
+    xhr.open('POST',`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/auto/upload`);
+    xhr.upload.onprogress=e=>{if(e.lengthComputable)setUploadProgress((e.loaded/e.total)*100);};
+    xhr.onerror=()=>reject(new Error('⚠️ تعذر الاتصال بخدمة رفع الملفات، تحقق من الإنترنت وحاول مجدداً.'));
+    xhr.onload=()=>{
+      let data=null;
+      try{data=JSON.parse(xhr.responseText);}catch(e){}
+      if(xhr.status<200||xhr.status>=300||!data||data.error){
+        const msg=(data&&data.error&&data.error.message)?data.error.message:('HTTP '+xhr.status);
+        reject(new Error('⚠️ فشل رفع الملف: '+msg));
+        return;
+      }
+      setUploadProgress(100);
+      resolve(data.secure_url);
+    };
+    xhr.send(fd);
+  });
 }
 async function convertFileToBase64(file,folderCtx){const MAX_IMAGE_SOURCE_BYTES=25*1024*1024;const MAX_OTHER_BYTES=10*1024*1024;const isImage=file.type&&file.type.startsWith('image/');
   // Cloudinary blocks delivery of PDF/ZIP by default (a security restriction on the
@@ -2149,7 +2188,114 @@ async function convertFileToBase64(file,folderCtx){const MAX_IMAGE_SOURCE_BYTES=
   const isPdfOrZip=/application\/(pdf|zip|x-zip-compressed)/.test(file.type||'')||/\.(pdf|zip)$/i.test(file.name||'');
   if(isImage){if(file.size>MAX_IMAGE_SOURCE_BYTES)throw new Error('⚠️ حجم الصورة كبير جداً (الحد الأقصى 25 ميجابايت). يرجى اختيار صورة أصغر.');let uploadPayload=file;if(file.size>800*1024){try{const raw=await _readFileAsDataUrl(file);uploadPayload=await compressImage(raw,1600,0.72);}catch(e){uploadPayload=file;}}return await uploadToCloudinary(uploadPayload);}
   else if(isPdfOrZip){return await uploadToGoogleDrive(file,folderCtx);}
-  else{if(file.size>MAX_OTHER_BYTES)return await uploadToGoogleDrive(file,folderCtx);return await uploadToCloudinary(file);}} const DRIVE_PROXY_URL='https://rawaee-drive-proxy.vercel.app/api/token'; const MAX_DRIVE_BYTES=500*1024*1024; let _driveAccessToken=null; async function getGoogleAccessToken(){if(_driveAccessToken&&_driveAccessToken.expiresAt>Date.now()+60000)return _driveAccessToken.value;let resp;try{resp=await fetch(DRIVE_PROXY_URL);}catch(e){throw new Error('⚠️ تعذر الاتصال بخادم رفع الملفات، تحقق من الإنترنت وحاول مجدداً.');}let data=null;try{data=await resp.json();}catch(e){}if(!resp.ok||!data||!data.access_token){throw new Error('⚠️ تعذر تجهيز صلاحية رفع الملفات إلى Google Drive.');}_driveAccessToken={value:data.access_token,expiresAt:Date.now()+((data.expires_in||3500)*1000)};return _driveAccessToken.value;} function _updateGoogleDriveStatusUI(){} async function _driveFindOrCreateFolder(name,parentId,accessToken){const safeName=String(name).replace(/'/g,"\\'");const q="name='"+safeName+"' and '"+(parentId||'root')+"' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false";const listRes=await fetch('https://www.googleapis.com/drive/v3/files?q='+encodeURIComponent(q)+'&fields=files(id,name)',{headers:{Authorization:'Bearer '+accessToken}});const listData=await listRes.json().catch(()=>null);if(listData&&listData.files&&listData.files.length)return listData.files[0].id;const createRes=await fetch('https://www.googleapis.com/drive/v3/files',{method:'POST',headers:{Authorization:'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({name:String(name),mimeType:'application/vnd.google-apps.folder',parents:parentId?[parentId]:undefined})});const createData=await createRes.json().catch(()=>null);if(!createData||!createData.id)throw new Error('folder_create_failed');return createData.id;} async function uploadToGoogleDrive(file,folderCtx){if(file.size>MAX_DRIVE_BYTES)throw new Error('⚠️ حجم الملف كبير جداً حتى لـ Google Drive (الحد الأقصى 500 ميجابايت). يرجى ضغط الملف أو تصغيره.');const accessToken=await getGoogleAccessToken();let parentId=null;try{const orderRef=folderCtx&&folderCtx.order;const orderRec=(orderRef&&typeof orders!=='undefined')?orders[orderRef]:null;const personName=(folderCtx&&folderCtx.person)||(orderRec&&orderRec.client)||(typeof cu!=='undefined'&&cu&&cu.name)||'غير محدد';const personFolderId=await _driveFindOrCreateFolder(personName,null,accessToken);parentId=personFolderId;if(orderRef){const humanLabel=(orderRec&&orderRec.id)?orderRec.id:orderRef;parentId=await _driveFindOrCreateFolder(String(humanLabel),personFolderId,accessToken);}}catch(e){parentId=null;}const metadata={name:file.name||('ملف_'+Date.now())};if(parentId)metadata.parents=[parentId];const form=new FormData();form.append('metadata',new Blob([JSON.stringify(metadata)],{type:'application/json'}));form.append('file',file);let res;try{res=await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id',{method:'POST',headers:{Authorization:'Bearer '+accessToken},body:form});}catch(netErr){throw new Error('⚠️ تعذر الاتصال بـ Google Drive، تحقق من الإنترنت وحاول مجدداً.');}let data=null;try{data=await res.json();}catch(e){}if(!res.ok||!data||!data.id){const msg=(data&&data.error&&data.error.message)?data.error.message:('HTTP '+res.status);throw new Error('⚠️ فشل رفع الملف إلى Google Drive: '+msg);}try{await fetch('https://www.googleapis.com/drive/v3/files/'+data.id+'/permissions',{method:'POST',headers:{Authorization:'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({role:'reader',type:'anyone'})});}catch(e){}return 'https://drive.google.com/file/d/'+data.id+'/view?usp=sharing';}function normalizeSaudiPhone(v){
+  else{if(file.size>MAX_OTHER_BYTES)return await uploadToGoogleDrive(file,folderCtx);return await uploadToCloudinary(file);}}
+const DRIVE_PROXY_URL='https://rawaee-drive-proxy.vercel.app/api/token';
+const MAX_DRIVE_BYTES=500*1024*1024;
+const DRIVE_CHUNK_BYTES=8*1024*1024; // must be a multiple of 256KB per Google's resumable-upload spec
+let _driveAccessToken=null;
+async function getGoogleAccessToken(){
+  if(_driveAccessToken&&_driveAccessToken.expiresAt>Date.now()+60000)return _driveAccessToken.value;
+  let resp;
+  try{resp=await fetch(DRIVE_PROXY_URL);}catch(e){throw new Error('⚠️ تعذر الاتصال بخادم رفع الملفات، تحقق من الإنترنت وحاول مجدداً.');}
+  let data=null;try{data=await resp.json();}catch(e){}
+  if(!resp.ok||!data||!data.access_token)throw new Error('⚠️ تعذر تجهيز صلاحية رفع الملفات إلى Google Drive.');
+  _driveAccessToken={value:data.access_token,expiresAt:Date.now()+((data.expires_in||3500)*1000)};
+  return _driveAccessToken.value;
+}
+function _updateGoogleDriveStatusUI(){}
+async function _driveFindOrCreateFolder(name,parentId,accessToken){
+  const safeName=String(name).replace(/'/g,"\\'");
+  const q="name='"+safeName+"' and '"+(parentId||'root')+"' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false";
+  const listRes=await fetch('https://www.googleapis.com/drive/v3/files?q='+encodeURIComponent(q)+'&fields=files(id,name)',{headers:{Authorization:'Bearer '+accessToken}});
+  const listData=await listRes.json().catch(()=>null);
+  if(listData&&listData.files&&listData.files.length)return listData.files[0].id;
+  const createRes=await fetch('https://www.googleapis.com/drive/v3/files',{method:'POST',headers:{Authorization:'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({name:String(name),mimeType:'application/vnd.google-apps.folder',parents:parentId?[parentId]:undefined})});
+  const createData=await createRes.json().catch(()=>null);
+  if(!createData||!createData.id)throw new Error('folder_create_failed');
+  return createData.id;
+}
+// Uploads one chunk via XHR (not fetch) so xhr.upload.onprogress can report
+// real bytes-sent-so-far — offsetBytes lets progress stay cumulative across
+// chunks instead of resetting to 0% at the start of every chunk. Google's
+// resumable endpoint replies 200/201 (with the finished file) on the chunk
+// that completes the upload, or 308 (Resume Incomplete) on every earlier one.
+function _driveUploadChunk(sessionUri,chunk,start,total,contentType,offsetBytes){
+  return new Promise((resolve,reject)=>{
+    const xhr=new XMLHttpRequest();
+    xhr.open('PUT',sessionUri);
+    xhr.setRequestHeader('Content-Range',`bytes ${start}-${start+chunk.size-1}/${total}`);
+    if(contentType)xhr.setRequestHeader('Content-Type',contentType);
+    xhr.upload.onprogress=e=>{if(e.lengthComputable)setUploadProgress(((offsetBytes+e.loaded)/total)*100);};
+    xhr.onerror=()=>reject(new Error('gdrive-chunk-network-error'));
+    xhr.onload=()=>{
+      if(xhr.status===200||xhr.status===201){
+        let data=null;try{data=JSON.parse(xhr.responseText);}catch(e){}
+        resolve({done:true,data});
+      }else if(xhr.status===308){
+        resolve({done:false});
+      }else{
+        reject(new Error('gdrive-chunk-http-'+xhr.status));
+      }
+    };
+    xhr.send(chunk);
+  });
+}
+// Chunked + resumable instead of the old single non-resumable multipart
+// POST: large files no longer need to fit in one request (avoiding
+// timeouts/failures on slow connections), each chunk retries independently
+// on failure instead of restarting the whole file, and the per-chunk
+// progress events give an accurate live percentage instead of an
+// all-or-nothing spinner.
+async function uploadToGoogleDrive(file,folderCtx){
+  if(file.size>MAX_DRIVE_BYTES)throw new Error('⚠️ حجم الملف كبير جداً حتى لـ Google Drive (الحد الأقصى 500 ميجابايت). يرجى ضغط الملف أو تصغيره.');
+  const accessToken=await getGoogleAccessToken();
+  let parentId=null;
+  try{
+    const orderRef=folderCtx&&folderCtx.order;
+    const orderRec=(orderRef&&typeof orders!=='undefined')?orders[orderRef]:null;
+    const personName=(folderCtx&&folderCtx.person)||(orderRec&&orderRec.client)||(typeof cu!=='undefined'&&cu&&cu.name)||'غير محدد';
+    const personFolderId=await _driveFindOrCreateFolder(personName,null,accessToken);
+    parentId=personFolderId;
+    if(orderRef){
+      const humanLabel=(orderRec&&orderRec.id)?orderRec.id:orderRef;
+      parentId=await _driveFindOrCreateFolder(String(humanLabel),personFolderId,accessToken);
+    }
+  }catch(e){parentId=null;}
+  const metadata={name:file.name||('ملف_'+Date.now())};
+  if(parentId)metadata.parents=[parentId];
+  const contentType=file.type||'application/octet-stream';
+  let initRes;
+  try{
+    initRes=await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&fields=id',{
+      method:'POST',
+      headers:{Authorization:'Bearer '+accessToken,'Content-Type':'application/json; charset=UTF-8','X-Upload-Content-Type':contentType,'X-Upload-Content-Length':String(file.size)},
+      body:JSON.stringify(metadata)
+    });
+  }catch(netErr){throw new Error('⚠️ تعذر الاتصال بـ Google Drive، تحقق من الإنترنت وحاول مجدداً.');}
+  if(!initRes.ok){throw new Error('⚠️ فشل بدء جلسة الرفع إلى Google Drive: HTTP '+initRes.status);}
+  const sessionUri=initRes.headers.get('Location');
+  if(!sessionUri)throw new Error('⚠️ تعذر إنشاء جلسة رفع قابلة للاستكمال على Google Drive.');
+  let start=0,fileId=null;
+  const MAX_CHUNK_RETRIES=3;
+  while(start<file.size){
+    const chunk=file.slice(start,Math.min(start+DRIVE_CHUNK_BYTES,file.size));
+    let attempt=0,lastErr=null,result=null;
+    while(attempt<MAX_CHUNK_RETRIES){
+      try{result=await _driveUploadChunk(sessionUri,chunk,start,file.size,contentType,start);lastErr=null;break;}
+      catch(e){lastErr=e;attempt++;if(attempt<MAX_CHUNK_RETRIES)await new Promise(r=>setTimeout(r,800*attempt));}
+    }
+    if(lastErr)throw new Error('⚠️ فشل رفع الملف إلى Google Drive بعد عدة محاولات، تحقق من الإنترنت وحاول مجدداً.');
+    start+=chunk.size;
+    if(result.done){fileId=result.data&&result.data.id;break;}
+  }
+  if(!fileId)throw new Error('⚠️ فشل رفع الملف إلى Google Drive: لم يتم استلام تأكيد الاكتمال.');
+  try{
+    await fetch('https://www.googleapis.com/drive/v3/files/'+fileId+'/permissions',{method:'POST',headers:{Authorization:'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({role:'reader',type:'anyone'})});
+  }catch(e){}
+  setUploadProgress(100);
+  return 'https://drive.google.com/file/d/'+fileId+'/view?usp=sharing';
+}
+function normalizeSaudiPhone(v){
   let s=toEnglishDigits(String(v||'')).trim();
   s=s.replace(/[^\d+]/g,''); // strip everything except digits and a leading +
   if(s.startsWith('+966'))s='0'+s.slice(4);
@@ -2738,6 +2884,7 @@ function preciseTimeBadge(hours){
 }
 function deadlineBadge(deadline){if(!deadline||deadline==='—')return'';const now=new Date();const dl=new Date(deadline);const hours=Math.round((dl-now)/3600000);if(hours<0)return`<div class="deadline-warn deadline-over"><i class="ti ti-alert-triangle"></i>تجاوز موعد التسليم!</div>`;if(hours<=24)return`<div class="deadline-warn"><i class="ti ti-clock"></i>التسليم خلال ${hours} ساعة</div>`;if(hours<=72)return`<div class="deadline-warn"><i class="ti ti-clock"></i>التسليم خلال ${Math.round(hours/24)} أيام</div>`;return'';}
 function formatDate(iso){if(!iso)return'—';try{return new Date(iso).toLocaleDateString('ar-SA');}catch{return iso;}}
+function fmtDateTime(iso){if(!iso)return'—';try{const d=new Date(iso);return d.toLocaleDateString('en-CA')+' · '+d.toLocaleTimeString('ar-SA',{hour:'2-digit',minute:'2-digit'});}catch{return iso;}}
 function renderDeptTrackRow(o){
   const activeDepts=getActiveDepts(o);const stages=[];
   if(activeDepts.includes('design'))stages.push({key:'design',label:'تصميم',person:o.designName||'—'});
@@ -3662,9 +3809,9 @@ function openWfInlinePanel(key,skipScroll){
     }else if(nd==='done'){
       nextBtn=`<button class="btn btn-green btn-sm" onclick="finishOrder('${key}')"><i class="ti ti-circle-check"></i> إتمام وأرشفة الطلب</button>`;
     }else{
-      const needsFile=o.currentDept==='design'&&((o.printTo!=='none'&&!o.approvedPrintFile)||(o.workshopTo!=='none'&&!o.approvedWorkshopFile));
+      const needsFile=o.currentDept==='design'&&o.printTo!=='none'&&(!o.clientApprovalImage||!o.approvedPrintFile||(o.workshopTo!=='none'&&!o.approvedWorkshopFile));
       nextBtn=needsFile
-        ?`<span style="font-size:11px;color:#EF4444;font-weight:700"><i class="ti ti-alert-triangle"></i> يرجى رفع بروفة القياسات والتصميم المعتمدة أولاً (من النافذة الكاملة)</span>`
+        ?`<span style="font-size:11px;color:#EF4444;font-weight:700"><i class="ti ti-alert-triangle"></i> يجب رفع جميع الملفات المطلوبة قبل الانتقال للمرحلة التالية (من النافذة الكاملة)</span>`
         :`<button class="btn btn-brand btn-sm" onclick="sendToNextDept('${key}','${nd}')"><i class="ti ti-arrow-left"></i> ${nextLabels[o.currentDept]||'إرسال للمرحلة التالية'}</button>`;
     }
   }
@@ -4075,7 +4222,13 @@ async function bulkAdvanceSelected(){
     const o=orders[key];if(!o)continue;
     // Same design-stage file-approval gate as sendToNextDept() — bulk moves
     // must not be a bypass route around it.
-    if(o.currentDept==='design'&&(!o.clientApprovalImage||(o.printTo!=='none'&&!o.approvedPrintFile)||(o.workshopTo!=='none'&&!o.workshopProofImage))){blocked++;continue;}
+    if(o.currentDept==='design'){
+      const isProofQt=o.isQuickTask&&o.printTo==='none'&&o.workshopTo==='none';
+      const fileBlocked=isProofQt
+        ? !o.approvedPrintFile
+        : (o.printTo!=='none'&&(!o.clientApprovalImage||!o.approvedPrintFile||(o.workshopTo!=='none'&&!o.approvedWorkshopFile)));
+      if(fileBlocked){blocked++;continue;}
+    }
     const idx=deptOrder.indexOf(o.currentDept);
     const nd=idx>=0&&idx<deptOrder.length-1?deptOrder[idx+1]:'done';
     try{await fbPatch('orders/'+key,{currentDept:nd,stageStartDate:new Date().toISOString()});moved++;}catch(e){console.error(e);}
@@ -6371,16 +6524,23 @@ function openOrderModal(key){
     }else{
       // Design cannot move an order on to print/workshop until the approved
       // deliverables those departments actually need are uploaded — mirrors
-      // the consolidated upload boxes above one-for-one (per active dept).
+      // the dynamic upload boxes above one-for-one (per active dept). If
+      // printing isn't part of this order's workflow at all, there's nothing
+      // to gate — no upload boxes are shown there either.
       const _missingFiles=[];
       if(o.currentDept==='design'){
-        if(!o.clientApprovalImage)_missingFiles.push('التصميم المعتمد');
-        if(o.printTo!=='none'&&!o.approvedPrintFile)_missingFiles.push('بروفة الطباعة المعتمدة');
-        if(o.workshopTo!=='none'&&!o.workshopProofImage)_missingFiles.push('بروفة الورشة المعتمدة');
+        const _isProofQt=o.isQuickTask&&o.printTo==='none'&&o.workshopTo==='none';
+        if(_isProofQt){
+          if(!o.approvedPrintFile)_missingFiles.push('ملف البروفة');
+        }else if(o.printTo!=='none'){
+          if(!o.clientApprovalImage)_missingFiles.push('الملف المعتمد للتصميم');
+          if(!o.approvedPrintFile)_missingFiles.push('بروفة التصميم');
+          if(o.workshopTo!=='none'&&!o.approvedWorkshopFile)_missingFiles.push('ملف الإنتاج للورشة');
+        }
       }
       const needsFile=o.currentDept==='design'&&_missingFiles.length>0;
       nextBtn=needsFile
-        ?`<span style="font-size:11px;color:#EF4444;font-weight:700"><i class="ti ti-alert-triangle"></i> يرجى رفع الملفات المطلوبة أولاً: ${esc(_missingFiles.join('، '))}</span>`
+        ?`<span style="font-size:11px;color:#EF4444;font-weight:700"><i class="ti ti-alert-triangle"></i> يجب رفع جميع الملفات المطلوبة قبل الانتقال للمرحلة التالية: ${esc(_missingFiles.join('، '))}</span>`
         :`<button class="btn btn-brand btn-sm" onclick="sendToNextDept('${key}','${nd}')"><i class="ti ti-arrow-left"></i> ${nextLabels[o.currentDept]||'إرسال للمرحلة التالية'}</button>`;
     }
   }
@@ -6388,48 +6548,45 @@ function openOrderModal(key){
   if(isMine||t==='admin'){
     if(o.currentDept==='design'){
       const _isProofQt=o.isQuickTask&&o.printTo==='none'&&o.workshopTo==='none';
-      // Consolidated design-stage upload area — every approved deliverable this
-      // order's downstream departments need is uploaded from ONE place here,
-      // instead of being split between this box and the separate proof-approval
-      // section further down the page. Up to 4 boxes, shown only for the
-      // departments actually active on this order:
-      //  1. التصميم المعتمد (client-approved design) — always shown at design stage
-      //  2. بروفة الطباعة المعتمدة — only if print is active
-      //  3. مخطط قياسات الورشة — only if workshop is active
-      //  4. بروفة الورشة المعتمدة — only if workshop is active
-      // Each box accepts multiple files at once (first fills the existing
-      // ff/fn2 field for backward compatibility, the rest land in `${ff}Extra`
-      // — see uploadFileDirect()); uploadedFilesHtml() renders the primary
-      // file plus any extras as one combined list.
-      const uploadedFilesHtml=(ff,label)=>{
-        const extra=Array.isArray(o[ff+'Extra'])?o[ff+'Extra']:[];
-        return[o[ff]?fileLinkHtml(o[ff+'Name'],o[ff],label):'',...extra.map(f=>fileLinkHtml(f.name,f.data,label))].filter(Boolean).join(' ');
-      };
-      uploadArea=`<div class="dept-upload-box"><div class="dept-upload-title" style="color:#6B21A8"><i class="ti ti-brush"></i> رفع ملفات التصميم المعتمدة</div>
-      <div class="fg" style="margin-bottom:8px"><label>التصميم المعتمد:</label><input type="file" multiple id="f-designapproved-input" accept="image/*,.pdf,.doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onchange="uploadFileDirect('${key}','clientApprovalImage','clientApprovalImageName','f-designapproved-input')"/>${uploadedFilesHtml('clientApprovalImage','الملف الحالي')}</div>
-      ${(o.printTo!=='none'||_isProofQt)?`<div class="fg" style="margin-bottom:8px"><label>${_isProofQt?'ملف البروفة النهائي المرسل للعميل:':'بروفة الطباعة المعتمدة:'}</label><input type="file" multiple id="f-print-input" accept="image/*,.pdf,.doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onchange="uploadFileDirect('${key}','approvedPrintFile','approvedPrintFileName','f-print-input')"/>${uploadedFilesHtml('approvedPrintFile','الملف الحالي')}</div>`:''}
-      ${o.workshopTo!=='none'?`<div class="fg" style="margin-bottom:8px"><label>مخطط قياسات الورشة:</label><input type="file" multiple id="f-workshop-input" accept="image/*,.pdf,.doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onchange="uploadFileDirect('${key}','approvedWorkshopFile','approvedWorkshopFileName','f-workshop-input')"/>${uploadedFilesHtml('approvedWorkshopFile','الملف الحالي')}</div>`:''}
-      ${o.workshopTo!=='none'?`<div class="fg"><label>بروفة الورشة المعتمدة:</label><input type="file" multiple id="f-wsproof-input" accept="image/*,.pdf" onchange="uploadFileDirect('${key}','workshopProofImage','workshopProofImageName','f-wsproof-input')"/>${uploadedFilesHtml('workshopProofImage','الملف الحالي')}</div>`:''}
-    </div>`;
+      const _printActive=o.printTo!=='none';
+      const _workshopActive=o.workshopTo!=='none';
+      const _designFormats='image/*,.pdf,.ai,.psd,.eps,.svg,.cdr,application/postscript,application/pdf,image/vnd.adobe.photoshop';
+      // Fully dynamic per the active workflow — printing is what makes this a
+      // "production" order in the first place, so with no printing stage at
+      // all there is nothing to approve/hand off and no boxes are shown.
+      // Quick-task "proof" orders (design-only, single file to the client)
+      // keep their own simpler single box instead.
+      if(_isProofQt){
+        uploadArea=`<div class="dept-upload-box"><div class="dept-upload-title" style="color:#6B21A8"><i class="ti ti-brush"></i> ملف البروفة النهائي المرسل للعميل</div>
+        <input type="file" multiple id="f-print-input" accept="${_designFormats}" onchange="uploadFileDirect('${key}','approvedPrintFile','approvedPrintFileName','f-print-input')"/>
+        ${renderApprovalFileList(o,key,'approvedPrintFile',canAct)}
+      </div>`;
+      }else if(_printActive){
+        uploadArea=`<div class="dept-upload-box"><div class="dept-upload-title" style="color:#6B21A8"><i class="ti ti-brush"></i> ملفات التصميم المطلوبة</div>
+        <div class="fg" style="margin-bottom:10px"><label>الملف المعتمد للتصميم:</label><input type="file" multiple id="f-designapproved-input" accept="${_designFormats}" onchange="uploadFileDirect('${key}','clientApprovalImage','clientApprovalImageName','f-designapproved-input')"/>${renderApprovalFileList(o,key,'clientApprovalImage',canAct)}</div>
+        <div class="fg" style="margin-bottom:10px"><label>بروفة التصميم:</label><input type="file" multiple id="f-print-input" accept="${_designFormats}" onchange="uploadFileDirect('${key}','approvedPrintFile','approvedPrintFileName','f-print-input')"/>${renderApprovalFileList(o,key,'approvedPrintFile',canAct)}</div>
+        ${_workshopActive?`<div class="fg"><label>ملف الإنتاج للورشة:</label><input type="file" multiple id="f-workshop-input" accept="${_designFormats}" onchange="uploadFileDirect('${key}','approvedWorkshopFile','approvedWorkshopFileName','f-workshop-input')"/>${renderApprovalFileList(o,key,'approvedWorkshopFile',canAct)}</div>`:''}
+      </div>`;
+      }
     }
     // Printing is receive-only: printers never attach their own files here —
     // they only see what Design already approved for them, plus whatever the
-    // client attached at order registration. (Design's own "first printed
-    // copy" upload box, previously here, was removed at the user's request.)
+    // client attached at order registration, each with who uploaded it and
+    // when, and can add internal notes via the department notes box below.
     else if(o.currentDept==='print'){
-      const _clientFiles=(o.files||[]).filter(f=>f&&f.data&&f.name);
-      const _printReceived=[
-        o.approvedPrintFile?fileLinkHtml(o.approvedPrintFileName,o.approvedPrintFile,'من التصميم'):'',
-        ..._clientFiles.map(f=>fileLinkHtml(f.name,f.data,'من تسجيل الطلب'))
-      ].filter(Boolean).join('');
-      uploadArea=`<div class="dept-upload-box"><div class="dept-upload-title" style="color:#3730A3"><i class="ti ti-printer"></i> الملفات المستلمة للطباعة</div>
-      ${_printReceived?`<div style="display:flex;flex-direction:column;gap:6px;">${_printReceived}</div>`:'<div style="font-size:11px;color:var(--text-3);">لا توجد ملفات مستلمة بعد</div>'}
+      const _clientFiles=(o.files||[]).filter(f=>f&&f.data&&f.name).map(f=>`<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:8px;padding:5px 8px;">${fileLinkHtml(f.name,f.data,'من تسجيل الطلب')}</div>`).join('');
+      const _designFiles=renderApprovalFileList(o,key,'approvedPrintFile',false);
+      uploadArea=`<div class="dept-upload-box"><div class="dept-upload-title" style="color:#3730A3"><i class="ti ti-printer"></i> الملفات المستلمة من التصميم</div>
+      ${_designFiles}
+      ${_clientFiles?`<div style="font-size:10.5px;color:var(--text-3);font-weight:700;margin:8px 0 4px;">مرفقات تسجيل الطلب</div><div style="display:flex;flex-direction:column;gap:5px;">${_clientFiles}</div>`:''}
     </div>`;
     }
-    else if(o.currentDept==='workshop')uploadArea=`<div class="dept-upload-box"><div class="dept-upload-title" style="color:#9A3412"><i class="ti ti-tools"></i> رفع صورة/فيديو التركيب النهائي</div>
-      <div class="fg"><label>صورة المنجز</label><input type="file" id="f-done-input" accept="image/*,.pdf,.doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onchange="uploadFileDirect('${key}','finalWorkshopDoneFile','finalWorkshopDoneFileName','f-done-input')"/></div>
-      <div class="fg"><label>فيديو المنجز (اختياري)</label><input type="file" id="f-donevideo-input" accept="video/*" onchange="uploadFileDirect('${key}','finalWorkshopVideo','finalWorkshopVideoName','f-donevideo-input')"/></div>
-      ${o.finalWorkshopVideo?fileLinkHtml(o.finalWorkshopVideoName,o.finalWorkshopVideo,'الفيديو الحالي'):''}
+    // Workshop has exactly one upload section — "الإنجاز النهائي" (Final
+    // Work) — accepting images/PDF/production docs (and video, folded into
+    // the same box instead of a separate field) as multiple files at once.
+    else if(o.currentDept==='workshop')uploadArea=`<div class="dept-upload-box"><div class="dept-upload-title" style="color:#9A3412"><i class="ti ti-tools"></i> الإنجاز النهائي</div>
+      <input type="file" multiple id="f-done-input" accept="image/*,video/*,.pdf,.doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onchange="uploadFileDirect('${key}','finalWorkshopDoneFile','finalWorkshopDoneFileName','f-done-input')"/>
+      ${renderApprovalFileList(o,key,'finalWorkshopDoneFile',canAct)}
     </div>`;
     else if(o.currentDept==='external'){
       const _extMode=o.externalMode||'both';
@@ -6714,30 +6871,90 @@ async function _uploadOneFileData(file,key){
 // filling the existing single-value field (ff/fn2) so every other place in
 // the app that already reads that field keeps working unchanged, and any
 // additional files are stored as an additive `${ff}Extra` array alongside it.
+// Newly selected files are ADDITIVE — if the primary slot is already filled,
+// every file picked this time (even just one) is appended to `${ff}Extra`
+// instead of overwriting what's already there. This matters now that each
+// box supports "delete this one file" individually (deleteApprovalFile) —
+// re-opening the file picker to add one more file must never silently wipe
+// out files a delete didn't touch.
 async function uploadFileDirect(key,ff,fn2,inputId){
   const el=document.getElementById(inputId);if(!el||!el.files||!el.files.length)return;
   const files=Array.from(el.files);
+  const o=orders[key];
   showSaving(files.length>1?'جاري حفظ الملفات...':'جاري حفظ الملف...');
   try{
     const uploaded=[];
     for(const file of files){
       const{data,storage}=await _uploadOneFileData(file,key);
-      uploaded.push({data,storage,name:file.name});
+      uploaded.push({data,storage,name:file.name,uploadedBy:cu.name||cu._uname||'—',uploadedAt:new Date().toISOString()});
     }
-    const[first,...rest]=uploaded;
+    const existingExtra=Array.isArray(o&&o[ff+'Extra'])?o[ff+'Extra']:[];
     const upd={};
-    upd[ff]=first.data;upd[ff+'Storage']=first.storage;upd[fn2]=first.name;
-    upd[ff+'Extra']=rest.map(r=>({data:r.data,name:r.name}));
-    upd[ff+'UploadedBy']=cu.name||cu._uname||'—';upd[ff+'UploadedAt']=new Date().toISOString();
+    if(o&&o[ff]){
+      upd[ff+'Extra']=[...existingExtra,...uploaded];
+    }else{
+      const[first,...rest]=uploaded;
+      upd[ff]=first.data;upd[ff+'Storage']=first.storage;upd[fn2]=first.name;
+      upd[ff+'UploadedBy']=first.uploadedBy;upd[ff+'UploadedAt']=first.uploadedAt;
+      upd[ff+'Extra']=[...existingExtra,...rest];
+    }
     await fbPatch(`orders/${key}`,upd);await loadData();hideSaving();toast('✓ تم التحديث');
     if(ff==='approvedPrintFile'||ff==='approvedWorkshopFile')dispatchAutoWhatsapp(orders[key],'proof_ready');
     const _uo=orders[key];
     if(_uo){
       const _isProof=ff==='approvedPrintFile'&&_uo.currentDept==='design';
-      pushNotification({type:'upload',message:_isProof?`تم رفع بروفة تصميم على الطلب ${esc(_uo.id||key)}`:`تم رفع ملف على الطلب ${esc(_uo.id||key)} — ${esc(first.name)}`,orderKey:key,orderId:_uo.id,client:_uo.client});
+      pushNotification({type:'upload',message:_isProof?`تم رفع بروفة تصميم على الطلب ${esc(_uo.id||key)}`:`تم رفع ملف على الطلب ${esc(_uo.id||key)} — ${esc(uploaded[0].name)}`,orderKey:key,orderId:_uo.id,client:_uo.client});
     }
     openOrderModal(key);
   }catch(e){hideSaving();toast(e&&e.message?e.message:'❌ فشل الرفع');}
+}
+// Deletes one file from an approval upload box — slot is 'primary' or the
+// index of an entry in `${ff}Extra`. Deleting the primary file promotes the
+// oldest extra (if any) into its place so the field never goes "half full"
+// (a primary-less order with leftover extras) while other code still only
+// ever reads the primary field.
+async function deleteApprovalFile(key,ff,slot){
+  const o=orders[key];if(!o)return;
+  if(!confirm('حذف هذا الملف؟'))return;
+  const fn2=ff+'Name';
+  const extra=Array.isArray(o[ff+'Extra'])?[...o[ff+'Extra']]:[];
+  const upd={};
+  if(slot==='primary'){
+    if(extra.length){
+      const promoted=extra.shift();
+      upd[ff]=promoted.data;upd[fn2]=promoted.name;
+      upd[ff+'UploadedBy']=promoted.uploadedBy||null;upd[ff+'UploadedAt']=promoted.uploadedAt||null;
+      upd[ff+'Extra']=extra;
+    }else{
+      upd[ff]=null;upd[fn2]=null;upd[ff+'UploadedBy']=null;upd[ff+'UploadedAt']=null;upd[ff+'Extra']=null;
+    }
+  }else{
+    const idx=Number(slot);
+    if(!(idx>=0&&idx<extra.length))return;
+    extra.splice(idx,1);
+    upd[ff+'Extra']=extra.length?extra:null;
+  }
+  showSaving('جاري الحذف...');
+  try{await fbPatch(`orders/${key}`,upd);await loadData();hideSaving();toast('✓ تم الحذف');openOrderModal(key);}
+  catch(e){hideSaving();toast('❌ فشل الحذف');}
+}
+// Shared renderer for every "approval upload box" (design's approved-design/
+// design-proof/workshop-production-file, workshop's final-work) — one file
+// list combining the primary field + its `${ff}Extra` array, each row
+// showing who uploaded it and when, with a delete button per canAct.
+function renderApprovalFileList(o,key,ff,canAct){
+  const rows=[];
+  if(o[ff])rows.push({data:o[ff],name:o[ff+'Name'],uploadedBy:o[ff+'UploadedBy'],uploadedAt:o[ff+'UploadedAt'],slot:'primary'});
+  (Array.isArray(o[ff+'Extra'])?o[ff+'Extra']:[]).forEach((f,i)=>rows.push({data:f.data,name:f.name,uploadedBy:f.uploadedBy,uploadedAt:f.uploadedAt,slot:String(i)}));
+  if(!rows.length)return'<div style="font-size:11px;color:var(--text-3);">لا توجد ملفات مرفوعة بعد</div>';
+  return `<div style="display:flex;flex-direction:column;gap:5px;margin-top:4px;">${rows.map(r=>`
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:8px;padding:5px 8px;">
+      <div>
+        ${fileLinkHtml(r.name,r.data)}
+        <div style="font-size:9.5px;color:var(--text-3);margin-top:2px;">${r.uploadedBy?('<i class="ti ti-user"></i> '+esc(r.uploadedBy)):''}${r.uploadedAt?(' · '+fmtDateTime(r.uploadedAt)):''}</div>
+      </div>
+      ${canAct?`<button class="btn btn-out btn-xs" onclick="event.stopPropagation();deleteApprovalFile('${key}','${ff}','${r.slot}')"><i class="ti ti-trash"></i></button>`:''}
+    </div>`).join('')}</div>`;
 }
 async function saveExternalNote(key){
   const el=document.getElementById('f-ext-note-input');if(!el)return;
@@ -6753,10 +6970,11 @@ async function sendToNextDept(key,next){
   // uploaded. Enforced here (not just in the UI) so it can't be bypassed by
   // calling this function directly from any surface.
   if(curDept==='design'){
-    const missingDesign=!o.clientApprovalImage;
-    const missingPrint=o.printTo!=='none'&&!o.approvedPrintFile;
-    const missingWorkshop=o.workshopTo!=='none'&&!o.workshopProofImage;
-    if(missingDesign||missingPrint||missingWorkshop){toast('⚠️ يجب رفع جميع الملفات المطلوبة أولاً قبل الإرسال للمرحلة التالية');return;}
+    const isProofQt=o.isQuickTask&&o.printTo==='none'&&o.workshopTo==='none';
+    const blocked=isProofQt
+      ? !o.approvedPrintFile
+      : (o.printTo!=='none'&&(!o.clientApprovalImage||!o.approvedPrintFile||(o.workshopTo!=='none'&&!o.approvedWorkshopFile)));
+    if(blocked){toast('⚠️ يجب رفع جميع الملفات المطلوبة قبل الانتقال للمرحلة التالية');return;}
   }
   showSaving('جاري التحويل...');
   const timeField={design:'designDoneAt',external:'externalDoneAt',print:'printDoneAt',workshop:'workshopDoneAt'};
