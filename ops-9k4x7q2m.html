@@ -1799,6 +1799,30 @@ async function syncUsers(){
     }else USERS=r;
   }catch(e){USERS={...INITIAL_USERS};}
 }
+// Cold-load instant paint: the very first render after a page refresh/new
+// tab used to block on a full fetch of every dataset before showing
+// anything but a spinner. Session-scoped (cleared when the tab closes, so
+// nothing lingers long-term) — good enough to skip that wait by painting
+// last-known data immediately while loadData() refreshes in the background.
+// USERS is deliberately excluded (holds password hashes) and is re-fetched
+// via syncUsers() on every load anyway.
+const _DATA_CACHE_KEY='rawaee_data_cache_v1';
+function _saveDataCache(){
+  try{
+    sessionStorage.setItem(_DATA_CACHE_KEY,JSON.stringify({orders,clients,submittedRequests,chats,standaloneQuotes,warranties,teamChat,govRecords,urgentRequests,tasksData,eventNotifs}));
+  }catch(e){/* quota exceeded or unavailable — just skip caching, nothing breaks */}
+}
+function _restoreDataCache(){
+  try{
+    const raw=sessionStorage.getItem(_DATA_CACHE_KEY);
+    if(!raw)return false;
+    const d=JSON.parse(raw);
+    orders=d.orders||{};clients=d.clients||{};submittedRequests=d.submittedRequests||{};chats=d.chats||{};
+    standaloneQuotes=d.standaloneQuotes||{};warranties=d.warranties||{};teamChat=d.teamChat||{};
+    govRecords=d.govRecords||{};urgentRequests=d.urgentRequests||{};tasksData=d.tasksData||{};eventNotifs=d.eventNotifs||{};
+    return true;
+  }catch(e){return false;}
+}
 async function loadData(){
   // Each fetch is tracked individually so a single failing endpoint (network
   // blip, momentary Firebase outage) can't wipe out unrelated in-memory data —
@@ -1837,6 +1861,7 @@ async function loadData(){
     cleanExpiredWarranties();
   }catch(e){console.error('loadData post-processing failed',e);}
   if(anyFailed)toast('⚠️ تعذر تحديث بعض البيانات، يتم عرض آخر نسخة محفوظة');
+  _saveDataCache();
 }
 // ============================================================
 // NOTIFICATION SOUND (new-assignment beep)
@@ -1895,6 +1920,16 @@ window.addEventListener('load',async()=>{
       // directly; a not-yet-migrated legacy account still needs one re-derivation.
       const stillValid=rec&&s.tok&&(isHashedPass(rec.pass)?s.tok===rec.pass:s.tok===await makeSessionToken(s.uname,rec.pass));
       if(s.uname&&stillValid){
+        // Instant paint on cold load: if a same-tab-session cache exists,
+        // render immediately from it instead of blocking on a full network
+        // round-trip, then quietly refresh with live data in the background.
+        // First-ever load in this tab (no cache yet) falls back to the
+        // original blocking fetch — nothing to show early in that case anyway.
+        if(_restoreDataCache()){
+          hideSaving();enterApp(s.uname);
+          loadData().then(()=>refreshCurrentPage()).catch(()=>{});
+          return;
+        }
         await loadData();hideSaving();enterApp(s.uname);return;
       }
     }catch(e){}
@@ -2154,6 +2189,21 @@ function compressImage(dataUrl,maxDim=1600,quality=0.72){
 // large files no longer bloat the database or get rejected.
 const CLOUDINARY_CLOUD_NAME='xo8imy4r';
 const CLOUDINARY_UPLOAD_PRESET='rawaee_unsigned';
+// Display-only thumbnail via Cloudinary's on-the-fly URL transformation — the
+// ORIGINAL stored URL (and the original uploaded file itself) never changes;
+// this just asks Cloudinary's CDN for a small, auto-quality/auto-format
+// rendition for card/list previews so the browser downloads/decodes far
+// less data than the full-resolution source. Anything not hosted on
+// Cloudinary (Google Drive links, legacy base64 data URIs) is returned
+// untouched — no transformation is possible or needed there.
+function cloudinaryThumb(url,width=200){
+  if(!url||typeof url!=='string'||!url.includes('res.cloudinary.com'))return url;
+  const marker='/upload/';
+  const idx=url.indexOf(marker);
+  if(idx===-1)return url;
+  const insertAt=idx+marker.length;
+  return url.slice(0,insertAt)+`w_${width},q_auto,f_auto/`+url.slice(insertAt);
+}
 // XHR instead of fetch() specifically because fetch has no upload-progress
 // event — xhr.upload.onprogress is the only way in a browser to get a real,
 // live byte-level percentage while the request body is still being sent.
@@ -5157,7 +5207,7 @@ function buildQuoteArchiveRows(){
     const firstImg=(q.lines||[]).find(l=>l.img);
     return `<tr data-key="${q._key}" data-date="${q.date||''}" data-converted="${conv?'1':'0'}" style="${conv?'background:#F0FDF4;':''}">
     <td><div style="display:flex;align-items:center;gap:8px;">
-      ${firstImg?`<img src="${firstImg.img}" title="يحتوي على صور مرفقة" style="width:26px;height:26px;object-fit:cover;border-radius:6px;border:1px solid var(--border);flex-shrink:0;"/>`:''}
+      ${firstImg?`<img src="${cloudinaryThumb(firstImg.img,80)}" title="يحتوي على صور مرفقة" style="width:26px;height:26px;object-fit:cover;border-radius:6px;border:1px solid var(--border);flex-shrink:0;" loading="lazy"/>`:''}
       <strong>${esc(q.client)}</strong>
     </div></td>
     <td><span class="badge b-new">${q.ref||'—'}</span></td>
@@ -5266,7 +5316,7 @@ function renderQuoteLines(){
     <input type="text" inputmode="decimal" id="q-line-wtax-${l.id}" placeholder="السعر شامل الضريبة" value="${fmtMoney((l.p*1.15))}" oninput="updateQuoteLineFromTax('${l.id}',this.value)" min="0" onfocus="this.select()"/>
     <div id="q-line-total-${l.id}" style="display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:var(--maroon);background:var(--surface-2);border:1.5px solid var(--border);border-radius:8px;padding:8px 6px;text-align:center;">${fmtMoney((showMeters?(l.m??1):1)*(l.q||0)*(l.p||0)*1.15)}</div>
     <label title="إرفاق صورة للبند" style="cursor:pointer;display:flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:8px;border:1px dashed var(--border);background:var(--bg);flex-shrink:0;transition:.12s;" onmouseover="this.style.borderColor='var(--gold)'" onmouseout="this.style.borderColor='var(--border)'">
-      ${l.img?`<img src="${l.img}" style="width:28px;height:28px;object-fit:cover;border-radius:6px;"/>`:
+      ${l.img?`<img src="${cloudinaryThumb(l.img,80)}" style="width:28px;height:28px;object-fit:cover;border-radius:6px;" loading="lazy"/>`:
       `<i class="ti ti-photo" style="font-size:14px;color:var(--text-3);"></i>`}
       <input type="file" accept="image/*" style="display:none" onchange="attachLineImage('${l.id}',this.files)"/>
     </label>
@@ -6539,7 +6589,7 @@ async function saveDesignProofMeta(key,type){
 function buildProofApprovalSection(o,key,canAct){
   const clientCard=`<div class="od-proof-card">
     <h4><i class="ti ti-user-check"></i> اعتماد العميل على التصميم</h4>
-    ${o.clientApprovalImage?`<img src="${o.clientApprovalImage}" loading="lazy" class="od-proof-preview"/>`:''}
+    ${o.clientApprovalImage?`<img src="${cloudinaryThumb(o.clientApprovalImage,400)}" loading="lazy" class="od-proof-preview"/>`:''}
     <div style="display:flex;flex-wrap:wrap;gap:6px;">${fileLinkHtml(o.clientApprovalImageName,o.clientApprovalImage)}${fileLinkHtml(o.clientApprovalPdfName,o.clientApprovalPdf)}</div>
     <div class="od-proof-meta">${o.clientApprovalDate?`<span><i class="ti ti-calendar"></i> ${formatDate(o.clientApprovalDate)}</span>`:''}${o.clientApprovalBy?`<span><i class="ti ti-user"></i> ${esc(o.clientApprovalBy)}</span>`:''}</div>
     ${o.clientApprovalNotes?`<div style="font-size:11px;color:var(--text-2);margin-top:6px;">${esc(o.clientApprovalNotes)}</div>`:''}
@@ -6554,7 +6604,7 @@ function buildProofApprovalSection(o,key,canAct){
   </div>`;
   const workshopCard=`<div class="od-proof-card">
     <h4><i class="ti ti-tools"></i> بروفة الورشة النهائية</h4>
-    ${o.workshopProofImage?`<img src="${o.workshopProofImage}" loading="lazy" class="od-proof-preview"/>`:''}
+    ${o.workshopProofImage?`<img src="${cloudinaryThumb(o.workshopProofImage,400)}" loading="lazy" class="od-proof-preview"/>`:''}
     <div style="display:flex;flex-wrap:wrap;gap:6px;">${fileLinkHtml(o.workshopProofImageName,o.workshopProofImage)}${fileLinkHtml(o.workshopProofPdfName,o.workshopProofPdf)}</div>
     <div class="od-proof-meta">${o.workshopProofVersion?`<span><i class="ti ti-git-branch"></i> نسخة ${esc(o.workshopProofVersion)}</span>`:''}</div>
     ${o.workshopProofNotes?`<div style="font-size:11px;color:var(--text-2);margin-top:6px;">${esc(o.workshopProofNotes)}</div>`:''}
@@ -6754,7 +6804,7 @@ function openOrderModal(key){
     _measureDone?`
     <div style="background:#F0FDF4;border:1px solid #BBF7D0;border-radius:10px;padding:12px 16px;margin-bottom:12px;">
       <div style="font-size:12px;font-weight:800;color:#166534;margin-bottom:6px;"><i class="ti ti-clipboard-check"></i> القياسات مكتملة — اتخذ إجراءً</div>
-      ${o.workshopSitePhoto?`<div style="margin-bottom:8px;"><img src="${o.workshopSitePhoto}" loading="lazy" style="width:100%;max-height:160px;object-fit:cover;border-radius:8px;"/></div>`:''}
+      ${o.workshopSitePhoto?`<div style="margin-bottom:8px;"><img src="${cloudinaryThumb(o.workshopSitePhoto,400)}" loading="lazy" style="width:100%;max-height:160px;object-fit:cover;border-radius:8px;"/></div>`:''}
       ${_measureBtns(key,o.client,o.phone)}
     </div>`:
     _proofDone?`
