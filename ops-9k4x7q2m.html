@@ -1385,6 +1385,7 @@ input:focus,select:focus,textarea:focus{box-shadow:inset 0 1px 3px rgba(74,14,23
         <div class="page" id="page-maintreq"><div id="maintreq-content"></div></div>
         <div class="page" id="page-urgent"><div id="urgent-content"></div></div>
         <div class="page" id="page-tasks"><div id="tasks-content"></div></div>
+        <div class="page" id="page-itemwork"><div id="itemwork-content"></div></div>
       </div>
     </div>
   </div>
@@ -1397,6 +1398,7 @@ input:focus,select:focus,textarea:focus{box-shadow:inset 0 1px 3px rgba(74,14,23
 <div class="modal-overlay" id="add-item-modal"><div class="modal-box" dir="rtl" id="add-item-modal-body" style="max-width:480px;"></div></div>
 <div class="modal-overlay" id="gov-modal"><div class="modal-box" dir="rtl" id="gov-modal-body" style="max-width:480px;"></div></div>
 <div class="modal-overlay" id="task-modal"><div class="modal-box" dir="rtl" id="task-modal-body" style="max-width:440px;"></div></div>
+<div class="modal-overlay" id="itemwork-review-modal"><div class="modal-box" dir="rtl" id="itemwork-review-modal-body" style="max-width:520px;"></div></div>
 <div class="modal-overlay" id="notif-modal">
   <div class="modal-box" dir="rtl" style="max-width:480px;">
     <div class="modal-header"><span class="modal-title"><i class="ti ti-bell"></i> التنبيهات</span><button class="btn-close" onclick="closeModal('notif-modal')">×</button></div>
@@ -1532,7 +1534,7 @@ function fileLinkHtml(name,url,label){
   const icon=fileIconForName(nm);
   const size=fileSizeLabel(url);
   const ext=fileExt(nm).toUpperCase();
-  return `<a href="${url}" download="${esc(nm)}" class="file-download-link" title="${esc(nm)}" onclick="event.stopPropagation();notifyFileAccess('${encodeURIComponent(nm)}')">
+  return `<a href="${url}" download="${esc(nm)}" target="_blank" rel="noopener noreferrer" class="file-download-link" title="${esc(nm)}" onclick="event.stopPropagation();notifyFileAccess('${encodeURIComponent(nm)}')">
     <i class="ti ${icon}"></i>
     <span class="file-link-name">${label?esc(label)+' — ':''}${esc(nm)}</span>
     ${ext?`<span class="file-link-ext">${ext}</span>`:''}
@@ -3216,7 +3218,7 @@ function renderWfFilesView(){
         <td style="font-size:12px;"><i class="ti ${r.icon}"></i> ${esc(r.label)} <span style="color:var(--text-3);">(${esc(r.fileName)})</span></td>
         <td style="font-size:11.5px;">${esc(r.uploadedBy)}</td>
         <td style="font-size:11px;">${formatDate(r.uploadedAt)}</td>
-        <td><a href="${r.fileData}" download="${esc(r.fileName)}" class="btn btn-out btn-xs"><i class="ti ti-download"></i></a></td>
+        <td><a href="${r.fileData}" download="${esc(r.fileName)}" target="_blank" rel="noopener noreferrer" class="btn btn-out btn-xs"><i class="ti ti-download"></i></a></td>
       </tr>`).join(''):'<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text-3)">لا توجد ملفات مرفوعة بعد</td></tr>'}</tbody></table></div></div>`;
 }
 function filterWfFilesRows(){
@@ -4088,24 +4090,77 @@ function setExtDashTab(t){window._extDashTab=t;buildExternalDashboard();}
 // MY WORK
 // ============================================================
 function setMyWorkFilter(f){window._myWorkFilter=f;buildMyWork();}
+// Production employees (designer/printer/workshop/external) see individual ITEMS
+// currently sitting at their own stage — not whole orders — since with per-item
+// independent workflow (itemCurrentDept) a single order can have some items
+// already past this employee's stage and others not there yet. Same assignee
+// rule as isMyOrder() (including the 'all' shared-queue tolerance for
+// design/workshop), just applied per item. Quick-tasks, maintenance requests and
+// any legacy order with no itemized breakdown (orderItems empty/missing) are
+// intentionally excluded here — they have no per-item concept and keep
+// rendering as whole-order "simple task" cards further below instead.
+function myAssignedItems(){
+  const deptKey={designer:'design',printer:'print',workshop:'workshop',external:'external'}[cu.type];
+  if(!deptKey)return[];
+  const allowAll=deptKey==='design'||deptKey==='workshop';
+  const out=[];
+  ordersArr().forEach(o=>{
+    if(o.currentDept==='done')return;
+    if(!o.orderItems||!o.orderItems.length)return;
+    const assignee=o[deptKey+'To'];
+    if(!assignee||assignee==='none')return;
+    if(assignee!==cu._uname&&!(allowAll&&assignee==='all'))return;
+    o.orderItems.forEach((it,i)=>{
+      if(itemCurrentDept(it,o)===deptKey)out.push({o,idx:i,it});
+    });
+  });
+  return out;
+}
+function buildMyWorkItemsHtml(){
+  const rows=myAssignedItems();
+  if(!rows.length)return'';
+  return `<div class="order-items-grid" style="margin-bottom:18px;">${rows.map(({o,idx,it})=>{
+    const dept=itemCurrentDept(it,o);
+    return `<div class="order-item-card" style="cursor:pointer;" onclick="openItemWorkspace('${o._key}',${idx})">
+      <div class="oi-card-head">
+        <div class="oi-card-head-left">
+          <span class="oi-badge">${esc(o.id||o._key)}</span>
+          <strong class="oi-card-name" title="${esc(it.name||'—')}">${esc(it.name||'—')}</strong>
+        </div>
+        <span class="badge ${dept==='done'?'b-done':'b-new'}">${WF_DEPT_META[dept]?.label||dept}</span>
+      </div>
+      <div class="oi-card-metrics">
+        <span title="العميل"><i class="ti ti-user"></i> ${esc(o.client||'—')}</span>
+        ${gpbadge(o.priority)}
+        <span title="التسليم"><i class="ti ti-calendar-time"></i> ${deadlineDateTime(o)}</span>
+      </div>
+      <button class="btn btn-brand btn-sm" style="width:100%;justify-content:center;margin-top:10px;" onclick="event.stopPropagation();openItemWorkspace('${o._key}',${idx})"><i class="ti ti-arrow-left"></i> فتح البند</button>
+    </div>`;
+  }).join('')}</div>`;
+}
 function buildMyWork(){
   const isWorkshop=cu.type==='workshop';
   const _canSeeCardTotal=['admin','follower','receiver'].includes(cu.type);
   const allMyOrders=ordersArr().filter(o=>isMyOrder(o));
+  // Simple (non-itemized) tasks — quick tasks, maintenance requests, and any
+  // legacy order without a per-item breakdown — don't fit the item-workspace
+  // model above, so they keep the original whole-order card treatment.
+  const simpleOrders=allMyOrders.filter(o=>!o.orderItems||!o.orderItems.length);
+  const itemCardsHtml=buildMyWorkItemsHtml();
   const wfFilter=isWorkshop?(window._myWorkFilter||'all'):'all';
-  const myOrders=wfFilter==='all'?allMyOrders:wfFilter==='maintenance'?allMyOrders.filter(o=>o.orderKind==='maintenance'):allMyOrders.filter(o=>o.orderKind!=='maintenance');
+  const myOrders=wfFilter==='all'?simpleOrders:wfFilter==='maintenance'?simpleOrders.filter(o=>o.orderKind==='maintenance'):simpleOrders.filter(o=>o.orderKind!=='maintenance');
   // Workshop gets a quick filter bar to instantly separate regular production jobs
   // from maintenance/repair requests in their daily working queue.
   const filterBar=isWorkshop?(()=>{
-    const regCount=allMyOrders.filter(o=>o.orderKind!=='maintenance').length;
-    const mntCount=allMyOrders.filter(o=>o.orderKind==='maintenance').length;
+    const regCount=simpleOrders.filter(o=>o.orderKind!=='maintenance').length;
+    const mntCount=simpleOrders.filter(o=>o.orderKind==='maintenance').length;
     return`<div class="tab-bar" style="margin-bottom:14px;">
-      <button class="tab-btn ${wfFilter==='all'?'active':''}" onclick="setMyWorkFilter('all')"><i class="ti ti-list"></i> كل الطلبات (${allMyOrders.length})</button>
+      <button class="tab-btn ${wfFilter==='all'?'active':''}" onclick="setMyWorkFilter('all')"><i class="ti ti-list"></i> كل الطلبات (${simpleOrders.length})</button>
       <button class="tab-btn ${wfFilter==='regular'?'active':''}" onclick="setMyWorkFilter('regular')"><i class="ti ti-building-factory-2"></i> الطلبات العادية (${regCount})</button>
       <button class="tab-btn ${wfFilter==='maintenance'?'active':''}" onclick="setMyWorkFilter('maintenance')"><i class="ti ti-tool"></i> طلبات الصيانة (${mntCount})</button>
     </div>`;
   })():'';
-  const cards=myOrders.length===0?'<div style="color:var(--text-3);padding:30px;text-align:center;"><i class="ti ti-check-circle" style="font-size:36px;display:block;margin-bottom:10px;color:#10B981;"></i>لا توجد أعمال موكلة إليك حالياً</div>'
+  const cards=myOrders.length===0?(itemCardsHtml?'':'<div style="color:var(--text-3);padding:30px;text-align:center;"><i class="ti ti-check-circle" style="font-size:36px;display:block;margin-bottom:10px;color:#10B981;"></i>لا توجد أعمال موكلة إليك حالياً</div>')
     :`<div class="wf-grid">${myOrders.map(o=>{
       const isMnt=o.orderKind==='maintenance';
       const cardBorder=isMnt?'border:2px solid #DC2626;background:linear-gradient(135deg,#FEF2F2,#FFF5F5);':o.isQuickTask?'border:2px solid #C89A4A;background:linear-gradient(135deg,#FFFDF8,#FFF5E0);':'';
@@ -4131,8 +4186,149 @@ function buildMyWork(){
   // removed so unassigned/other-employee tasks are never visible here.
   document.getElementById('my-content').innerHTML=`
     <div class="page-header"><div class="ptitle"><i class="ti ti-user-check"></i> أعمالي — ${esc(cu.name)}</div></div>
+    ${itemCardsHtml?`<div style="font-size:13px;font-weight:800;color:var(--text-2);margin-bottom:10px;">البنود الموكلة إليك</div>${itemCardsHtml}`:''}
     ${filterBar}
     ${controlsRow(false)}<div>${cards}</div>`;
+}
+// ============================================================
+// ITEM WORKSPACE — a dedicated, single-purpose page opened from an item card
+// in the item-based "My Work" dashboard above. Shows ONLY what this one item
+// needs (name/description/specs/measurements/required notes/attachments),
+// lets the employee upload the file(s) required for their current stage, and
+// gates "Send to Next Department" until that requirement is met — reusing the
+// existing itemVersions/itemStageRequirementMet/advanceItemDept machinery
+// rather than introducing any new schema.
+// ============================================================
+function openItemWorkspace(orderKey,idx){
+  window._itemworkKey=orderKey;window._itemworkIdx=idx;
+  window._newVerFiles=window._newVerFiles||{};window._newVerFiles[idx]=[];
+  nav('itemwork');
+}
+function _itemworkState(){
+  const key=window._itemworkKey;const idx=window._itemworkIdx;
+  const o=key?orders[key]:null;
+  const it=(o&&Array.isArray(o.orderItems))?o.orderItems[idx]:null;
+  return{key,idx,o,it};
+}
+// Per-item assignee check (mirrors myAssignedItems()'s rule) — unlike
+// isMyOrder(), this is scoped to the ITEM's own currentDept, since per-item
+// independent workflow means an item's stage can differ from o.currentDept.
+function isMyItem(o,it){
+  const deptKey={designer:'design',printer:'print',workshop:'workshop',external:'external'}[cu.type];
+  if(!deptKey)return false;
+  if(itemCurrentDept(it,o)!==deptKey)return false;
+  const allowAll=deptKey==='design'||deptKey==='workshop';
+  const assignee=o[deptKey+'To'];
+  if(!assignee||assignee==='none')return false;
+  return assignee===cu._uname||(allowAll&&assignee==='all');
+}
+function removeQueuedItemworkFile(idx,fi){
+  const q=window._newVerFiles&&window._newVerFiles[idx];if(!q)return;
+  q.splice(fi,1);
+  buildItemWorkspacePage();
+}
+async function deleteItemVersion(key,idx,versionId){
+  const o=orders[key];if(!o)return;
+  const it=o.orderItems[idx];if(!it)return;
+  if(!confirm('حذف هذا الملف؟'))return;
+  showSaving('جاري الحذف...');
+  try{
+    const versions=itemVersions(it).filter(v=>!v._legacy&&v.id!==versionId);
+    const items=[...o.orderItems];items[idx]={...items[idx],versions};
+    await fbPatch(`orders/${key}`,{orderItems:items});
+    await loadData();hideSaving();toast('✓ تم الحذف');
+    buildItemWorkspacePage();
+  }catch(e){hideSaving();toast('❌ فشل الحذف');}
+}
+function openItemworkReviewModal(){
+  const{key,idx,o,it}=_itemworkState();if(!o||!it)return;
+  const dept=itemCurrentDept(it,o);
+  const stageVersions=itemVersionsForStage(it,dept).filter(v=>!v._legacy);
+  const nd=itemNextDept(it,o);
+  document.getElementById('itemwork-review-modal-body').innerHTML=`
+    <div class="modal-header"><span class="modal-title"><i class="ti ti-send"></i> مراجعة قبل الإرسال</span><button class="btn-close" onclick="closeModal('itemwork-review-modal')">×</button></div>
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <div style="font-size:12.5px;color:var(--text-2);">سيتم إرسال البند <strong>${esc(it.name||'—')}</strong> إلى مرحلة <strong style="color:var(--maroon);">${WF_DEPT_META[nd]?.label||nd||'—'}</strong> ولن يمكن التعديل عليه بعد ذلك من هذه المرحلة.</div>
+      <div style="display:flex;flex-direction:column;gap:6px;">
+        ${stageVersions.map(v=>`<div style="background:var(--surface-2);border:1px solid var(--border-soft);border-radius:8px;padding:8px 10px;">
+          <div style="display:flex;flex-wrap:wrap;gap:5px;">${(v.files||[]).map(f=>fileLinkHtml(f.name,f.data)).join('')}</div>
+          <div style="font-size:10px;color:var(--text-3);margin-top:5px;">رفع بواسطة ${esc(v.createdBy||'—')} ${v.createdAt?'· '+formatDate(v.createdAt):''}</div>
+        </div>`).join('')||'<div style="font-size:11px;color:var(--text-3);">لا توجد ملفات</div>'}
+      </div>
+      <button class="btn btn-brand" style="width:100%;justify-content:center;" onclick="closeModal('itemwork-review-modal');confirmItemworkSend();"><i class="ti ti-arrow-left"></i> تأكيد الإرسال</button>
+    </div>`;
+  openModal('itemwork-review-modal');
+}
+async function confirmItemworkSend(){
+  const{key,idx}=_itemworkState();
+  if(!key||idx==null)return;
+  await advanceItemDept(key,idx);
+  buildItemWorkspacePage();
+}
+function buildItemWorkspacePage(){
+  const{key,idx,o,it}=_itemworkState();
+  const el=document.getElementById('itemwork-content');
+  if(!el)return;
+  if(!o||!it){el.innerHTML=`${backBtnHtml()}<div style="text-align:center;color:var(--text-3);padding:40px;"><i class="ti ti-mood-sad" style="font-size:32px;display:block;margin-bottom:8px;"></i>تعذر العثور على هذا البند</div>`;return;}
+  const dept=itemCurrentDept(it,o);
+  const stillMine=isMyItem(o,it);
+  const canAct=stillMine||cu.type==='admin';
+  const allVersions=itemVersions(it);
+  const legacyVersions=allVersions.filter(v=>v._legacy);
+  const stageVersions=allVersions.filter(v=>!v._legacy&&(v.stage||'design')===dept);
+  const reqMet=itemStageRequirementMet(it,o);
+  const nd=itemNextDept(it,o);
+  const queued=(window._newVerFiles&&window._newVerFiles[idx])||[];
+  const specsHtml=(it.template&&PRODUCT_TEMPLATES[it.template]&&it.specs&&Object.values(it.specs).some(v=>v))
+    ?`<div class="fg"><label>المواصفات / المقاسات</label><div style="font-size:12.5px;line-height:1.8;">${PRODUCT_TEMPLATES[it.template].fields.filter(f=>it.specs[f.key]).map(f=>`<div><strong>${esc(f.label)}:</strong> ${esc(String(it.specs[f.key]))}</div>`).join('')}</div></div>`:'';
+  el.innerHTML=`
+    ${backBtnHtml()}
+    <div class="page-header"><div class="ptitle"><i class="ti ti-box"></i> ${esc(it.name||'بند')}</div><span class="badge ${dept==='done'?'b-done':'b-new'}">${WF_DEPT_META[dept]?.label||dept}</span></div>
+    <div class="card" style="margin-bottom:14px;">
+      <div style="padding:18px 20px;display:flex;flex-direction:column;gap:12px;">
+        <div style="display:flex;gap:14px;flex-wrap:wrap;font-size:11.5px;color:var(--text-3);">
+          <span><i class="ti ti-file-text"></i> ${esc(o.id||o._key)}</span>
+          ${it.qty?`<span><i class="ti ti-stack-2"></i> الكمية: ${esc(String(it.qty))}</span>`:''}
+          <span><i class="ti ti-calendar-time"></i> التسليم: ${deadlineDateTime(o)}</span>
+        </div>
+        ${it.details?`<div class="fg"><label>الوصف / التفاصيل المطلوبة</label><div style="font-size:12.5px;line-height:1.7;color:var(--text-2);">${esc(it.details)}</div></div>`:''}
+        ${specsHtml}
+        ${it.requiredFiles?`<div class="fg"><label>ملاحظات مطلوبة</label><div style="font-size:12.5px;line-height:1.7;color:var(--text-2);">${esc(it.requiredFiles)}</div></div>`:''}
+        <div class="fg"><label>المرفقات الأصلية / ملفات العميل</label>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;">${legacyVersions.length?legacyVersions.map(v=>(v.files||[]).map(f=>fileLinkHtml(f.name,f.data)).join('')).join(''):'<span style="font-size:11px;color:var(--text-3);">لا توجد مرفقات أصلية</span>'}</div>
+        </div>
+      </div>
+    </div>
+    <div class="card" style="margin-bottom:14px;">
+      <div class="card-header"><span class="card-title"><i class="ti ti-upload"></i> الملفات المرفوعة لهذه المرحلة</span></div>
+      <div style="padding:16px 20px;display:flex;flex-direction:column;gap:8px;">
+        ${stageVersions.length?stageVersions.map(v=>`<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:8px;padding:8px 10px;">
+          <div>
+            <div style="display:flex;flex-wrap:wrap;gap:5px;">${(v.files||[]).map(f=>fileLinkHtml(f.name,f.data)).join('')}</div>
+            <div style="font-size:10px;color:var(--text-3);margin-top:4px;">رفع بواسطة ${esc(v.createdBy||'—')} ${v.createdAt?'· '+formatDate(v.createdAt):''}</div>
+          </div>
+          ${(canAct&&v.status!=='معتمد من العميل'&&nd)?`<button class="btn btn-red btn-xs" onclick="deleteItemVersion('${key}',${idx},'${v.id}')"><i class="ti ti-trash"></i> حذف</button>`:''}
+        </div>`).join(''):'<div style="font-size:11.5px;color:var(--text-3);">لم يتم رفع أي ملف لهذه المرحلة بعد</div>'}
+        ${(canAct&&nd)?`
+        <div style="margin-top:6px;">
+          <div class="dept-upload-box" onclick="document.getElementById('itemwork-file-input').click()"><i class="ti ti-cloud-upload" style="font-size:20px;color:var(--gold);"></i><br>اضغط لرفع الملف (تصميم / PDF / صورة معاينة / ملف إنتاج)</div>
+          <input type="file" id="itemwork-file-input" multiple style="display:none" onchange="handleNewVersionFiles(${idx},this.files).then(buildItemWorkspacePage)"/>
+          ${queued.length?`<div style="display:flex;flex-direction:column;gap:5px;margin-top:8px;">${queued.map((f,fi)=>`<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;background:#F0FDF4;border:1px solid #BBF7D0;border-radius:8px;padding:6px 10px;font-size:11.5px;"><span><i class="ti ti-paperclip"></i> ${esc(f.name)}</span><button class="btn btn-out btn-xs" onclick="removeQueuedItemworkFile(${idx},${fi})"><i class="ti ti-x"></i></button></div>`).join('')}</div>
+          <textarea id="new-ver-notes-${idx}" placeholder="ملاحظات (اختياري)..." style="min-height:44px;font-size:12px;margin-top:8px;"></textarea>
+          <button class="btn btn-brand btn-sm" style="margin-top:8px;" onclick="saveNewItemVersion('${key}',${idx}).then(buildItemWorkspacePage)"><i class="ti ti-device-floppy"></i> حفظ ورفع الملفات</button>`:''}
+        </div>`:''}
+      </div>
+    </div>
+    ${nd?`<div class="card">
+      <div style="padding:16px 20px;">
+        ${canAct?(reqMet
+          ?`<button class="btn btn-brand" style="width:100%;justify-content:center;" onclick="openItemworkReviewModal()"><i class="ti ti-send"></i> إرسال إلى ${WF_DEPT_META[nd]?.label||nd}</button>`
+          :`<button class="btn btn-out" style="width:100%;justify-content:center;opacity:.5;cursor:not-allowed;" disabled><i class="ti ti-lock"></i> إرسال إلى ${WF_DEPT_META[nd]?.label||nd}</button>
+             <div style="font-size:11px;color:#DC2626;margin-top:6px;text-align:center;"><i class="ti ti-alert-triangle"></i> يرجى رفع جميع الملفات المطلوبة قبل الإرسال${dept==='design'?' واعتماد العميل عليها':''}</div>`)
+          :`<div style="font-size:12px;color:var(--text-3);text-align:center;">${stillMine?'':'هذا البند غير موكل إليك في هذه المرحلة'}</div>`}
+      </div>
+    </div>`:`<div class="card"><div style="padding:16px 20px;text-align:center;color:#10B981;font-weight:700;font-size:12.5px;"><i class="ti ti-check-circle"></i> تم إنجاز هذا البند بالكامل</div></div>`}
+  `;
 }
 // ============================================================
 // MAINTENANCE REQUEST PAGE — a detached, simplified channel for logging
@@ -7158,7 +7354,7 @@ function renderOrderLines(){
             <i class="ti ti-plus" style="color:var(--gold)"></i> إضافة ملف
             <input type="file" accept="image/*,.pdf,.doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" multiple style="display:none" onchange="attachOrderLineFile('${l.id}',this.files)"/>
           </label>
-          ${(l.files&&l.files.length)?`<div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px;">${l.files.map((f,fi)=>`<span style="display:inline-flex;align-items:center;gap:4px;background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:3px 8px;font-size:10px;"><a href="${f.data}" download="${esc(f.name)}" style="color:var(--maroon);text-decoration:none;"><i class="ti ti-download"></i> ${esc(f.name)}</a><button type="button" onclick="removeOrderLineFile('${l.id}',${fi})" style="background:none;border:none;color:#EF4444;cursor:pointer;padding:0 0 0 2px;font-size:11px;line-height:1;">×</button></span>`).join('')}</div>`:'<div style="font-size:10px;color:var(--text-3);margin-top:4px;">لا توجد مرفقات</div>'}
+          ${(l.files&&l.files.length)?`<div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px;">${l.files.map((f,fi)=>`<span style="display:inline-flex;align-items:center;gap:4px;background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:3px 8px;font-size:10px;"><a href="${f.data}" download="${esc(f.name)}" target="_blank" rel="noopener noreferrer" style="color:var(--maroon);text-decoration:none;"><i class="ti ti-download"></i> ${esc(f.name)}</a><button type="button" onclick="removeOrderLineFile('${l.id}',${fi})" style="background:none;border:none;color:#EF4444;cursor:pointer;padding:0 0 0 2px;font-size:11px;line-height:1;">×</button></span>`).join('')}</div>`:'<div style="font-size:10px;color:var(--text-3);margin-top:4px;">لا توجد مرفقات</div>'}
         </div>
         <div class="oi-grid-2">
           <div class="fg"><label>سعر الحبة (ر.س)</label><input type="text" inputmode="decimal" placeholder="0" min="0" value="${(l.price||'').toString().replace(/"/g,'&quot;')}" oninput="updateOrderLinePrice(this,'${l.id}')" onfocus="this.select()"/></div>
@@ -9018,6 +9214,7 @@ function _buildPage(p){
   else if(p==='prep') buildPrepPhasePage();
   else if(p==='tasks') buildTasksPage();
   else if(p==='extdash') buildExternalDashboard();
+  else if(p==='itemwork') buildItemWorkspacePage();
 }
    </script>
 <script>
