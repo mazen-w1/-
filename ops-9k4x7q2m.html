@@ -2612,11 +2612,27 @@ function itemVersions(it){
 // photo, delivery proof, etc.). Versions are tagged with the stage they were
 // added at, so this check is scoped to the item's current stage only.
 function itemVersionsForStage(it,stageKey){return itemVersions(it).filter(v=>(v.stage||'design')===stageKey);}
+// Mirrors the dynamic per-workflow file requirements built for the admin
+// order view (openOrderModal), but at the item level: versions are tagged
+// with a `kind` (design_approved/design_proof/workshop_production/
+// final_work) when uploaded via saveItemKindFiles(), and each stage's gate
+// checks for the specific kinds that stage's active downstream departments
+// actually need — not just "any file," and not a client-approval status
+// toggle (there is no UI on this page to set one).
 function itemStageRequirementMet(it,o){
   const dept=itemCurrentDept(it,o);
   if(dept==='done')return true;
+  if(dept==='print')return true; // receive-only — nothing to upload, nothing to gate
   const vers=itemVersionsForStage(it,dept);
-  if(dept==='design')return vers.some(v=>v.status==='معتمد من العميل'&&v.files&&v.files.length>0);
+  const hasKind=k=>vers.some(v=>v.kind===k&&v.files&&v.files.length>0);
+  if(dept==='design'){
+    const seq=itemDeptSeq(o);
+    if(!seq.includes('print'))return true; // printing not in this order's path — no production files required
+    if(!hasKind('design_approved')||!hasKind('design_proof'))return false;
+    if(seq.includes('workshop')&&!hasKind('workshop_production'))return false;
+    return true;
+  }
+  if(dept==='workshop')return vers.some(v=>(!v.kind||v.kind==='final_work')&&v.files&&v.files.length>0);
   return vers.some(v=>v.files&&v.files.length>0);
 }
 async function advanceItemDept(key,idx){
@@ -2624,7 +2640,7 @@ async function advanceItemDept(key,idx){
   if(cu.type!=='admin'&&!isMyOrder(o)){toast('⚠️ هذا الإجراء غير متاح لك');return;}
   const it=o.orderItems[idx];if(!it)return;
   const nd=itemNextDept(it,o);if(!nd)return;
-  if(!itemStageRequirementMet(it,o)){toast('⚠️ يجب رفع الملف المطلوب لهذه المرحلة'+(itemCurrentDept(it,o)==='design'?' واعتماد العميل عليه':'')+' أولاً');return;}
+  if(!itemStageRequirementMet(it,o)){toast('⚠️ يجب رفع جميع الملفات المطلوبة لهذه المرحلة أولاً');return;}
   showSaving('جاري تحديث حالة البند...');
   try{
     const items=[...o.orderItems];items[idx]={...items[idx],currentDept:nd};
@@ -2709,6 +2725,35 @@ async function saveNewItemVersion(key,idx){
     _refreshOrderItemsViews(key);
   }catch(e){hideSaving();toast('❌ فشل حفظ النسخة');}
 }
+const ITEM_KIND_LABELS={design_approved:'التصميم المعتمد',design_proof:'بروفة التصميم',workshop_production:'ملف الإنتاج للورشة',final_work:'الإنجاز النهائي'};
+// Powers the dynamic per-workflow upload boxes on the Item Workspace page
+// (buildItemWorkspacePage) — each box uploads straight into a new version
+// tagged with its own `kind`, which itemStageRequirementMet() checks for
+// individually instead of "any file for this stage." Files upload and save
+// in one step (no separate queue-then-save flow) to match the same UX as
+// the order-level upload boxes.
+async function saveItemKindFiles(key,idx,kind,inputId){
+  const el=document.getElementById(inputId);if(!el||!el.files||!el.files.length)return;
+  const o=orders[key];if(!o)return;
+  const it=o.orderItems&&o.orderItems[idx];if(!it)return;
+  if(cu.type!=='admin'&&!isMyItem(o,it)){toast('⚠️ هذا الإجراء غير متاح لك');return;}
+  const files=Array.from(el.files);
+  showSaving(files.length>1?'جاري حفظ الملفات...':'جاري حفظ الملف...');
+  try{
+    const uploaded=[];
+    for(const f of files){
+      const{data}=await _uploadOneFileData(f,key);
+      uploaded.push({data,name:f.name});
+    }
+    const newVersion={id:'v'+Date.now(),label:ITEM_KIND_LABELS[kind]||kind,status:'قيد التنفيذ',stage:itemCurrentDept(it,o),kind,files:uploaded,notes:'',createdBy:cu.name,createdAt:new Date().toISOString()};
+    const items=[...o.orderItems];
+    const priorVersions=Array.isArray(items[idx].versions)?items[idx].versions:itemVersions(items[idx]).filter(v=>!v._legacy);
+    items[idx]={...items[idx],versions:[...priorVersions,newVersion]};
+    await fbPatch(`orders/${key}`,{orderItems:items});
+    await loadData();hideSaving();toast('✓ تم رفع الملف');
+    buildItemWorkspacePage();
+  }catch(e){hideSaving();toast(e&&e.message?e.message:'❌ فشل الرفع');}
+}
 async function toggleVersionApproval(key,itemIdx,versionId){
   const o=orders[key];if(!o)return;
   if(cu.type!=='admin'&&!isMyOrder(o)){toast('⚠️ هذا الإجراء غير متاح لك');return;}
@@ -2773,8 +2818,8 @@ function renderOrderItemsCards(o,key,canAct){
     const reqMet=itemStageRequirementMet(it,o);
     const advanceBtn=nd?(canAct?(reqMet
         ?`<button class="btn btn-brand btn-xs" onclick="advanceItemDept('${key}',${i})"><i class="ti ti-arrow-left"></i> نقل البند لمرحلة ${WF_DEPT_META[nd]?.label||nd}</button>`
-        :`<button class="btn btn-out btn-xs" disabled style="opacity:.5;cursor:not-allowed;" title="يجب رفع الملف المطلوب${dept==='design'?' واعتماد العميل عليه':''} أولاً"><i class="ti ti-lock"></i> نقل البند لمرحلة ${WF_DEPT_META[nd]?.label||nd}</button>
-           <div style="font-size:10px;color:#DC2626;margin-top:4px;"><i class="ti ti-alert-triangle"></i> يتطلب رفع ${dept==='design'?'نسخة معتمدة من العميل':'ملف لهذه المرحلة'} قبل النقل</div>`)
+        :`<button class="btn btn-out btn-xs" disabled style="opacity:.5;cursor:not-allowed;" title="يجب رفع جميع الملفات المطلوبة أولاً"><i class="ti ti-lock"></i> نقل البند لمرحلة ${WF_DEPT_META[nd]?.label||nd}</button>
+           <div style="font-size:10px;color:#DC2626;margin-top:4px;"><i class="ti ti-alert-triangle"></i> يتطلب رفع جميع الملفات المطلوبة لهذه المرحلة قبل النقل</div>`)
       :''):'';
     // Printing view protection: printers must never see/download unapproved
     // design drafts — only the final client-approved version and files are
@@ -2822,7 +2867,10 @@ function renderOrderItemsCards(o,key,canAct){
         ${advanceBtn?`<div style="margin:8px 0;">${advanceBtn}</div>`:''}
         ${it.requiredFiles?`<div style="font-size:11px;color:var(--text-2);margin-top:6px;"><strong style="color:var(--maroon-mid);">الملفات المطلوبة:</strong> ${esc(it.requiredFiles)}</div>`:''}
         ${historyHtml}
-        <div class="order-item-versions">${curStageHtml}</div>
+        ${dept==='design'?(seq.includes('print')?`<div class="order-item-versions">${[renderItemKindBox(it,key,i,'design_approved',dept,canAct),renderItemKindBox(it,key,i,'design_proof',dept,canAct),...(seq.includes('workshop')?[renderItemKindBox(it,key,i,'workshop_production',dept,canAct)]:[])].join('')}</div>`:'<div style="font-size:11px;color:var(--text-3);">لا توجد ملفات إنتاج مطلوبة لهذا المسار</div>')
+          :dept==='print'?`<div class="order-item-versions">${renderItemKindBox(it,key,i,'design_approved','design',false)}${renderItemKindBox(it,key,i,'design_proof','design',false)}</div>`
+          :dept==='workshop'?`<div class="order-item-versions">${renderItemKindBox(it,key,i,'final_work',dept,canAct)}</div>`
+          :`<div class="order-item-versions">${curStageHtml}</div>
         ${canAct?`
         <div style="margin-top:8px;">
           <button class="btn btn-out btn-xs" onclick="toggleAddItemVersionForm(${i})"><i class="ti ti-plus"></i> إضافة نسخة لهذه المرحلة</button>
@@ -2833,7 +2881,7 @@ function renderOrderItemsCards(o,key,canAct){
             <div id="new-ver-file-note-${i}" style="font-size:10px;color:#10B981;font-weight:700;"></div>
             <button class="btn btn-brand btn-xs" style="align-self:flex-start;" onclick="saveNewItemVersion('${key}',${i})"><i class="ti ti-device-floppy"></i> حفظ النسخة</button>
           </div>
-        </div>`:''}
+        </div>`:''}`}
         ${it.internalNotes?`<div style="font-size:10.5px;color:var(--text-3);margin-top:8px;border-top:1px dashed var(--border-soft);padding-top:6px;"><i class="ti ti-note"></i> ملاحظات داخلية: ${esc(it.internalNotes)}</div>`:''}
         ${(!deptRestricted)?`<button class="btn btn-out btn-xs" style="margin-top:8px;" onclick="openAddItemModal('${key}',${i})" title="تعديل بيانات البند"><i class="ti ti-pencil"></i> تعديل بيانات البند</button>`:''}
       </div>
@@ -4472,6 +4520,27 @@ async function confirmItemworkSend(){
   await advanceItemDept(key,idx);
   buildItemWorkspacePage();
 }
+// One named upload box for the Item Workspace page — mirrors the dynamic
+// per-workflow boxes on the admin order view. Passing canAct=false renders
+// it read-only (no file input, no delete button) for Printing's receive-only
+// view. 'final_work' also matches legacy versions with no kind tag at all,
+// so items uploaded before this feature existed still show up.
+function renderItemKindBox(it,key,idx,kind,dept,canAct){
+  const label=ITEM_KIND_LABELS[kind]||kind;
+  const versions=itemVersions(it).filter(v=>!v._legacy&&(v.stage||'design')===dept&&(v.kind===kind||(kind==='final_work'&&!v.kind)));
+  const filesHtml=versions.length?versions.map(v=>`<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:8px;padding:6px 10px;">
+    <div>
+      <div style="display:flex;flex-wrap:wrap;gap:5px;">${(v.files||[]).map(f=>fileLinkHtml(f.name,f.data)).join('')}</div>
+      <div style="font-size:10px;color:var(--text-3);margin-top:4px;"><i class="ti ti-user"></i> ${esc(v.createdBy||'—')} ${v.createdAt?'· '+fmtDateTime(v.createdAt):''}</div>
+    </div>
+    ${canAct?`<button class="btn btn-red btn-xs" onclick="deleteItemVersion('${key}',${idx},'${v.id}')"><i class="ti ti-trash"></i></button>`:''}
+  </div>`).join(''):'<div style="font-size:11px;color:var(--text-3);">لا توجد ملفات بعد</div>';
+  const inputId=`itemwork-${kind}-input`;
+  return `<div class="fg" style="margin-bottom:10px"><label>${esc(label)}:</label>
+    ${canAct?`<input type="file" multiple id="${inputId}" accept="image/*,.pdf,.ai,.psd,.eps,.svg,.cdr,application/postscript,application/pdf,image/vnd.adobe.photoshop,video/*,.doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onchange="saveItemKindFiles('${key}',${idx},'${kind}','${inputId}')"/>`:''}
+    <div style="display:flex;flex-direction:column;gap:5px;margin-top:6px;">${filesHtml}</div>
+  </div>`;
+}
 function buildItemWorkspacePage(){
   const{key,idx,o,it}=_itemworkState();
   const el=document.getElementById('itemwork-content');
@@ -4507,32 +4576,63 @@ function buildItemWorkspacePage(){
         </div>
       </div>
     </div>
-    <div class="card" style="margin-bottom:14px;">
-      <div class="card-header"><span class="card-title"><i class="ti ti-upload"></i> الملفات المرفوعة لهذه المرحلة</span></div>
-      <div style="padding:16px 20px;display:flex;flex-direction:column;gap:8px;">
-        ${stageVersions.length?stageVersions.map(v=>`<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:8px;padding:8px 10px;">
-          <div>
-            <div style="display:flex;flex-wrap:wrap;gap:5px;">${(v.files||[]).map(f=>fileLinkHtml(f.name,f.data)).join('')}</div>
-            <div style="font-size:10px;color:var(--text-3);margin-top:4px;">رفع بواسطة ${esc(v.createdBy||'—')} ${v.createdAt?'· '+formatDate(v.createdAt):''}</div>
-          </div>
-          ${(canAct&&v.status!=='معتمد من العميل'&&nd)?`<button class="btn btn-red btn-xs" onclick="deleteItemVersion('${key}',${idx},'${v.id}')"><i class="ti ti-trash"></i> حذف</button>`:''}
-        </div>`).join(''):'<div style="font-size:11.5px;color:var(--text-3);">لم يتم رفع أي ملف لهذه المرحلة بعد</div>'}
-        ${(canAct&&nd)?`
-        <div style="margin-top:6px;">
-          <div class="dept-upload-box" onclick="document.getElementById('itemwork-file-input').click()"><i class="ti ti-cloud-upload" style="font-size:20px;color:var(--gold);"></i><br>اضغط لرفع الملف (تصميم / PDF / صورة معاينة / ملف إنتاج)</div>
-          <input type="file" id="itemwork-file-input" multiple style="display:none" onchange="handleNewVersionFiles(${idx},this.files).then(buildItemWorkspacePage)"/>
-          ${queued.length?`<div style="display:flex;flex-direction:column;gap:5px;margin-top:8px;">${queued.map((f,fi)=>`<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;background:#F0FDF4;border:1px solid #BBF7D0;border-radius:8px;padding:6px 10px;font-size:11.5px;"><span><i class="ti ti-paperclip"></i> ${esc(f.name)}</span><button class="btn btn-out btn-xs" onclick="removeQueuedItemworkFile(${idx},${fi})"><i class="ti ti-x"></i></button></div>`).join('')}</div>
-          <textarea id="new-ver-notes-${idx}" placeholder="ملاحظات (اختياري)..." style="min-height:44px;font-size:12px;margin-top:8px;"></textarea>
-          <button class="btn btn-brand btn-sm" style="margin-top:8px;" onclick="saveNewItemVersion('${key}',${idx}).then(buildItemWorkspacePage)"><i class="ti ti-device-floppy"></i> حفظ ورفع الملفات</button>`:''}
-        </div>`:''}
-      </div>
-    </div>
+    ${(()=>{
+      // Dynamic per-workflow file sections — same rules as the admin order
+      // view: Design shows exactly the boxes its active downstream
+      // departments need, Printing is receive-only, Workshop has one box.
+      const seq=itemDeptSeq(o);
+      if(dept==='design'){
+        if(!seq.includes('print')){
+          return`<div class="card" style="margin-bottom:14px;"><div style="padding:16px 20px;font-size:11.5px;color:var(--text-3);text-align:center;">لا توجد ملفات إنتاج مطلوبة لهذا المسار</div></div>`;
+        }
+        const boxes=[renderItemKindBox(it,key,idx,'design_approved',dept,canAct),renderItemKindBox(it,key,idx,'design_proof',dept,canAct)];
+        if(seq.includes('workshop'))boxes.push(renderItemKindBox(it,key,idx,'workshop_production',dept,canAct));
+        return`<div class="card" style="margin-bottom:14px;">
+          <div class="card-header"><span class="card-title"><i class="ti ti-upload"></i> ملفات التصميم المطلوبة</span></div>
+          <div style="padding:16px 20px;">${boxes.join('')}</div>
+        </div>`;
+      }
+      if(dept==='print'){
+        return`<div class="card" style="margin-bottom:14px;">
+          <div class="card-header"><span class="card-title"><i class="ti ti-printer"></i> الملفات المستلمة من التصميم</span></div>
+          <div style="padding:16px 20px;">${renderItemKindBox(it,key,idx,'design_approved','design',false)}${renderItemKindBox(it,key,idx,'design_proof','design',false)}</div>
+        </div>`;
+      }
+      if(dept==='workshop'){
+        return`<div class="card" style="margin-bottom:14px;">
+          <div class="card-header"><span class="card-title"><i class="ti ti-tools"></i> الإنجاز النهائي</span></div>
+          <div style="padding:16px 20px;">${renderItemKindBox(it,key,idx,'final_work',dept,canAct)}</div>
+        </div>`;
+      }
+      // Any other stage (external, etc.) keeps the original generic
+      // upload/versions flow — unaffected by this dynamic-workflow change.
+      return`<div class="card" style="margin-bottom:14px;">
+        <div class="card-header"><span class="card-title"><i class="ti ti-upload"></i> الملفات المرفوعة لهذه المرحلة</span></div>
+        <div style="padding:16px 20px;display:flex;flex-direction:column;gap:8px;">
+          ${stageVersions.length?stageVersions.map(v=>`<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:8px;padding:8px 10px;">
+            <div>
+              <div style="display:flex;flex-wrap:wrap;gap:5px;">${(v.files||[]).map(f=>fileLinkHtml(f.name,f.data)).join('')}</div>
+              <div style="font-size:10px;color:var(--text-3);margin-top:4px;">رفع بواسطة ${esc(v.createdBy||'—')} ${v.createdAt?'· '+formatDate(v.createdAt):''}</div>
+            </div>
+            ${(canAct&&v.status!=='معتمد من العميل'&&nd)?`<button class="btn btn-red btn-xs" onclick="deleteItemVersion('${key}',${idx},'${v.id}')"><i class="ti ti-trash"></i> حذف</button>`:''}
+          </div>`).join(''):'<div style="font-size:11.5px;color:var(--text-3);">لم يتم رفع أي ملف لهذه المرحلة بعد</div>'}
+          ${(canAct&&nd)?`
+          <div style="margin-top:6px;">
+            <div class="dept-upload-box" onclick="document.getElementById('itemwork-file-input').click()"><i class="ti ti-cloud-upload" style="font-size:20px;color:var(--gold);"></i><br>اضغط لرفع الملف</div>
+            <input type="file" id="itemwork-file-input" multiple style="display:none" onchange="handleNewVersionFiles(${idx},this.files).then(buildItemWorkspacePage)"/>
+            ${queued.length?`<div style="display:flex;flex-direction:column;gap:5px;margin-top:8px;">${queued.map((f,fi)=>`<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;background:#F0FDF4;border:1px solid #BBF7D0;border-radius:8px;padding:6px 10px;font-size:11.5px;"><span><i class="ti ti-paperclip"></i> ${esc(f.name)}</span><button class="btn btn-out btn-xs" onclick="removeQueuedItemworkFile(${idx},${fi})"><i class="ti ti-x"></i></button></div>`).join('')}</div>
+            <textarea id="new-ver-notes-${idx}" placeholder="ملاحظات (اختياري)..." style="min-height:44px;font-size:12px;margin-top:8px;"></textarea>
+            <button class="btn btn-brand btn-sm" style="margin-top:8px;" onclick="saveNewItemVersion('${key}',${idx}).then(buildItemWorkspacePage)"><i class="ti ti-device-floppy"></i> حفظ ورفع الملفات</button>`:''}
+          </div>`:''}
+        </div>
+      </div>`;
+    })()}
     ${nd?`<div class="card">
       <div style="padding:16px 20px;">
         ${canAct?(reqMet
           ?`<button class="btn btn-brand" style="width:100%;justify-content:center;" onclick="openItemworkReviewModal()"><i class="ti ti-send"></i> إرسال إلى ${WF_DEPT_META[nd]?.label||nd}</button>`
           :`<button class="btn btn-out" style="width:100%;justify-content:center;opacity:.5;cursor:not-allowed;" disabled><i class="ti ti-lock"></i> إرسال إلى ${WF_DEPT_META[nd]?.label||nd}</button>
-             <div style="font-size:11px;color:#DC2626;margin-top:6px;text-align:center;"><i class="ti ti-alert-triangle"></i> يرجى رفع جميع الملفات المطلوبة قبل الإرسال${dept==='design'?' واعتماد العميل عليها':''}</div>`)
+             <div style="font-size:11px;color:#DC2626;margin-top:6px;text-align:center;"><i class="ti ti-alert-triangle"></i> يجب رفع جميع الملفات المطلوبة قبل الانتقال للمرحلة التالية</div>`)
           :`<div style="font-size:12px;color:var(--text-3);text-align:center;">${stillMine?'':'هذا البند غير موكل إليك في هذه المرحلة'}</div>`}
       </div>
     </div>`:`<div class="card"><div style="padding:16px 20px;text-align:center;color:#10B981;font-weight:700;font-size:12.5px;"><i class="ti ti-check-circle"></i> تم إنجاز هذا البند بالكامل</div></div>`}
