@@ -447,6 +447,17 @@ input[type="password"]{direction:rtl;text-align:right;padding-left:40px;padding-
 .order-item-card{background:var(--surface);border:1px solid var(--border-soft);border-radius:var(--radius-lg);padding:18px 20px;box-shadow:var(--shadow-sm);transition:box-shadow .2s,transform .2s;}
 .order-item-card:hover{box-shadow:var(--shadow-md);transform:translateY(-2px);}
 .order-item-card-head{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;padding-bottom:10px;border-bottom:1px solid var(--border-soft);margin-bottom:10px;}
+.oi-card-head{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;cursor:pointer;}
+.oi-card-head-left{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0;}
+.oi-card-chev{font-size:14px;color:var(--text-3);flex-shrink:0;transition:transform .15s;}
+.oi-card-name{font-size:13px;color:var(--maroon);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:180px;}
+.oi-card-qty{font-size:10.5px;color:var(--text-3);font-weight:700;}
+.oi-card-metrics{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:8px;font-size:10.5px;color:var(--text-3);font-weight:600;}
+.oi-card-metrics span{display:inline-flex;align-items:center;gap:3px;}
+.oi-card-bar-track{height:5px;border-radius:5px;background:var(--border-soft);overflow:hidden;margin-top:8px;}
+.oi-card-bar-fill{height:100%;border-radius:5px;background:linear-gradient(90deg,var(--gold),var(--maroon));transition:width .4s;}
+.oi-card-body{margin-top:12px;padding-top:12px;border-top:1px dashed var(--border-soft);}
+.od-dept-chip{display:inline-flex;align-items:center;gap:7px;background:var(--surface);border:1px solid var(--border-soft);border-radius:20px;padding:6px 13px;font-size:11.5px;font-weight:700;margin:0 6px 8px 0;color:var(--text-2);}
 .order-item-htimeline{display:flex;align-items:flex-start;gap:2px;margin:10px 0;}
 .order-item-versions{display:flex;flex-direction:column;gap:10px;margin-top:10px;}
 .item-ver-card{background:var(--surface-2);border:1px solid var(--border-soft);border-radius:var(--radius-md);padding:12px 14px;border-right:3px solid var(--border);transition:.15s;}
@@ -1025,10 +1036,13 @@ input[type="password"]{direction:rtl;text-align:right;padding-left:40px;padding-
    activity timeline, grouped file manager. All glass/soft-3D, same
    maroon/gold palette as the rest of the app.
    ============================================================ */
-.od-header{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:16px;padding:16px 20px;border-radius:var(--radius-lg);background:linear-gradient(135deg,var(--maroon) 0%,var(--maroon-dark) 100%);}
+.od-header{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:16px;padding:16px 20px;border-radius:var(--radius-lg);background:linear-gradient(135deg,var(--maroon) 0%,var(--maroon-dark) 100%);position:sticky;top:0;z-index:6;box-shadow:0 8px 16px -8px rgba(0,0,0,.35);}
 .od-header-main{display:flex;flex-direction:column;gap:6px;min-width:0;}
 .od-header-title{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:16px;font-weight:900;color:#fff;}
 .od-header-meta{display:flex;flex-wrap:wrap;gap:14px;font-size:11.5px;color:rgba(255,255,255,.8);}
+.od-header-progress{display:flex;align-items:center;gap:8px;margin-top:9px;}
+.od-header-progress-track{flex:1;max-width:220px;height:6px;background:rgba(255,255,255,.25);border-radius:6px;overflow:hidden;}
+.od-header-progress-fill{height:100%;background:var(--gold);border-radius:6px;transition:width .4s;}
 .od-header-meta strong{color:#fff;font-weight:800;}
 .od-quick-actions{display:flex;gap:8px;flex-shrink:0;}
 .od-qa-btn{width:36px;height:36px;border-radius:12px;border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.12);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;color:#fff;font-size:15px;cursor:pointer;transition:.15s;}
@@ -2464,6 +2478,43 @@ async function advanceItemDept(key,idx){
     _refreshOrderItemsViews(key);
   }catch(e){hideSaving();toast('❌ فشل تحديث البند');}
 }
+function toggleOrderItemCard(idx){
+  const body=document.getElementById('oi-card-body-'+idx);
+  const chev=document.getElementById('oi-card-chev-'+idx);
+  if(!body)return;
+  const opening=body.style.display==='none';
+  body.style.display=opening?'block':'none';
+  if(chev)chev.style.transform=opening?'rotate(180deg)':'';
+}
+function toggleBulkSendPanel(){
+  const p=document.getElementById('oi-bulk-panel');if(!p)return;
+  p.style.display=p.style.display==='none'?'block':'none';
+}
+// Batches the exact same per-item move advanceItemDept() already performs —
+// same eligibility (itemNextDept) and same requirement check
+// (itemStageRequirementMet) — just applied to every checked item in one
+// write instead of one fbPatch per click.
+async function bulkAdvanceItems(key){
+  const checks=Array.from(document.querySelectorAll('.oi-bulk-check:checked')).map(c=>parseInt(c.value,10));
+  if(!checks.length){toast('⚠️ يرجى تحديد بند واحد على الأقل');return;}
+  const o=orders[key];if(!o)return;
+  if(cu.type!=='admin'&&!isMyOrder(o)){toast('⚠️ هذا الإجراء غير متاح لك');return;}
+  showSaving('جاري نقل البنود المحددة...');
+  let moved=0,blocked=0;
+  try{
+    const items=[...o.orderItems];
+    checks.forEach(idx=>{
+      const it=items[idx];if(!it)return;
+      const nd=itemNextDept(it,o);if(!nd)return;
+      if(!itemStageRequirementMet(it,o)){blocked++;return;}
+      items[idx]={...it,currentDept:nd};moved++;
+    });
+    if(moved)await fbPatch(`orders/${key}`,{orderItems:items});
+    await loadData();hideSaving();
+    toast(moved?`✓ تم نقل ${moved} بند${blocked?` — تعذر نقل ${blocked} لعدم استيفاء شرط الرفع/الاعتماد`:''}`:'⚠️ لم يتم نقل أي بند — يجب استيفاء شرط الرفع/الاعتماد أولاً');
+    _refreshOrderItemsViews(key);
+  }catch(e){hideSaving();toast('❌ فشل نقل البنود');}
+}
 function toggleAddItemVersionForm(idx){
   const el=document.getElementById('add-ver-form-'+idx);
   if(el)el.style.display=el.style.display==='none'?'flex':'none';
@@ -2548,10 +2599,12 @@ function renderOrderItemsCards(o,key,canAct){
       ${(allowEdit&&!v._legacy)?`<button class="btn ${approved?'btn-out':'btn-green'} btn-xs" style="margin-top:6px;" onclick="toggleVersionApproval('${key}',${i},'${v.id}')"><i class="ti ${approved?'ti-x':'ti-check'}"></i> ${approved?'إلغاء الاعتماد':'اعتماد من العميل'}</button>`:''}
     </div>`;
   };
+  const bulkRows=[];
   const cardsHtml=items.map((it,i)=>{
     const dept=itemCurrentDept(it,o);
     const seq=itemDeptSeq(o);
     const curIdx=seq.indexOf(dept);
+    const pct=seq.length>1?Math.round((curIdx/(seq.length-1))*100):0;
     const tlHtml=seq.map((dk,si)=>{
       const st=si<curIdx?'done':(dk===dept?'active':'');
       const meta=WF_DEPT_META[dk]||{label:dk,icon:'ti-circle'};
@@ -2580,34 +2633,63 @@ function renderOrderItemsCards(o,key,canAct){
     }).join('');
     const curStageBody=curStageVersions.length?curStageVersions.map(v=>renderVerCard(v,key,i,canAct)).join(''):'<div style="font-size:11px;color:var(--text-3);">لا توجد نسخ لهذه المرحلة بعد</div>';
     const curStageHtml=omAccordion('ti-files',`نسخ المرحلة الحالية${curStageVersions.length?' ('+curStageVersions.length+')':''}`,curStageBody,false);
+    const assigneeUname=o[dept+'To'];
+    const assigneeName=(assigneeUname&&assigneeUname!=='none')?(USERS[assigneeUname]?.name||assigneeUname):'—';
+    const filesCount=allVersions.reduce((s,v)=>s+(v.files?v.files.length:0),0);
+    const commentsCount=allVersions.filter(v=>v.notes&&v.notes.trim()).length;
+    const addedAt=it.addedAt||it.createdAt||o.date;
+    if(nd)bulkRows.push({idx:i,name:it.name||('بند '+(i+1)),ndLabel:WF_DEPT_META[nd]?.label||nd});
     return `<div class="order-item-card">
-      <div class="order-item-card-head">
-        <strong style="font-size:13.5px;color:var(--maroon);">بند ${i+1}: ${esc(it.name||'—')}</strong>
+      <div class="oi-card-head" onclick="toggleOrderItemCard(${i})">
+        <div class="oi-card-head-left">
+          <i class="ti ti-chevron-down oi-card-chev" id="oi-card-chev-${i}"></i>
+          <span class="oi-badge">بند #${i+1}</span>
+          <strong class="oi-card-name" title="${esc(it.name||'—')}">${esc(it.name||'—')}</strong>
+          ${it.qty?`<span class="oi-card-qty">×${esc(String(it.qty))}</span>`:''}
+        </div>
         <span class="badge ${dept==='done'?'b-done':'b-new'}">${WF_DEPT_META[dept]?.label||dept}</span>
       </div>
-      ${(it.template&&PRODUCT_TEMPLATES[it.template]&&it.specs&&Object.values(it.specs).some(v=>v))?`<div style="font-size:11.5px;color:var(--text-2);background:var(--surface-2);border-right:3px solid var(--maroon);border-radius:8px;padding:6px 10px;margin-top:6px;line-height:1.7;"><strong style="color:var(--maroon-mid);">مواصفات ${esc(PRODUCT_TEMPLATES[it.template].label)}:</strong> ${PRODUCT_TEMPLATES[it.template].fields.filter(f=>it.specs[f.key]).map(f=>esc(f.label)+': '+esc(String(it.specs[f.key]))).join(' · ')}</div>`:''}
-      ${it.details?`<div style="font-size:11.5px;color:var(--text-2);background:var(--surface-2);border-right:3px solid var(--gold);border-radius:8px;padding:6px 10px;margin-top:6px;line-height:1.6;"><strong style="color:var(--maroon-mid);">التفاصيل والمواصفات:</strong> ${esc(it.details)}</div>`:''}
-      <div class="order-item-htimeline">${tlHtml}</div>
-      ${advanceBtn?`<div style="margin:8px 0;">${advanceBtn}</div>`:''}
-      ${it.requiredFiles?`<div style="font-size:11px;color:var(--text-2);margin-top:6px;"><strong style="color:var(--maroon-mid);">الملفات المطلوبة:</strong> ${esc(it.requiredFiles)}</div>`:''}
-      ${historyHtml}
-      <div class="order-item-versions">${curStageHtml}</div>
-      ${canAct?`
-      <div style="margin-top:8px;">
-        <button class="btn btn-out btn-xs" onclick="toggleAddItemVersionForm(${i})"><i class="ti ti-plus"></i> إضافة نسخة لهذه المرحلة</button>
-        <div id="add-ver-form-${i}" style="display:none;flex-direction:column;gap:8px;margin-top:8px;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:10px;padding:10px;">
-          <textarea id="new-ver-notes-${i}" placeholder="ملاحظات النسخة..." style="min-height:50px;font-size:12px;"></textarea>
-          <div class="dept-upload-box" onclick="document.getElementById('new-ver-file-${i}').click()" style="padding:10px;"><i class="ti ti-upload"></i> اضغط لإرفاق ملفات النسخة</div>
-          <input type="file" id="new-ver-file-${i}" multiple style="display:none" onchange="handleNewVersionFiles(${i},this.files)"/>
-          <div id="new-ver-file-note-${i}" style="font-size:10px;color:#10B981;font-weight:700;"></div>
-          <button class="btn btn-brand btn-xs" style="align-self:flex-start;" onclick="saveNewItemVersion('${key}',${i})"><i class="ti ti-device-floppy"></i> حفظ النسخة</button>
-        </div>
-      </div>`:''}
-      ${it.internalNotes?`<div style="font-size:10.5px;color:var(--text-3);margin-top:8px;border-top:1px dashed var(--border-soft);padding-top:6px;"><i class="ti ti-note"></i> ملاحظات داخلية: ${esc(it.internalNotes)}</div>`:''}
-      ${(!deptRestricted)?`<button class="btn btn-out btn-xs" style="margin-top:8px;" onclick="openAddItemModal('${key}',${i})" title="تعديل بيانات البند"><i class="ti ti-pencil"></i> تعديل بيانات البند</button>`:''}
+      <div class="oi-card-metrics">
+        <span title="الموظف المسؤول عن المرحلة الحالية"><i class="ti ti-user"></i> ${esc(assigneeName)}</span>
+        <span title="عدد الملفات المرفوعة"><i class="ti ti-paperclip"></i> ${filesCount}</span>
+        <span title="عدد الملاحظات"><i class="ti ti-message-2"></i> ${commentsCount}</span>
+        <span title="منذ إضافة البند"><i class="ti ti-clock"></i> ${addedAt?notifTimeAgo(addedAt):'—'}</span>
+      </div>
+      <div class="oi-card-bar-track"><div class="oi-card-bar-fill" style="width:${pct}%;"></div></div>
+      <div class="oi-card-body" id="oi-card-body-${i}" style="display:none;" onclick="event.stopPropagation();">
+        ${(it.template&&PRODUCT_TEMPLATES[it.template]&&it.specs&&Object.values(it.specs).some(v=>v))?`<div style="font-size:11.5px;color:var(--text-2);background:var(--surface-2);border-right:3px solid var(--maroon);border-radius:8px;padding:6px 10px;margin-bottom:6px;line-height:1.7;"><strong style="color:var(--maroon-mid);">مواصفات ${esc(PRODUCT_TEMPLATES[it.template].label)}:</strong> ${PRODUCT_TEMPLATES[it.template].fields.filter(f=>it.specs[f.key]).map(f=>esc(f.label)+': '+esc(String(it.specs[f.key]))).join(' · ')}</div>`:''}
+        ${it.details?`<div style="font-size:11.5px;color:var(--text-2);background:var(--surface-2);border-right:3px solid var(--gold);border-radius:8px;padding:6px 10px;margin-bottom:6px;line-height:1.6;"><strong style="color:var(--maroon-mid);">التفاصيل والمواصفات:</strong> ${esc(it.details)}</div>`:''}
+        <div class="order-item-htimeline">${tlHtml}</div>
+        ${advanceBtn?`<div style="margin:8px 0;">${advanceBtn}</div>`:''}
+        ${it.requiredFiles?`<div style="font-size:11px;color:var(--text-2);margin-top:6px;"><strong style="color:var(--maroon-mid);">الملفات المطلوبة:</strong> ${esc(it.requiredFiles)}</div>`:''}
+        ${historyHtml}
+        <div class="order-item-versions">${curStageHtml}</div>
+        ${canAct?`
+        <div style="margin-top:8px;">
+          <button class="btn btn-out btn-xs" onclick="toggleAddItemVersionForm(${i})"><i class="ti ti-plus"></i> إضافة نسخة لهذه المرحلة</button>
+          <div id="add-ver-form-${i}" style="display:none;flex-direction:column;gap:8px;margin-top:8px;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:10px;padding:10px;">
+            <textarea id="new-ver-notes-${i}" placeholder="ملاحظات النسخة..." style="min-height:50px;font-size:12px;"></textarea>
+            <div class="dept-upload-box" onclick="document.getElementById('new-ver-file-${i}').click()" style="padding:10px;"><i class="ti ti-upload"></i> اضغط لإرفاق ملفات النسخة</div>
+            <input type="file" id="new-ver-file-${i}" multiple style="display:none" onchange="handleNewVersionFiles(${i},this.files)"/>
+            <div id="new-ver-file-note-${i}" style="font-size:10px;color:#10B981;font-weight:700;"></div>
+            <button class="btn btn-brand btn-xs" style="align-self:flex-start;" onclick="saveNewItemVersion('${key}',${i})"><i class="ti ti-device-floppy"></i> حفظ النسخة</button>
+          </div>
+        </div>`:''}
+        ${it.internalNotes?`<div style="font-size:10.5px;color:var(--text-3);margin-top:8px;border-top:1px dashed var(--border-soft);padding-top:6px;"><i class="ti ti-note"></i> ملاحظات داخلية: ${esc(it.internalNotes)}</div>`:''}
+        ${(!deptRestricted)?`<button class="btn btn-out btn-xs" style="margin-top:8px;" onclick="openAddItemModal('${key}',${i})" title="تعديل بيانات البند"><i class="ti ti-pencil"></i> تعديل بيانات البند</button>`:''}
+      </div>
     </div>`;
   }).join('');
-  return `<div class="order-items-grid">${cardsHtml}</div>
+  const bulkToolbarHtml=(canAct&&bulkRows.length)?`<div style="margin-bottom:12px;">
+    <button class="btn btn-out btn-sm" type="button" onclick="toggleBulkSendPanel()"><i class="ti ti-checkbox"></i> تحديد بنود لنقلها معاً</button>
+    <div id="oi-bulk-panel" style="display:none;margin-top:8px;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:10px;padding:10px;">
+      <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px;">
+        ${bulkRows.map(r=>`<label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;"><input type="checkbox" class="oi-bulk-check" value="${r.idx}"/> ${esc(r.name)} <span style="color:var(--text-3);font-size:10.5px;">→ ${esc(r.ndLabel)}</span></label>`).join('')}
+      </div>
+      <button class="btn btn-brand btn-sm" type="button" onclick="bulkAdvanceItems('${key}')"><i class="ti ti-transfer"></i> نقل البنود المحددة</button>
+    </div>
+  </div>`:'';
+  return `${bulkToolbarHtml}<div class="order-items-grid">${cardsHtml}</div>
     ${deptRestricted?'':`<button class="btn btn-out btn-xs" style="margin-top:10px;" onclick="openAddItemModal('${key}')"><i class="ti ti-square-rounded-plus"></i> إضافة بند جديد للطلب</button>`}`;
 }
 function progressColor(o){const m={new:'#CBD5E1',design:'#6B21A8',external:'#B45309',print:'#3730A3',workshop:'#9A3412',done:'#10B981'};return m[o.currentDept||'new']||'#475569';}
@@ -6106,6 +6188,38 @@ function openOrderModal(key){
     :''
   const _canRevert=(t==='admin'&&_prevDept);
   const _canArchive=(cu.type==='admin'&&!(o.isQuickTask&&o.approvedPrintFile));
+  // Production employees only need full controls for their own department —
+  // every other active department is shown as a compact read-only status
+  // chip instead of a full workspace card. Admin/receiver/follower/accountant
+  // keep seeing every department in full (they need the broader oversight).
+  const _myDeptKey={designer:'design',printer:'print',workshop:'workshop',external:'external'}[cu.type];
+  const _otherDeptChips=[];
+  const _deptCardsHtml=getActiveDepts(o).map(dk=>{
+    if(_myDeptKey&&dk!==_myDeptKey){
+      const meta=WF_DEPT_META[dk]||{label:dk,icon:'ti-circle',color:'#475569'};
+      const state=deptStageState(o,dk);
+      const stateLbl=state==='done'?'مكتمل':state==='current'?'قيد التنفيذ':'قادم';
+      const stateCls=state==='done'?'b-done':state==='current'?'b-proc':'b-new';
+      _otherDeptChips.push(`<div class="od-dept-chip"><i class="ti ${meta.icon}" style="color:${meta.color};"></i> ${esc(meta.label)} <span class="badge ${stateCls}">${stateLbl}</span></div>`);
+      return'';
+    }
+    return buildDeptWorkspaceCard(o,key,dk,canAct,dk===o.currentDept?nextBtn:'',dk===o.currentDept?uploadArea:'');
+  }).join('');
+  const _otherDeptChipsHtml=_otherDeptChips.length?`<div style="display:flex;flex-wrap:wrap;margin-bottom:14px;">${_otherDeptChips.join('')}</div>`:'';
+  const _custInfoAcc=omAccordion('ti-user','معلومات العميل',`<div class="od-summary-grid">
+    <div class="od-summary-card"><div class="od-summary-lbl">العميل</div><div class="od-summary-val">${esc(o.client||'—')}</div></div>
+    <div class="od-summary-card"><div class="od-summary-lbl">رقم الجوال</div><div class="od-summary-val" style="direction:ltr;">${esc(o.phone||'—')}</div></div>
+    <div class="od-summary-card"><div class="od-summary-lbl">الخدمة</div><div class="od-summary-val">${esc(o.service||'—')}</div></div>
+    <div class="od-summary-card"><div class="od-summary-lbl">التسليم</div><div class="od-summary-val">${deadlineDateTime(o)}</div></div>
+  </div>`,false);
+  // Financial figures are collapsed by default for everyone, and hidden
+  // entirely (not even the collapsed header) for shop-floor production
+  // roles — they rarely need it and it's needless exposure of pricing data.
+  const _finInfoAcc=_myDeptKey?'':omAccordion('ti-cash','المعلومات المالية',`<div class="od-summary-grid">
+    <div class="od-summary-card"><div class="od-summary-lbl">الفاتورة</div><div class="od-summary-val">${o.totalAmount?fmtMoney(Number(o.totalAmount))+' ر.س':'—'}</div></div>
+    <div class="od-summary-card"><div class="od-summary-lbl">حالة الدفع</div><div class="od-summary-val">${esc(o.paymentStatus||'—')}</div></div>
+    <div class="od-summary-card"><div class="od-summary-lbl">المتبقي</div><div class="od-summary-val">${o.remainingAmount?fmtMoney(Number(o.remainingAmount))+' ر.س':'—'}</div></div>
+  </div>`,false);
   document.getElementById('order-modal-body').innerHTML=`
     <div class="od-header">
       <div class="od-header-main">
@@ -6113,11 +6227,13 @@ function openOrderModal(key){
         <div class="od-header-meta">
           <span>الخدمة: <strong>${esc(o.service)}</strong></span>
           <span>الحالة: ${deptBadge(o.currentDept)}</span>
+          <span>الأولوية: ${gpbadge(o.priority)}</span>
           <span>المسؤول: <strong>${esc(currentPersonName(o))}</strong></span>
           <span>أنشئ بواسطة: <strong>${esc(o.createdBy||'—')}</strong></span>
           <span>التسليم: <strong>${deadlineDateTime(o)}</strong> ${deadlineBadge(o.deadline)}</span>
           ${o.lastItemUpdateAt?`<span>آخر تحديث: <strong>${(o.lastItemUpdateAt||'').split('T')[0]||'—'}</strong></span>`:''}
         </div>
+        <div class="od-header-progress"><span style="font-size:10.5px;color:rgba(255,255,255,.85);">التقدم الإجمالي</span><div class="od-header-progress-track"><div class="od-header-progress-fill" style="width:${orderProgress(o)}%;"></div></div><strong style="font-size:11px;color:#fff;">${orderProgress(o)}%</strong></div>
       </div>
       <div class="od-quick-actions">
         <button class="od-qa-btn" title="طباعة" onclick="printOrderDetails()"><i class="ti ti-printer"></i></button>
@@ -6137,12 +6253,14 @@ function openOrderModal(key){
     ${fromQuoteHtml}
     ${updateBannerHtml}
     ${buildOrderProgressTimeline(o,key)}
-    ${buildOrderSummaryCards(o,key)}
+    ${_custInfoAcc}
+    ${_finInfoAcc}
     <div style="margin-bottom:16px;">
       <div class="od-dept-section-lbl" style="margin-bottom:8px;font-size:12px;">📦 بنود الطلب</div>
       ${renderOrderItemsCards(o,key,canAct)}
     </div>
-    ${getActiveDepts(o).map(dk=>buildDeptWorkspaceCard(o,key,dk,canAct,dk===o.currentDept?nextBtn:'',dk===o.currentDept?uploadArea:'')).join('')}
+    ${_otherDeptChipsHtml}
+    ${_deptCardsHtml}
     ${getActiveDepts(o).includes('design')?buildProofApprovalSection(o,key,canAct):''}
     ${maintOrderRow}
     ${maintenanceRow}
