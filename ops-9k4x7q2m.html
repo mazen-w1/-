@@ -345,7 +345,10 @@ input[type="password"]{direction:rtl;text-align:right;padding-left:40px;padding-
 .oi-row-head-left{display:flex;align-items:center;gap:8px;}
 .oi-badge{font-size:10px;font-weight:800;color:var(--maroon);background:var(--gold-soft);padding:3px 10px;border-radius:20px;}
 .oi-main-tag{font-size:9px;font-weight:700;color:var(--gold);}
+.oi-collapsed-summary{font-size:11.5px;font-weight:700;color:var(--text-2);}
 .oi-grid{display:grid;grid-template-columns:2fr 1fr 0.7fr 1fr;gap:8px;}
+.oi-grid-2{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+@media(max-width:640px){.oi-grid-2{grid-template-columns:1fr;}}
 @media(max-width:640px){.oi-grid{grid-template-columns:1fr;}}
 .oi-row .fg{gap:3px;}
 .oi-row label{font-size:10px;}
@@ -353,7 +356,10 @@ input[type="password"]{direction:rtl;text-align:right;padding-left:40px;padding-
 .oi-row textarea{padding:7px 10px;font-size:12px;min-height:40px;}
 /* Production workflow — horizontal connected timeline (visual only, same selects/depts) */
 .wf-stage-track{display:flex;flex-wrap:nowrap;align-items:center;gap:16px;overflow-x:auto;padding:6px 2px 8px;}
-.wf-stage-card{flex:0 0 280px;}
+.wf-stage-card{flex:0 0 280px;cursor:grab;transition:transform .15s,box-shadow .15s;}
+.wf-stage-card:active{cursor:grabbing;}
+.wf-stage-card .dept-section{transition:box-shadow .15s;}
+.wf-stage-card:hover .dept-section{box-shadow:0 0 0 2px var(--gold-soft);}
 .wf-stage-connector{flex:0 0 26px;height:2px;background:linear-gradient(90deg,rgba(212,175,55,.25),var(--gold),rgba(212,175,55,.25));border-radius:2px;}
 #add-content .wf-stage-card .dept-section{border-radius:var(--radius-lg);border-color:rgba(212,175,55,.35);box-shadow:0 4px 14px rgba(74,14,23,.05);}
 #add-content .wf-stage-card .dept-header{display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 10px 10px;font-size:11.5px;}
@@ -1348,6 +1354,7 @@ input:focus,select:focus,textarea:focus{box-shadow:inset 0 1px 3px rgba(74,14,23
         <div class="page" id="page-teamchat"><div id="teamchat-content"></div></div>
         <div class="page" id="page-wf"><div id="wf-content"></div></div>
         <div class="page" id="page-my"><div id="my-content"></div></div>
+        <div class="page" id="page-extdash"><div id="extdash-content"></div></div>
         <div class="page" id="page-users"><div id="users-content"></div></div>
         <div class="page" id="page-clients"><div id="clients-content"></div></div>
         <div class="page" id="page-timeline"><div id="timeline-content"></div></div>
@@ -1379,6 +1386,14 @@ input:focus,select:focus,textarea:focus{box-shadow:inset 0 1px 3px rgba(74,14,23
 <div class="modal-overlay" id="notif-modal">
   <div class="modal-box" dir="rtl" style="max-width:480px;">
     <div class="modal-header"><span class="modal-title"><i class="ti ti-bell"></i> التنبيهات</span><button class="btn-close" onclick="closeModal('notif-modal')">×</button></div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;padding:0 4px 10px;">
+      <button class="btn btn-out btn-xs" onclick="setNotifFilter('all')">الكل</button>
+      <button class="btn btn-out btn-xs" onclick="setNotifFilter('new_order')">طلبات جديدة</button>
+      <button class="btn btn-out btn-xs" onclick="setNotifFilter('transfer')">تحويلات</button>
+      <button class="btn btn-out btn-xs" onclick="setNotifFilter('upload')">رفع ملفات</button>
+      <button class="btn btn-out btn-xs" onclick="setNotifFilter('comment')">ملاحظات</button>
+      <button class="btn btn-out btn-xs" onclick="setNotifFilter('completed')">مكتملة</button>
+    </div>
     <div id="notif-panel-body"></div>
   </div>
 </div>
@@ -1544,20 +1559,20 @@ const FINANCIAL_SHEET_ENDPOINT='https://script.google.com/macros/s/AKfycbxr4fQAf
 // returns false and uploadFileDirect() safely falls back to the original Firebase-base64
 // behavior — nothing breaks, it simply doesn't use Drive until a real endpoint is supplied.
 const GDRIVE_UPLOAD_ENDPOINT='https://script.google.com/macros/s/AKfycbzULmZEsbikLIkww7rvymETCWuVWhKu5CzO9oIhw_HsBT2JAN50rJVGkti06VYcPYSA/exec';
-// Must match SHARED_SECRET in gdrive-upload-script.gs exactly — copied byte-for-byte
-// from the deployed Apps Script project. The endpoint is "Anyone" access, so this
+// Must match SHARED_SECRET in gdrive-upload-script.gs exactly, once that script is
+// redeployed with the hardened version — the endpoint is "Anyone" access, so this
 // secret is what stops a stranger who finds the URL from uploading into the Drive
-// folder; the script fails closed (server-not-configured / unauthorized) if this
-// doesn't match, rather than silently accepting uploads.
-const GDRIVE_UPLOAD_SECRET='04ef9776d579f99fc18830c1780d7df27fe6b51d8d605572';
-function isGDriveConfigured(){return!!GDRIVE_UPLOAD_ENDPOINT&&!GDRIVE_UPLOAD_ENDPOINT.includes('PASTE_YOUR')&&!!GDRIVE_UPLOAD_SECRET&&!GDRIVE_UPLOAD_SECRET.includes('PASTE_YOUR');}
-async function _postToGDriveScript(payload){
+// folder. Left as the placeholder below, the deployed script (if still the older,
+// secret-less revision) still accepts requests as before; nothing breaks either way.
+const GDRIVE_UPLOAD_SECRET='PASTE_YOUR_SHARED_SECRET_HERE';
+function isGDriveConfigured(){return!!GDRIVE_UPLOAD_ENDPOINT&&!GDRIVE_UPLOAD_ENDPOINT.includes('PASTE_YOUR');}
+async function uploadToGDrive(dataUrl,fileName){
   let res;
   try{
-    res=await fetch(GDRIVE_UPLOAD_ENDPOINT,{method:'POST',body:JSON.stringify(payload)});
+    res=await fetch(GDRIVE_UPLOAD_ENDPOINT,{method:'POST',body:JSON.stringify({secret:GDRIVE_UPLOAD_SECRET,fileData:dataUrl,fileName})});
   }catch(networkErr){
     // Offline, DNS failure, or blocked by CORS/a proxy before any response came back —
-    // callers fall back to another upload path silently.
+    // the caller (uploadFileDirect) catches this and falls back to Firebase silently.
     throw new Error('gdrive-network-error');
   }
   let j=null;
@@ -1569,61 +1584,7 @@ async function _postToGDriveScript(payload){
     throw new Error('gdrive-invalid-response');
   }
   if(!j||!j.success)throw new Error((j&&j.error)||'gdrive-upload-failed');
-  return j;
-}
-async function uploadToGDrive(dataUrl,fileName,folderCtx){
-  const j=await _postToGDriveScript({secret:GDRIVE_UPLOAD_SECRET,fileData:dataUrl,fileName,uploaderName:_driveUploaderName(),clientName:_driveClientName(folderCtx)});
   return j.url;
-}
-// Chunked upload for large files (and design-department uploads) to the same Apps
-// Script endpoint — mirrors the server's handleChunk_() contract exactly: each chunk
-// is a fresh data URL read directly off a File.slice(), decoded independently and
-// concatenated as raw bytes server-side, so there's no base64-boundary issue with
-// splitting the file this way. Raw chunk size is kept under the script's 8MB
-// (base64'd) per-chunk cap, and the whole upload is capped at the script's own
-// 150MB ceiling — anything larger, or any failure along the way, is left for the
-// caller to fall back to the direct Drive OAuth path instead.
-const GDRIVE_CHUNK_RAW_BYTES=6*1024*1024;
-const GDRIVE_CHUNK_MAX_FILE_BYTES=150*1024*1024;
-function _readBlobAsDataUrl(blob){
-  return new Promise((res,rej)=>{
-    const r=new FileReader();
-    r.onload=()=>res(r.result);
-    r.onerror=()=>rej(new Error('read-failed'));
-    r.readAsDataURL(blob);
-  });
-}
-function _genGDriveUploadId(){
-  return 'u'+Date.now().toString(36)+Math.random().toString(36).slice(2,10);
-}
-async function uploadToGDriveChunked(file,folderCtx){
-  if(!isGDriveConfigured())throw new Error('gdrive-not-configured');
-  if(file.size>GDRIVE_CHUNK_MAX_FILE_BYTES)throw new Error('gdrive-chunk-file-too-large');
-  const uploadId=_genGDriveUploadId();
-  const totalChunks=Math.max(1,Math.ceil(file.size/GDRIVE_CHUNK_RAW_BYTES));
-  const uploaderName=_driveUploaderName();
-  const clientName=_driveClientName(folderCtx);
-  let lastResult=null;
-  for(let i=0;i<totalChunks;i++){
-    const start=i*GDRIVE_CHUNK_RAW_BYTES;
-    const end=Math.min(file.size,start+GDRIVE_CHUNK_RAW_BYTES);
-    const chunkDataUrl=await _readBlobAsDataUrl(file.slice(start,end));
-    lastResult=await _postToGDriveScript({
-      secret:GDRIVE_UPLOAD_SECRET,
-      mode:'chunk',
-      uploadId,
-      chunkIndex:i,
-      totalChunks,
-      fileSize:file.size,
-      mimeType:file.type||'application/octet-stream',
-      fileName:file.name||('file_'+Date.now()),
-      chunkData:chunkDataUrl,
-      uploaderName,
-      clientName
-    });
-  }
-  if(!lastResult||!lastResult.url)throw new Error('gdrive-chunk-incomplete');
-  return lastResult.url;
 }
 function showGDriveStatus(){
   if(isGDriveConfigured()){toast('✓ Google Drive متصل كمسار احتياطي — يُستخدم فقط إذا فشل الرفع الأساسي');return;}
@@ -1664,16 +1625,18 @@ function applyServicePreset(v){
     if(sel&&!p[k])sel.value='none';
   });
 }
-// Security note: this used to hardcode a set of default admin/employee
-// passwords here so a fresh/empty /users table could self-seed on first
-// run. That meant real plaintext defaults sat permanently in this
-// public repo's source and git history. The database is already
-// populated with real accounts, so that seeding path is removed —
-// if /users is ever genuinely empty, an admin must create the first
-// account directly from the Firebase console rather than the app
-// silently reintroducing known credentials.
+const INITIAL_USERS={
+  admin:{pass:'admin',name:'المدير العام',role:'مدير عام',color:'#10B981',type:'admin',photo:''},
+  mazen:{pass:'123456',name:'مازن',role:'مدير عام',color:'#10B981',type:'admin',photo:''},
+  accountant:{pass:'1234',name:'المحاسب',role:'محاسب',color:'#0EA5E9',type:'accountant',photo:''},
+  receiver:{pass:'1234',name:'مستقبل العميل',role:'مستقبل عميل',color:'#D4AF37',type:'receiver',photo:''},
+  designer1:{pass:'1234',name:'سالم القثمي',role:'مصمم',color:'#6B21A8',type:'designer',photo:''},
+  printer1:{pass:'1234',name:'الذرحاني',role:'طباعة',color:'#3730A3',type:'printer',photo:''},
+  workshop1:{pass:'1234',name:'أويس',role:'ورشة',color:'#9A3412',type:'workshop',photo:''},
+  external1:{pass:'1234',name:'منفذ خارجي',role:'تنفيذ خارجي',color:'#713F12',type:'external',photo:''},
+};
 let cu=null,orders={},clients={},USERS={},currentSortMode='date-desc',_pendingPortalType=null;
-let submittedRequests={},chats={},standaloneQuotes={},warranties={},teamChat={},govRecords={},urgentRequests={},tasksData={};
+let submittedRequests={},chats={},standaloneQuotes={},warranties={},teamChat={},govRecords={},urgentRequests={},tasksData={},eventNotifs={};
 let _lastAssignSnapshot=null,_audioCtx=null,_audioUnlocked=false;
 let _navHistory=[];
 let _nuPhotoB64='',_euPhotoB64='',_euSelectedColor='',_nuSelectedColor='';
@@ -1703,13 +1666,12 @@ function openLoginBox(portalKey){
 }
 function backToPortalGrid(){document.getElementById('portal-main-view').style.display='block';document.getElementById('portal-password-card').style.display='none';}
 async function doLogin(){
+  await syncUsers();
   const u=document.getElementById('lu').value.trim().toLowerCase();
   const p=document.getElementById('lp').value;
   const e=document.getElementById('lerr');
   const allowed=PORTAL_ROLE_MAP[_pendingPortalType]||[];
-  // Only the one username being attempted is fetched here — the full
-  // /users table (every account's hash) is never downloaded pre-login.
-  const rec=await fetchOneUserRecord(u);
+  const rec=USERS[u];
   const hash=rec?await makeSessionToken(u,p):null;
   // rec.pass may still be a legacy plaintext value for accounts that haven't logged in
   // since password hashing was introduced — verify against it directly this one time,
@@ -1719,7 +1681,6 @@ async function doLogin(){
     if(legacyMatch){try{await fbPatch(`users/${u}`,{pass:hash});rec.pass=hash;}catch(err){}}
     if(allowed.length>0&&!allowed.includes(rec.type)){e.style.display='block';e.textContent='هذا الحساب لا ينتمي لهذا القسم';return;}
     showSaving('جاري الدخول...');
-    await syncUsers();
     await loadData();hideSaving();
     localStorage.setItem(SESSION_KEY,JSON.stringify({uname:u,tok:hash}));
     enterApp(u);e.style.display='none';
@@ -1800,21 +1761,15 @@ const fbSet=(p,d)=>fbReq(p,'PUT',d);
 const fbPush=(p,d)=>fbReq(p,'POST',d);
 const fbPatch=(p,d)=>fbReq(p,'PATCH',d);
 const fbDelete=p=>fbReq(p,'DELETE');
-// Full user table (all names/roles/password hashes) — only ever fetched
-// once someone is already authenticated (a valid session token, or a
-// just-verified login). Never call this to check a login attempt itself.
 async function syncUsers(){
   try{
     const r=await fbGet('users');
-    USERS=r||{};
-  }catch(e){/* keep last-known USERS rather than wiping it on a network blip */}
-}
-// Single-record lookup used for the actual credential check, so an
-// unauthenticated visitor's browser only ever pulls the one username
-// being attempted — never every account's password hash at once.
-async function fetchOneUserRecord(uname){
-  if(!uname)return null;
-  try{return await fbGet('users/'+encodeURIComponent(uname));}catch(e){return null;}
+    if(!r||Object.keys(r).length===0){
+      const seeded={};
+      for(const uname in INITIAL_USERS){seeded[uname]={...INITIAL_USERS[uname],pass:await makeSessionToken(uname,INITIAL_USERS[uname].pass)};}
+      await fbSet('users',seeded);USERS=seeded;
+    }else USERS=r;
+  }catch(e){USERS={...INITIAL_USERS};}
 }
 async function loadData(){
   // Each fetch is tracked individually so a single failing endpoint (network
@@ -1833,6 +1788,7 @@ async function loadData(){
     ['govRecords',v=>govRecords=v],
     ['urgentRequests',v=>urgentRequests=v],
     ['tasks',v=>tasksData=v],
+    ['eventNotifs',v=>eventNotifs=v],
   ];
   const results=await Promise.all(fetches.map(([path])=>fbGet(path).then(v=>({ok:true,v})).catch(()=>({ok:false}))));
   let anyFailed=false;
@@ -1894,18 +1850,17 @@ function checkNewAssignments(){
 // ============================================================
 window.addEventListener('load',async()=>{
   showSaving('جاري التحميل...');
+  await syncUsers();
   const sess=localStorage.getItem(SESSION_KEY);
   if(sess){
     try{
       const s=JSON.parse(sess);
-      // Same principle as doLogin(): re-validating a saved session only
-      // ever needs that one account's record, not the whole /users table.
-      const rec=await fetchOneUserRecord(s.uname);
+      const rec=USERS[s.uname];
       // rec.pass is a hash post-migration, so the stored token can be compared to it
       // directly; a not-yet-migrated legacy account still needs one re-derivation.
       const stillValid=rec&&s.tok&&(isHashedPass(rec.pass)?s.tok===rec.pass:s.tok===await makeSessionToken(s.uname,rec.pass));
       if(s.uname&&stillValid){
-        await syncUsers();await loadData();hideSaving();enterApp(s.uname);return;
+        await loadData();hideSaving();enterApp(s.uname);return;
       }
     }catch(e){}
     localStorage.removeItem(SESSION_KEY);
@@ -1937,15 +1892,78 @@ function getNotifications(){
   });
   return notifs;
 }
-function updateNotifBell(){
-  const notifs=getNotifications();const dot=document.getElementById('notif-count');if(!dot)return;
-  if(notifs.length>0){dot.style.display='flex';dot.textContent=notifs.length;}else{dot.style.display='none';}
+// ── Event notification log (new orders, transfers, uploads, comments,
+// completion) — additive to the derived urgent/deadline alerts above, which
+// keep working exactly as before. Stored in Firebase (eventNotifs/) so every
+// user sees the same event history; "read" state is per-device via
+// localStorage, following the same pattern already used for team-chat and
+// per-item update badges elsewhere in this app (see teamChatSeen_/
+// itemUpdateSeen_ — mark-all-read-on-open, not per-notification tracking).
+const NOTIF_TYPE_META={
+  new_order:{label:'طلب جديد',icon:'ti-file-plus',color:'#2563EB'},
+  transfer:{label:'تحويل قسم',icon:'ti-transfer',color:'#8a6d1f'},
+  workflow_update:{label:'تحديث سير عمل',icon:'ti-sitemap',color:'#3730A3'},
+  upload:{label:'رفع ملف',icon:'ti-upload',color:'#0EA5E9'},
+  comment:{label:'ملاحظة',icon:'ti-message-2',color:'#6B21A8'},
+  completed:{label:'اكتمال طلب',icon:'ti-circle-check',color:'#047857'},
+};
+async function pushNotification(n){
+  try{
+    await fbPush('eventNotifs',{type:n.type,message:n.message,orderKey:n.orderKey||'',orderId:n.orderId||'',client:n.client||'',targetUname:n.targetUname||'all-admin',createdAt:new Date().toISOString()});
+  }catch(e){console.warn('notification push failed (non-fatal)',e);}
 }
+function isEventNotifForMe(n){
+  if(!n)return false;
+  if(n.targetUname===cu._uname)return true;
+  if(n.targetUname==='all-admin')return['admin','receiver','follower'].includes(cu.type);
+  return false;
+}
+function myEventNotifs(){
+  return Object.entries(eventNotifs||{}).map(([k,v])=>({...v,_key:k})).filter(isEventNotifForMe).sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));
+}
+function notifSeenKey(){return'notifSeen_'+(cu&&cu._uname?cu._uname:'anon');}
+function getNotifLastSeen(){try{return localStorage.getItem(notifSeenKey())||'1970-01-01T00:00:00.000Z';}catch(e){return'1970-01-01T00:00:00.000Z';}}
+function markEventNotifsRead(){try{localStorage.setItem(notifSeenKey(),new Date().toISOString());}catch(e){}}
+function updateNotifBell(){
+  const dot=document.getElementById('notif-count');if(!dot)return;
+  const lastSeen=getNotifLastSeen();
+  const unreadEvents=myEventNotifs().filter(n=>n.createdAt>lastSeen).length;
+  const total=getNotifications().length+unreadEvents;
+  if(total>0){dot.style.display='flex';dot.textContent=total;}else{dot.style.display='none';}
+}
+function notifTimeAgo(iso){
+  try{
+    const mins=Math.round((Date.now()-new Date(iso).getTime())/60000);
+    if(mins<1)return'الآن';
+    if(mins<60)return`منذ ${mins} د`;
+    const hrs=Math.round(mins/60);if(hrs<24)return`منذ ${hrs} س`;
+    return`منذ ${Math.round(hrs/24)} ي`;
+  }catch(e){return'';}
+}
+function renderNotifPanelBody(){
+  const filter=window._notifFilter||'all';
+  const derived=getNotifications().map(n=>({...n,isEvent:false}));
+  const events=myEventNotifs().map(n=>({type:n.type,msg:n.message,key:n.orderKey,color:(NOTIF_TYPE_META[n.type]||{}).color||'#475569',isEvent:true,createdAt:n.createdAt}));
+  let all=[...derived,...events];
+  if(filter!=='all')all=all.filter(n=>n.type===filter);
+  const body=document.getElementById('notif-panel-body');
+  if(all.length===0){body.innerHTML='<div style="text-align:center;color:var(--text-3);padding:30px;"><i class="ti ti-check" style="font-size:36px;color:#10B981;display:block;margin-bottom:10px;"></i>لا توجد تنبيهات</div>';return;}
+  body.innerHTML=all.map(n=>`<div style="display:flex;align-items:center;gap:10px;padding:13px 4px;border-bottom:1px solid var(--border-soft);cursor:pointer;" onclick="closeModal('notif-modal');${n.key?`openOrderModal('${n.key}')`:''}">
+    <div style="width:10px;height:10px;border-radius:50%;background:${n.color};flex-shrink:0;"></div>
+    <div style="flex:1;"><div style="font-size:13px;font-weight:600;color:var(--text-1)">${n.msg}</div>${n.isEvent?`<div style="font-size:10.5px;color:var(--text-3);margin-top:2px;">${notifTimeAgo(n.createdAt)}</div>`:''}</div>
+  </div>`).join('');
+}
+function setNotifFilter(f){window._notifFilter=f;renderNotifPanelBody();}
 function openNotifPanel(){
-  const notifs=getNotifications();const body=document.getElementById('notif-panel-body');
-  if(notifs.length===0){body.innerHTML='<div style="text-align:center;color:var(--text-3);padding:30px;"><i class="ti ti-check" style="font-size:36px;color:#10B981;display:block;margin-bottom:10px;"></i>لا توجد تنبيهات حالية</div>';}
-  else{body.innerHTML=notifs.map(n=>`<div style="display:flex;align-items:center;gap:10px;padding:13px 4px;border-bottom:1px solid var(--border-soft);cursor:pointer;" onclick="closeModal('notif-modal');openOrderModal('${n.key}')"><div style="width:10px;height:10px;border-radius:50%;background:${n.color};flex-shrink:0;"></div><div style="font-size:13px;font-weight:600;color:var(--text-1)">${n.msg}</div></div>`).join('');}
+  window._notifFilter='all';
+  renderNotifPanelBody();
   openModal('notif-modal');
+  // Opening the panel is the "I've seen these" moment — matches the same
+  // mark-all-read-on-open pattern already used for team chat/item updates,
+  // so the unread badge clears immediately rather than requiring the user
+  // to dismiss each notification individually.
+  markEventNotifsRead();
+  updateNotifBell();
 }
 // ============================================================
 // UTILS
@@ -1953,6 +1971,15 @@ function openNotifPanel(){
 function toast(m){const t=document.getElementById('toast');if(!t){console.warn('toast:',m);return;}t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2800);}
 function closeModal(id){const el=document.getElementById(id);if(el)el.classList.remove('open');}
 function openModal(id){const el=document.getElementById(id);if(el)el.classList.add('open');}
+// Click-outside-to-close: every modal in the app is a `.modal-overlay` with a
+// `.modal-box` child holding the actual content — a click that lands on the
+// overlay itself (never on the box, since that click would target a descendant)
+// means the user clicked the dimmed backdrop, so close whichever modal that was.
+document.addEventListener('click',function(e){
+  if(e.target&&e.target.classList&&e.target.classList.contains('modal-overlay')&&e.target.classList.contains('open')){
+    closeModal(e.target.id);
+  }
+});
 // ── Shared debounce for oninput handlers that trigger a full page rebuild
 // (e.g. buildGovObligationsPage) instead of a lightweight row-hide — without
 // this, typing a search term rebuilds the whole page on every keystroke. ──
@@ -1963,6 +1990,66 @@ function debounce(fn,delay){
     timer=setTimeout(()=>fn.apply(this,args),delay);
   };
 }
+// ── Order-registration draft autosave/recovery ──────────────────────────────
+// Anything typed into the "تسجيل طلب" form is mirrored into localStorage so a
+// refresh (or an accidental tab close) never loses in-progress work. Only the
+// plain field values + the in-memory item/production-line arrays are kept —
+// nothing here is sent anywhere, and the draft is cleared once the order is
+// actually submitted.
+const ORDER_DRAFT_KEY='rawaee_order_draft_v1';
+const ORDER_DRAFT_FIELD_IDS=['fc','fp','f-contact-person','fpr','f-order-type','fd','fpay','fn','f-internal-notes','f-amt-network','f-amt-cash','f-amt-transfer','fw-design','fw-external','fw-external-note','fw-print','fw-workshop'];
+const ORDER_DRAFT_CHECKBOX_IDS=['f-urgent-important','f-maintenance'];
+function saveOrderDraft(){
+  try{
+    if(!document.getElementById('fc'))return; // form isn't open
+    const fields={};
+    ORDER_DRAFT_FIELD_IDS.forEach(id=>{const el=document.getElementById(id);if(el)fields[id]=el.value;});
+    ORDER_DRAFT_CHECKBOX_IDS.forEach(id=>{const el=document.getElementById(id);if(el)fields[id]=el.checked;});
+    localStorage.setItem(ORDER_DRAFT_KEY,JSON.stringify({
+      fields,
+      orderLines:window._orderLines||[],
+      prodLines:window._prodLines||[],
+      primaryLineItemIds:window._primaryLineItemIds||[],
+      workflowOrder:window._workflowOrder||['design','external','print','workshop'],
+      workshopDeptFileB64:window._workshopDeptFileB64||'',
+      workshopDeptFileName:window._workshopDeptFileName||'',
+      savedAt:Date.now()
+    }));
+  }catch(e){/* localStorage full/unavailable — autosave is best-effort */}
+}
+const saveOrderDraftDebounced=debounce(saveOrderDraft,600);
+function loadOrderDraft(){
+  try{const raw=localStorage.getItem(ORDER_DRAFT_KEY);return raw?JSON.parse(raw):null;}catch(e){return null;}
+}
+function clearOrderDraft(){try{localStorage.removeItem(ORDER_DRAFT_KEY);}catch(e){}}
+function restoreOrderDraft(draft){
+  if(!draft)return;
+  Object.keys(draft.fields||{}).forEach(id=>{
+    const el=document.getElementById(id);if(!el)return;
+    if(el.type==='checkbox')el.checked=!!draft.fields[id];else el.value=draft.fields[id]||'';
+  });
+  window._orderLines=draft.orderLines||[];
+  window._prodLines=draft.prodLines||[];
+  window._primaryLineItemIds=draft.primaryLineItemIds||[];
+  window._workflowOrder=(draft.workflowOrder&&draft.workflowOrder.length)?draft.workflowOrder:['design','external','print','workshop'];
+  window._workshopDeptFileB64=draft.workshopDeptFileB64||'';
+  window._workshopDeptFileName=draft.workshopDeptFileName||'';
+  if(window._workshopDeptFileName){const note=document.getElementById('fw-workshop-file-note');if(note)note.textContent='✓ تم إرفاق: '+window._workshopDeptFileName;}
+  renderWorkflowStageTrack();
+  renderOrderLines();renderProductionLines();renderPrimaryLineItems();
+  onPaymentChange(document.getElementById('fpay')?.value||'');
+  onExternalChange(document.getElementById('fw-external')?.value||'none');
+  recalcOrderTotal();
+}
+// Delegated so it survives buildAddForm() rebuilding #add-content's innerHTML
+// as many times as the user opens the page — a listener attached inside that
+// function would otherwise be re-registered (and stack) on every rebuild.
+document.addEventListener('input',function(e){
+  if(e.target&&e.target.closest&&e.target.closest('#add-content'))saveOrderDraftDebounced();
+});
+document.addEventListener('change',function(e){
+  if(e.target&&e.target.closest&&e.target.closest('#add-content'))saveOrderDraftDebounced();
+});
 function toggleOmAccordion(headerEl){
   const body=headerEl.nextElementSibling;if(!body)return;
   const isOpen=headerEl.classList.toggle('open');
@@ -2024,53 +2111,15 @@ async function uploadToCloudinary(fileOrDataUrl){
   }
   return data.secure_url;
 }
-async function convertFileToBase64(file,folderCtx){const MAX_IMAGE_SOURCE_BYTES=25*1024*1024;const LARGE_FILE_BYTES=10*1024*1024;const isImage=file.type&&file.type.startsWith('image/');
+async function convertFileToBase64(file,folderCtx){const MAX_IMAGE_SOURCE_BYTES=25*1024*1024;const MAX_OTHER_BYTES=10*1024*1024;const isImage=file.type&&file.type.startsWith('image/');
   // Cloudinary blocks delivery of PDF/ZIP by default (a security restriction on the
   // account, separate from the unsigned-upload preset) — even accounts with that
   // restriction lifted have shown stale-CDN failures, so PDFs/ZIPs always go to
   // Drive instead of Cloudinary. Every other file type is unaffected.
   const isPdfOrZip=/application\/(pdf|zip|x-zip-compressed)/.test(file.type||'')||/\.(pdf|zip)$/i.test(file.name||'');
-  // Routing rule: anything over 10MB, plus anything tied to the design section
-  // (order currently sitting in the "design" department) or uploaded by a user
-  // with the designer role, always goes to Google Drive instead of Cloudinary —
-  // regardless of file type or size. Everything else (small files from the other
-  // departments) keeps using the Cloudinary path as before.
-  const orderRec=(folderCtx&&folderCtx.order&&typeof orders!=='undefined')?orders[folderCtx.order]:null;
-  const isDesignSource=(typeof cu!=='undefined'&&cu&&cu.type==='designer')||(orderRec&&orderRec.currentDept==='design');
-  const isLarge=file.size>LARGE_FILE_BYTES;
-  // Large files and design-section/designer uploads try the Apps Script chunked
-  // endpoint first (keeps big payloads off Cloudinary and off the OAuth Drive
-  // quota). If it's unconfigured, rejects the file's mime type (its allowlist is
-  // narrower than Cloudinary/OAuth Drive — no zip, for instance), is over its own
-  // 150MB ceiling, or fails for any other reason, fall back to the direct Drive
-  // OAuth path, which has no size/type allowlist of its own and is the
-  // already-verified-working route.
-  if(isDesignSource||isLarge){
-    if(isGDriveConfigured()&&file.size<=GDRIVE_CHUNK_MAX_FILE_BYTES){
-      try{
-        return await uploadToGDriveChunked(file,folderCtx);
-      }catch(chunkErr){
-        console.warn('رفع الملف عبر Apps Script (Drive) فشل، تجربة المسار المباشر عبر OAuth',chunkErr);
-      }
-    }
-    return await uploadToGoogleDrive(file,folderCtx);
-  }
-  if(isImage){
-    if(file.size>MAX_IMAGE_SOURCE_BYTES)throw new Error('⚠️ حجم الصورة كبير جداً (الحد الأقصى 25 ميجابايت). يرجى اختيار صورة أصغر.');
-    let uploadPayload=file;if(file.size>800*1024){try{const raw=await _readFileAsDataUrl(file);uploadPayload=await compressImage(raw,1600,0.72);}catch(e){uploadPayload=file;}}return await uploadToCloudinary(uploadPayload);
-  }
+  if(isImage){if(file.size>MAX_IMAGE_SOURCE_BYTES)throw new Error('⚠️ حجم الصورة كبير جداً (الحد الأقصى 25 ميجابايت). يرجى اختيار صورة أصغر.');let uploadPayload=file;if(file.size>800*1024){try{const raw=await _readFileAsDataUrl(file);uploadPayload=await compressImage(raw,1600,0.72);}catch(e){uploadPayload=file;}}return await uploadToCloudinary(uploadPayload);}
   else if(isPdfOrZip){return await uploadToGoogleDrive(file,folderCtx);}
-  else{return await uploadToCloudinary(file);}} const DRIVE_PROXY_URL='https://rawaee-drive-proxy.vercel.app/api/token'; const MAX_DRIVE_BYTES=500*1024*1024; let _driveAccessToken=null; async function getGoogleAccessToken(){if(_driveAccessToken&&_driveAccessToken.expiresAt>Date.now()+60000)return _driveAccessToken.value;let resp;try{resp=await fetch(DRIVE_PROXY_URL);}catch(e){throw new Error('⚠️ تعذر الاتصال بخادم رفع الملفات، تحقق من الإنترنت وحاول مجدداً.');}let data=null;try{data=await resp.json();}catch(e){}if(!resp.ok||!data||!data.access_token){throw new Error('⚠️ تعذر تجهيز صلاحية رفع الملفات إلى Google Drive.');}_driveAccessToken={value:data.access_token,expiresAt:Date.now()+((data.expires_in||3500)*1000)};return _driveAccessToken.value;} function _updateGoogleDriveStatusUI(){} async function _driveFindOrCreateFolder(name,parentId,accessToken){const safeName=String(name).replace(/'/g,"\\'");const q="name='"+safeName+"' and '"+(parentId||'root')+"' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false";const listRes=await fetch('https://www.googleapis.com/drive/v3/files?q='+encodeURIComponent(q)+'&fields=files(id,name)',{headers:{Authorization:'Bearer '+accessToken}});const listData=await listRes.json().catch(()=>null);if(listData&&listData.files&&listData.files.length)return listData.files[0].id;const createRes=await fetch('https://www.googleapis.com/drive/v3/files',{method:'POST',headers:{Authorization:'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({name:String(name),mimeType:'application/vnd.google-apps.folder',parents:parentId?[parentId]:undefined})});const createData=await createRes.json().catch(()=>null);if(!createData||!createData.id)throw new Error('folder_create_failed');return createData.id;} function _driveUploaderName(){return(typeof cu!=='undefined'&&cu&&cu.name)||'غير محدد';}
-function _driveClientName(folderCtx){const orderRef=folderCtx&&folderCtx.order;const orderRec=(orderRef&&typeof orders!=='undefined')?orders[orderRef]:null;return(folderCtx&&folderCtx.person)||(orderRec&&orderRec.client)||'عميل غير محدد';}
-async function uploadToGoogleDrive(file,folderCtx){if(file.size>MAX_DRIVE_BYTES)throw new Error('⚠️ حجم الملف كبير جداً حتى لـ Google Drive (الحد الأقصى 500 ميجابايت). يرجى ضغط الملف أو تصغيره.');const accessToken=await getGoogleAccessToken();let parentId=null;try{
-  // Every Drive upload — regardless of role or department — files under
-  // <uploader's name>/<client's name>/, reusing the client subfolder whenever
-  // the same client name comes up again for that uploader.
-  const uploaderName=_driveUploaderName();
-  const clientName=_driveClientName(folderCtx);
-  const uploaderFolderId=await _driveFindOrCreateFolder(uploaderName,null,accessToken);
-  parentId=await _driveFindOrCreateFolder(String(clientName),uploaderFolderId,accessToken);
-}catch(e){parentId=null;}const metadata={name:file.name||('ملف_'+Date.now())};if(parentId)metadata.parents=[parentId];const form=new FormData();form.append('metadata',new Blob([JSON.stringify(metadata)],{type:'application/json'}));form.append('file',file);let res;try{res=await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id',{method:'POST',headers:{Authorization:'Bearer '+accessToken},body:form});}catch(netErr){throw new Error('⚠️ تعذر الاتصال بـ Google Drive، تحقق من الإنترنت وحاول مجدداً.');}let data=null;try{data=await res.json();}catch(e){}if(!res.ok||!data||!data.id){const msg=(data&&data.error&&data.error.message)?data.error.message:('HTTP '+res.status);throw new Error('⚠️ فشل رفع الملف إلى Google Drive: '+msg);}try{await fetch('https://www.googleapis.com/drive/v3/files/'+data.id+'/permissions',{method:'POST',headers:{Authorization:'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({role:'reader',type:'anyone'})});}catch(e){}return 'https://drive.google.com/file/d/'+data.id+'/view?usp=sharing';}function normalizeSaudiPhone(v){
+  else{if(file.size>MAX_OTHER_BYTES)return await uploadToGoogleDrive(file,folderCtx);return await uploadToCloudinary(file);}} const DRIVE_PROXY_URL='https://rawaee-drive-proxy.vercel.app/api/token'; const MAX_DRIVE_BYTES=500*1024*1024; let _driveAccessToken=null; async function getGoogleAccessToken(){if(_driveAccessToken&&_driveAccessToken.expiresAt>Date.now()+60000)return _driveAccessToken.value;let resp;try{resp=await fetch(DRIVE_PROXY_URL);}catch(e){throw new Error('⚠️ تعذر الاتصال بخادم رفع الملفات، تحقق من الإنترنت وحاول مجدداً.');}let data=null;try{data=await resp.json();}catch(e){}if(!resp.ok||!data||!data.access_token){throw new Error('⚠️ تعذر تجهيز صلاحية رفع الملفات إلى Google Drive.');}_driveAccessToken={value:data.access_token,expiresAt:Date.now()+((data.expires_in||3500)*1000)};return _driveAccessToken.value;} function _updateGoogleDriveStatusUI(){} async function _driveFindOrCreateFolder(name,parentId,accessToken){const safeName=String(name).replace(/'/g,"\\'");const q="name='"+safeName+"' and '"+(parentId||'root')+"' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false";const listRes=await fetch('https://www.googleapis.com/drive/v3/files?q='+encodeURIComponent(q)+'&fields=files(id,name)',{headers:{Authorization:'Bearer '+accessToken}});const listData=await listRes.json().catch(()=>null);if(listData&&listData.files&&listData.files.length)return listData.files[0].id;const createRes=await fetch('https://www.googleapis.com/drive/v3/files',{method:'POST',headers:{Authorization:'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({name:String(name),mimeType:'application/vnd.google-apps.folder',parents:parentId?[parentId]:undefined})});const createData=await createRes.json().catch(()=>null);if(!createData||!createData.id)throw new Error('folder_create_failed');return createData.id;} async function uploadToGoogleDrive(file,folderCtx){if(file.size>MAX_DRIVE_BYTES)throw new Error('⚠️ حجم الملف كبير جداً حتى لـ Google Drive (الحد الأقصى 500 ميجابايت). يرجى ضغط الملف أو تصغيره.');const accessToken=await getGoogleAccessToken();let parentId=null;try{const orderRef=folderCtx&&folderCtx.order;const orderRec=(orderRef&&typeof orders!=='undefined')?orders[orderRef]:null;const personName=(folderCtx&&folderCtx.person)||(orderRec&&orderRec.client)||(typeof cu!=='undefined'&&cu&&cu.name)||'غير محدد';const personFolderId=await _driveFindOrCreateFolder(personName,null,accessToken);parentId=personFolderId;if(orderRef){const humanLabel=(orderRec&&orderRec.id)?orderRec.id:orderRef;parentId=await _driveFindOrCreateFolder(String(humanLabel),personFolderId,accessToken);}}catch(e){parentId=null;}const metadata={name:file.name||('ملف_'+Date.now())};if(parentId)metadata.parents=[parentId];const form=new FormData();form.append('metadata',new Blob([JSON.stringify(metadata)],{type:'application/json'}));form.append('file',file);let res;try{res=await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id',{method:'POST',headers:{Authorization:'Bearer '+accessToken},body:form});}catch(netErr){throw new Error('⚠️ تعذر الاتصال بـ Google Drive، تحقق من الإنترنت وحاول مجدداً.');}let data=null;try{data=await res.json();}catch(e){}if(!res.ok||!data||!data.id){const msg=(data&&data.error&&data.error.message)?data.error.message:('HTTP '+res.status);throw new Error('⚠️ فشل رفع الملف إلى Google Drive: '+msg);}try{await fetch('https://www.googleapis.com/drive/v3/files/'+data.id+'/permissions',{method:'POST',headers:{Authorization:'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({role:'reader',type:'anyone'})});}catch(e){}return 'https://drive.google.com/file/d/'+data.id+'/view?usp=sharing';}function normalizeSaudiPhone(v){
   let s=toEnglishDigits(String(v||'')).trim();
   s=s.replace(/[^\d+]/g,''); // strip everything except digits and a leading +
   if(s.startsWith('+966'))s='0'+s.slice(4);
@@ -2145,7 +2194,7 @@ function buildSidebar(){
       ni('tasks','ti-list-check','مهام'),
     ]);
   }else if(t==='external'){
-    h+=navGroup('أعمالي',[ni('my','ti-user-check','أعمالي الحالية')]);
+    h+=navGroup('أعمالي',[ni('my','ti-user-check','أعمالي الحالية'),ni('extdash','ti-world','لوحة التنفيذ الخارجي')]);
     h+=navGroup('إدارة الطلبات',[
       ni('add','ti-plus','تسجيل طلب'),
       ni('maintreq','ti-tool','طلب صيانة'),
@@ -2177,6 +2226,7 @@ function buildSidebar(){
     h+=navGroup('الإدارة',[
       ni('clients','ti-address-book','العملاء'),
       ni('emp','ti-chart-bar','الاحصائيات'),
+      ni('extdash','ti-world','لوحة التنفيذ الخارجي'),
       ni('warranty','ti-shield-check','ضمان اللوحات'),
       ni('govobligations','ti-building-bank','الالتزامات الحكومية والتشغيلية'),
       ni('tasks','ti-list-check','مهام'),
@@ -2255,26 +2305,9 @@ async function nav(p,skipHistory=false){
 }
 function navBack(){if(_navHistory.length===0)return;const prev=_navHistory.pop();nav(prev,true);}
 function backBtnHtml(){return`<div style="margin-bottom:16px;"><button class="btn btn-out btn-sm" onclick="navBack()"><i class="ti ti-arrow-right"></i> رجوع</button></div>`;}
-if(!window._interactionTrackerInstalled){
-  window._interactionTrackerInstalled=true;
-  window._lastUserInteractionAt=0;
-  // General safety net for the background auto-refresh below: any recent
-  // click/keystroke/checkbox toggle/custom-dropdown interaction anywhere on
-  // the page counts as "user is busy", regardless of which specific widget
-  // it happened in. This catches cases the narrower checks in
-  // refreshCurrentPage() can't enumerate (custom checkboxes, dropdowns,
-  // momentary focus loss between fields in a multi-step form, etc).
-  ['input','change','mousedown','keydown','touchstart'].forEach(evt=>{
-    document.addEventListener(evt,()=>{window._lastUserInteractionAt=Date.now();},{passive:true,capture:true});
-  });
-}
 function refreshCurrentPage(){
   const p=_curPage;
   if(p==='add'||p==='request'||p==='quote')return;
-  // If the user touched/typed/clicked anywhere on the page in the last few
-  // seconds, assume they're mid-task and skip this cycle's rebuild — a
-  // background refresh should never be able to interrupt active work.
-  if(Date.now()-(window._lastUserInteractionAt||0)<8000)return;
   if(document.querySelector('.modal-overlay.open'))return;
   if(window._wfSelected&&window._wfSelected.size>0)return;
   // Skip while the user has an in-page dropdown/menu open, an ongoing save
@@ -2309,20 +2342,38 @@ function paymentBadge(p){
   const m={'تم الدفع':'b-paid','دفع جزئي':'b-partial','عند التسليم':'b-delivery'};
   return`<span class="badge ${m[p]||'b-new'}">${p}</span>`;
 }
+// Composite "how urgent is this right now" score used by the 'urgent-auto'
+// sort mode — completed orders always sink to the bottom, then overdue
+// orders float highest, then priority, then how long an order has sat in its
+// current stage without moving (so nothing waits forever unnoticed).
+function orderUrgencyScore(o){
+  if(o.currentDept==='done')return-1000;
+  let score=0;
+  const isOverdue=o.deadline&&o.deadline!=='—'&&new Date(o.deadline)<new Date();
+  if(isOverdue)score+=1000;
+  const pw={'عاجلة':300,'متوسطة':150,'عادية':50};
+  score+=pw[o.priority]||0;
+  const stageAgeH=(Date.now()-new Date(o.stageStartDate||o.date).getTime())/3600000;
+  score+=Math.min(stageAgeH,72);
+  return score;
+}
 function ordersArr(){
   let list=Object.entries(orders).map(([k,v])=>({...v,_key:k}));
   if(currentSortMode==='priority-desc'){const w={'عاجلة':3,'متوسطة':2,'عادية':1};return list.sort((a,b)=>(w[b.priority]||0)-(w[a.priority]||0));}
   if(currentSortMode==='priority-asc'){const w={'عاجلة':3,'متوسطة':2,'عادية':1};return list.sort((a,b)=>(w[a.priority]||0)-(w[b.priority]||0));}
   if(currentSortMode==='date-asc')return list.sort((a,b)=>new Date(a.date)-new Date(b.date));
+  if(currentSortMode==='urgent-auto')return list.sort((a,b)=>orderUrgencyScore(b)-orderUrgencyScore(a));
   return list.sort((a,b)=>new Date(b.date)-new Date(a.date));
 }
 function getActiveDepts(o){
-  const seq=[];
-  if(o.designTo&&o.designTo!=='none')seq.push('design');
-  if(o.externalTo&&o.externalTo!=='none')seq.push('external');
-  if(o.printTo&&o.printTo!=='none')seq.push('print');
-  if(o.workshopTo&&o.workshopTo!=='none')seq.push('workshop');
-  return seq;
+  // Orders created with the drag-and-drop workflow builder carry their own
+  // stage order in o.workflowOrder; orders without it (every order created
+  // before this feature existed) fall back to the original fixed
+  // design→external→print→workshop order, so nothing about their behavior
+  // changes.
+  const isOn={design:o.designTo&&o.designTo!=='none',external:o.externalTo&&o.externalTo!=='none',print:o.printTo&&o.printTo!=='none',workshop:o.workshopTo&&o.workshopTo!=='none'};
+  const order=(o.workflowOrder&&o.workflowOrder.length)?o.workflowOrder:['design','external','print','workshop'];
+  return order.filter(k=>isOn[k]);
 }
 function getNextDept(o){const seq=getActiveDepts(o);const idx=seq.indexOf(o.currentDept);if(idx===-1||idx===seq.length-1)return'done';return seq[idx+1];}
 function getPrevDept(o){const seq=getActiveDepts(o);if(o.currentDept==='done')return seq[seq.length-1]||null;const idx=seq.indexOf(o.currentDept);if(idx<=0)return null;return seq[idx-1];}
@@ -2336,7 +2387,12 @@ async function revertOrderToPrevDept(key){
   showSaving('جاري الإرجاع...');
   const upd={currentDept:prev,stageStartDate:new Date().toISOString(),status:'قيد المتابعة'};
   if(o.currentDept==='done'){upd.archivedAt=null;upd.workshopFeedbackDone=null;}
-  try{await fbPatch(`orders/${key}`,upd);await loadData();hideSaving();closeModal('order-modal');toast('✓ تم إرجاع الطلب للمرحلة السابقة');refreshCurrentPage();}
+  try{
+    await fbPatch(`orders/${key}`,upd);await loadData();hideSaving();closeModal('order-modal');
+    const prevAssignee=o[prev+'To'];
+    pushNotification({type:'workflow_update',message:`تم إرجاع الطلب ${esc(o.id||key)} إليك — ${esc(deptLbl[prev]||prev)}`,orderKey:key,orderId:o.id,client:o.client,targetUname:(prevAssignee&&prevAssignee!=='none')?prevAssignee:'all-admin'});
+    toast('✓ تم إرجاع الطلب للمرحلة السابقة');refreshCurrentPage();
+  }
   catch(e){hideSaving();toast('❌ فشل الإرجاع');}
 }
 function getDeptWorkers(deptKey){const dept=DEPTS.find(d=>d.key===deptKey);if(!dept||!dept.roles.length)return[];return Object.entries(USERS).filter(([,v])=>dept.roles.includes(v.type)).map(([uname,v])=>({uname,name:v.name}));}
@@ -2522,6 +2578,7 @@ function renderOrderItemsCards(o,key,canAct){
         <strong style="font-size:13.5px;color:var(--maroon);">بند ${i+1}: ${esc(it.name||'—')}</strong>
         <span class="badge ${dept==='done'?'b-done':'b-new'}">${WF_DEPT_META[dept]?.label||dept}</span>
       </div>
+      ${(it.template&&PRODUCT_TEMPLATES[it.template]&&it.specs&&Object.values(it.specs).some(v=>v))?`<div style="font-size:11.5px;color:var(--text-2);background:var(--surface-2);border-right:3px solid var(--maroon);border-radius:8px;padding:6px 10px;margin-top:6px;line-height:1.7;"><strong style="color:var(--maroon-mid);">مواصفات ${esc(PRODUCT_TEMPLATES[it.template].label)}:</strong> ${PRODUCT_TEMPLATES[it.template].fields.filter(f=>it.specs[f.key]).map(f=>esc(f.label)+': '+esc(String(it.specs[f.key]))).join(' · ')}</div>`:''}
       ${it.details?`<div style="font-size:11.5px;color:var(--text-2);background:var(--surface-2);border-right:3px solid var(--gold);border-radius:8px;padding:6px 10px;margin-top:6px;line-height:1.6;"><strong style="color:var(--maroon-mid);">التفاصيل والمواصفات:</strong> ${esc(it.details)}</div>`:''}
       <div class="order-item-htimeline">${tlHtml}</div>
       ${advanceBtn?`<div style="margin:8px 0;">${advanceBtn}</div>`:''}
@@ -2621,6 +2678,7 @@ function controlsRow(showSearch=false,searchId='',searchPlaceholder='بحث...')
       <i class="ti ti-arrows-sort" style="color:var(--gold);font-size:15px;"></i>
       <label>ترتيب:</label>
       <select onchange="changeSortMode(this.value)">
+        <option value="urgent-auto" ${currentSortMode==='urgent-auto'?'selected':''}>ترتيب تلقائي (الأكثر إلحاحاً أولاً)</option>
         <option value="date-desc" ${currentSortMode==='date-desc'?'selected':''}>الأحدث أولاً</option>
         <option value="date-asc" ${currentSortMode==='date-asc'?'selected':''}>الأقدم أولاً</option>
         <option value="priority-desc" ${currentSortMode==='priority-desc'?'selected':''}>الأولوية الأعلى</option>
@@ -3880,6 +3938,63 @@ async function bulkAdvanceSelected(){
 }
 function filterWf(q){document.querySelectorAll('.wf-card').forEach(c=>{c.style.display=c.textContent.toLowerCase().includes(q.toLowerCase())?'':'none';});}
 function filterWfDept(dept){document.querySelectorAll('.wf-card').forEach(c=>{c.style.display=(dept==='all'||c.getAttribute('data-dept')===dept)?'':'none';});}
+// ============================================================
+// EXTERNAL PRODUCTION DASHBOARD
+// ============================================================
+function buildExternalDashboard(){
+  const arr=ordersArr();
+  const now=Date.now();
+  // "Pending" = still sitting at the external stage right now; "Completed" is
+  // tracked via externalDoneAt (already recorded by sendToNextDept's per-stage
+  // timestamps) regardless of what the order later did — passed-through work
+  // stays counted as completed by this department even after moving on.
+  const pending=arr.filter(o=>o.currentDept==='external');
+  const completed=arr.filter(o=>o.externalDoneAt);
+  const mode=o=>o.externalMode||'both';
+  const waitingFiles=pending.filter(o=>mode(o)!=='text'&&!o.externalFile);
+  const waitingInstructions=pending.filter(o=>mode(o)!=='files'&&!(o.externalNote&&o.externalNote.trim()));
+  const delayed=pending.filter(o=>o.deadline&&o.deadline!=='—'&&new Date(o.deadline)<new Date());
+  const isToday=d=>{try{return new Date(d).toDateString()===new Date().toDateString();}catch(e){return false;}};
+  const weekAgo=now-7*24*3600000;
+  const todaysJobs=pending.filter(o=>isToday(o.externalStartAt||o.date));
+  const thisWeek=arr.filter(o=>{const t=new Date(o.externalStartAt||o.date).getTime();return o.externalTo&&o.externalTo!=='none'&&t>=weekAgo&&t<=now;});
+  const completionHours=completed.filter(o=>o.externalStartAt&&o.externalDoneAt).map(o=>(new Date(o.externalDoneAt)-new Date(o.externalStartAt))/3600000);
+  const avgCompletionH=completionHours.length?(completionHours.reduce((s,h)=>s+h,0)/completionHours.length):0;
+  const statCard=(label,num,icon,color)=>`<div class="wf-stat-card" style="--wf-stat-bg:${color}12;--wf-stat-accent:${color};">
+    <div class="wf-stat-top"><div class="wf-stat-icon" style="background:${color};"><i class="ti ${icon}"></i></div><div><div class="wf-stat-num">${num}</div><div class="wf-stat-lbl">${label}</div></div></div>
+  </div>`;
+  const jobRow=o=>`<tr>
+    <td onclick="openOrderModal('${o._key}')" style="cursor:pointer;"><strong style="color:var(--maroon)">${esc(o.id||o._key)}</strong></td>
+    <td onclick="openOrderModal('${o._key}')" style="cursor:pointer;font-size:12px;">${esc(o.client||'—')}</td>
+    <td style="font-size:11.5px;">${esc(o.service||'—')}</td>
+    <td style="font-size:11px;">${deadlineDateTime(o)}</td>
+    <td>${gpbadge(o.priority)}</td>
+  </tr>`;
+  const jobsTable=(list,emptyMsg)=>`<div class="card"><div class="tbl-wrap"><table><thead><tr><th>رقم الطلب</th><th>العميل</th><th>الخدمة</th><th>التسليم</th><th>الأولوية</th></tr></thead><tbody>${list.length?list.map(jobRow).join(''):`<tr><td colspan="5" style="text-align:center;padding:18px;color:var(--text-3)">${emptyMsg}</td></tr>`}</tbody></table></div></div>`;
+  document.getElementById('extdash-content').innerHTML=`
+    <div class="page-header"><div class="ptitle"><i class="ti ti-world"></i> لوحة التنفيذ الخارجي</div></div>
+    <div class="wf-stats-row" style="margin-bottom:20px;">
+      ${statCard('مهام اليوم',todaysJobs.length,'ti-calendar-event','#3730A3')}
+      ${statCard('هذا الأسبوع',thisWeek.length,'ti-calendar-week','#2563EB')}
+      ${statCard('متوسط وقت الإنجاز',avgCompletionH?Math.round(avgCompletionH)+' س':'—','ti-hourglass','#8a6d1f')}
+      ${statCard('قيد التنفيذ',pending.length,'ti-progress','#9A3412')}
+      ${statCard('مكتملة',completed.length,'ti-circle-check','#047857')}
+      ${statCard('متأخرة',delayed.length,'ti-alert-triangle','#9F1239')}
+    </div>
+    <div class="tab-bar" style="margin-bottom:14px;">
+      <button class="tab-btn ${(!window._extDashTab||window._extDashTab==='pending')?'active':''}" onclick="setExtDashTab('pending')">قيد التنفيذ (${pending.length})</button>
+      <button class="tab-btn ${window._extDashTab==='waitingFiles'?'active':''}" onclick="setExtDashTab('waitingFiles')">بانتظار ملفات (${waitingFiles.length})</button>
+      <button class="tab-btn ${window._extDashTab==='waitingInstructions'?'active':''}" onclick="setExtDashTab('waitingInstructions')">بانتظار تعليمات (${waitingInstructions.length})</button>
+      <button class="tab-btn ${window._extDashTab==='delayed'?'active':''}" onclick="setExtDashTab('delayed')">متأخرة (${delayed.length})</button>
+      <button class="tab-btn ${window._extDashTab==='completed'?'active':''}" onclick="setExtDashTab('completed')">مكتملة (${completed.length})</button>
+    </div>
+    <div id="extdash-list"></div>`;
+  const lists={pending,waitingFiles,waitingInstructions,delayed,completed};
+  const emptyMsgs={pending:'لا توجد مهام قيد التنفيذ',waitingFiles:'لا توجد مهام بانتظار ملفات',waitingInstructions:'لا توجد مهام بانتظار تعليمات',delayed:'لا توجد مهام متأخرة — عمل رائع',completed:'لا توجد مهام مكتملة بعد'};
+  const tab=window._extDashTab||'pending';
+  document.getElementById('extdash-list').innerHTML=jobsTable(lists[tab],emptyMsgs[tab]);
+}
+function setExtDashTab(t){window._extDashTab=t;buildExternalDashboard();}
 // ============================================================
 // MY WORK
 // ============================================================
@@ -5734,8 +5849,13 @@ function deptFilesForStage(o,dk){
 }
 function saveDeptNote(key,dk){
   const el=document.getElementById('od-note-'+dk);if(!el)return;
-  const upd={};upd['deptNotes_'+dk]=el.value.trim();
-  fbPatch(`orders/${key}`,upd).then(()=>{toast('✓ تم حفظ الملاحظة');}).catch(()=>toast('❌ فشل الحفظ'));
+  const noteVal=el.value.trim();
+  const upd={};upd['deptNotes_'+dk]=noteVal;
+  const o=orders[key];
+  fbPatch(`orders/${key}`,upd).then(()=>{
+    toast('✓ تم حفظ الملاحظة');
+    if(noteVal&&o)pushNotification({type:'comment',message:`ملاحظة جديدة على الطلب ${esc(o.id||key)} — ${esc(WF_DEPT_META[dk]?.label||dk)}`,orderKey:key,orderId:o.id,client:o.client});
+  }).catch(()=>toast('❌ فشل الحفظ'));
 }
 function buildDeptWorkspaceCard(o,key,dk,canAct,nextBtnHtml,uploadAreaHtml){
   const meta=WF_DEPT_META[dk]||{label:dk,icon:'ti-circle',color:'#475569'};
@@ -5916,10 +6036,22 @@ function openOrderModal(key){
       ${o.workshopTo!=='none'?`<div class="fg"><label>مخطط قياسات الورشة:</label><input type="file" id="f-workshop-input" accept="image/*,.pdf,.doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onchange="uploadFileDirect('${key}','approvedWorkshopFile','approvedWorkshopFileName','f-workshop-input')"/></div>`:''}
     </div>`;
     }
-    else if(o.currentDept==='workshop')uploadArea=`<div class="dept-upload-box"><div class="dept-upload-title" style="color:#9A3412"><i class="ti ti-tools"></i> رفع صورة التركيب النهائي</div>
-      <div class="fg"><input type="file" id="f-done-input" accept="image/*,.pdf,.doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onchange="uploadFileDirect('${key}','finalWorkshopDoneFile','finalWorkshopDoneFileName','f-done-input')"/></div></div>`;
-    else if(o.currentDept==='external')uploadArea=`<div class="dept-upload-box"><div class="dept-upload-title" style="color:#713F12"><i class="ti ti-world"></i> تحديث ملفات التوريد</div>
-      <div class="fg"><input type="file" id="f-ext-input" accept="image/*,.pdf,.doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onchange="uploadFileDirect('${key}','externalFile','externalFileName','f-ext-input')"/></div></div>`;
+    else if(o.currentDept==='print')uploadArea=`<div class="dept-upload-box"><div class="dept-upload-title" style="color:#3730A3"><i class="ti ti-printer"></i> رفع صورة أول نسخة مطبوعة</div>
+      <div class="fg"><input type="file" id="f-firstprint-input" accept="image/*,.pdf" onchange="uploadFileDirect('${key}','firstPrintImage','firstPrintImageName','f-firstprint-input')"/></div>
+      ${o.firstPrintImage?fileLinkHtml(o.firstPrintImageName,o.firstPrintImage,'الصورة الحالية'):''}
+    </div>`;
+    else if(o.currentDept==='workshop')uploadArea=`<div class="dept-upload-box"><div class="dept-upload-title" style="color:#9A3412"><i class="ti ti-tools"></i> رفع صورة/فيديو التركيب النهائي</div>
+      <div class="fg"><label>صورة المنجز</label><input type="file" id="f-done-input" accept="image/*,.pdf,.doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onchange="uploadFileDirect('${key}','finalWorkshopDoneFile','finalWorkshopDoneFileName','f-done-input')"/></div>
+      <div class="fg"><label>فيديو المنجز (اختياري)</label><input type="file" id="f-donevideo-input" accept="video/*" onchange="uploadFileDirect('${key}','finalWorkshopVideo','finalWorkshopVideoName','f-donevideo-input')"/></div>
+      ${o.finalWorkshopVideo?fileLinkHtml(o.finalWorkshopVideoName,o.finalWorkshopVideo,'الفيديو الحالي'):''}
+    </div>`;
+    else if(o.currentDept==='external'){
+      const _extMode=o.externalMode||'both';
+      uploadArea=`<div class="dept-upload-box"><div class="dept-upload-title" style="color:#713F12"><i class="ti ti-world"></i> تحديث التنفيذ الخارجي</div>
+      ${_extMode!=='files'?`<div class="fg"><label>التعليمات/الملاحظات</label><textarea id="f-ext-note-input" style="min-height:55px;font-size:12px;">${esc(o.externalNote||'')}</textarea><button class="btn btn-out btn-xs" style="margin-top:6px;" onclick="saveExternalNote('${key}')"><i class="ti ti-device-floppy"></i> حفظ الملاحظة</button></div>`:''}
+      ${_extMode!=='text'?`<div class="fg"><label>ملف التوريد</label><input type="file" id="f-ext-input" accept="image/*,.pdf,.doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onchange="uploadFileDirect('${key}','externalFile','externalFileName','f-ext-input')"/></div>`:''}
+      </div>`;
+    }
   }
   const canLogMaintenance=['admin','receiver','workshop'].includes(t);
   const _lastVisit=(o.maintenanceVisits&&o.maintenanceVisits.length)?o.maintenanceVisits[o.maintenanceVisits.length-1]:null;const _lastVisitDate=_lastVisit?(typeof _lastVisit==='object'?_lastVisit.date:_lastVisit):null;const _visitsHistory=(o.maintenanceVisits||[]).slice().reverse().map(v=>{const vd=typeof v==='object'?v:{date:v,reason:'',photo:''};return `<div style="border:1px solid var(--border-soft);border-radius:8px;padding:8px;margin-top:4px;width:100%;"><div style="font-size:11px;color:var(--text-3);">${vd.date?new Date(vd.date).toLocaleDateString('ar-SA'):'—'}</div>${vd.reason?`<div style="font-size:13px;margin-top:4px;">${esc(vd.reason)}</div>`:''}${vd.photo?`<a href="${vd.photo}" target="_blank" style="font-size:12px;color:var(--maroon);display:inline-block;margin-top:4px;"><i class="ti ti-photo"></i> عرض الصورة</a>`:''}</div>`;}).join('');
@@ -6148,7 +6280,7 @@ async function uploadFileDirect(key,ff,fn2,inputId){
       const localB64=await _readFileAsDataUrl(file);
       if(isGDriveConfigured()){
         try{
-          upd[ff]=await uploadToGDrive(localB64,file.name,{order:key});
+          upd[ff]=await uploadToGDrive(localB64,file.name);
           upd[ff+'Storage']='gdrive';
         }catch(gdriveErr){
           console.warn('المسار الاحتياطي عبر Google Drive فشل أيضاً، سيتم الحفظ داخل قاعدة البيانات كخطة أخيرة',gdriveErr);
@@ -6162,8 +6294,16 @@ async function uploadFileDirect(key,ff,fn2,inputId){
     upd[ff+'UploadedBy']=cu.name||cu._uname||'—';upd[ff+'UploadedAt']=new Date().toISOString();
     await fbPatch(`orders/${key}`,upd);await loadData();hideSaving();toast('✓ تم التحديث');
     if(ff==='approvedPrintFile'||ff==='approvedWorkshopFile')dispatchAutoWhatsapp(orders[key],'proof_ready');
+    const _uo=orders[key];
+    if(_uo)pushNotification({type:'upload',message:`تم رفع ملف على الطلب ${esc(_uo.id||key)} — ${esc(file.name)}`,orderKey:key,orderId:_uo.id,client:_uo.client});
     openOrderModal(key);
   }catch(e){hideSaving();toast(e&&e.message?e.message:'❌ فشل الرفع');}
+}
+async function saveExternalNote(key){
+  const el=document.getElementById('f-ext-note-input');if(!el)return;
+  showSaving('جاري الحفظ...');
+  try{await fbPatch(`orders/${key}`,{externalNote:el.value.trim()});await loadData();hideSaving();toast('✓ تم حفظ الملاحظة');openOrderModal(key);}
+  catch(e){hideSaving();toast('❌ فشل الحفظ');}
 }
 async function sendToNextDept(key,next){
   const o=orders[key];if(!o)return;
@@ -6185,7 +6325,13 @@ async function sendToNextDept(key,next){
   if(startField[next])upd[startField[next]]=new Date().toISOString();
   try{
     await fbPatch(`orders/${key}`,upd);await loadData();hideSaving();closeModal('order-modal');
-    if(next==='done')dispatchAutoWhatsapp(orders[key],'ready_for_delivery');
+    if(next==='done'){
+      dispatchAutoWhatsapp(orders[key],'ready_for_delivery');
+      pushNotification({type:'completed',message:`اكتمل الطلب ${esc(o.id||key)} — ${esc(o.client)}`,orderKey:key,orderId:o.id,client:o.client});
+    }else{
+      const nextAssignee=o[next+'To'];
+      pushNotification({type:'transfer',message:`تم تحويل الطلب ${esc(o.id||key)} إليك — ${esc(WF_DEPT_META[next]?.label||next)}`,orderKey:key,orderId:o.id,client:o.client,targetUname:(nextAssignee&&nextAssignee!=='none')?nextAssignee:'all-admin'});
+    }
     toast('✓ تم النقل للمرحلة التالية');refreshCurrentPage();
   }catch(e){hideSaving();toast('❌ فشل النقل، حاول مرة أخرى');}
 }
@@ -6256,6 +6402,7 @@ async function finishOrder(key){
     await fbPatch(`orders/${key}`,{currentDept:'done',status:'مكتمل',workshopDoneAt:new Date().toISOString()});
     await createWarrantyIfNeeded(key,o);
     dispatchAutoWhatsapp(o,'ready_for_delivery');
+    pushNotification({type:'completed',message:`اكتمل الطلب ${esc(o.id||key)} — ${esc(o.client)}`,orderKey:key,orderId:o.id,client:o.client});
     await loadData();hideSaving();closeModal('order-modal');
     resyncOrderToSheet(key);
     toast('✓ تم إغلاق الطلب');refreshCurrentPage();
@@ -6269,6 +6416,7 @@ async function archiveOrder(key){
     await fbPatch(`orders/${key}`,{currentDept:'done',status:'مؤرشف',archivedAt:new Date().toISOString(),archivedBy:cu.name});
     await createWarrantyIfNeeded(key,o);
     if(o?.phone&&o.phone!=='—')await sendSmsNotification(o.phone,`مرحباً ${esc(o.client)}، طلبكم ${o.id||key} تم إغلاقه. روائع الأفكار الإعلانية.`);
+    pushNotification({type:'completed',message:`تم إنهاء وأرشفة الطلب ${esc(o.id||key)} — ${esc(o.client)}`,orderKey:key,orderId:o.id,client:o.client});
     await loadData();hideSaving();closeModal('order-modal');
     resyncOrderToSheet(key);
     toast('✓ تم إنهاء الطلب وأرشفته');refreshCurrentPage();
@@ -6393,28 +6541,8 @@ function buildAddForm(isUrgentQuick=false){
           <label style="font-size:9.5px;">البنود التي يغطيها هذا الخط (اختياري — أي بند غير مخصص لخط موازٍ يعمل هنا تلقائياً)</label>
           <div id="primary-line-items-wrap" style="display:flex;flex-wrap:wrap;"></div>
         </div>
-        <div class="wf-stage-track">
-          <div class="wf-stage-card"><div id="dept-wrap-design" class="dept-section"><div class="dept-header dept-design"><span class="wf-stage-icon"><i class="ti ti-brush"></i></span> التصميم</div><div class="dept-body">
-            <select id="fw-design"><option value="none">❌ بدون تصميم</option>${isDesigner||isUrgentQuick?`<option value="${cu._uname}" selected>${esc(cu.name)}</option>`:''}${mkOpts(dw)}</select>
-          </div></div></div>
-          <div class="wf-stage-connector"></div>
-          <div class="wf-stage-card"><div id="dept-wrap-external" class="dept-section"><div class="dept-header dept-ext"><span class="wf-stage-icon"><i class="ti ti-world"></i></span> تنفيذ خارجي</div><div class="dept-body">
-            <select id="fw-external" onchange="onExternalChange(this.value)"><option value="none">❌ لا يوجد</option>${mkOpts(ew)}</select>
-            <div id="external-note-wrap" style="display:none;margin-top:8px;">
-              <textarea id="fw-external-note" placeholder="ملاحظات المورد..." style="min-height:55px;font-size:12px;"></textarea>
-            </div>
-          </div></div></div>
-          <div class="wf-stage-connector"></div>
-          <div class="wf-stage-card"><div id="dept-wrap-print" class="dept-section"><div class="dept-header dept-print"><span class="wf-stage-icon"><i class="ti ti-printer"></i></span> الطباعة</div><div class="dept-body">
-            <select id="fw-print"><option value="none">❌ لا يتطلب</option>${mkOpts(pw)}</select>
-          </div></div></div>
-          <div class="wf-stage-connector"></div>
-          <div class="wf-stage-card"><div id="dept-wrap-workshop" class="dept-section"><div class="dept-header dept-workshop"><span class="wf-stage-icon"><i class="ti ti-tools"></i></span> الورشة</div><div class="dept-body">
-            <select id="fw-workshop"><option value="none">❌ لا يتطلب</option>${mkOpts(ww)}</select>
-            <div class="prod-line-file-btn" onclick="document.getElementById('fw-workshop-file').click()"><i class="ti ti-paperclip"></i> <span id="fw-workshop-file-note">إرفاق ملف (اختياري)</span></div>
-            <input type="file" id="fw-workshop-file" style="display:none" accept="image/*,.pdf,.doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onchange="handleWorkshopDeptFile(this.files)"/>
-          </div></div></div>
-        </div>
+        <div class="wf-stage-track" id="wf-stage-track"></div>
+        <div style="font-size:9.5px;color:var(--text-3);margin-top:6px;"><i class="ti ti-arrows-move"></i> اسحب البطاقات لإعادة ترتيب مراحل سير العمل حسب الحاجة (تصميم / تنفيذ خارجي / طباعة / ورشة)</div>
       </div>
       <div style="padding:16px 20px 4px;border-top:1px solid var(--border-soft);margin-top:6px;">
         <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
@@ -6430,9 +6558,19 @@ function buildAddForm(isUrgentQuick=false){
     </div>`;
   window.globalAttachedFiles=[];window.externalFileB64='';window.externalFileName='';
   window._prodLines=[];window._prodLineDesignWorkers=dw;window._prodLinePrintWorkers=pw;window._prodLineExternalWorkers=ew;window._prodLineWorkshopWorkers=ww;window._primaryLineItemIds=[];renderProductionLines();renderPrimaryLineItems();
+  window._workflowOrder=['design','external','print','workshop'];
+  window._wfStageWorkers={dw,pw,ww,ew,isDesigner,isUrgentQuick,cuName:cu.name,cuUname:cu._uname};
+  renderWorkflowStageTrack();
   window._workshopDeptFileB64='';window._workshopDeptFileName='';
   window._orderLines=[];
   setTimeout(()=>{
+    const hasPrefill=!!(_prefillCl||_prefillPh||_prefillFl.length);
+    const draft=(!isUrgentQuick&&!hasPrefill)?loadOrderDraft():null;
+    if(draft&&draft.orderLines&&draft.orderLines.length){
+      restoreOrderDraft(draft);
+      toast('✓ تم استرجاع مسودة محفوظة تلقائياً من آخر جلسة');
+      return;
+    }
     addOrderLine();
     if(_prefillCl){const fc=document.getElementById('fc');if(fc)fc.value=_prefillCl;}
     if(_prefillPh){const fp=document.getElementById('fp');if(fp)fp.value=_prefillPh;}
@@ -6515,15 +6653,114 @@ function onPaymentChange(v){
   }
 }
 function onExternalChange(v){const w=document.getElementById('external-note-wrap');if(w)w.style.display=v!=='none'?'block':'none';}
+// ── Workflow Builder: drag-and-drop stage reordering ────────────────────────
+// The primary production line's 4 department cards (design/external/print/
+// workshop) are rendered in whatever order window._workflowOrder specifies
+// (defaults to the original design→external→print→workshop order for full
+// backward compatibility). Dragging a card to a new position updates that
+// order array and re-renders — the select/textarea element ids never change,
+// only their position, so every existing onchange/getElementById reference
+// elsewhere in the form keeps working untouched.
+const WF_STAGE_META={
+  design:{label:'التصميم',icon:'ti-brush',cls:'dept-design'},
+  external:{label:'تنفيذ خارجي',icon:'ti-world',cls:'dept-ext'},
+  print:{label:'الطباعة',icon:'ti-printer',cls:'dept-print'},
+  workshop:{label:'الورشة',icon:'ti-tools',cls:'dept-workshop'}
+};
+function _wfStageBodyHtml(stageKey){
+  const w=window._wfStageWorkers||{};
+  const mkOpts=arr=>(arr||[]).map(x=>`<option value="${esc(x.uname)}">${esc(x.name)}</option>`).join('');
+  if(stageKey==='design')return `<select id="fw-design"><option value="none">❌ بدون تصميم</option>${(w.isDesigner||w.isUrgentQuick)?`<option value="${esc(w.cuUname)}">${esc(w.cuName)}</option>`:''}${mkOpts(w.dw)}</select>`;
+  if(stageKey==='external')return `<select id="fw-external" onchange="onExternalChange(this.value)"><option value="none">❌ لا يوجد</option>${mkOpts(w.ew)}</select>
+    <div id="external-note-wrap" style="display:none;margin-top:8px;">
+      <select id="fw-external-mode" style="font-size:11px;margin-bottom:6px;">
+        <option value="both">نص وتعليمات + مرفقات</option>
+        <option value="text">نص وتعليمات فقط</option>
+        <option value="files">مرفقات فقط</option>
+      </select>
+      <textarea id="fw-external-note" placeholder="ملاحظات المورد..." style="min-height:55px;font-size:12px;"></textarea>
+    </div>`;
+  if(stageKey==='print')return `<select id="fw-print"><option value="none">❌ لا يتطلب</option>${mkOpts(w.pw)}</select>`;
+  if(stageKey==='workshop')return `<select id="fw-workshop"><option value="none">❌ لا يتطلب</option>${mkOpts(w.ww)}</select>
+    <div class="prod-line-file-btn" onclick="document.getElementById('fw-workshop-file').click()"><i class="ti ti-paperclip"></i> <span id="fw-workshop-file-note">${window._workshopDeptFileName?('✓ '+esc(window._workshopDeptFileName)):'إرفاق ملف (اختياري)'}</span></div>
+    <input type="file" id="fw-workshop-file" style="display:none" accept="image/*,.pdf,.doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onchange="handleWorkshopDeptFile(this.files)"/>`;
+  return'';
+}
+function _snapshotStageValues(){
+  const snap={};
+  ['fw-design','fw-external','fw-print','fw-workshop','fw-external-note','fw-external-mode'].forEach(id=>{const el=document.getElementById(id);if(el)snap[id]=el.value;});
+  return snap;
+}
+function _applyStageValuesSnapshot(snap){
+  Object.keys(snap).forEach(id=>{const el=document.getElementById(id);if(el)el.value=snap[id];});
+  onExternalChange(document.getElementById('fw-external')?.value||'none');
+}
+function renderWorkflowStageTrack(){
+  const track=document.getElementById('wf-stage-track');if(!track)return;
+  const snap=_snapshotStageValues();
+  const order=window._workflowOrder||['design','external','print','workshop'];
+  track.innerHTML=order.map((k,idx)=>{
+    const meta=WF_STAGE_META[k];
+    const card=`<div class="wf-stage-card" draggable="true" ondragstart="wfStageDragStart(event,'${k}')" ondragover="wfStageDragOver(event)" ondrop="wfStageDrop(event,'${k}')" ondragend="wfStageDragEnd(event)">
+      <div id="dept-wrap-${k}" class="dept-section"><div class="dept-header ${meta.cls}"><i class="ti ti-grip-vertical" style="cursor:grab;opacity:.45;font-size:12px;"></i> <span class="wf-stage-icon"><i class="ti ${meta.icon}"></i></span> ${meta.label}</div><div class="dept-body">${_wfStageBodyHtml(k)}</div></div>
+    </div>`;
+    return idx<order.length-1?card+'<div class="wf-stage-connector"></div>':card;
+  }).join('');
+  _applyStageValuesSnapshot(snap);
+}
+function wfStageDragStart(e,key){window._wfDragKey=key;try{e.currentTarget.style.opacity='0.4';}catch(_){}}
+function wfStageDragOver(e){e.preventDefault();}
+function wfStageDrop(e,targetKey){
+  e.preventDefault();
+  const dragKey=window._wfDragKey;if(!dragKey||dragKey===targetKey)return;
+  const order=(window._workflowOrder||['design','external','print','workshop']).slice();
+  const from=order.indexOf(dragKey),to=order.indexOf(targetKey);
+  if(from===-1||to===-1)return;
+  order.splice(from,1);
+  order.splice(to,0,dragKey);
+  window._workflowOrder=order;
+  renderWorkflowStageTrack();
+  saveOrderDraft();
+}
+function wfStageDragEnd(e){try{e.currentTarget.style.opacity='1';}catch(_){}window._wfDragKey=null;}
+// Each parallel production line can drag-reorder its own stages independently
+// of the primary line — this is the "custom item workflow" override: an item
+// claimed by a parallel line follows that line's own workflowOrder, not the
+// order-level one, once it's been dragged to a different sequence.
+function _prodLineStageBodyHtml(l,stageKey,dOpts,eOpts,pOpts,wOpts){
+  if(stageKey==='design')return `<select onchange="updateProductionLine('${l.id}','design',this.value)">${dOpts(l.design)}</select>`;
+  if(stageKey==='external')return `<select onchange="updateProductionLine('${l.id}','external',this.value)">${eOpts(l.external)}</select>`;
+  if(stageKey==='print')return `<select onchange="updateProductionLine('${l.id}','print',this.value)">${pOpts(l.print)}</select>`;
+  if(stageKey==='workshop')return `<select onchange="updateProductionLine('${l.id}','workshop',this.value)">${wOpts(l.workshop)}</select>
+    <div class="prod-line-file-btn" onclick="document.getElementById('pl-file-${l.id}').click()"><i class="ti ti-paperclip"></i> ${l.workshopDeptFileName?('✓ '+esc(l.workshopDeptFileName)):'إرفاق ملف'}</div>
+    <input type="file" id="pl-file-${l.id}" style="display:none" onchange="handleProdLineWorkshopFile('${l.id}',this.files)"/>`;
+  return'';
+}
+function prodLineStageDragStart(e,lineId,key){window._plDragKey={lineId,key};try{e.currentTarget.style.opacity='0.4';}catch(_){}}
+function prodLineStageDragOver(e){e.preventDefault();}
+function prodLineStageDrop(e,lineId,targetKey){
+  e.preventDefault();
+  const d=window._plDragKey;if(!d||d.lineId!==lineId||d.key===targetKey)return;
+  const l=(window._prodLines||[]).find(x=>x.id===lineId);if(!l)return;
+  const order=(l.workflowOrder||['design','external','print','workshop']).slice();
+  const from=order.indexOf(d.key),to=order.indexOf(targetKey);
+  if(from===-1||to===-1)return;
+  order.splice(from,1);order.splice(to,0,d.key);
+  l.workflowOrder=order;
+  renderProductionLines();
+  saveOrderDraft();
+}
+function prodLineStageDragEnd(e){try{e.currentTarget.style.opacity='1';}catch(_){}window._plDragKey=null;}
 // ── Parallel Production Lines (up to 2 extra, alongside the primary line above) ──
 function addProductionLine(){
   if(!window._prodLines)window._prodLines=[];
   if(window._prodLines.length>=3){toast('⚠️ الحد الأقصى 4 خطوط إنتاج (الخط الأساسي + 3 خطوط إضافية)');return;}
-  window._prodLines.push({id:'pl'+Date.now(),design:'none',external:'none',print:'none',workshop:'none',itemIds:[]});
+  window._prodLines.push({id:'pl'+Date.now(),design:'none',external:'none',print:'none',workshop:'none',itemIds:[],workflowOrder:['design','external','print','workshop']});
   renderProductionLines();
+  saveOrderDraft();
 }
-function removeProductionLine(id){window._prodLines=(window._prodLines||[]).filter(x=>x.id!==id);renderProductionLines();}
-function updateProductionLine(id,f,v){const l=(window._prodLines||[]).find(x=>x.id===id);if(l)l[f]=v;}
+function removeProductionLine(id){window._prodLines=(window._prodLines||[]).filter(x=>x.id!==id);renderProductionLines();saveOrderDraft();}
+function updateProductionLine(id,f,v){const l=(window._prodLines||[]).find(x=>x.id===id);if(l)l[f]=v;saveOrderDraft();}
 function toggleProductionLineItem(id,itemId,checked){
   const l=(window._prodLines||[]).find(x=>x.id===id);if(!l)return;
   if(!l.itemIds)l.itemIds=[];
@@ -6555,22 +6792,13 @@ function renderProductionLines(){
         <label style="font-size:9.5px;">البنود التي يبدأ بها هذا الخط (الاختيار مفتوح — يمكن اختيار أكثر من بند) *</label>
         <div style="display:flex;flex-wrap:wrap;">${itemCheckboxes(l)}</div>
       </div>
-      <div class="dept-grid-layout" style="padding:0;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;">
-        <div class="dept-section"><div class="dept-header dept-design"><i class="ti ti-brush"></i> التصميم</div><div class="dept-body">
-          <select onchange="updateProductionLine('${l.id}','design',this.value)">${dOpts(l.design)}</select>
-        </div></div>
-        <div class="dept-section"><div class="dept-header dept-ext"><i class="ti ti-world"></i> تنفيذ خارجي</div><div class="dept-body">
-          <select onchange="updateProductionLine('${l.id}','external',this.value)">${eOpts(l.external)}</select>
-        </div></div>
-        <div class="dept-section"><div class="dept-header dept-print"><i class="ti ti-printer"></i> الطباعة</div><div class="dept-body">
-          <select onchange="updateProductionLine('${l.id}','print',this.value)">${pOpts(l.print)}</select>
-        </div></div>
-        <div class="dept-section"><div class="dept-header dept-workshop"><i class="ti ti-tools"></i> الورشة</div><div class="dept-body">
-          <select onchange="updateProductionLine('${l.id}','workshop',this.value)">${wOpts(l.workshop)}</select>
-          <div class="prod-line-file-btn" onclick="document.getElementById('pl-file-${l.id}').click()"><i class="ti ti-paperclip"></i> ${l.workshopDeptFileName?('✓ '+l.workshopDeptFileName):'إرفاق ملف'}</div>
-          <input type="file" id="pl-file-${l.id}" style="display:none" onchange="handleProdLineWorkshopFile('${l.id}',this.files)"/>
-        </div></div>
-      </div>
+      <div style="font-size:9px;color:var(--text-3);margin-bottom:4px;"><i class="ti ti-arrows-move"></i> اسحب لتخصيص ترتيب سير عمل هذا الخط بشكل مستقل</div>
+      <div class="wf-stage-track" style="overflow-x:visible;flex-wrap:wrap;gap:8px;">${(l.workflowOrder||['design','external','print','workshop']).map(k=>{
+        const meta=WF_STAGE_META[k];
+        return `<div class="wf-stage-card" style="flex:0 0 140px;" draggable="true" ondragstart="prodLineStageDragStart(event,'${l.id}','${k}')" ondragover="prodLineStageDragOver(event)" ondrop="prodLineStageDrop(event,'${l.id}','${k}')" ondragend="prodLineStageDragEnd(event)">
+          <div class="dept-section"><div class="dept-header ${meta.cls}"><i class="ti ti-grip-vertical" style="cursor:grab;opacity:.45;font-size:11px;"></i> <i class="ti ${meta.icon}"></i> ${meta.label}</div><div class="dept-body">${_prodLineStageBodyHtml(l,k,dOpts,eOpts,pOpts,wOpts)}</div></div>
+        </div>`;
+      }).join('')}</div>
     </div>`).join('');
   const btn=document.getElementById('add-prod-line-btn');
   if(btn)btn.style.display=lines.length>=3?'none':'';
@@ -6597,6 +6825,7 @@ async function handleProdLineWorkshopFile(id,files){
     l.workshopDeptFile=await convertFileToBase64(files[0]);
     l.workshopDeptFileName=files[0].name;
     renderProductionLines();
+    saveOrderDraft();
   }catch(e){toast(e&&e.message?e.message:'⚠️ فشل تحميل الملف');}
   hideSaving();
 }
@@ -6608,6 +6837,7 @@ async function handleWorkshopDeptFile(files){
     window._workshopDeptFileName=files[0].name;
     const note=document.getElementById('fw-workshop-file-note');
     if(note)note.textContent='✓ تم إرفاق: '+files[0].name;
+    saveOrderDraft();
   }catch(e){toast(e&&e.message?e.message:'⚠️ فشل تحميل الملف');}
   hideSaving();
 }
@@ -6642,14 +6872,94 @@ async function dispatchAutoWhatsapp(o,event){
     await fetch(WHATSAPP_DISPATCH_ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone:o.phone,client:o.client,orderId:o.id,event})});
   }catch(e){}
 }
+// ── Product Templates ────────────────────────────────────────────────────────
+// Selecting a template on an item swaps the generic free-text specs field for
+// a small set of fields specific to that product type, stored in l.specs
+// (additive — l.details keeps working exactly as before for untemplated
+// items, and templated items still get a "ملاحظات إضافية" free-text field
+// for anything the structured fields don't cover).
+const PRODUCT_TEMPLATES={
+  book:{label:'كتاب',fields:[
+    {key:'paperType',label:'نوع الورق',type:'select',options:['كوشيه','ابيض','مقوى','لماع','مطفي']},
+    {key:'pages',label:'عدد الصفحات',type:'number'},
+    {key:'binding',label:'نوع التجليد',type:'select',options:['دبل حلقي','لصق حراري','تجليد كتب','سلك']},
+    {key:'size',label:'المقاس',type:'select',options:['A4','A5','A3','مقاس مخصص']},
+  ]},
+  cup:{label:'كوب',fields:[
+    {key:'capacity',label:'السعة',type:'select',options:['6 أونصة','8 أونصة','11 أونصة','12 أونصة','مخصص']},
+    {key:'printMethod',label:'طريقة الطباعة',type:'select',options:['سبليمشن','طباعة حرارية','نقش ليزر']},
+    {key:'color',label:'اللون',type:'text'},
+  ]},
+  tshirt:{label:'تيشيرت',fields:[
+    {key:'size',label:'المقاس',type:'select',options:['S','M','L','XL','XXL','مقاسات متعددة']},
+    {key:'fabric',label:'نوع القماش',type:'select',options:['قطن 100%','بوليستر','قطن مخلوط']},
+    {key:'printMethod',label:'طريقة الطباعة',type:'select',options:['سبليمشن','دي تي إف','طباعة حرارية','تطريز']},
+    {key:'color',label:'اللون',type:'text'},
+  ]},
+  board:{label:'لوحة إعلانية',fields:[
+    {key:'width',label:'العرض (م)',type:'number'},
+    {key:'height',label:'الارتفاع (م)',type:'number'},
+    {key:'material',label:'الخامة',type:'select',options:['فليكس','أكريليك','ألمنيوم كمبوند','ستيكر مقصوص','بنر']},
+    {key:'thickness',label:'السماكة',type:'select',options:['3مم','5مم','8مم','10مم']},
+    {key:'lighting',label:'الإضاءة',type:'select',options:['بدون','ليد خلفي','ليد أمامي','نيون']},
+  ]},
+  rollup:{label:'رول أب',fields:[
+    {key:'size',label:'المقاس',type:'select',options:['80×200 سم','85×200 سم','100×200 سم','مخصص']},
+    {key:'base',label:'نوع القاعدة',type:'select',options:['قاعدة عادية','قاعدة مزدوجة','قاعدة بريميوم']},
+  ]},
+  shield:{label:'درع',fields:[
+    {key:'material',label:'الخامة',type:'select',options:['كريستال','خشب','معدن','أكريليك']},
+    {key:'size',label:'المقاس',type:'text'},
+    {key:'printMethod',label:'نوع الطباعة/الحفر',type:'select',options:['حفر ليزر','طباعة UV','نقش']},
+  ]},
+  sticker:{label:'ملصق',fields:[
+    {key:'material',label:'الخامة',type:'select',options:['ورق لاصق','فينيل','شفاف']},
+    {key:'size',label:'المقاس',type:'text'},
+    {key:'cutType',label:'نوع القطع',type:'select',options:['مقاس ثابت (مستطيل)','تقطيع حسب الشكل']},
+  ]},
+};
+function buildItemTemplateFieldsHtml(l){
+  const tpl=PRODUCT_TEMPLATES[l.template];
+  const selectHtml=`<div class="fg"><label>نوع المنتج (اختياري — لعرض حقول مواصفات مخصصة)</label>
+    <select onchange="updateOrderLineTemplate('${l.id}',this.value)">
+      <option value=""${!l.template?' selected':''}>— بدون قالب (مواصفات نصية حرة) —</option>
+      ${Object.keys(PRODUCT_TEMPLATES).map(k=>`<option value="${k}"${l.template===k?' selected':''}>${esc(PRODUCT_TEMPLATES[k].label)}</option>`).join('')}
+      <option value="custom"${l.template==='custom'?' selected':''}>منتج مخصص</option>
+    </select>
+  </div>`;
+  if(!tpl){
+    return selectHtml+`<div class="fg"><label>التفاصيل والمواصفات</label><textarea placeholder="المقاسات، المواد، عدد النسخ..." style="min-height:40px;" oninput="updateOrderLine('${l.id}','details',this.value)">${esc(l.details)}</textarea></div>`;
+  }
+  const specsGridHtml=`<div class="dept-grid-layout" style="padding:0;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;">${tpl.fields.map(f=>{
+    const val=(l.specs&&l.specs[f.key])||'';
+    if(f.type==='select'){
+      return `<div class="fg"><label>${esc(f.label)}</label><select onchange="updateOrderLineSpec('${l.id}','${f.key}',this.value)"><option value="">—</option>${f.options.map(o=>`<option value="${esc(o)}"${val===o?' selected':''}>${esc(o)}</option>`).join('')}</select></div>`;
+    }
+    return `<div class="fg"><label>${esc(f.label)}</label><input type="${f.type==='number'?'number':'text'}" value="${esc(String(val))}" oninput="updateOrderLineSpec('${l.id}','${f.key}',this.value)"/></div>`;
+  }).join('')}</div>`;
+  return selectHtml+specsGridHtml+`<div class="fg"><label>ملاحظات إضافية (اختياري)</label><textarea placeholder="أي تفاصيل أخرى غير مذكورة أعلاه..." style="min-height:32px;" oninput="updateOrderLine('${l.id}','details',this.value)">${esc(l.details)}</textarea></div>`;
+}
+function updateOrderLineTemplate(id,tpl){
+  const l=(window._orderLines||[]).find(x=>x.id===id);if(!l)return;
+  l.template=tpl;
+  if(!l.specs)l.specs={};
+  renderOrderLines();
+  saveOrderDraft();
+}
+function updateOrderLineSpec(id,key,val){
+  const l=(window._orderLines||[]).find(x=>x.id===id);if(!l)return;
+  if(!l.specs)l.specs={};
+  l.specs[key]=val;
+}
 // ── Order Line Items ──────────────────────────────────────────────────────────
 function addOrderLine(){
   if(!window._orderLines)window._orderLines=[];
   const id='ol'+Date.now();
-  window._orderLines.push({id,name:'',details:'',price:'',qty:1,files:[]});
+  window._orderLines.push({id,name:'',details:'',price:'',qty:1,files:[],collapsed:false,template:'',specs:{}});
   renderOrderLines();
   renderProductionLines();
   renderPrimaryLineItems();
+  saveOrderDraft();
 }
 function removeOrderLine(id){
   window._orderLines=(window._orderLines||[]).filter(x=>x.id!==id);
@@ -6660,6 +6970,12 @@ function removeOrderLine(id){
   renderOrderLines();
   renderProductionLines();
   renderPrimaryLineItems();
+  saveOrderDraft();
+}
+function toggleOrderLineCollapse(id){
+  const l=(window._orderLines||[]).find(x=>x.id===id);if(!l)return;
+  l.collapsed=!l.collapsed;
+  renderOrderLines();
 }
 function updateOrderLine(id,f,v){
   const l=(window._orderLines||[]).find(x=>x.id===id);if(l)l[f]=v;
@@ -6700,17 +7016,18 @@ function renderOrderLines(){
         <div class="oi-row-head-left">
           <span class="oi-badge">بند #${i+1}</span>
           ${i===0?'<span class="oi-main-tag">(الخدمة الرئيسية)</span>':''}
+          ${l.collapsed?`<span class="oi-collapsed-summary">${esc(l.name||'بند بدون اسم')} — ${(l.qty??1)} × ${fmtMoney(parseFloat(normalizeDigits(l.price))||0)} = ${fmtMoney(orderLineTotal(l))} ر.س</span>`:''}
         </div>
-        ${window._orderLines.length>1?`<button class="btn btn-red btn-xs" type="button" onclick="removeOrderLine('${l.id}')"><i class="ti ti-trash"></i> حذف</button>`:''}
+        <div style="display:flex;gap:6px;">
+          <button class="btn btn-out btn-xs" type="button" onclick="toggleOrderLineCollapse('${l.id}')" title="${l.collapsed?'توسيع البند':'طي البند'}"><i class="ti ${l.collapsed?'ti-chevron-down':'ti-chevron-up'}"></i></button>
+          ${window._orderLines.length>1?`<button class="btn btn-red btn-xs" type="button" onclick="removeOrderLine('${l.id}')"><i class="ti ti-trash"></i> حذف</button>`:''}
+        </div>
       </div>
+      ${l.collapsed?'':`
       <div style="display:flex;flex-direction:column;gap:10px;">
-        <div class="oi-grid">
-          <div class="fg"><label>اسم البند *</label><input placeholder="مثال: لوحة إعلانية" value="${l.name.replace(/"/g,'&quot;')}" oninput="updateOrderLine('${l.id}','name',this.value)"/></div>
-          <div class="fg"><label>سعر الحبة (ر.س)</label><input type="text" inputmode="decimal" placeholder="0" min="0" value="${(l.price||'').toString().replace(/"/g,'&quot;')}" oninput="updateOrderLinePrice(this,'${l.id}')" onfocus="this.select()"/></div>
-          <div class="fg"><label>الكمية</label><input type="text" inputmode="decimal" placeholder="1" min="1" value="${(l.qty??1).toString().replace(/"/g,'&quot;')}" oninput="updateOrderLineQty(this,'${l.id}')" onfocus="this.select()"/></div>
-          <div class="fg"><label>الإجمالي</label><div id="ol-line-total-${l.id}" style="display:flex;align-items:center;min-height:34px;font-size:12px;font-weight:800;color:var(--maroon);background:var(--surface-2);border:1.5px solid var(--border);border-radius:8px;padding:0 10px;">${fmtMoney(orderLineTotal(l))} ر.س</div></div>
-        </div>
-        <div class="fg"><label>التفاصيل والمواصفات</label><textarea placeholder="المقاسات، المواد، عدد النسخ..." style="min-height:40px;" oninput="updateOrderLine('${l.id}','details',this.value)">${esc(l.details)}</textarea></div>
+        <div class="fg"><label>اسم البند *</label><input placeholder="مثال: لوحة إعلانية" value="${l.name.replace(/"/g,'&quot;')}" oninput="updateOrderLine('${l.id}','name',this.value)"/></div>
+        <div class="fg" style="max-width:180px;"><label>الكمية</label><input type="text" inputmode="decimal" placeholder="1" min="1" value="${(l.qty??1).toString().replace(/"/g,'&quot;')}" oninput="updateOrderLineQty(this,'${l.id}')" onfocus="this.select()"/></div>
+        ${buildItemTemplateFieldsHtml(l)}
         <div class="fg"><label>مرفقات البند (يمكن إرفاق أكثر من ملف)</label>
           <label style="cursor:pointer;border:1.5px dashed var(--border);border-radius:8px;padding:7px 14px;font-size:11px;display:inline-flex;align-items:center;gap:6px;">
             <i class="ti ti-plus" style="color:var(--gold)"></i> إضافة ملف
@@ -6718,7 +7035,11 @@ function renderOrderLines(){
           </label>
           ${(l.files&&l.files.length)?`<div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px;">${l.files.map((f,fi)=>`<span style="display:inline-flex;align-items:center;gap:4px;background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:3px 8px;font-size:10px;"><a href="${f.data}" download="${esc(f.name)}" style="color:var(--maroon);text-decoration:none;"><i class="ti ti-download"></i> ${esc(f.name)}</a><button type="button" onclick="removeOrderLineFile('${l.id}',${fi})" style="background:none;border:none;color:#EF4444;cursor:pointer;padding:0 0 0 2px;font-size:11px;line-height:1;">×</button></span>`).join('')}</div>`:'<div style="font-size:10px;color:var(--text-3);margin-top:4px;">لا توجد مرفقات</div>'}
         </div>
-      </div>
+        <div class="oi-grid-2">
+          <div class="fg"><label>سعر الحبة (ر.س)</label><input type="text" inputmode="decimal" placeholder="0" min="0" value="${(l.price||'').toString().replace(/"/g,'&quot;')}" oninput="updateOrderLinePrice(this,'${l.id}')" onfocus="this.select()"/></div>
+          <div class="fg"><label>الإجمالي</label><div id="ol-line-total-${l.id}" style="display:flex;align-items:center;min-height:34px;font-size:12px;font-weight:800;color:var(--maroon);background:var(--surface-2);border:1.5px solid var(--border);border-radius:8px;padding:0 10px;">${fmtMoney(orderLineTotal(l))} ر.س</div></div>
+        </div>
+      </div>`}
     </div>`).join('');
   recalcOrderTotal();
 }
@@ -6734,12 +7055,13 @@ async function attachOrderLineFile(id,files){
       l.files.push({data:b64,name:file.name});
     }
     renderOrderLines();
+    saveOrderDraft();
   }catch(e){toast(e&&e.message?e.message:'⚠️ فشل تحميل الملف');}
   hideSaving();
 }
 function removeOrderLineFile(id,idx){
   const l=(window._orderLines||[]).find(x=>x.id===id);
-  if(l&&l.files){l.files.splice(idx,1);renderOrderLines();}
+  if(l&&l.files){l.files.splice(idx,1);renderOrderLines();saveOrderDraft();}
 }
 async function submitOrder(isUrgentQuick=false){
   const c=document.getElementById('fc').value.trim();
@@ -6767,8 +7089,13 @@ async function submitOrder(isUrgentQuick=false){
   const _extraLines=(window._prodLines||[]).filter(l=>l.design!=='none'||l.external!=='none'||l.print!=='none'||l.workshop!=='none');
   if(_extraLines.some(l=>!l.itemIds||!l.itemIds.length)){toast('⚠️ يرجى تحديد بند واحد على الأقل لكل خط إنتاج موازٍ');return;}
   const claimedItemIds=new Set(_extraLines.flatMap(l=>l.itemIds));
-  let startDept='design';
-  if(dU==='none'){if(extU!=='none')startDept='external';else if(pU!=='none')startDept='print';else startDept='workshop';}
+  // Respect whatever order the user dragged the stage cards into above —
+  // getActiveDepts() reads this same workflowOrder for every later stage
+  // transition, so the drag-and-drop order is honored for the order's entire
+  // lifetime, not just at creation.
+  const _wfOrder=window._workflowOrder||['design','external','print','workshop'];
+  const _deptToVal={design:dU,external:extU,print:pU,workshop:wU};
+  const startDept=_wfOrder.find(k=>_deptToVal[k]!=='none')||'design';
   const today=new Date().toISOString().split('T')[0];
   const totalAmt=parseFloat(normalizeDigits(document.getElementById('f-total-amount')?.value))||0;
   let paidAmt=0;
@@ -6793,7 +7120,7 @@ async function submitOrder(isUrgentQuick=false){
   const primaryLines=(window._orderLines||[]).filter(l=>!claimedItemIds.has(l.id));
   const primaryService=(primaryLines.find(l=>l.name.trim())||_lines[0]).name.trim()||s;
   const ord={
-    client:c,service:primaryService,orderItems:primaryLines.map(l=>({name:l.name,details:l.details,price:parseFloat(normalizeDigits(l.price))||0,qty:parseFloat(normalizeDigits(l.qty))||1,files:l.files||[]})),date:today,createdAt:new Date().toISOString(),stageStartDate:new Date().toISOString(),
+    client:c,service:primaryService,orderItems:primaryLines.map(l=>({name:l.name,details:l.details,price:parseFloat(normalizeDigits(l.price))||0,qty:parseFloat(normalizeDigits(l.qty))||1,files:l.files||[],template:l.template||'',specs:l.specs||{}})),date:today,createdAt:new Date().toISOString(),stageStartDate:new Date().toISOString(),
     priority:document.getElementById('fpr').value,phone:normalizeSaudiPhone(phone),
     paymentStatus:payStatus,paidAmount:paidAmt,
     paidNetwork,paidCash,paidTransfer,paymentMethod:payChannelsText,
@@ -6801,9 +7128,11 @@ async function submitOrder(isUrgentQuick=false){
     deadline:document.getElementById('fd').value||'—',notes:document.getElementById('fn').value||'—',
     files:window.globalAttachedFiles||[],createdBy:cu.name,createdByUname:cu._uname,
     isUrgentQuick:isUrgentQuick||false,
+    workflowOrder:_wfOrder,
     designTo:dU,designName:dU==='none'?'❌ معفى':(USERS[dU]?.name||dU),
     externalTo:extU,externalName:extU==='none'?'❌ معفى':(USERS[extU]?.name||extU),
     externalNote:extU!=='none'?(document.getElementById('fw-external-note')?.value||''):'',
+    externalMode:extU!=='none'?(document.getElementById('fw-external-mode')?.value||'both'):'',
     printTo:pU,printName:pU==='none'?'❌ معفى':(USERS[pU]?.name||pU),
     workshopTo:wU,workshopName:wU==='none'?'❌ معفى':(USERS[wU]?.name||wU),
     workshopDeptFile:window._workshopDeptFileB64||'',workshopDeptFileName:window._workshopDeptFileName||'',
@@ -6821,6 +7150,11 @@ async function submitOrder(isUrgentQuick=false){
     const res=await fbPush('orders',ord);await loadData();
     const newId='ORD-'+String(ordersArr().length).padStart(3,'0');
     await fbPatch(`orders/${res.name}`,{id:newId});await loadData();
+    {
+      const _startAssignee={design:dU,external:extU,print:pU,workshop:wU}[startDept];
+      pushNotification({type:'new_order',message:`طلب جديد ${esc(newId)} — ${esc(c)}`,orderKey:res.name,orderId:newId,client:c,targetUname:(_startAssignee&&_startAssignee!=='none')?_startAssignee:'all-admin'});
+      pushNotification({type:'new_order',message:`طلب جديد ${esc(newId)} — ${esc(c)}`,orderKey:res.name,orderId:newId,client:c,targetUname:'all-admin'});
+    }
     // Extra parallel production lines: each becomes its own linked order so design/print
     // in that line runs independently (its own currentDept) without blocking the primary line.
     // Each line owns whichever item(s) were freely selected as its "البنود" (open,
@@ -6829,15 +7163,21 @@ async function submitOrder(isUrgentQuick=false){
     for(let i=0;i<_extraLines.length;i++){
       const l=_extraLines[i];
       const lineItems=(window._orderLines||[]).filter(x=>(l.itemIds||[]).includes(x.id));
-      let lineDept='design';
-      if(l.design==='none'){if(l.external!=='none')lineDept='external';else if(l.print!=='none')lineDept='print';else lineDept='workshop';}
+      // Custom per-item workflow: each parallel line can carry its own stage
+      // order (l.workflowOrder, set via the same drag-and-drop builder in its
+      // card); falls back to the primary line's order if the line never
+      // customized its own.
+      const _lineWfOrder=(l.workflowOrder&&l.workflowOrder.length)?l.workflowOrder:_wfOrder;
+      const _lineDeptToVal={design:l.design,external:l.external,print:l.print,workshop:l.workshop};
+      const lineDept=_lineWfOrder.find(k=>_lineDeptToVal[k]!=='none')||'design';
       const lineOrd={
         client:c,service:(lineItems.length?lineItems.map(x=>x.name).join(' + '):s)+' — خط إنتاج موازٍ #'+(i+2),
-        orderItems:lineItems.map(x=>({name:x.name,details:x.details,price:parseFloat(normalizeDigits(x.price))||0,qty:parseFloat(normalizeDigits(x.qty))||1,files:x.files||[]})),
+        orderItems:lineItems.map(x=>({name:x.name,details:x.details,price:parseFloat(normalizeDigits(x.price))||0,qty:parseFloat(normalizeDigits(x.qty))||1,files:x.files||[],template:x.template||'',specs:x.specs||{}})),
         date:today,createdAt:new Date().toISOString(),stageStartDate:new Date().toISOString(),
         priority:document.getElementById('fpr').value,phone:normalizeSaudiPhone(phone),
         deadline:document.getElementById('fd').value||'—',notes:'خط إنتاج موازٍ مرتبط بالطلب '+newId,
         files:[],createdBy:cu.name,createdByUname:cu._uname,isUrgentQuick:isUrgentQuick||false,
+        workflowOrder:_lineWfOrder,
         designTo:l.design,designName:l.design==='none'?'❌ معفى':(USERS[l.design]?.name||l.design),
         externalTo:l.external,externalName:l.external==='none'?'❌ معفى':(USERS[l.external]?.name||l.external),externalNote:'',
         printTo:l.print,printName:l.print==='none'?'❌ معفى':(USERS[l.print]?.name||l.print),
@@ -6859,6 +7199,7 @@ async function submitOrder(isUrgentQuick=false){
       await loadData();
     }
     hideSaving();window.globalAttachedFiles=[];window._workshopDeptFileB64='';window._workshopDeptFileName='';window._prodLines=[];
+    clearOrderDraft();
     toast('✓ تم إنشاء الطلب: '+newId+(_extraLines.length?` مع ${_extraLines.length} خط إنتاج موازٍ`:''));nav('wf');
   }catch(e){hideSaving();toast('❌ فشل الاتصال');}
 }
@@ -8551,6 +8892,7 @@ function _buildPage(p){
   else if(p==='urgent') buildUrgentPage();
   else if(p==='prep') buildPrepPhasePage();
   else if(p==='tasks') buildTasksPage();
+  else if(p==='extdash') buildExternalDashboard();
 }
    </script>
 <script>
