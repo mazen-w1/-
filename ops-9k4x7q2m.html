@@ -2627,9 +2627,12 @@ function itemStageRequirementMet(it,o){
   const hasKind=k=>vers.some(v=>v.kind===k&&v.files&&v.files.length>0);
   if(dept==='design'){
     const seq=itemDeptSeq(o);
-    if(!seq.includes('print'))return true; // printing not in this order's path — no production files required
-    if(!hasKind('design_approved')||!hasKind('design_proof'))return false;
-    if(seq.includes('workshop')&&!hasKind('workshop_production'))return false;
+    const printActive=seq.includes('print'),workshopActive=seq.includes('workshop');
+    if(!printActive&&!workshopActive)return true; // truly nothing downstream — no production files required
+    if(!printActive&&workshopActive)return hasKind('workshop_production'); // workshop-only: just one approved proof, no separate "approved design" file
+    if(!hasKind('design_approved'))return false;
+    if(!hasKind('design_proof'))return false;
+    if(workshopActive&&!hasKind('workshop_production'))return false;
     return true;
   }
   if(dept==='workshop')return vers.some(v=>(!v.kind||v.kind==='final_work')&&v.files&&v.files.length>0);
@@ -2867,7 +2870,7 @@ function renderOrderItemsCards(o,key,canAct){
         ${advanceBtn?`<div style="margin:8px 0;">${advanceBtn}</div>`:''}
         ${it.requiredFiles?`<div style="font-size:11px;color:var(--text-2);margin-top:6px;"><strong style="color:var(--maroon-mid);">الملفات المطلوبة:</strong> ${esc(it.requiredFiles)}</div>`:''}
         ${historyHtml}
-        ${dept==='design'?(seq.includes('print')?`<div class="order-item-versions">${[renderItemKindBox(it,key,i,'design_approved',dept,canAct),renderItemKindBox(it,key,i,'design_proof',dept,canAct),...(seq.includes('workshop')?[renderItemKindBox(it,key,i,'workshop_production',dept,canAct)]:[])].join('')}</div>`:'<div style="font-size:11px;color:var(--text-3);">لا توجد ملفات إنتاج مطلوبة لهذا المسار</div>')
+        ${dept==='design'?((seq.includes('print')||seq.includes('workshop'))?`<div class="order-item-versions">${(!seq.includes('print')&&seq.includes('workshop'))?renderItemKindBox(it,key,i,'workshop_production',dept,canAct,'بروفة تصميم معتمدة'):[renderItemKindBox(it,key,i,'design_approved',dept,canAct),renderItemKindBox(it,key,i,'design_proof',dept,canAct),...(seq.includes('workshop')?[renderItemKindBox(it,key,i,'workshop_production',dept,canAct)]:[])].join('')}</div>`:'<div style="font-size:11px;color:var(--text-3);">لا توجد ملفات إنتاج مطلوبة لهذا المسار</div>')
           :dept==='print'?`<div class="order-item-versions">${renderItemKindBox(it,key,i,'design_approved','design',false)}${renderItemKindBox(it,key,i,'design_proof','design',false)}</div>`
           :dept==='workshop'?`<div class="order-item-versions">${renderItemKindBox(it,key,i,'final_work',dept,canAct)}</div>`
           :`<div class="order-item-versions">${curStageHtml}</div>
@@ -3857,7 +3860,7 @@ function openWfInlinePanel(key,skipScroll){
     }else if(nd==='done'){
       nextBtn=`<button class="btn btn-green btn-sm" onclick="finishOrder('${key}')"><i class="ti ti-circle-check"></i> إتمام وأرشفة الطلب</button>`;
     }else{
-      const needsFile=o.currentDept==='design'&&o.printTo!=='none'&&(!o.clientApprovalImage||!o.approvedPrintFile||(o.workshopTo!=='none'&&!o.approvedWorkshopFile));
+      const needsFile=o.currentDept==='design'&&(o.printTo==='none'&&o.workshopTo!=='none'?!o.approvedWorkshopFile:(o.printTo!=='none'&&(!o.clientApprovalImage||!o.approvedPrintFile||(o.workshopTo!=='none'&&!o.approvedWorkshopFile))));
       nextBtn=needsFile
         ?`<span style="font-size:11px;color:#EF4444;font-weight:700"><i class="ti ti-alert-triangle"></i> يجب رفع جميع الملفات المطلوبة قبل الانتقال للمرحلة التالية (من النافذة الكاملة)</span>`
         :`<button class="btn btn-brand btn-sm" onclick="sendToNextDept('${key}','${nd}')"><i class="ti ti-arrow-left"></i> ${nextLabels[o.currentDept]||'إرسال للمرحلة التالية'}</button>`;
@@ -4272,9 +4275,12 @@ async function bulkAdvanceSelected(){
     // must not be a bypass route around it.
     if(o.currentDept==='design'){
       const isProofQt=o.isQuickTask&&o.printTo==='none'&&o.workshopTo==='none';
+      const workshopOnly=o.printTo==='none'&&o.workshopTo!=='none';
       const fileBlocked=isProofQt
         ? !o.approvedPrintFile
-        : (o.printTo!=='none'&&(!o.clientApprovalImage||!o.approvedPrintFile||(o.workshopTo!=='none'&&!o.approvedWorkshopFile)));
+        : workshopOnly
+          ? !o.approvedWorkshopFile
+          : (o.printTo!=='none'&&(!o.clientApprovalImage||!o.approvedPrintFile||(o.workshopTo!=='none'&&!o.approvedWorkshopFile)));
       if(fileBlocked){blocked++;continue;}
     }
     const idx=deptOrder.indexOf(o.currentDept);
@@ -4525,8 +4531,8 @@ async function confirmItemworkSend(){
 // it read-only (no file input, no delete button) for Printing's receive-only
 // view. 'final_work' also matches legacy versions with no kind tag at all,
 // so items uploaded before this feature existed still show up.
-function renderItemKindBox(it,key,idx,kind,dept,canAct){
-  const label=ITEM_KIND_LABELS[kind]||kind;
+function renderItemKindBox(it,key,idx,kind,dept,canAct,labelOverride){
+  const label=labelOverride||ITEM_KIND_LABELS[kind]||kind;
   const versions=itemVersions(it).filter(v=>!v._legacy&&(v.stage||'design')===dept&&(v.kind===kind||(kind==='final_work'&&!v.kind)));
   const filesHtml=versions.length?versions.map(v=>`<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:8px;padding:6px 10px;">
     <div>
@@ -4582,11 +4588,16 @@ function buildItemWorkspacePage(){
       // departments need, Printing is receive-only, Workshop has one box.
       const seq=itemDeptSeq(o);
       if(dept==='design'){
-        if(!seq.includes('print')){
+        const printActive=seq.includes('print'),workshopActive=seq.includes('workshop');
+        if(!printActive&&!workshopActive){
           return`<div class="card" style="margin-bottom:14px;"><div style="padding:16px 20px;font-size:11.5px;color:var(--text-3);text-align:center;">لا توجد ملفات إنتاج مطلوبة لهذا المسار</div></div>`;
         }
-        const boxes=[renderItemKindBox(it,key,idx,'design_approved',dept,canAct),renderItemKindBox(it,key,idx,'design_proof',dept,canAct)];
-        if(seq.includes('workshop'))boxes.push(renderItemKindBox(it,key,idx,'workshop_production',dept,canAct));
+        // Workshop-only (no printing): just one approved design proof — not
+        // the full "approved design + separate box per dept" combo used
+        // whenever printing is involved.
+        const boxes=!printActive&&workshopActive
+          ?[renderItemKindBox(it,key,idx,'workshop_production',dept,canAct,'بروفة تصميم معتمدة')]
+          :[renderItemKindBox(it,key,idx,'design_approved',dept,canAct),renderItemKindBox(it,key,idx,'design_proof',dept,canAct),...(workshopActive?[renderItemKindBox(it,key,idx,'workshop_production',dept,canAct)]:[])];
         return`<div class="card" style="margin-bottom:14px;">
           <div class="card-header"><span class="card-title"><i class="ti ti-upload"></i> ملفات التصميم المطلوبة</span></div>
           <div style="padding:16px 20px;">${boxes.join('')}</div>
@@ -6633,6 +6644,8 @@ function openOrderModal(key){
         const _isProofQt=o.isQuickTask&&o.printTo==='none'&&o.workshopTo==='none';
         if(_isProofQt){
           if(!o.approvedPrintFile)_missingFiles.push('ملف البروفة');
+        }else if(o.printTo==='none'&&o.workshopTo!=='none'){
+          if(!o.approvedWorkshopFile)_missingFiles.push('بروفة تصميم معتمدة');
         }else if(o.printTo!=='none'){
           if(!o.clientApprovalImage)_missingFiles.push('الملف المعتمد للتصميم');
           if(!o.approvedPrintFile)_missingFiles.push('بروفة التصميم');
@@ -6652,15 +6665,26 @@ function openOrderModal(key){
       const _printActive=o.printTo!=='none';
       const _workshopActive=o.workshopTo!=='none';
       const _designFormats='image/*,.pdf,.ai,.psd,.eps,.svg,.cdr,application/postscript,application/pdf,image/vnd.adobe.photoshop';
-      // Fully dynamic per the active workflow — printing is what makes this a
-      // "production" order in the first place, so with no printing stage at
-      // all there is nothing to approve/hand off and no boxes are shown.
-      // Quick-task "proof" orders (design-only, single file to the client)
-      // keep their own simpler single box instead.
+      // Fully dynamic per the active workflow — الملف المعتمد للتصميم is
+      // required whenever ANYTHING is downstream of design (print and/or
+      // workshop); بروفة التصميم only when printing is active; ملف الإنتاج
+      // للورشة only when workshop is active — so Design -> Workshop (no
+      // printing at all) still gets its own required box instead of none.
+      // Only a true dead-end (design is the last stage, e.g. Design ->
+      // Delivery) shows no boxes. Quick-task "proof" orders (design-only,
+      // single file to the client) keep their own simpler single box.
       if(_isProofQt){
         uploadArea=`<div class="dept-upload-box"><div class="dept-upload-title" style="color:#6B21A8"><i class="ti ti-brush"></i> ملف البروفة النهائي المرسل للعميل</div>
         <input type="file" multiple id="f-print-input" accept="${_designFormats}" onchange="uploadFileDirect('${key}','approvedPrintFile','approvedPrintFileName','f-print-input')"/>
         ${renderApprovalFileList(o,key,'approvedPrintFile',canAct)}
+      </div>`;
+      }else if(!_printActive&&_workshopActive){
+        // Workshop-only (no printing at all) needs just ONE file — an
+        // approved design proof for the workshop to work from — not the
+        // full "approved design + separate production file" combo the
+        // printing-involved paths use.
+        uploadArea=`<div class="dept-upload-box"><div class="dept-upload-title" style="color:#6B21A8"><i class="ti ti-brush"></i> ملف التصميم المطلوب</div>
+        <div class="fg"><label>بروفة تصميم معتمدة:</label><input type="file" multiple id="f-workshop-input" accept="${_designFormats}" onchange="uploadFileDirect('${key}','approvedWorkshopFile','approvedWorkshopFileName','f-workshop-input')"/>${renderApprovalFileList(o,key,'approvedWorkshopFile',canAct)}</div>
       </div>`;
       }else if(_printActive){
         uploadArea=`<div class="dept-upload-box"><div class="dept-upload-title" style="color:#6B21A8"><i class="ti ti-brush"></i> ملفات التصميم المطلوبة</div>
@@ -7072,9 +7096,12 @@ async function sendToNextDept(key,next){
   // calling this function directly from any surface.
   if(curDept==='design'){
     const isProofQt=o.isQuickTask&&o.printTo==='none'&&o.workshopTo==='none';
+    const workshopOnly=o.printTo==='none'&&o.workshopTo!=='none';
     const blocked=isProofQt
       ? !o.approvedPrintFile
-      : (o.printTo!=='none'&&(!o.clientApprovalImage||!o.approvedPrintFile||(o.workshopTo!=='none'&&!o.approvedWorkshopFile)));
+      : workshopOnly
+        ? !o.approvedWorkshopFile
+        : (o.printTo!=='none'&&(!o.clientApprovalImage||!o.approvedPrintFile||(o.workshopTo!=='none'&&!o.approvedWorkshopFile)));
     if(blocked){toast('⚠️ يجب رفع جميع الملفات المطلوبة قبل الانتقال للمرحلة التالية');return;}
   }
   showSaving('جاري التحويل...');
