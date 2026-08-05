@@ -1409,6 +1409,9 @@ input:focus,select:focus,textarea:focus{box-shadow:inset 0 1px 3px rgba(74,14,23
       <button class="btn btn-out btn-xs" onclick="setNotifFilter('upload')">رفع ملفات</button>
       <button class="btn btn-out btn-xs" onclick="setNotifFilter('comment')">ملاحظات</button>
       <button class="btn btn-out btn-xs" onclick="setNotifFilter('completed')">مكتملة</button>
+      <button class="btn btn-out btn-xs" onclick="setNotifFilter('client_approved')">اعتماد العميل</button>
+      <button class="btn btn-out btn-xs" onclick="setNotifFilter('employee_changed')">تغيير موظف</button>
+      <button class="btn btn-out btn-xs" onclick="setNotifFilter('message')">رسائل</button>
     </div>
     <div id="notif-panel-body"></div>
   </div>
@@ -1929,6 +1932,10 @@ const NOTIF_TYPE_META={
   upload:{label:'رفع ملف',icon:'ti-upload',color:'#0EA5E9'},
   comment:{label:'ملاحظة',icon:'ti-message-2',color:'#6B21A8'},
   completed:{label:'اكتمال طلب',icon:'ti-circle-check',color:'#047857'},
+  employee_changed:{label:'تغيير موظف',icon:'ti-user-cog',color:'#0F766E'},
+  client_approved:{label:'اعتماد العميل',icon:'ti-thumb-up',color:'#10B981'},
+  client_rejected:{label:'رفض العميل',icon:'ti-thumb-down',color:'#DC2626'},
+  message:{label:'رسالة جديدة',icon:'ti-message',color:'#7C3AED'},
 };
 async function pushNotification(n){
   try{
@@ -1991,7 +1998,7 @@ function openNotifPanel(){
 // ============================================================
 // UTILS
 // ============================================================
-function toast(m){const t=document.getElementById('toast');if(!t){console.warn('toast:',m);return;}t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2800);}
+function toast(m){const t=document.getElementById('toast');if(!t){console.warn('toast:',m);return;}t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),4000);}
 function closeModal(id){const el=document.getElementById(id);if(el)el.classList.remove('open');}
 function openModal(id){const el=document.getElementById(id);if(el)el.classList.add('open');}
 // Click-outside-to-close: every modal in the app is a `.modal-overlay` with a
@@ -2571,6 +2578,10 @@ async function toggleVersionApproval(key,itemIdx,versionId){
     items[itemIdx]={...items[itemIdx],versions:newVersions};
     await fbPatch(`orders/${key}`,{orderItems:items});
     await loadData();hideSaving();toast(approved?'تم إلغاء الاعتماد':'✓ تم اعتماد النسخة من العميل');
+    // Un-approving just reverts a version to "in progress" — there is no
+    // separate "client rejected" state in the schema, so only the approval
+    // transition (not its reversal) is worth notifying the designer about.
+    if(!approved)pushNotification({type:'client_approved',message:`تم اعتماد نسخة تصميم من العميل — الطلب ${esc(o.id||key)}`,orderKey:key,orderId:o.id,client:o.client,targetUname:(o.designTo&&o.designTo!=='none')?o.designTo:'all-admin'});
     _refreshOrderItemsViews(key);
   }catch(e){hideSaving();toast('❌ فشل التحديث');}
 }
@@ -3005,6 +3016,45 @@ async function handleWfSitePhoto(files){
 // ============================================================
 // DASHBOARD
 // ============================================================
+// Manager production overview: one premium stat card per department —
+// counts only (never individual order items), each linking straight to that
+// department's own filtered queue page (openDeptStagePage → buildDeptStagePage,
+// the pre-existing per-department page). Pure read of existing order/user
+// data — no new schema.
+function buildDeptStatCardsHtml(){
+  const arr=ordersArr();
+  const now=new Date();
+  const deptsDef=[
+    {key:'design',label:'التصميم',icon:'ti-brush',color:'#6B21A8',roleType:'designer'},
+    {key:'print',label:'الطباعة',icon:'ti-printer',color:'#3730A3',roleType:'printer'},
+    {key:'workshop',label:'الورشة',icon:'ti-tools',color:'#9A3412',roleType:'workshop'},
+    {key:'external',label:'تنفيذ خارجي',icon:'ti-world',color:'#713F12',roleType:'external'}
+  ];
+  const cardsHtml=deptsDef.map(d=>{
+    const deptOrders=arr.filter(o=>(o.currentDept||'design')===d.key);
+    const delayed=deptOrders.filter(o=>o.deadline&&o.deadline!=='—'&&new Date(o.deadline)<now).length;
+    // "Waiting for client approval" is only a real, tracked concept at the
+    // design stage (client-approval status on a version) — other stages have
+    // no approval field, so they simply report 0 rather than a fabricated guess.
+    const waitingApproval=d.key==='design'?deptOrders.filter(o=>(o.orderItems||[]).some(it=>itemVersionsForStage(it,'design').some(v=>!v._legacy&&v.files&&v.files.length&&v.status!=='معتمد من العميل'))).length:0;
+    const inProgress=Math.max(0,deptOrders.length-delayed-waitingApproval);
+    const team=Object.values(USERS).filter(u=>u.type===d.roleType).map(u=>u.name).filter(Boolean);
+    return `<div class="card" style="border-right:4px solid ${d.color};display:flex;flex-direction:column;gap:10px;">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <div style="width:46px;height:46px;border-radius:50%;background:${d.color};display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 6px 14px rgba(0,0,0,.18);"><i class="ti ${d.icon}" style="font-size:20px;color:#fff;"></i></div>
+        <div><div style="font-size:22px;font-weight:900;color:var(--text-1);line-height:1;">${deptOrders.length}</div><div style="font-size:12px;color:var(--text-3);font-weight:700;margin-top:2px;">${d.label} — إجمالي الطلبات</div></div>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;">
+        <span class="badge b-proc" style="font-size:10px;">قيد التنفيذ: ${inProgress}</span>
+        ${d.key==='design'?`<span class="badge b-new" style="font-size:10px;">بانتظار اعتماد العميل: ${waitingApproval}</span>`:''}
+        <span class="badge" style="font-size:10px;background:${delayed?'#FEE2E2':'var(--surface-2)'};color:${delayed?'#991B1B':'var(--text-3)'};">متأخرة: ${delayed}</span>
+      </div>
+      <div style="font-size:10.5px;color:var(--text-3);"><i class="ti ti-users"></i> ${team.length?esc(team.join('، ')):'لا يوجد موظفون مسجّلون لهذا القسم'}</div>
+      <button class="btn btn-out btn-sm" style="width:100%;justify-content:center;margin-top:auto;" onclick="openDeptStagePage('${d.key}')"><i class="ti ti-arrow-left"></i> فتح القسم</button>
+    </div>`;
+  }).join('');
+  return `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px;margin-bottom:20px;">${cardsHtml}</div>`;
+}
 function buildDash(){
   const t=cu.type;
   const arr=ordersArr();
@@ -3113,9 +3163,12 @@ function buildDash(){
     <td>${deptBadge(o.currentDept)}</td>
     <td>${orderTimerBadge(o)}</td>
   </tr>`).join('');
+  const deptCardsSection=['admin','follower','receiver'].includes(t)?buildDeptStatCardsHtml():'';
   document.getElementById('page-dash').innerHTML=`
     <div class="page-header"><div><div class="ptitle"><i class="ti ti-layout-dashboard"></i> لوحة التحكم</div><div class="breadcrumb">مرحباً، ${esc(cu.name)}</div></div></div>
-    ${roNote}${myNote}${qtBtns}${stats}
+    ${roNote}${myNote}${qtBtns}
+    ${deptCardsSection}
+    ${stats}
     ${controlsRow(false)}
     <div class="card">
       <div class="card-header">
@@ -3866,25 +3919,24 @@ function buildDeptStagePage(){
     <td style="font-size:12px;">${esc(o.service||'—')}</td>
     <td style="font-size:12px;">${esc(o.createdBy||'—')}</td>
     <td style="font-size:11px;">${o.date||'—'}</td>
-  </tr>`:`<tr data-search="${searchBlob(o)}"${hasAssignee?` data-assignee="${esc(o[assigneeField]||'')}"`:''} onclick="openOrderModal('${o._key}')" style="cursor:pointer;">
-    <td><strong style="color:var(--maroon)">${o.id||o._key}</strong></td>
-    <td><strong style="font-size:13px;">${esc(o.client||'—')}</strong></td>
-    <td style="font-size:12px;">${esc(o.service||'—')}</td>
-    <td style="font-size:12px;">${esc(currentPersonName(o))}</td>
-    <td style="font-size:11.5px;color:var(--text-3);">${esc(o.createdBy||'—')}</td>
-    <td style="font-size:11px;">${deadlineDateTime(o)}</td>
-    <td>${gpbadge(o.priority)}</td>
-    <td>${orderTimerBadge(o)}</td>
-    ${cu.type==='admin'?`<td style="width:40px;" onclick="event.stopPropagation()">
-      <div class="row-menu-wrap">
-        <button class="btn btn-out btn-xs" style="padding:3px 7px;" onclick="toggleRowMenu('dsam-${o._key}')" title="إجراءات سريعة"><i class="ti ti-dots-vertical"></i></button>
-        <div class="row-menu" id="dsam-${o._key}" style="display:none;">
-          <button onclick="closeAllRowMenus();openOrderModal('${o._key}')"><i class="ti ti-edit"></i> فتح / تعديل</button>
-          <button style="color:#DC2626;" onclick="deleteOrderSingle('${o._key}')"><i class="ti ti-trash"></i> حذف</button>
-        </div>
+  </tr>`:`<div class="wf-card" data-search="${searchBlob(o)}"${hasAssignee?` data-assignee="${esc(o[assigneeField]||'')}"`:''} onclick="openOrderModal('${o._key}')" style="cursor:pointer;">
+    ${cu.type==='admin'?`<div class="row-menu-wrap" style="position:absolute;top:8px;left:8px;z-index:2;" onclick="event.stopPropagation()">
+      <button class="btn btn-out btn-xs" style="padding:2px 6px;" onclick="toggleRowMenu('dsam-${o._key}')" title="إجراءات سريعة"><i class="ti ti-dots-vertical"></i></button>
+      <div class="row-menu" id="dsam-${o._key}" style="display:none;">
+        <button onclick="closeAllRowMenus();openOrderModal('${o._key}')"><i class="ti ti-edit"></i> فتح / تعديل</button>
+        <button style="color:#DC2626;" onclick="deleteOrderSingle('${o._key}')"><i class="ti ti-trash"></i> حذف</button>
       </div>
-    </td>`:''}
-  </tr>`).join('');
+    </div>`:''}
+    <div class="wf-card-top">
+      <div class="wf-card-name" style="font-size:15.5px;">${esc(o.client||'—')}</div>
+      <div class="wf-card-svc">${esc(o.service||'—')}</div>
+      <div class="wf-card-id">${o.id||o._key}</div>
+      <div style="font-size:11.5px;color:var(--text-2);margin-top:4px;"><i class="ti ti-user"></i> ${esc(currentPersonName(o))}</div>
+      <div style="font-size:10.5px;color:var(--text-3);"><i class="ti ti-calendar-time"></i> ${deadlineDateTime(o)}</div>
+      <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:6px;">${gpbadge(o.priority)} ${orderTimerBadge(o)}</div>
+    </div>
+    <div class="wf-card-prog"><div class="wf-card-fill" style="width:${orderProgress(o)}%;background:${progressColor(o)}"></div></div>
+  </div>`).join('');
   const thead=isCompleted
     ?`${canDelete?'<th style="width:150px;">إجراءات</th>':''}<th style="width:80px">رقم الطلب</th><th>العميل</th><th style="width:100px">المبلغ</th><th>الخدمة</th><th style="width:120px">منشئ الطلب</th><th style="width:90px">التاريخ</th>`
     :`<th style="width:80px">رقم الطلب</th><th>العميل</th><th>الخدمة</th><th style="width:100px">المسؤول</th><th style="width:110px">منشئ الطلب</th><th style="width:120px">تاريخ التسليم</th><th style="width:90px">الأولوية</th><th style="width:90px">المدة</th>${cu.type==='admin'?'<th style="width:40px;"></th>':''}`;
@@ -3928,13 +3980,15 @@ function buildDeptStagePage(){
         ${personOptions}
       </select>`:''}
     </div>
-    <div class="card"><div class="tbl-wrap"><table><thead><tr>${thead}</tr></thead>
-    <tbody>${rows||`<tr><td colspan="${isCompleted?(6+(canDelete?1:0)):(8+(cu.type==='admin'?1:0))}" style="text-align:center;padding:24px;color:var(--text-3)">لا توجد طلبات في هذه المرحلة حالياً</td></tr>`}</tbody></table></div></div>`;
+    ${isCompleted
+      ?`<div class="card"><div class="tbl-wrap"><table><thead><tr>${thead}</tr></thead>
+    <tbody>${rows||`<tr><td colspan="${6+(canDelete?1:0)}" style="text-align:center;padding:24px;color:var(--text-3)">لا توجد طلبات في هذه المرحلة حالياً</td></tr>`}</tbody></table></div></div>`
+      :(rows?`<div class="wf-grid">${rows}</div>`:'<div class="card" style="text-align:center;padding:30px;color:var(--text-3);"><i class="ti ti-inbox" style="font-size:32px;display:block;margin-bottom:8px;"></i>لا توجد طلبات في هذه المرحلة حالياً</div>')}`;
 }
 function filterDeptStageRows(){
   const q=(document.getElementById('deptstage-search')?.value||'').trim().toLowerCase();
   const person=document.getElementById('deptstage-person-filter')?.value||'';
-  document.querySelectorAll('#deptstage-content tbody tr[data-search]').forEach(r=>{
+  document.querySelectorAll('#deptstage-content [data-search]').forEach(r=>{
     const matchesSearch=!q||(r.getAttribute('data-search')||'').includes(q);
     const matchesPerson=!person||r.getAttribute('data-assignee')===person;
     r.style.display=(matchesSearch&&matchesPerson)?'':'none';
@@ -4016,15 +4070,19 @@ async function bulkAdvanceSelected(){
   const skipped=selKeys.length-toMove.length;
   if(!toMove.length){toast('الطلبات المحددة موجودة في التسليم بالفعل ولا توجد مرحلة تالية لها');return;}
   showSaving('جاري نقل الطلبات...');
+  let moved=0,blocked=0;
   for(const key of toMove){
     const o=orders[key];if(!o)continue;
+    // Same design-stage file-approval gate as sendToNextDept() — bulk moves
+    // must not be a bypass route around it.
+    if(o.currentDept==='design'&&(!o.clientApprovalImage||(o.printTo!=='none'&&!o.approvedPrintFile)||(o.workshopTo!=='none'&&!o.workshopProofImage))){blocked++;continue;}
     const idx=deptOrder.indexOf(o.currentDept);
     const nd=idx>=0&&idx<deptOrder.length-1?deptOrder[idx+1]:'done';
-    try{await fbPatch('orders/'+key,{currentDept:nd,stageStartDate:new Date().toISOString()});}catch(e){console.error(e);}
+    try{await fbPatch('orders/'+key,{currentDept:nd,stageStartDate:new Date().toISOString()});moved++;}catch(e){console.error(e);}
   }
   await loadData();hideSaving();
   window._wfSelected=new Set();window._wfMultiMode=false;
-  toast(skipped>0?('✓ تم نقل '+toMove.length+' طلب (تم تجاهل '+skipped+' في التسليم)'):'✓ تم نقل الطلبات للمرحلة التالية');
+  toast(blocked>0?(`✓ تم نقل ${moved} طلب — تعذر نقل ${blocked} لعدم اكتمال ملفات التصميم المعتمدة`+(skipped>0?` (تم تجاهل ${skipped} في التسليم)`:'')):(skipped>0?('✓ تم نقل '+moved+' طلب (تم تجاهل '+skipped+' في التسليم)'):'✓ تم نقل الطلبات للمرحلة التالية'));
   buildWfGrid(_currentWfTab||'active');
 }
 function filterWf(q){document.querySelectorAll('.wf-card').forEach(c=>{c.style.display=c.textContent.toLowerCase().includes(q.toLowerCase())?'':'none';});}
@@ -4516,7 +4574,7 @@ function prepPhaseResponseHtml(o){
     if(!url)return'';
     return`<div style="margin-bottom:8px;">
       <div style="font-size:10.5px;font-weight:700;color:var(--text-3);margin-bottom:4px;">${label}</div>
-      ${isImg(url)?`<img src="${url}" style="width:100%;max-height:180px;object-fit:cover;border-radius:8px;border:1px solid var(--border);"/>`:''}
+      ${isImg(url)?`<img src="${url}" loading="lazy" style="width:100%;max-height:180px;object-fit:cover;border-radius:8px;border:1px solid var(--border);"/>`:''}
       ${fileLinkHtml(name||'ملف',url)}
     </div>`;
   };
@@ -5803,6 +5861,10 @@ async function sendTeamChatMsg(){
   }
   try{
     await fbPush('team_chat',msg);
+    // Broadcasting a bell notification for every chat message would be very
+    // noisy since chat is already visible on its own page — only the
+    // explicitly @mentioned people are worth interrupting for.
+    mentions.forEach(u=>{if(u!==cu._uname)pushNotification({type:'message',message:`${esc(cu.name)} أشار إليك في الدردشة: ${esc(txt.slice(0,80))}`,targetUname:u});});
     setTimeout(()=>loadAndRenderTeamChat(),500);
   }catch(e){toast('❌ فشل إرسال الرسالة');}
 }
@@ -5903,7 +5965,10 @@ async function reassignOrderDept(key){
   else if(dept==='external'){upd.externalTo=uname;upd.externalName=name;}
   else{toast('⚠️ لا يمكن تغيير المسؤول في هذه المرحلة');return;}
   showSaving('جاري تحديث المسؤول...');
-  try{await fbPatch(`orders/${key}`,upd);await loadData();hideSaving();toast('✓ تم تغيير الموظف المسؤول');openOrderModal(key);}
+  try{
+    await fbPatch(`orders/${key}`,upd);await loadData();hideSaving();toast('✓ تم تغيير الموظف المسؤول');openOrderModal(key);
+    if(uname!=='none')pushNotification({type:'employee_changed',message:`تم تكليفك بالطلب ${esc(o.id||key)} — ${esc(WF_DEPT_META[dept]?.label||dept)}`,orderKey:key,orderId:o.id,client:o.client,targetUname:uname});
+  }
   catch(e){hideSaving();toast('❌ فشل تحديث المسؤول');}
 }
 function openUnpaidOrderSummary(key){
@@ -6200,16 +6265,20 @@ async function saveDesignProofMeta(key,type){
   }
   try{await fbPatch(`orders/${key}`,upd);await loadData();toast('✓ تم الحفظ');openOrderModal(key);}catch(e){toast('❌ فشل الحفظ');}
 }
+// The actual approved-design-file/workshop-proof-file UPLOADS now happen in
+// one place — the consolidated design-stage upload box in openOrderModal
+// (a single source of truth instead of duplicate file inputs in two spots on
+// the page). This section stays as a read-only preview of whatever was
+// uploaded there, plus the extra approval metadata (date/approved-by/notes/
+// version) that has no home in that upload box.
 function buildProofApprovalSection(o,key,canAct){
   const clientCard=`<div class="od-proof-card">
     <h4><i class="ti ti-user-check"></i> اعتماد العميل على التصميم</h4>
-    ${o.clientApprovalImage?`<img src="${o.clientApprovalImage}" class="od-proof-preview"/>`:''}
+    ${o.clientApprovalImage?`<img src="${o.clientApprovalImage}" loading="lazy" class="od-proof-preview"/>`:''}
     <div style="display:flex;flex-wrap:wrap;gap:6px;">${fileLinkHtml(o.clientApprovalImageName,o.clientApprovalImage)}${fileLinkHtml(o.clientApprovalPdfName,o.clientApprovalPdf)}</div>
     <div class="od-proof-meta">${o.clientApprovalDate?`<span><i class="ti ti-calendar"></i> ${formatDate(o.clientApprovalDate)}</span>`:''}${o.clientApprovalBy?`<span><i class="ti ti-user"></i> ${esc(o.clientApprovalBy)}</span>`:''}</div>
     ${o.clientApprovalNotes?`<div style="font-size:11px;color:var(--text-2);margin-top:6px;">${esc(o.clientApprovalNotes)}</div>`:''}
     ${canAct?`<div style="margin-top:10px;display:flex;flex-direction:column;gap:6px;">
-      <label style="font-size:10px;color:var(--text-3);">صورة الاعتماد<input type="file" accept="image/*" id="cap-img-input" onchange="uploadDesignProofField('${key}','clientApprovalImage','cap-img-input')" style="font-size:11px;display:block;margin-top:3px;"/></label>
-      <label style="font-size:10px;color:var(--text-3);">ملف PDF<input type="file" accept=".pdf" id="cap-pdf-input" onchange="uploadDesignProofField('${key}','clientApprovalPdf','cap-pdf-input')" style="font-size:11px;display:block;margin-top:3px;"/></label>
       <div style="display:flex;gap:6px;flex-wrap:wrap;">
         <input type="date" id="cap-date" value="${o.clientApprovalDate||''}" style="flex:1;min-width:110px;font-size:11px;"/>
         <input type="text" id="cap-by" placeholder="اسم من اعتمد" value="${esc(o.clientApprovalBy||'')}" style="flex:1;min-width:110px;font-size:11px;"/>
@@ -6220,13 +6289,11 @@ function buildProofApprovalSection(o,key,canAct){
   </div>`;
   const workshopCard=`<div class="od-proof-card">
     <h4><i class="ti ti-tools"></i> بروفة الورشة النهائية</h4>
-    ${o.workshopProofImage?`<img src="${o.workshopProofImage}" class="od-proof-preview"/>`:''}
+    ${o.workshopProofImage?`<img src="${o.workshopProofImage}" loading="lazy" class="od-proof-preview"/>`:''}
     <div style="display:flex;flex-wrap:wrap;gap:6px;">${fileLinkHtml(o.workshopProofImageName,o.workshopProofImage)}${fileLinkHtml(o.workshopProofPdfName,o.workshopProofPdf)}</div>
     <div class="od-proof-meta">${o.workshopProofVersion?`<span><i class="ti ti-git-branch"></i> نسخة ${esc(o.workshopProofVersion)}</span>`:''}</div>
     ${o.workshopProofNotes?`<div style="font-size:11px;color:var(--text-2);margin-top:6px;">${esc(o.workshopProofNotes)}</div>`:''}
     ${canAct?`<div style="margin-top:10px;display:flex;flex-direction:column;gap:6px;">
-      <label style="font-size:10px;color:var(--text-3);">صورة البروفة<input type="file" accept="image/*" id="wsp-img-input" onchange="uploadDesignProofField('${key}','workshopProofImage','wsp-img-input')" style="font-size:11px;display:block;margin-top:3px;"/></label>
-      <label style="font-size:10px;color:var(--text-3);">ملف PDF<input type="file" accept=".pdf" id="wsp-pdf-input" onchange="uploadDesignProofField('${key}','workshopProofPdf','wsp-pdf-input')" style="font-size:11px;display:block;margin-top:3px;"/></label>
       <input type="text" id="wsp-version" placeholder="رقم/اسم النسخة" value="${esc(o.workshopProofVersion||'')}" style="font-size:11px;"/>
       <textarea id="wsp-notes" placeholder="ملاحظات..." style="font-size:11px;min-height:40px;">${esc(o.workshopProofNotes||'')}</textarea>
       <button class="btn btn-out btn-xs" style="align-self:flex-start;" onclick="saveDesignProofMeta('${key}','workshop')"><i class="ti ti-device-floppy"></i> حفظ</button>
@@ -6302,9 +6369,18 @@ function openOrderModal(key){
     }else if(nd==='done'){
       nextBtn=`<button class="btn btn-green btn-sm" onclick="finishOrder('${key}')"><i class="ti ti-circle-check"></i> إتمام وأرشفة الطلب</button>`;
     }else{
-      const needsFile=o.currentDept==='design'&&((o.printTo!=='none'&&!o.approvedPrintFile)||(o.workshopTo!=='none'&&!o.approvedWorkshopFile));
+      // Design cannot move an order on to print/workshop until the approved
+      // deliverables those departments actually need are uploaded — mirrors
+      // the consolidated upload boxes above one-for-one (per active dept).
+      const _missingFiles=[];
+      if(o.currentDept==='design'){
+        if(!o.clientApprovalImage)_missingFiles.push('التصميم المعتمد');
+        if(o.printTo!=='none'&&!o.approvedPrintFile)_missingFiles.push('بروفة الطباعة المعتمدة');
+        if(o.workshopTo!=='none'&&!o.workshopProofImage)_missingFiles.push('بروفة الورشة المعتمدة');
+      }
+      const needsFile=o.currentDept==='design'&&_missingFiles.length>0;
       nextBtn=needsFile
-        ?`<span style="font-size:11px;color:#EF4444;font-weight:700"><i class="ti ti-alert-triangle"></i> يرجى رفع ملفات البروفة أولاً</span>`
+        ?`<span style="font-size:11px;color:#EF4444;font-weight:700"><i class="ti ti-alert-triangle"></i> يرجى رفع الملفات المطلوبة أولاً: ${esc(_missingFiles.join('، '))}</span>`
         :`<button class="btn btn-brand btn-sm" onclick="sendToNextDept('${key}','${nd}')"><i class="ti ti-arrow-left"></i> ${nextLabels[o.currentDept]||'إرسال للمرحلة التالية'}</button>`;
     }
   }
@@ -6312,15 +6388,44 @@ function openOrderModal(key){
   if(isMine||t==='admin'){
     if(o.currentDept==='design'){
       const _isProofQt=o.isQuickTask&&o.printTo==='none'&&o.workshopTo==='none';
+      // Consolidated design-stage upload area — every approved deliverable this
+      // order's downstream departments need is uploaded from ONE place here,
+      // instead of being split between this box and the separate proof-approval
+      // section further down the page. Up to 4 boxes, shown only for the
+      // departments actually active on this order:
+      //  1. التصميم المعتمد (client-approved design) — always shown at design stage
+      //  2. بروفة الطباعة المعتمدة — only if print is active
+      //  3. مخطط قياسات الورشة — only if workshop is active
+      //  4. بروفة الورشة المعتمدة — only if workshop is active
+      // Each box accepts multiple files at once (first fills the existing
+      // ff/fn2 field for backward compatibility, the rest land in `${ff}Extra`
+      // — see uploadFileDirect()); uploadedFilesHtml() renders the primary
+      // file plus any extras as one combined list.
+      const uploadedFilesHtml=(ff,label)=>{
+        const extra=Array.isArray(o[ff+'Extra'])?o[ff+'Extra']:[];
+        return[o[ff]?fileLinkHtml(o[ff+'Name'],o[ff],label):'',...extra.map(f=>fileLinkHtml(f.name,f.data,label))].filter(Boolean).join(' ');
+      };
       uploadArea=`<div class="dept-upload-box"><div class="dept-upload-title" style="color:#6B21A8"><i class="ti ti-brush"></i> رفع ملفات التصميم المعتمدة</div>
-      ${(o.printTo!=='none'||_isProofQt)?`<div class="fg" style="margin-bottom:8px"><label>${_isProofQt?'ملف البروفة النهائي المرسل للعميل:':'ملف تفصيل الطباعة:'}</label><input type="file" id="f-print-input" accept="image/*,.pdf,.doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onchange="uploadFileDirect('${key}','approvedPrintFile','approvedPrintFileName','f-print-input')"/></div>`:''}
-      ${o.workshopTo!=='none'?`<div class="fg"><label>مخطط قياسات الورشة:</label><input type="file" id="f-workshop-input" accept="image/*,.pdf,.doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onchange="uploadFileDirect('${key}','approvedWorkshopFile','approvedWorkshopFileName','f-workshop-input')"/></div>`:''}
+      <div class="fg" style="margin-bottom:8px"><label>التصميم المعتمد:</label><input type="file" multiple id="f-designapproved-input" accept="image/*,.pdf,.doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onchange="uploadFileDirect('${key}','clientApprovalImage','clientApprovalImageName','f-designapproved-input')"/>${uploadedFilesHtml('clientApprovalImage','الملف الحالي')}</div>
+      ${(o.printTo!=='none'||_isProofQt)?`<div class="fg" style="margin-bottom:8px"><label>${_isProofQt?'ملف البروفة النهائي المرسل للعميل:':'بروفة الطباعة المعتمدة:'}</label><input type="file" multiple id="f-print-input" accept="image/*,.pdf,.doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onchange="uploadFileDirect('${key}','approvedPrintFile','approvedPrintFileName','f-print-input')"/>${uploadedFilesHtml('approvedPrintFile','الملف الحالي')}</div>`:''}
+      ${o.workshopTo!=='none'?`<div class="fg" style="margin-bottom:8px"><label>مخطط قياسات الورشة:</label><input type="file" multiple id="f-workshop-input" accept="image/*,.pdf,.doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onchange="uploadFileDirect('${key}','approvedWorkshopFile','approvedWorkshopFileName','f-workshop-input')"/>${uploadedFilesHtml('approvedWorkshopFile','الملف الحالي')}</div>`:''}
+      ${o.workshopTo!=='none'?`<div class="fg"><label>بروفة الورشة المعتمدة:</label><input type="file" multiple id="f-wsproof-input" accept="image/*,.pdf" onchange="uploadFileDirect('${key}','workshopProofImage','workshopProofImageName','f-wsproof-input')"/>${uploadedFilesHtml('workshopProofImage','الملف الحالي')}</div>`:''}
     </div>`;
     }
-    else if(o.currentDept==='print')uploadArea=`<div class="dept-upload-box"><div class="dept-upload-title" style="color:#3730A3"><i class="ti ti-printer"></i> رفع صورة أول نسخة مطبوعة</div>
-      <div class="fg"><input type="file" id="f-firstprint-input" accept="image/*,.pdf" onchange="uploadFileDirect('${key}','firstPrintImage','firstPrintImageName','f-firstprint-input')"/></div>
-      ${o.firstPrintImage?fileLinkHtml(o.firstPrintImageName,o.firstPrintImage,'الصورة الحالية'):''}
+    // Printing is receive-only: printers never attach their own files here —
+    // they only see what Design already approved for them, plus whatever the
+    // client attached at order registration. (Design's own "first printed
+    // copy" upload box, previously here, was removed at the user's request.)
+    else if(o.currentDept==='print'){
+      const _clientFiles=(o.files||[]).filter(f=>f&&f.data&&f.name);
+      const _printReceived=[
+        o.approvedPrintFile?fileLinkHtml(o.approvedPrintFileName,o.approvedPrintFile,'من التصميم'):'',
+        ..._clientFiles.map(f=>fileLinkHtml(f.name,f.data,'من تسجيل الطلب'))
+      ].filter(Boolean).join('');
+      uploadArea=`<div class="dept-upload-box"><div class="dept-upload-title" style="color:#3730A3"><i class="ti ti-printer"></i> الملفات المستلمة للطباعة</div>
+      ${_printReceived?`<div style="display:flex;flex-direction:column;gap:6px;">${_printReceived}</div>`:'<div style="font-size:11px;color:var(--text-3);">لا توجد ملفات مستلمة بعد</div>'}
     </div>`;
+    }
     else if(o.currentDept==='workshop')uploadArea=`<div class="dept-upload-box"><div class="dept-upload-title" style="color:#9A3412"><i class="ti ti-tools"></i> رفع صورة/فيديو التركيب النهائي</div>
       <div class="fg"><label>صورة المنجز</label><input type="file" id="f-done-input" accept="image/*,.pdf,.doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onchange="uploadFileDirect('${key}','finalWorkshopDoneFile','finalWorkshopDoneFileName','f-done-input')"/></div>
       <div class="fg"><label>فيديو المنجز (اختياري)</label><input type="file" id="f-donevideo-input" accept="video/*" onchange="uploadFileDirect('${key}','finalWorkshopVideo','finalWorkshopVideoName','f-donevideo-input')"/></div>
@@ -6367,7 +6472,7 @@ function openOrderModal(key){
     _measureDone?`
     <div style="background:#F0FDF4;border:1px solid #BBF7D0;border-radius:10px;padding:12px 16px;margin-bottom:12px;">
       <div style="font-size:12px;font-weight:800;color:#166534;margin-bottom:6px;"><i class="ti ti-clipboard-check"></i> القياسات مكتملة — اتخذ إجراءً</div>
-      ${o.workshopSitePhoto?`<div style="margin-bottom:8px;"><img src="${o.workshopSitePhoto}" style="width:100%;max-height:160px;object-fit:cover;border-radius:8px;"/></div>`:''}
+      ${o.workshopSitePhoto?`<div style="margin-bottom:8px;"><img src="${o.workshopSitePhoto}" loading="lazy" style="width:100%;max-height:160px;object-fit:cover;border-radius:8px;"/></div>`:''}
       ${_measureBtns(key,o.client,o.phone)}
     </div>`:
     _proofDone?`
@@ -6398,6 +6503,12 @@ function openOrderModal(key){
     return buildDeptWorkspaceCard(o,key,dk,canAct,dk===o.currentDept?nextBtn:'',dk===o.currentDept?uploadArea:'');
   }).join('');
   const _otherDeptChipsHtml=_otherDeptChips.length?`<div style="display:flex;flex-wrap:wrap;margin-bottom:14px;">${_otherDeptChips.join('')}</div>`:'';
+  // The Workflow Timeline above already communicates the current stage, so
+  // the full per-department action cards (upload boxes, advance buttons,
+  // approval controls) are collapsed by default here instead of always-on —
+  // still one click away for whoever needs to act, but not duplicating the
+  // timeline's status information on every page load.
+  const _deptToolsAcc=(_otherDeptChipsHtml||_deptCardsHtml)?omAccordion('ti-tool','أدوات مراحل الإنتاج',`${_otherDeptChipsHtml}${_deptCardsHtml}`,false):'';
   const _custInfoAcc=omAccordion('ti-user','معلومات العميل',`<div class="od-summary-grid">
     <div class="od-summary-card"><div class="od-summary-lbl">العميل</div><div class="od-summary-val">${esc(o.client||'—')}</div></div>
     <div class="od-summary-card"><div class="od-summary-lbl">رقم الجوال</div><div class="od-summary-val" style="direction:ltr;">${esc(o.phone||'—')}</div></div>
@@ -6451,8 +6562,7 @@ function openOrderModal(key){
       <div class="od-dept-section-lbl" style="margin-bottom:8px;font-size:12px;">📦 بنود الطلب</div>
       ${renderOrderItemsCards(o,key,canAct)}
     </div>
-    ${_otherDeptChipsHtml}
-    ${_deptCardsHtml}
+    ${_deptToolsAcc}
     ${getActiveDepts(o).includes('design')?buildProofApprovalSection(o,key,canAct):''}
     ${maintOrderRow}
     ${maintenanceRow}
@@ -6578,41 +6688,54 @@ function openTimelineModal(key){
     </div>`;
   openModal('timeline-modal');
 }
-async function uploadFileDirect(key,ff,fn2,inputId){
-  const el=document.getElementById(inputId);if(!el||!el.files||!el.files.length)return;
-  const file=el.files[0];
-  showSaving('جاري حفظ الملف...');
+// Primary path: the same Cloudinary/Google-Drive-proxy pipeline every other
+// upload in the app uses. GDRIVE_UPLOAD_ENDPOINT (Apps Script) only kicks in
+// below as a resilience fallback if that primary upload throws — it must not
+// run on the happy path, since convertFileToBase64() returns a hosted URL
+// here, not a base64 data URI.
+async function _uploadOneFileData(file,key){
   try{
-    const upd={};
-    // Primary path: the same Cloudinary/Google-Drive-proxy pipeline every other
-    // upload in the app uses. GDRIVE_UPLOAD_ENDPOINT (Apps Script) only kicks in
-    // below as a resilience fallback if that primary upload throws — it must not
-    // run on the happy path, since convertFileToBase64() returns a hosted URL
-    // here, not a base64 data URI.
-    try{
-      upd[ff]=await convertFileToBase64(file,{order:key});
-      upd[ff+'Storage']='cloud';
-    }catch(primaryErr){
-      console.warn('الرفع الأساسي فشل، تجربة المسار الاحتياطي',primaryErr);
-      const localB64=await _readFileAsDataUrl(file);
-      if(isGDriveConfigured()){
-        try{
-          upd[ff]=await uploadToGDrive(localB64,file.name);
-          upd[ff+'Storage']='gdrive';
-        }catch(gdriveErr){
-          console.warn('المسار الاحتياطي عبر Google Drive فشل أيضاً، سيتم الحفظ داخل قاعدة البيانات كخطة أخيرة',gdriveErr);
-          upd[ff]=localB64;upd[ff+'Storage']='firebase';
-        }
-      }else{
-        upd[ff]=localB64;upd[ff+'Storage']='firebase';
+    return{data:await convertFileToBase64(file,{order:key}),storage:'cloud'};
+  }catch(primaryErr){
+    console.warn('الرفع الأساسي فشل، تجربة المسار الاحتياطي',primaryErr);
+    const localB64=await _readFileAsDataUrl(file);
+    if(isGDriveConfigured()){
+      try{return{data:await uploadToGDrive(localB64,file.name),storage:'gdrive'};}
+      catch(gdriveErr){
+        console.warn('المسار الاحتياطي عبر Google Drive فشل أيضاً، سيتم الحفظ داخل قاعدة البيانات كخطة أخيرة',gdriveErr);
+        return{data:localB64,storage:'firebase'};
       }
     }
-    upd[fn2]=file.name;
+    return{data:localB64,storage:'firebase'};
+  }
+}
+// Most upload boxes only ever select one file, but a few (the design-stage
+// approval boxes) allow selecting several at once — the first file keeps
+// filling the existing single-value field (ff/fn2) so every other place in
+// the app that already reads that field keeps working unchanged, and any
+// additional files are stored as an additive `${ff}Extra` array alongside it.
+async function uploadFileDirect(key,ff,fn2,inputId){
+  const el=document.getElementById(inputId);if(!el||!el.files||!el.files.length)return;
+  const files=Array.from(el.files);
+  showSaving(files.length>1?'جاري حفظ الملفات...':'جاري حفظ الملف...');
+  try{
+    const uploaded=[];
+    for(const file of files){
+      const{data,storage}=await _uploadOneFileData(file,key);
+      uploaded.push({data,storage,name:file.name});
+    }
+    const[first,...rest]=uploaded;
+    const upd={};
+    upd[ff]=first.data;upd[ff+'Storage']=first.storage;upd[fn2]=first.name;
+    upd[ff+'Extra']=rest.map(r=>({data:r.data,name:r.name}));
     upd[ff+'UploadedBy']=cu.name||cu._uname||'—';upd[ff+'UploadedAt']=new Date().toISOString();
     await fbPatch(`orders/${key}`,upd);await loadData();hideSaving();toast('✓ تم التحديث');
     if(ff==='approvedPrintFile'||ff==='approvedWorkshopFile')dispatchAutoWhatsapp(orders[key],'proof_ready');
     const _uo=orders[key];
-    if(_uo)pushNotification({type:'upload',message:`تم رفع ملف على الطلب ${esc(_uo.id||key)} — ${esc(file.name)}`,orderKey:key,orderId:_uo.id,client:_uo.client});
+    if(_uo){
+      const _isProof=ff==='approvedPrintFile'&&_uo.currentDept==='design';
+      pushNotification({type:'upload',message:_isProof?`تم رفع بروفة تصميم على الطلب ${esc(_uo.id||key)}`:`تم رفع ملف على الطلب ${esc(_uo.id||key)} — ${esc(first.name)}`,orderKey:key,orderId:_uo.id,client:_uo.client});
+    }
     openOrderModal(key);
   }catch(e){hideSaving();toast(e&&e.message?e.message:'❌ فشل الرفع');}
 }
@@ -6630,9 +6753,10 @@ async function sendToNextDept(key,next){
   // uploaded. Enforced here (not just in the UI) so it can't be bypassed by
   // calling this function directly from any surface.
   if(curDept==='design'){
+    const missingDesign=!o.clientApprovalImage;
     const missingPrint=o.printTo!=='none'&&!o.approvedPrintFile;
-    const missingWorkshop=o.workshopTo!=='none'&&!o.approvedWorkshopFile;
-    if(missingPrint||missingWorkshop){toast('⚠️ يجب رفع بروفة القياسات والتصميم المعتمدة أولاً قبل الإرسال للمرحلة التالية');return;}
+    const missingWorkshop=o.workshopTo!=='none'&&!o.workshopProofImage;
+    if(missingDesign||missingPrint||missingWorkshop){toast('⚠️ يجب رفع جميع الملفات المطلوبة أولاً قبل الإرسال للمرحلة التالية');return;}
   }
   showSaving('جاري التحويل...');
   const timeField={design:'designDoneAt',external:'externalDoneAt',print:'printDoneAt',workshop:'workshopDoneAt'};
