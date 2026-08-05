@@ -1788,7 +1788,6 @@ async function loadData(){
     ['govRecords',v=>govRecords=v],
     ['urgentRequests',v=>urgentRequests=v],
     ['tasks',v=>tasksData=v],
-    ['eventNotifs',v=>eventNotifs=v],
   ];
   const results=await Promise.all(fetches.map(([path])=>fbGet(path).then(v=>({ok:true,v})).catch(()=>({ok:false}))));
   let anyFailed=false;
@@ -1796,6 +1795,14 @@ async function loadData(){
     if(r.ok){fetches[i][1]((r.v&&typeof r.v==='object')?r.v:{});}
     else{anyFailed=true;}
   });
+  // eventNotifs is fetched separately from the core business-data list above —
+  // it's an additive, non-critical feature (the event notification log), and
+  // its Firebase path may not exist in every deployment's database rules yet
+  // (added after those rules were last configured). A permission error here
+  // must never trigger the generic "some data failed to update" banner that's
+  // meant to warn about orders/clients/etc. — that would alarm users over a
+  // feature they may not even have enabled server-side.
+  try{eventNotifs=(await fbGet('eventNotifs'))||{};}catch(e){console.warn('eventNotifs fetch failed (non-fatal — check Firebase rules allow this path)',e);}
   try{
     updateNotifBell();updateRequestsBadgeSidebar();updateTeamChatBadge();updatePrepBadgeSidebar();
     checkNewAssignments();
