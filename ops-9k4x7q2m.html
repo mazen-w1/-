@@ -2646,6 +2646,26 @@ function orderProgress(o){const seq=getActiveDepts(o);const total=seq.length;if(
 function itemDeptSeq(o){return[...getActiveDepts(o),'done'];}
 function itemCurrentDept(it,o){return it.currentDept||o.currentDept||itemDeptSeq(o)[0]||'design';}
 function itemNextDept(it,o){const seq=itemDeptSeq(o);const idx=seq.indexOf(itemCurrentDept(it,o));if(idx===-1||idx===seq.length-1)return null;return seq[idx+1];}
+// Item-level moves (advanceItemDept/bulkAdvanceItems) only ever touched
+// orderItems[i].currentDept, leaving the order's own top-level currentDept —
+// which drives admin/department "active orders" lists, isMyOrder, Kanban
+// buckets, notifications, etc. — stuck at whatever stage the order started
+// in. That desync let an order whose items had all moved on (and vanished
+// from the assigned employee's own "أعمالي" queue) keep showing forever in
+// the old department's active-orders list. Recompute the order-level stage
+// as the bottleneck (earliest) stage any item is still sitting in, so both
+// views agree.
+function computeOrderDeptFromItems(o,items){
+  const list=items||o.orderItems;
+  if(!Array.isArray(list)||!list.length)return o.currentDept;
+  const seq=itemDeptSeq(o);
+  let minIdx=seq.length-1;
+  list.forEach(it=>{
+    const idx=seq.indexOf(itemCurrentDept(it,o));
+    if(idx!==-1&&idx<minIdx)minIdx=idx;
+  });
+  return seq[minIdx];
+}
 // Pre-existing orders never had `versions` — synthesize a read-only "الأصلية"
 // version from the item's original files so old items still render sensibly
 // instead of an empty version list. Never written back to the DB.
@@ -2690,14 +2710,17 @@ function itemStageRequirementMet(it,o){
 }
 async function advanceItemDept(key,idx){
   const o=orders[key];if(!o)return;
-  if(cu.type!=='admin'&&!isMyOrder(o)){toast('⚠️ هذا الإجراء غير متاح لك');return;}
   const it=o.orderItems[idx];if(!it)return;
+  if(cu.type!=='admin'&&!isMyItem(o,it)){toast('⚠️ هذا الإجراء غير متاح لك');return;}
   const nd=itemNextDept(it,o);if(!nd)return;
   if(!itemStageRequirementMet(it,o)){toast('⚠️ يجب رفع جميع الملفات المطلوبة لهذه المرحلة أولاً');return;}
   showSaving('جاري تحديث حالة البند...');
   try{
     const items=[...o.orderItems];items[idx]={...items[idx],currentDept:nd};
-    await fbPatch(`orders/${key}`,{orderItems:items});
+    const upd={orderItems:items};
+    const newOrderDept=computeOrderDeptFromItems(o,items);
+    if(newOrderDept&&newOrderDept!==o.currentDept){upd.currentDept=newOrderDept;upd.stageStartDate=new Date().toISOString();}
+    await fbPatch(`orders/${key}`,upd);
     await loadData();hideSaving();toast('✓ تم تحديث تقدّم البند');
     _refreshOrderItemsViews(key);
   }catch(e){hideSaving();toast('❌ فشل تحديث البند');}
@@ -2733,7 +2756,12 @@ async function bulkAdvanceItems(key){
       if(!itemStageRequirementMet(it,o)){blocked++;return;}
       items[idx]={...it,currentDept:nd};moved++;
     });
-    if(moved)await fbPatch(`orders/${key}`,{orderItems:items});
+    if(moved){
+      const upd={orderItems:items};
+      const newOrderDept=computeOrderDeptFromItems(o,items);
+      if(newOrderDept&&newOrderDept!==o.currentDept){upd.currentDept=newOrderDept;upd.stageStartDate=new Date().toISOString();}
+      await fbPatch(`orders/${key}`,upd);
+    }
     await loadData();hideSaving();
     toast(moved?`✓ تم نقل ${moved} بند${blocked?` — تعذر نقل ${blocked} لعدم استيفاء شرط الرفع/الاعتماد`:''}`:'⚠️ لم يتم نقل أي بند — يجب استيفاء شرط الرفع/الاعتماد أولاً');
     _refreshOrderItemsViews(key);
