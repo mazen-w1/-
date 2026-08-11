@@ -1618,9 +1618,24 @@ async function uploadToGDrive(dataUrl,fileName){
   if(!j||!j.success)throw new Error((j&&j.error)||'gdrive-upload-failed');
   return j.url;
 }
-function showGDriveStatus(){
-  if(isGDriveConfigured()){toast('✓ Google Drive متصل كمسار احتياطي — يُستخدم فقط إذا فشل الرفع الأساسي');return;}
-  toast(cu.type==='admin'?'⚠️ المسار الاحتياطي لـ Google Drive غير مفعّل — يلزم نشر Apps Script وتعيين GDRIVE_UPLOAD_ENDPOINT في الكود':'⚠️ المسار الاحتياطي لـ Google Drive غير مفعّل حالياً');
+// This button used to only report on the OLD Apps-Script fallback path
+// (isGDriveConfigured/GDRIVE_UPLOAD_ENDPOINT), which large PDF/ZIP uploads
+// don't even use anymore — uploadToGoogleDrive() gets its access token from
+// DRIVE_PROXY_URL (a separate Vercel-hosted OAuth token proxy, outside this
+// file entirely). So the status shown here had nothing to do with whether
+// uploads would actually work. Now it live-tests the real path first.
+async function showGDriveStatus(){
+  toast('⏳ جاري فحص الاتصال بـ Google Drive...');
+  try{
+    _driveAccessToken=null; // force a fresh check, not a cached token from before a fix
+    await getGoogleAccessToken();
+    toast('✓ الاتصال بـ Google Drive يعمل بشكل طبيعي (عبر خادم rawaee-drive-proxy)');
+  }catch(e){
+    const detail=(e&&e.message)?e.message:'خطأ غير معروف';
+    toast(cu.type==='admin'
+      ?`❌ فشل الاتصال بـ Google Drive: ${detail} — تحقق من خادم rawaee-drive-proxy.vercel.app (متغيرات البيئة/رمز التحديث في Vercel) وحالة صلاحيات OAuth في Google Cloud Console`
+      :'❌ تعذر الاتصال بـ Google Drive حالياً — يرجى إبلاغ المدير');
+  }
 }
 window.globalAttachedFiles=[];
 window.reqFileB64='';window.reqFileName='';
@@ -2250,9 +2265,16 @@ let _driveAccessToken=null;
 async function getGoogleAccessToken(){
   if(_driveAccessToken&&_driveAccessToken.expiresAt>Date.now()+60000)return _driveAccessToken.value;
   let resp;
-  try{resp=await fetch(DRIVE_PROXY_URL);}catch(e){throw new Error('⚠️ تعذر الاتصال بخادم رفع الملفات، تحقق من الإنترنت وحاول مجدداً.');}
+  try{resp=await fetch(DRIVE_PROXY_URL);}catch(e){throw new Error('⚠️ تعذر الاتصال بخادم رفع الملفات (rawaee-drive-proxy)، تحقق من الإنترنت أو من أن الخادم يعمل.');}
   let data=null;try{data=await resp.json();}catch(e){}
-  if(!resp.ok||!data||!data.access_token)throw new Error('⚠️ تعذر تجهيز صلاحية رفع الملفات إلى Google Drive.');
+  if(!resp.ok||!data||!data.access_token){
+    // Surface whatever the proxy actually said (e.g. invalid_grant on an
+    // expired/revoked refresh token, missing env vars, a Google API error)
+    // instead of a generic message — this is the only signal available from
+    // here into a failure that actually happens in a separate deployment.
+    const detail=(data&&(data.error_description||data.error))||('HTTP '+resp.status);
+    throw new Error(`⚠️ تعذر تجهيز صلاحية Google Drive — رد الخادم: ${detail}`);
+  }
   _driveAccessToken={value:data.access_token,expiresAt:Date.now()+((data.expires_in||3500)*1000)};
   return _driveAccessToken.value;
 }
