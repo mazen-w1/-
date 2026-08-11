@@ -443,20 +443,20 @@ input[type="password"]{direction:rtl;text-align:right;padding-left:40px;padding-
 .wf-htimeline-node.done .wf-htimeline-lbl,.wf-htimeline-node.active .wf-htimeline-lbl{color:var(--text-1);}
 .wf-detail-actions{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding-top:20px;margin-top:20px;border-top:1px solid var(--border-soft);}
 /* ── Per-item independent workflow cards + design versions ── */
-.order-items-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px;}
-.order-item-card{background:var(--surface);border:1px solid var(--border-soft);border-radius:var(--radius-lg);padding:18px 20px;box-shadow:var(--shadow-sm);transition:box-shadow .2s,transform .2s;}
+.order-items-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:8px;}
+.order-item-card{background:var(--surface);border:1px solid var(--border-soft);border-radius:var(--radius-md);padding:10px 12px;box-shadow:var(--shadow-sm);transition:box-shadow .2s,transform .2s;}
 .order-item-card:hover{box-shadow:var(--shadow-md);transform:translateY(-2px);}
-.order-item-card-head{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;padding-bottom:10px;border-bottom:1px solid var(--border-soft);margin-bottom:10px;}
-.oi-card-head{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;cursor:pointer;}
-.oi-card-head-left{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0;}
-.oi-card-chev{font-size:14px;color:var(--text-3);flex-shrink:0;transition:transform .15s;}
-.oi-card-name{font-size:13px;color:var(--maroon);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:180px;}
-.oi-card-qty{font-size:10.5px;color:var(--text-3);font-weight:700;}
-.oi-card-metrics{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:8px;font-size:10.5px;color:var(--text-3);font-weight:600;}
+.order-item-card-head{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;padding-bottom:6px;border-bottom:1px solid var(--border-soft);margin-bottom:6px;}
+.oi-card-head{display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap;cursor:pointer;}
+.oi-card-head-left{display:flex;align-items:center;gap:6px;flex-wrap:wrap;min-width:0;}
+.oi-card-chev{font-size:13px;color:var(--text-3);flex-shrink:0;transition:transform .15s;}
+.oi-card-name{font-size:12px;color:var(--maroon);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:150px;}
+.oi-card-qty{font-size:10px;color:var(--text-3);font-weight:700;}
+.oi-card-metrics{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-top:5px;font-size:10px;color:var(--text-3);font-weight:600;}
 .oi-card-metrics span{display:inline-flex;align-items:center;gap:3px;}
-.oi-card-bar-track{height:5px;border-radius:5px;background:var(--border-soft);overflow:hidden;margin-top:8px;}
-.oi-card-bar-fill{height:100%;border-radius:5px;background:linear-gradient(90deg,var(--gold),var(--maroon));transition:width .4s;}
-.oi-card-body{margin-top:12px;padding-top:12px;border-top:1px dashed var(--border-soft);}
+.oi-card-bar-track{height:4px;border-radius:4px;background:var(--border-soft);overflow:hidden;margin-top:5px;}
+.oi-card-bar-fill{height:100%;border-radius:4px;background:linear-gradient(90deg,var(--gold),var(--maroon));transition:width .4s;}
+.oi-card-body{margin-top:8px;padding-top:8px;border-top:1px dashed var(--border-soft);}
 .od-dept-chip{display:inline-flex;align-items:center;gap:7px;background:var(--surface);border:1px solid var(--border-soft);border-radius:20px;padding:6px 13px;font-size:11.5px;font-weight:700;margin:0 6px 8px 0;color:var(--text-2);}
 .order-item-htimeline{display:flex;align-items:flex-start;gap:2px;margin:10px 0;}
 .order-item-versions{display:flex;flex-direction:column;gap:10px;margin-top:10px;}
@@ -1587,13 +1587,17 @@ const FINANCIAL_SHEET_ENDPOINT='https://script.google.com/macros/s/AKfycbxr4fQAf
 // returns false and uploadFileDirect() safely falls back to the original Firebase-base64
 // behavior — nothing breaks, it simply doesn't use Drive until a real endpoint is supplied.
 const GDRIVE_UPLOAD_ENDPOINT='https://script.google.com/macros/s/AKfycbzULmZEsbikLIkww7rvymETCWuVWhKu5CzO9oIhw_HsBT2JAN50rJVGkti06VYcPYSA/exec';
-// Must match SHARED_SECRET in gdrive-upload-script.gs exactly, once that script is
-// redeployed with the hardened version — the endpoint is "Anyone" access, so this
-// secret is what stops a stranger who finds the URL from uploading into the Drive
-// folder. Left as the placeholder below, the deployed script (if still the older,
-// secret-less revision) still accepts requests as before; nothing breaks either way.
+// Must match SHARED_SECRET in gdrive-upload-script.gs exactly. The endpoint is
+// "Anyone" access, so this secret is what stops a stranger who extracts the URL
+// from this public file from uploading into the Drive folder. SECURITY: while
+// this is still the placeholder, isGDriveConfigured() below deliberately treats
+// the fallback as NOT configured and refuses to call the endpoint at all —
+// sending requests with an obviously-fake, publicly-known secret string would
+// be worse than not using the fallback, since anyone reading this file learns
+// the exact value being sent. Replace with a real random secret (and set the
+// same value in the deployed script) to re-enable this fallback path.
 const GDRIVE_UPLOAD_SECRET='PASTE_YOUR_SHARED_SECRET_HERE';
-function isGDriveConfigured(){return!!GDRIVE_UPLOAD_ENDPOINT&&!GDRIVE_UPLOAD_ENDPOINT.includes('PASTE_YOUR');}
+function isGDriveConfigured(){return!!GDRIVE_UPLOAD_ENDPOINT&&!GDRIVE_UPLOAD_ENDPOINT.includes('PASTE_YOUR')&&!!GDRIVE_UPLOAD_SECRET&&!GDRIVE_UPLOAD_SECRET.includes('PASTE_YOUR');}
 async function uploadToGDrive(dataUrl,fileName){
   let res;
   try{
@@ -2886,6 +2890,13 @@ function renderOrderItemsCards(o,key,canAct){
   };
   const bulkRows=[];
   const cardsHtml=items.map((it,i)=>{
+    try{return renderOneItemCard(it,i);}
+    catch(e){
+      console.error('renderOneItemCard failed for item',i,e);
+      return `<div class="order-item-card" style="border-color:#FCA5A5;"><div class="oi-card-head"><span class="oi-badge">بند #${i+1}</span><strong class="oi-card-name">${esc((it&&it.name)||'—')}</strong></div><div style="font-size:11px;color:#DC2626;margin-top:6px;"><i class="ti ti-alert-triangle"></i> تعذر عرض تفاصيل هذا البند (بيانات غير مكتملة) — باقي البنود تعمل بشكل طبيعي</div></div>`;
+    }
+  }).join('');
+  function renderOneItemCard(it,i){
     const dept=itemCurrentDept(it,o);
     const seq=itemDeptSeq(o);
     const curIdx=seq.indexOf(dept);
@@ -2967,7 +2978,7 @@ function renderOrderItemsCards(o,key,canAct){
         ${(!deptRestricted)?`<button class="btn btn-out btn-xs" style="margin-top:8px;" onclick="openAddItemModal('${key}',${i})" title="تعديل بيانات البند"><i class="ti ti-pencil"></i> تعديل بيانات البند</button>`:''}
       </div>
     </div>`;
-  }).join('');
+  }
   const bulkToolbarHtml=(canAct&&bulkRows.length)?`<div style="margin-bottom:12px;">
     <button class="btn btn-out btn-sm" type="button" onclick="toggleBulkSendPanel()"><i class="ti ti-checkbox"></i> تحديد بنود لنقلها معاً</button>
     <div id="oi-bulk-panel" style="display:none;margin-top:8px;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:10px;padding:10px;">
@@ -2977,8 +2988,38 @@ function renderOrderItemsCards(o,key,canAct){
       <button class="btn btn-brand btn-sm" type="button" onclick="bulkAdvanceItems('${key}')"><i class="ti ti-transfer"></i> نقل البنود المحددة</button>
     </div>
   </div>`:'';
-  return `${bulkToolbarHtml}<div class="order-items-grid">${cardsHtml}</div>
+  // With many items the card grid gets long and hard to scan/track — a quick
+  // name/dept search plus an expand/collapse-all toggle keeps large orders
+  // just as manageable as small ones, instead of forcing a scroll-and-hunt.
+  const oiToolsHtml=items.length>3?`<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px;">
+    <input placeholder="بحث في بنود الطلب (${items.length})..." oninput="filterOrderItemCards(this)" style="flex:1;min-width:180px;font-size:12px;padding:6px 10px;"/>
+    <button class="btn btn-out btn-xs" type="button" onclick="toggleAllOrderItemCards(this,true)"><i class="ti ti-chevrons-down"></i> فتح الكل</button>
+    <button class="btn btn-out btn-xs" type="button" onclick="toggleAllOrderItemCards(this,false)"><i class="ti ti-chevrons-up"></i> إغلاق الكل</button>
+  </div>`:'';
+  return `<div class="oi-items-wrap">${oiToolsHtml}${bulkToolbarHtml}<div class="order-items-grid">${cardsHtml}</div>
+    <div class="oi-items-empty" style="display:none;text-align:center;color:var(--text-3);padding:16px;font-size:12px;">لا توجد بنود مطابقة للبحث</div></div>
     ${deptRestricted?'':`<button class="btn btn-out btn-xs" style="margin-top:10px;" onclick="openAddItemModal('${key}')"><i class="ti ti-square-rounded-plus"></i> إضافة بند جديد للطلب</button>`}`;
+}
+function filterOrderItemCards(input){
+  const wrap=input.closest('.oi-items-wrap');if(!wrap)return;
+  const q=(input.value||'').trim().toLowerCase();
+  let visible=0;
+  wrap.querySelectorAll('.order-item-card').forEach(card=>{
+    const match=!q||card.textContent.toLowerCase().includes(q);
+    card.style.display=match?'':'none';
+    if(match)visible++;
+  });
+  const empty=wrap.querySelector('.oi-items-empty');
+  if(empty)empty.style.display=(q&&!visible)?'block':'none';
+}
+function toggleAllOrderItemCards(btn,open){
+  const wrap=btn.closest('.oi-items-wrap');if(!wrap)return;
+  wrap.querySelectorAll('[id^="oi-card-body-"]').forEach(body=>{
+    body.style.display=open?'block':'none';
+    const idx=body.id.replace('oi-card-body-','');
+    const chev=wrap.querySelector('#oi-card-chev-'+idx);
+    if(chev)chev.style.transform=open?'rotate(180deg)':'';
+  });
 }
 function progressColor(o){const m={new:'#CBD5E1',design:'#6B21A8',external:'#B45309',print:'#3730A3',workshop:'#9A3412',done:'#10B981'};return m[o.currentDept||'new']||'#475569';}
 function currentPersonName(o){if(!o.currentDept||o.currentDept==='design')return o.designName||'—';if(o.currentDept==='external')return o.externalName||o.externalNote||'تنفيذ خارجي';if(o.currentDept==='print')return o.printName||'—';if(o.currentDept==='workshop')return o.workshopName||'—';if(o.currentDept==='done')return'✓ مكتمل';return'—';}
