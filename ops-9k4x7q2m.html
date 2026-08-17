@@ -1537,6 +1537,7 @@ input:focus,select:focus,textarea:focus{box-shadow:inset 0 1px 3px rgba(74,14,23
 <div class="modal-overlay" id="gov-modal"><div class="modal-box" dir="rtl" id="gov-modal-body" style="max-width:480px;"></div></div>
 <div class="modal-overlay" id="task-modal"><div class="modal-box" dir="rtl" id="task-modal-body" style="max-width:440px;"></div></div>
 <div class="modal-overlay" id="itemwork-review-modal"><div class="modal-box" dir="rtl" id="itemwork-review-modal-body" style="max-width:520px;"></div></div>
+<div class="modal-overlay" id="client-feedback-modal"><div class="modal-box" dir="rtl" id="client-feedback-modal-body" style="max-width:520px;"></div></div>
 <div class="modal-overlay" id="notif-modal">
   <div class="modal-box" dir="rtl" style="max-width:480px;">
     <div class="modal-header"><span class="modal-title"><i class="ti ti-bell"></i> التنبيهات</span><button class="btn-close" onclick="closeModal('notif-modal')">×</button></div>
@@ -3011,9 +3012,31 @@ async function saveItemKindFiles(key,idx,kind,inputId){
     const newVersion={id:'v'+Date.now(),label:ITEM_KIND_LABELS[kind]||kind,status:'قيد التنفيذ',stage:itemCurrentDept(it,o),kind,files:uploaded,notes:'',createdBy:cu.name,createdAt:new Date().toISOString()};
     const items=[...o.orderItems];
     const priorVersions=Array.isArray(items[idx].versions)?items[idx].versions:itemVersions(items[idx]).filter(v=>!v._legacy);
-    items[idx]={...items[idx],versions:[...priorVersions,newVersion]};
-    await fbPatch(`orders/${key}`,{orderItems:items});
-    await loadData();hideSaving();toast('✓ تم رفع الملف');
+    // A fresh design_proof/design_approved upload resolves whatever client
+    // feedback sent this item back for revision — clear the flag so it
+    // reads as a normal in-progress item again instead of still flagging
+    // "🔄 يتطلب تعديل" once the requested rework has actually been done.
+    items[idx]={...items[idx],versions:[...priorVersions,newVersion],needsRevision:(kind==='design_proof'||kind==='design_approved'||kind==='workshop_production')?false:items[idx].needsRevision};
+    // Auto-advance: once this upload satisfies every required design file for
+    // the item (design_approved/design_proof, or workshop_production on a
+    // workshop-only path), it leaves the designer's queue immediately rather
+    // than sitting in a separate "approved, waiting to be sent" state — there
+    // is no third "معتمد" column to manually push items out of anymore.
+    const upd={orderItems:items};
+    let autoAdvanced=false;
+    if(itemCurrentDept(items[idx],o)==='design'&&itemStageRequirementMet(items[idx],o)){
+      const nd=itemNextDept(items[idx],o);
+      if(nd){
+        items[idx]={...items[idx],currentDept:nd};
+        upd.orderItems=items;
+        upd.lastItemUpdateAt=new Date().toISOString();upd.lastItemUpdateBy=cu.name;
+        const newOrderDept=computeOrderDeptFromItems(o,items);
+        if(newOrderDept&&newOrderDept!==o.currentDept){upd.currentDept=newOrderDept;upd.stageStartDate=new Date().toISOString();}
+        autoAdvanced=true;
+      }
+    }
+    await fbPatch(`orders/${key}`,upd);
+    await loadData();hideSaving();toast(autoAdvanced?'✓ تم الاعتماد — تم نقل البند تلقائياً للمرحلة التالية':'✓ تم رفع الملف');
     // This upload box is used from three different surfaces (the standalone
     // Item Workspace page, the designer board's inline item rows, and the
     // full order modal's per-item cards) — _refreshOrderItemsViews refreshes
@@ -3056,135 +3079,58 @@ function _refreshOrderItemsViews(key){
   if(_curPage==='itemwork')buildItemWorkspacePage();
   else if(_curPage==='designer')buildDesignerBoard();
 }
+// Clean grid-card item view: replaces the old per-item accordion (nested
+// timelines, version history, upload boxes, add-version forms) with a
+// simple card per item — title, dimensions, priority, WhatsApp, and a
+// single "فتح البند" button that opens the item's own dedicated workspace
+// (openItemWorkspace/buildItemWorkspacePage), where all that detail/upload
+// complexity now lives instead of cluttering the order modal itself.
+function itemDimensionsText(it){
+  if(it.template&&PRODUCT_TEMPLATES[it.template]&&it.specs&&Object.values(it.specs).some(v=>v)){
+    return PRODUCT_TEMPLATES[it.template].fields.filter(f=>it.specs[f.key]).map(f=>esc(f.label)+': '+esc(String(it.specs[f.key]))).join(' · ');
+  }
+  return it.details?esc(it.details):'';
+}
 function renderOrderItemsCards(o,key,canAct){
   const items=o.orderItems&&Array.isArray(o.orderItems)?o.orderItems:[];
   const deptRestricted=['designer','printer','workshop','follower'].includes(cu.type);
   if(!items.length){
     return `<div style="text-align:center;color:var(--text-3);padding:20px;">لا توجد بنود في هذا الطلب${deptRestricted?'':`<div style="margin-top:8px;"><button class="btn btn-out btn-xs" onclick="openAddItemModal('${key}')"><i class="ti ti-square-rounded-plus"></i> إضافة بند جديد</button></div>`}</div>`;
   }
-  const renderVerCard=(v,key,i,allowEdit)=>{
-    const approved=v.status==='معتمد من العميل';
-    const filesHtml=(v.files&&v.files.length)?v.files.map(f=>fileLinkHtml(f.name,f.data)).join(' '):'<span style="font-size:10px;color:var(--text-3);">لا توجد مرفقات</span>';
-    return `<div class="item-ver-card ${approved?'approved':''}">
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
-        <strong style="font-size:11.5px;color:var(--maroon);">${esc(v.label||'نسخة')}</strong>
-        <span class="badge ${approved?'b-done':'b-proc'}">${approved?'✅ معتمد من العميل':'🟡 قيد التنفيذ'}</span>
-      </div>
-      ${v.notes?`<div style="font-size:11px;color:var(--text-2);margin-top:5px;line-height:1.6;">${esc(v.notes)}</div>`:''}
-      <div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px;">${filesHtml}</div>
-      <div style="font-size:9.5px;color:var(--text-3);margin-top:5px;">${esc(v.createdBy||'—')} ${v.createdAt?'· '+formatDate(v.createdAt):''}</div>
-      ${(allowEdit&&!v._legacy)?`<button class="btn ${approved?'btn-out':'btn-green'} btn-xs" style="margin-top:6px;" onclick="toggleVersionApproval('${key}',${i},'${v.id}')"><i class="ti ${approved?'ti-x':'ti-check'}"></i> ${approved?'إلغاء الاعتماد':'اعتماد من العميل'}</button>`:''}
-    </div>`;
-  };
-  const bulkRows=[];
   const cardsHtml=items.map((it,i)=>{
-    try{return renderOneItemCard(it,i);}
+    try{return renderOneItemGridCard(it,i);}
     catch(e){
-      console.error('renderOneItemCard failed for item',i,e);
-      return `<div class="order-item-card" style="border-color:#FCA5A5;"><div class="oi-card-head"><span class="oi-badge">بند #${i+1}</span><strong class="oi-card-name">${esc((it&&it.name)||'—')}</strong></div><div style="font-size:11px;color:#DC2626;margin-top:6px;"><i class="ti ti-alert-triangle"></i> تعذر عرض تفاصيل هذا البند (بيانات غير مكتملة) — باقي البنود تعمل بشكل طبيعي</div></div>`;
+      console.error('renderOneItemGridCard failed for item',i,e);
+      return `<div class="order-item-card"><strong class="oi-card-name">بند #${i+1} — ${esc((it&&it.name)||'—')}</strong><div style="font-size:11px;color:#DC2626;margin-top:6px;"><i class="ti ti-alert-triangle"></i> تعذر عرض هذا البند (بيانات غير مكتملة) — باقي البنود تعمل بشكل طبيعي</div></div>`;
     }
   }).join('');
-  function renderOneItemCard(it,i){
+  function renderOneItemGridCard(it,i){
     const dept=itemCurrentDept(it,o);
-    const seq=itemDeptSeq(o);
-    const curIdx=seq.indexOf(dept);
-    const pct=seq.length>1?Math.round((curIdx/(seq.length-1))*100):0;
-    const tlHtml=seq.map((dk,si)=>{
-      const st=si<curIdx?'done':(dk===dept?'active':'');
-      const meta=WF_DEPT_META[dk]||{label:dk,icon:'ti-circle'};
-      return `<div class="wf-htimeline-node ${st}" style="flex:1;"><div class="wf-htimeline-dot ${st}" style="width:26px;height:26px;font-size:12px;"><i class="ti ${st==='done'?'ti-check':meta.icon}"></i></div><div class="wf-htimeline-lbl" style="font-size:9.5px;">${meta.label}</div></div>`;
-    }).join('');
-    const nd=itemNextDept(it,o);
-    const reqMet=itemStageRequirementMet(it,o);
-    const advanceBtn=nd?(canAct?(reqMet
-        ?`<button class="btn btn-brand btn-xs" onclick="advanceItemDept('${key}',${i})"><i class="ti ti-arrow-left"></i> نقل البند لمرحلة ${WF_DEPT_META[nd]?.label||nd}</button>`
-        :`<button class="btn btn-out btn-xs" disabled style="opacity:.5;cursor:not-allowed;" title="يجب رفع جميع الملفات المطلوبة أولاً"><i class="ti ti-lock"></i> نقل البند لمرحلة ${WF_DEPT_META[nd]?.label||nd}</button>
-           <div style="font-size:10px;color:#DC2626;margin-top:4px;"><i class="ti ti-alert-triangle"></i> يتطلب رفع جميع الملفات المطلوبة لهذه المرحلة قبل النقل</div>`)
-      :''):'';
-    // Printing view protection: printers must never see/download unapproved
-    // design drafts — only the final client-approved version and files are
-    // shown to them, so old drafts or wrong dimensions can't get printed.
-    const _printerLocked=cu.type==='printer';
-    let allVersions=itemVersions(it);
-    if(_printerLocked)allVersions=allVersions.filter(v=>v.status==='معتمد من العميل');
-    const curStageVersions=allVersions.filter(v=>(v.stage||'design')===dept);
-    const pastStages=seq.slice(0,curIdx);
-    const historyHtml=pastStages.map(pk=>{
-      const pv=allVersions.filter(v=>(v.stage||'design')===pk);
-      if(!pv.length)return'';
-      const meta=WF_DEPT_META[pk]||{label:pk};
-      return omAccordion('ti-history',`سجل مرحلة ${meta.label} (${pv.length})`,pv.map(v=>renderVerCard(v,key,i,false)).join(''),false);
-    }).join('');
-    const curStageBody=curStageVersions.length?curStageVersions.map(v=>renderVerCard(v,key,i,canAct)).join(''):'<div style="font-size:11px;color:var(--text-3);">لا توجد نسخ لهذه المرحلة بعد</div>';
-    const curStageHtml=omAccordion('ti-files',`نسخ المرحلة الحالية${curStageVersions.length?' ('+curStageVersions.length+')':''}`,curStageBody,false);
-    const assigneeUname=o[dept+'To'];
-    const assigneeName=(assigneeUname&&assigneeUname!=='none')?(USERS[assigneeUname]?.name||assigneeUname):'—';
-    const filesCount=allVersions.reduce((s,v)=>s+(v.files?v.files.length:0),0);
-    const commentsCount=allVersions.filter(v=>v.notes&&v.notes.trim()).length;
-    const addedAt=it.addedAt||it.createdAt||o.date;
-    if(nd)bulkRows.push({idx:i,name:it.name||('بند '+(i+1)),ndLabel:WF_DEPT_META[nd]?.label||nd});
-    return `<div class="order-item-card">
-      <div class="oi-card-head" onclick="toggleOrderItemCard(${i})">
+    const dims=itemDimensionsText(it);
+    return `<div class="order-item-card" data-search="${esc((it.name||'').toLowerCase())}">
+      <div class="oi-card-head" style="cursor:default;">
         <div class="oi-card-head-left">
-          <i class="ti ti-chevron-down oi-card-chev" id="oi-card-chev-${i}"></i>
           <span class="oi-badge">بند #${i+1}</span>
           <strong class="oi-card-name" title="${esc(it.name||'—')}">${esc(it.name||'—')}</strong>
           ${it.qty?`<span class="oi-card-qty">×${esc(String(it.qty))}</span>`:''}
         </div>
         <span class="badge ${dept==='done'?'b-done':'b-new'}">${WF_DEPT_META[dept]?.label||dept}</span>
       </div>
-      <div class="oi-card-metrics">
-        <span title="الموظف المسؤول عن المرحلة الحالية"><i class="ti ti-user"></i> ${esc(assigneeName)}</span>
-        <span title="عدد الملفات المرفوعة"><i class="ti ti-paperclip"></i> ${filesCount}</span>
-        <span title="عدد الملاحظات"><i class="ti ti-message-2"></i> ${commentsCount}</span>
-        <span title="منذ إضافة البند"><i class="ti ti-clock"></i> ${addedAt?notifTimeAgo(addedAt):'—'}</span>
-      </div>
-      <div class="oi-card-bar-track"><div class="oi-card-bar-fill" style="width:${pct}%;"></div></div>
-      <div class="oi-card-body" id="oi-card-body-${i}" style="display:none;" onclick="event.stopPropagation();">
-        ${(it.template&&PRODUCT_TEMPLATES[it.template]&&it.specs&&Object.values(it.specs).some(v=>v))?`<div style="font-size:11.5px;color:var(--text-2);background:var(--surface-2);border-right:3px solid var(--maroon);border-radius:8px;padding:6px 10px;margin-bottom:6px;line-height:1.7;"><strong style="color:var(--maroon-mid);">مواصفات ${esc(PRODUCT_TEMPLATES[it.template].label)}:</strong> ${PRODUCT_TEMPLATES[it.template].fields.filter(f=>it.specs[f.key]).map(f=>esc(f.label)+': '+esc(String(it.specs[f.key]))).join(' · ')}</div>`:''}
-        ${it.details?`<div style="font-size:11.5px;color:var(--text-2);background:var(--surface-2);border-right:3px solid var(--gold);border-radius:8px;padding:6px 10px;margin-bottom:6px;line-height:1.6;"><strong style="color:var(--maroon-mid);">التفاصيل والمواصفات:</strong> ${esc(it.details)}</div>`:''}
-        <div class="order-item-htimeline">${tlHtml}</div>
-        ${advanceBtn?`<div style="margin:8px 0;">${advanceBtn}</div>`:''}
-        ${it.requiredFiles?`<div style="font-size:11px;color:var(--text-2);margin-top:6px;"><strong style="color:var(--maroon-mid);">الملفات المطلوبة:</strong> ${esc(it.requiredFiles)}</div>`:''}
-        ${historyHtml}
-        ${dept==='design'?((seq.includes('print')||seq.includes('workshop'))?`<div class="order-item-versions">${(!seq.includes('print')&&seq.includes('workshop'))?renderItemKindBox(it,key,i,'workshop_production',dept,canAct,'بروفة تصميم معتمدة'):[renderItemKindBox(it,key,i,'design_approved',dept,canAct),renderItemKindBox(it,key,i,'design_proof',dept,canAct),...(seq.includes('workshop')?[renderItemKindBox(it,key,i,'workshop_production',dept,canAct)]:[])].join('')}</div>`:'<div style="font-size:11px;color:var(--text-3);">لا توجد ملفات إنتاج مطلوبة لهذا المسار</div>')
-          :dept==='print'?`<div class="order-item-versions">${renderItemKindBox(it,key,i,'design_approved','design',false)}${renderItemKindBox(it,key,i,'design_proof','design',false)}</div>`
-          :dept==='workshop'?`<div class="order-item-versions">${renderItemKindBox(it,key,i,'final_work',dept,canAct)}</div>`
-          :`<div class="order-item-versions">${curStageHtml}</div>
-        ${canAct?`
-        <div style="margin-top:8px;">
-          <button class="btn btn-out btn-xs" onclick="toggleAddItemVersionForm(${i})"><i class="ti ti-plus"></i> إضافة نسخة لهذه المرحلة</button>
-          <div id="add-ver-form-${i}" style="display:none;flex-direction:column;gap:8px;margin-top:8px;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:10px;padding:10px;">
-            <textarea id="new-ver-notes-${i}" placeholder="ملاحظات النسخة..." style="min-height:50px;font-size:12px;"></textarea>
-            <div class="dept-upload-box" onclick="document.getElementById('new-ver-file-${i}').click()" style="padding:10px;"><i class="ti ti-upload"></i> اضغط لإرفاق ملفات النسخة</div>
-            <input type="file" id="new-ver-file-${i}" multiple style="display:none" onchange="handleNewVersionFiles(${i},this.files)"/>
-            <div id="new-ver-file-note-${i}" style="font-size:10px;color:#10B981;font-weight:700;"></div>
-            <button class="btn btn-brand btn-xs" style="align-self:flex-start;" onclick="saveNewItemVersion('${key}',${i})"><i class="ti ti-device-floppy"></i> حفظ النسخة</button>
-          </div>
-        </div>`:''}`}
-        ${it.internalNotes?`<div style="font-size:10.5px;color:var(--text-3);margin-top:8px;border-top:1px dashed var(--border-soft);padding-top:6px;"><i class="ti ti-note"></i> ملاحظات داخلية: ${esc(it.internalNotes)}</div>`:''}
-        ${(!deptRestricted)?`<button class="btn btn-out btn-xs" style="margin-top:8px;" onclick="openAddItemModal('${key}',${i})" title="تعديل بيانات البند"><i class="ti ti-pencil"></i> تعديل بيانات البند</button>`:''}
+      ${dims?`<div style="font-size:11px;color:var(--text-2);margin-top:6px;"><i class="ti ti-ruler-2"></i> ${dims}</div>`:''}
+      <div style="margin-top:8px;">${gpbadge(o.priority)}</div>
+      <div style="display:flex;gap:6px;margin-top:10px;">
+        ${(canSeeWhatsappBtn()&&o.phone&&o.phone!=='—')?`<button class="btn btn-whatsapp btn-sm" onclick="event.stopPropagation();openWhatsapp('${encodeURIComponent(o.phone)}')" title="واتساب"><i class="ti ti-brand-whatsapp"></i></button>`:''}
+        ${canSeeClientFeedback()?`<button class="btn btn-out btn-sm" onclick="event.stopPropagation();openClientFeedbackPanel('${key}',${i})" title="ردود وملاحظات العميل"><i class="ti ti-message-2"></i></button>`:''}
+        <button class="btn btn-brand btn-sm" style="flex:1;justify-content:center;" onclick="openItemWorkspace('${key}',${i})"><i class="ti ti-arrow-left"></i> فتح البند</button>
       </div>
     </div>`;
   }
-  const bulkToolbarHtml=(canAct&&bulkRows.length)?`<div style="margin-bottom:12px;">
-    <button class="btn btn-out btn-sm" type="button" onclick="toggleBulkSendPanel()"><i class="ti ti-checkbox"></i> تحديد بنود لنقلها معاً</button>
-    <div id="oi-bulk-panel" style="display:none;margin-top:8px;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:10px;padding:10px;">
-      <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px;">
-        ${bulkRows.map(r=>`<label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;"><input type="checkbox" class="oi-bulk-check" value="${r.idx}"/> ${esc(r.name)} <span style="color:var(--text-3);font-size:10.5px;">→ ${esc(r.ndLabel)}</span></label>`).join('')}
-      </div>
-      <button class="btn btn-brand btn-sm" type="button" onclick="bulkAdvanceItems('${key}')"><i class="ti ti-transfer"></i> نقل البنود المحددة</button>
-    </div>
+  // With many items the grid gets long and hard to scan — a quick name
+  // search keeps large orders just as manageable as small ones.
+  const oiToolsHtml=items.length>3?`<div style="margin-bottom:10px;">
+    <input placeholder="بحث في بنود الطلب (${items.length})..." oninput="filterOrderItemCards(this)" style="width:100%;font-size:12px;padding:6px 10px;"/>
   </div>`:'';
-  // With many items the card grid gets long and hard to scan/track — a quick
-  // name/dept search plus an expand/collapse-all toggle keeps large orders
-  // just as manageable as small ones, instead of forcing a scroll-and-hunt.
-  const oiToolsHtml=items.length>3?`<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px;">
-    <input placeholder="بحث في بنود الطلب (${items.length})..." oninput="filterOrderItemCards(this)" style="flex:1;min-width:180px;font-size:12px;padding:6px 10px;"/>
-    <button class="btn btn-out btn-xs" type="button" onclick="toggleAllOrderItemCards(this,true)"><i class="ti ti-chevrons-down"></i> فتح الكل</button>
-    <button class="btn btn-out btn-xs" type="button" onclick="toggleAllOrderItemCards(this,false)"><i class="ti ti-chevrons-up"></i> إغلاق الكل</button>
-  </div>`:'';
-  return `<div class="oi-items-wrap">${oiToolsHtml}${bulkToolbarHtml}<div class="order-items-grid">${cardsHtml}</div>
+  return `<div class="oi-items-wrap">${oiToolsHtml}<div class="order-items-grid">${cardsHtml}</div>
     <div class="oi-items-empty" style="display:none;text-align:center;color:var(--text-3);padding:16px;font-size:12px;">لا توجد بنود مطابقة للبحث</div></div>
     ${deptRestricted?'':`<button class="btn btn-out btn-xs" style="margin-top:10px;" onclick="openAddItemModal('${key}')"><i class="ti ti-square-rounded-plus"></i> إضافة بند جديد للطلب</button>`}`;
 }
@@ -3200,14 +3146,83 @@ function filterOrderItemCards(input){
   const empty=wrap.querySelector('.oi-items-empty');
   if(empty)empty.style.display=(q&&!visible)?'block':'none';
 }
-function toggleAllOrderItemCards(btn,open){
-  const wrap=btn.closest('.oi-items-wrap');if(!wrap)return;
-  wrap.querySelectorAll('[id^="oi-card-body-"]').forEach(body=>{
-    body.style.display=open?'block':'none';
-    const idx=body.id.replace('oi-card-body-','');
-    const chev=wrap.querySelector('#oi-card-chev-'+idx);
-    if(chev)chev.style.transform=open?'rotate(180deg)':'';
-  });
+// ============================================================
+// CLIENT FEEDBACK PANEL — reception/manager/external field execution log
+// client responses (verbal changes, approvals-with-notes) and attach
+// screenshots/sketches/field photos against a specific item. Saving it
+// tags the item needsRevision and sends it straight back to the design
+// queue for rework, regardless of which stage it was actually sitting in —
+// a field team finding an installation issue reverts the item exactly the
+// same way a client rejecting a print proof would.
+// ============================================================
+function canSeeClientFeedback(){return['admin','receiver','external'].includes(cu.type);}
+window._cfbFiles=[];
+function openClientFeedbackPanel(key,idx){
+  if(!canSeeClientFeedback()){toast('⚠️ هذا الإجراء غير متاح لك');return;}
+  const o=orders[key];if(!o)return;
+  const it=o.orderItems&&o.orderItems[idx];if(!it)return;
+  window._cfbKey=key;window._cfbIdx=idx;window._cfbFiles=[];
+  const priorFeedback=itemVersions(it).filter(v=>!v._legacy&&v.kind==='client_feedback').sort((a,b)=>new Date(b.createdAt||0)-new Date(a.createdAt||0));
+  const historyHtml=priorFeedback.length?`<div style="margin-bottom:14px;display:flex;flex-direction:column;gap:8px;max-height:180px;overflow-y:auto;">${priorFeedback.map(v=>`<div style="background:var(--surface-2);border:1px solid var(--border-soft);border-radius:8px;padding:8px 10px;">
+    <div style="font-size:10.5px;color:var(--text-3);margin-bottom:3px;">${esc(v.createdBy||'—')} · ${fmtDateTime(v.createdAt)}</div>
+    ${v.notes?`<div style="font-size:12px;color:var(--text-1);line-height:1.6;">${esc(v.notes)}</div>`:''}
+    ${(v.files&&v.files.length)?`<div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:5px;">${v.files.map(f=>fileLinkHtml(f.name,f.data)).join('')}</div>`:''}
+  </div>`).join('')}</div>`:'';
+  document.getElementById('client-feedback-modal-body').innerHTML=`
+    <div class="modal-header"><div class="modal-title"><i class="ti ti-message-2"></i> ردود وملاحظات العميل</div><button class="btn-close" onclick="closeModal('client-feedback-modal')">×</button></div>
+    <div style="font-size:11.5px;color:var(--text-3);margin-bottom:10px;">${esc(o.id||key)} — ${esc(o.client||'—')} · ${esc(it.name||'بند')}</div>
+    ${historyHtml}
+    <div class="fg"><label>ملاحظات / تعديلات مطلوبة من العميل</label><textarea id="cfb-notes" placeholder="اكتب رد العميل أو التعديلات الشفهية المطلوبة..." style="min-height:90px;"></textarea></div>
+    <div class="fg"><label>إرفاق صور / لقطات شاشة / رسومات (اختياري)</label>
+      <div class="dept-upload-box" onclick="document.getElementById('cfb-file-input').click()"><i class="ti ti-upload" style="font-size:20px;color:var(--gold);"></i><br>اضغط لرفع صور أو ملفات</div>
+      <input type="file" id="cfb-file-input" multiple accept="image/*,.pdf" style="display:none" onchange="handleClientFeedbackFile(this.files)"/>
+      <div id="cfb-file-note" style="font-size:11px;color:#10B981;margin-top:4px;font-weight:700;"></div>
+    </div>
+    <button class="btn btn-brand" style="width:100%;justify-content:center;margin-top:6px;" onclick="saveClientFeedback()"><i class="ti ti-send"></i> حفظ وإعادة البند لقسم التصميم</button>`;
+  openModal('client-feedback-modal');
+}
+async function handleClientFeedbackFile(files){
+  if(!files||!files.length)return;
+  showSaving('جاري تحميل الملفات...');
+  try{
+    for(const f of Array.from(files)){
+      const b64=await convertFileToBase64(f);
+      window._cfbFiles.push({data:b64,name:f.name});
+    }
+    const note=document.getElementById('cfb-file-note');
+    if(note)note.textContent='✓ '+window._cfbFiles.length+' ملف مرفق';
+  }catch(e){toast(e&&e.message?e.message:'⚠️ فشل تحميل الملف');}
+  hideSaving();
+}
+async function saveClientFeedback(){
+  if(!canSeeClientFeedback()){toast('⚠️ هذا الإجراء غير متاح لك');return;}
+  const key=window._cfbKey,idx=window._cfbIdx;
+  const o=orders[key];if(!o)return;
+  const it=o.orderItems&&o.orderItems[idx];if(!it)return;
+  const notesEl=document.getElementById('cfb-notes');
+  const notes=notesEl?notesEl.value.trim():'';
+  const files=window._cfbFiles||[];
+  if(!notes&&!files.length){toast('⚠️ يرجى كتابة ملاحظة أو إرفاق ملف');return;}
+  showSaving('جاري الحفظ...');
+  try{
+    const newVersion={id:'v'+Date.now(),label:'رد العميل',status:'قيد التنفيذ',stage:'design',kind:'client_feedback',files,notes,createdBy:cu.name,createdAt:new Date().toISOString()};
+    const items=[...o.orderItems];
+    const priorVersions=Array.isArray(items[idx].versions)?items[idx].versions:itemVersions(items[idx]).filter(v=>!v._legacy);
+    // needsRevision forces itemDesignColumn() back to "قيد التصميم" even
+    // though older design_proof/design_approved versions still exist in
+    // history — otherwise a stale prior proof would make the item look like
+    // it's already "بانتظار رد العميل" again instead of needing fresh work.
+    items[idx]={...items[idx],versions:[...priorVersions,newVersion],needsRevision:true,currentDept:'design'};
+    const upd={orderItems:items,lastItemUpdateAt:new Date().toISOString(),lastItemUpdateBy:cu.name};
+    const newOrderDept=computeOrderDeptFromItems(o,items);
+    if(newOrderDept&&newOrderDept!==o.currentDept){upd.currentDept=newOrderDept;upd.stageStartDate=new Date().toISOString();}
+    await fbPatch(`orders/${key}`,upd);
+    await loadData();hideSaving();closeModal('client-feedback-modal');
+    toast('✓ تم حفظ ملاحظات العميل وإعادة البند لقسم التصميم');
+    const dTo=orders[key]&&orders[key].designTo;
+    if(dTo&&dTo!=='none')pushNotification({type:'client_feedback',message:`ملاحظات جديدة من العميل تتطلب تعديل — الطلب ${esc(o.id||key)}`,orderKey:key,orderId:o.id,client:o.client,targetUname:dTo==='all'?'all-admin':dTo});
+    _refreshOrderItemsViews(key);
+  }catch(e){hideSaving();toast('❌ فشل الحفظ');}
 }
 function progressColor(o){const m={new:'#CBD5E1',design:'#6B21A8',external:'#B45309',print:'#3730A3',workshop:'#9A3412',done:'#10B981'};return m[o.currentDept||'new']||'#475569';}
 function currentPersonName(o){if(!o.currentDept||o.currentDept==='design')return o.designName||'—';if(o.currentDept==='external')return o.externalName||o.externalNote||'تنفيذ خارجي';if(o.currentDept==='print')return o.printName||'—';if(o.currentDept==='workshop')return o.workshopName||'—';if(o.currentDept==='done')return'✓ مكتمل';return'—';}
@@ -4020,12 +4035,21 @@ function toggleWfFilterFlag(key){
 // ============================================================
 // MODULE 4 — DESIGNER WORKFLOW BOARD (item-level, grouped by parent order)
 // ============================================================
-// Column classification reuses the SAME per-item-kind files that already
+// Status classification reuses the SAME per-item-kind files that already
 // gate real stage advancement (itemStageRequirementMet) — 'design_proof'
-// (بروفة sent) and 'design_approved' (client-approved artwork) — so an item
-// only shows as "Approved & ready for print" once it has genuinely satisfied
-// that requirement, not a separate/duplicated notion of "approved".
+// (بروفة sent) and 'design_approved' (client-approved artwork). There is no
+// steady-state "Approved" bucket in the designer view: saveItemKindFiles()
+// now auto-advances an item the instant its upload satisfies every required
+// design file, so it leaves the design queue immediately instead of sitting
+// around waiting for a manual "send" click. 'approved' can still be returned
+// here defensively (e.g. legacy data saved before that auto-advance existed)
+// so nothing is silently lost, but it should be rare/transient in practice.
 function itemDesignColumn(it){
+  // A client-feedback revision request always wins over stale kind history —
+  // otherwise an item that already had a design_proof/design_approved
+  // version from a PRIOR cycle would misleadingly look "بانتظار رد العميل"
+  // or "approved" again right after being sent back for rework.
+  if(it.needsRevision)return'revision';
   const hasKind=k=>itemVersions(it).some(v=>!v._legacy&&(v.stage||'design')==='design'&&v.kind===k&&v.files&&v.files.length>0);
   if(hasKind('design_approved'))return'approved';
   if(hasKind('design_proof'))return'waiting';
@@ -4044,6 +4068,7 @@ const ITEM_DESIGN_STATUS={
   todo:{label:'قيد التصميم',icon:'ti-brush',cls:'b-proc'},
   waiting:{label:'📤 تم إرسال البروفة',icon:'ti-send',cls:'b-new'},
   approved:{label:'✅ معتمد — جاهز للطباعة',icon:'ti-circle-check',cls:'b-done'},
+  revision:{label:'🔄 يتطلب تعديل — رد من العميل',icon:'ti-refresh',cls:'b-urg'},
 };
 function buildDesignerBoard(){
   const groups={};
@@ -4089,7 +4114,7 @@ function designerItemRowHtml(o,it,idx){
   const uidBase=`dsb-${o._key}-${idx}`;
   const specs=it.specs?` <span style="color:var(--text-3);">(${esc(it.specs)})</span>`:'';
   let actionsHtml='';
-  if(colKey==='todo'){
+  if(colKey==='todo'||colKey==='revision'){
     const inputId=uidBase+'-proof';
     actionsHtml=`<label class="designer-action-btn" for="${inputId}" onclick="event.stopPropagation();"><i class="ti ti-upload"></i> رفع بروفة</label>
       <input type="file" multiple id="${inputId}" style="display:none" accept="image/*,.pdf,.ai,.psd" onclick="event.stopPropagation();" onchange="event.stopPropagation();saveItemKindFiles('${o._key}',${idx},'design_proof','${inputId}')"/>`;
@@ -7606,7 +7631,6 @@ function openOrderModal(key){
         ${_custInfoAcc}
         <div style="margin-bottom:16px;">
           <div class="od-dept-section-lbl" style="margin-bottom:8px;font-size:12px;">📦 بنود الطلب</div>
-          ${buildCompactItemsTable(o,key,canAct)}
           ${renderOrderItemsCards(o,key,canAct)}
         </div>
         ${_deptToolsAcc}
