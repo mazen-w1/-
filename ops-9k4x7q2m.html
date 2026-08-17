@@ -32,7 +32,8 @@
   --gold:         #D4AF37;
   --gold-light:   #F0D060;
   --gold-soft:    rgba(212,175,55,0.12);
-  --bg:           #F5F6F8;
+  --gold-2:       #C5A059;
+  --bg:           #F8F7F4;
   --surface:      #FFFFFF;
   --surface-2:    #FAFAFB;
   --border:       #E7E9ED;
@@ -266,6 +267,70 @@ tbody tr:hover td{background:var(--surface-2);}
 .b-partial{background:#FEF3C7;color:#92400E;}
 .b-delivery{background:#E0E7FF;color:#3730A3;}
 .urgent-tag{background:#EF4444;color:#fff;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;display:inline-flex;align-items:center;gap:3px;}
+/* ============================================================ MODULE 3 — DATA-DENSE OPERATIONS TABLE */
+.wf-list-filterbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px;}
+.wf-list-search{flex:1;min-width:230px;display:flex;align-items:center;gap:8px;background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius-md);padding:8px 12px;}
+.wf-list-search i{color:var(--text-3);font-size:15px;}
+.wf-list-search input{border:none;outline:none;flex:1;font-family:inherit;font-size:12.5px;background:transparent;}
+.wf-list-filterbar select{font-size:12px;padding:8px 10px;border-radius:var(--radius-md);border:1.5px solid var(--border);background:var(--surface);font-family:inherit;}
+.wf-toggle-chip{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:999px;border:1.5px solid var(--border);background:var(--surface);color:var(--text-2);font-size:11.5px;font-weight:800;cursor:pointer;font-family:inherit;transition:.15s;}
+.wf-toggle-chip:hover{border-color:var(--gold);}
+.wf-toggle-chip.active{background:var(--maroon);color:#fff;border-color:var(--maroon);}
+.wf-dense-table th{white-space:nowrap;}
+.wf-dense-row{cursor:pointer;transition:background .12s;}
+.wf-dense-row.wf-row-overdue{background:#FFF8F8;box-shadow:inset 3px 0 0 #C53030;}
+.wf-dense-row:hover{background:var(--surface-2);}
+/* Column-1 pills: unread / urgent / overdue */
+.row-pill{display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:20px;font-size:9.5px;font-weight:800;color:#fff;white-space:nowrap;}
+.new-pill{background:#2F855A;box-shadow:0 0 0 3px rgba(47,133,90,.18);animation:rowPillPulse 2s infinite;}
+@keyframes rowPillPulse{0%,100%{box-shadow:0 0 0 0 rgba(47,133,90,.35);}50%{box-shadow:0 0 0 5px rgba(47,133,90,0);}}
+.urgent-pill{background:#C05621;}
+.overdue-pill{background:#C53030;}
+/* Column-3 stage pills — spec's exact stage palette */
+.stage-pill{display:inline-flex;align-items:center;padding:4px 12px;border-radius:999px;font-size:11px;font-weight:800;color:#fff;white-space:nowrap;}
+.stage-design{background:#6B46C1;}
+.stage-print{background:#2B6CB0;}
+.stage-workshop{background:#C05621;}
+.stage-ready{background:#2F855A;}
+.stage-external{background:#713F12;}
+/* Column-4 proof/client-status pills */
+.proof-pill{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:8px;font-size:10.5px;font-weight:800;white-space:nowrap;}
+.proof-waiting{background:#FEF3C7;color:#92400E;}
+.proof-approved{background:#D1FAE5;color:#065F46;}
+/* Column-5 delivery countdown pills */
+.countdown-pill{display:inline-block;font-size:11px;font-weight:800;color:var(--text-2);}
+.countdown-pill.cd-soon{color:#C05621;}
+.countdown-pill.cd-overdue{color:#C53030;font-weight:900;}
+.countdown-pill.cd-done{color:#2F855A;}
+/* Column-7 quick-action icon buttons */
+.qbtn{width:28px;height:28px;border-radius:8px;border:1.5px solid var(--border);background:var(--surface);color:var(--text-2);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;font-size:13px;transition:.15s;}
+.qbtn:hover{border-color:var(--gold);color:var(--maroon);}
+.qbtn-wa{color:#25D366;border-color:#25D36655;}
+.qbtn-wa:hover{background:#25D36615;}
+.qbtn-brand{background:var(--maroon);color:#fff;border-color:var(--maroon);}
+.qbtn-brand:hover{background:var(--maroon-mid);}
+/* ============================================================ MODULE 4 — DESIGNER WORKFLOW BOARD */
+.designer-board{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;align-items:start;}
+@media(max-width:1000px){.designer-board{grid-template-columns:1fr;}}
+.designer-col{background:var(--surface-2);border-radius:var(--radius-lg);border:1px solid var(--border-soft);overflow:hidden;display:flex;flex-direction:column;max-height:calc(100vh - 180px);}
+.designer-col-head{display:flex;align-items:center;gap:9px;padding:14px 16px;background:var(--surface);border-bottom:3px solid;position:sticky;top:0;z-index:1;}
+.designer-col-icon{width:28px;height:28px;border-radius:8px;color:#fff;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;}
+.designer-col-label{font-size:12.5px;font-weight:900;color:var(--text-1);flex:1;}
+.designer-col-count{background:var(--surface-2);border:1px solid var(--border);border-radius:20px;padding:2px 10px;font-size:11px;font-weight:800;color:var(--text-2);}
+.designer-col-body{padding:12px;display:flex;flex-direction:column;gap:12px;overflow-y:auto;}
+.designer-order-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);overflow:hidden;box-shadow:var(--shadow-sm);}
+.designer-order-head{padding:10px 14px;background:var(--gold-soft);cursor:pointer;font-size:12.5px;border-bottom:1px solid var(--border-soft);}
+.designer-order-head:hover{background:rgba(212,175,55,.2);}
+.designer-order-items{display:flex;flex-direction:column;}
+.designer-item-row{padding:10px 14px;border-bottom:1px solid var(--border-soft);cursor:default;}
+.designer-item-row:last-child{border-bottom:none;}
+.designer-item-name{font-size:12px;font-weight:800;color:var(--text-1);margin-bottom:6px;}
+.designer-item-files{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px;}
+.designer-item-actions{display:flex;gap:6px;flex-wrap:wrap;}
+.designer-action-btn{display:inline-flex;align-items:center;gap:5px;padding:6px 11px;border-radius:8px;border:1.5px solid var(--border);background:var(--surface);color:var(--text-2);font-size:10.5px;font-weight:800;cursor:pointer;font-family:inherit;transition:.15s;}
+.designer-action-btn:hover{border-color:var(--gold);color:var(--maroon);}
+.designer-action-primary{background:#2F855A;color:#fff;border-color:#2F855A;}
+.designer-action-primary:hover{background:#276749;}
 /* ============================================================ FORMS */
 .fg{display:flex;flex-direction:column;gap:5px;}
 label{font-size:12px;color:var(--text-2);font-weight:700;}
@@ -597,6 +662,42 @@ input[type="password"]{direction:rtl;text-align:right;padding-left:40px;padding-
 }
 .quick-action-btn:hover{border-color:var(--gold);box-shadow:var(--shadow-md);transform:translateY(-1px);}
 .quick-action-btn .qa-icon{width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;}
+/* ============================================================ EXECUTIVE DASHBOARD v2 — KPI row / quick-action strip / dept workload */
+.kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:16px;}
+@media(max-width:900px){.kpi-row{grid-template-columns:repeat(2,1fr);}}
+@media(max-width:520px){.kpi-row{grid-template-columns:1fr;}}
+.kpi-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px 18px;cursor:pointer;transition:.18s;box-shadow:var(--shadow-sm);position:relative;overflow:hidden;}
+.kpi-card:hover{transform:translateY(-2px);box-shadow:var(--shadow-md);border-color:var(--gold);}
+.kpi-top{display:flex;align-items:center;gap:8px;margin-bottom:10px;}
+.kpi-icon{width:30px;height:30px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:15px;color:#fff;flex-shrink:0;}
+.kpi-icon.kc-gold{background:linear-gradient(145deg,var(--gold),#9B7011);}
+.kpi-icon.kc-red{background:linear-gradient(145deg,#E53E3E,#9B2C2C);}
+.kpi-icon.kc-green{background:linear-gradient(145deg,#38A169,#22543D);}
+.kpi-icon.kc-blue{background:linear-gradient(145deg,#4299E1,#2B6CB0);}
+.kpi-label{font-size:11.5px;font-weight:700;color:var(--text-3);}
+.kpi-value{font-size:26px;font-weight:900;color:var(--text-1);line-height:1;}
+.kpi-alert-badge{margin-top:8px;font-size:10.5px;font-weight:800;color:#C53030;background:#FFF5F5;border:1px solid #FED7D7;border-radius:8px;padding:3px 9px;display:inline-flex;align-items:center;gap:4px;}
+.kpi-spark{display:flex;align-items:flex-end;gap:3px;height:28px;margin-top:10px;}
+.kpi-spark-bar{flex:1;background:var(--gold-soft);border-radius:2px 2px 0 0;min-height:12%;}
+.kpi-card:last-child .kpi-spark-bar,.kpi-card:hover .kpi-spark-bar{background:var(--gold);}
+/* Slim quick action strip */
+.qa-strip{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;}
+.qa-strip-btn{display:inline-flex;align-items:center;gap:8px;background:var(--maroon);color:#fff;border:none;border-radius:999px;padding:10px 18px;font-family:inherit;font-size:12.5px;font-weight:800;cursor:pointer;transition:.18s;box-shadow:0 4px 14px rgba(74,14,23,.25);}
+.qa-strip-btn:hover{background:var(--maroon-mid);transform:translateY(-1px);}
+.qa-strip-btn-out{background:transparent;color:var(--maroon);border:1.5px solid var(--border);box-shadow:none;}
+.qa-strip-btn-out:hover{border-color:var(--gold);background:var(--gold-soft);}
+/* Department workload horizontal bars */
+.dept-load-list{display:flex;flex-direction:column;gap:14px;}
+.dept-load-row{cursor:pointer;padding:4px 2px;border-radius:var(--radius-sm);transition:.15s;}
+.dept-load-row:hover{background:var(--surface-2);}
+.dept-load-head{display:flex;align-items:center;gap:10px;margin-bottom:6px;}
+.dept-load-icon{width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:14px;flex-shrink:0;}
+.dept-load-label{font-size:12.5px;font-weight:800;color:var(--text-1);}
+.dept-load-count{font-size:12px;font-weight:800;color:var(--text-2);margin-right:auto;}
+.dept-load-count span{font-weight:600;color:var(--text-3);}
+.dept-load-team{font-size:10.5px;color:var(--text-3);font-weight:700;}
+.dept-load-track{height:8px;border-radius:6px;background:var(--surface-2);border:1px solid var(--border-soft);overflow:hidden;}
+.dept-load-fill{height:100%;border-radius:6px;transition:width .3s;}
 /* ============================================================ DASHBOARD GRID */
 .dash-main-grid{display:grid;grid-template-columns:1fr 340px;gap:16px;margin-bottom:16px;}
 @media(max-width:1100px){.dash-main-grid{grid-template-columns:1fr;}}
@@ -694,6 +795,41 @@ input[type="password"]{direction:rtl;text-align:right;padding-left:40px;padding-
 .login-btn-main{width:100%;padding:14px;background:linear-gradient(135deg,var(--maroon) 0%,var(--maroon-mid) 100%);color:#fff;border:none;border-radius:var(--radius-md);font-size:15px;font-weight:800;cursor:pointer;font-family:inherit;transition:.18s;margin-top:10px;box-shadow:0 10px 24px rgba(74,14,23,.4),inset 0 1px 0 rgba(255,255,255,.12);}
 .login-btn-main:hover{background:linear-gradient(135deg,var(--maroon-mid) 0%,var(--maroon) 100%);transform:translateY(-2px);box-shadow:0 14px 30px rgba(74,14,23,.5),inset 0 1px 0 rgba(255,255,255,.12);}
 .login-btn-main:active{transform:translateY(0);}
+/* ============================================================ UNIFIED AUTH CARD (single glassmorphic login) */
+.auth-card-glass{
+  width:100%;max-width:420px;margin:0 auto;
+  background:rgba(255,255,255,.07);
+  border:1.5px solid rgba(212,175,55,.4);
+  border-radius:var(--radius-xl);
+  backdrop-filter:blur(22px);-webkit-backdrop-filter:blur(22px);
+  box-shadow:0 24px 64px rgba(0,0,0,.45),0 4px 18px rgba(0,0,0,.3),inset 0 1px 0 rgba(255,255,255,.12);
+  padding:38px 34px 26px;position:relative;z-index:2;
+}
+.auth-card-header{text-align:center;margin-bottom:26px;}
+.auth-card-header .p-logo{width:78px;height:78px;margin:0 auto 14px;border:2px solid rgba(212,175,55,.5);background:linear-gradient(160deg,var(--maroon),var(--maroon-dark));}
+.auth-card-header .p-title{font-size:21px;}
+.auth-card-header .p-badge{font-size:11px;padding:5px 16px;}
+.auth-fields{display:flex;flex-direction:column;gap:16px;}
+.auth-fields .fg label{color:rgba(255,255,255,.75);font-size:12px;font-weight:700;display:block;margin-bottom:6px;}
+.auth-fields .fg input{
+  width:100%;background:rgba(0,0,0,.22);border:1.5px solid rgba(212,175,55,.3);color:#fff;
+  border-radius:var(--radius-md);padding:12px 14px;font-family:inherit;font-size:14px;
+  box-shadow:inset 0 2px 6px rgba(0,0,0,.3);
+  transition:border-color .2s,box-shadow .2s,transform .2s;
+}
+.auth-fields .fg input:focus{
+  outline:none;border-color:var(--gold);transform:translateY(-1px);
+  box-shadow:inset 0 2px 6px rgba(0,0,0,.3),0 0 0 3px rgba(212,175,55,.28),0 6px 16px rgba(212,175,55,.18);
+}
+.auth-fields .fg input::placeholder{color:rgba(255,255,255,.35);}
+.auth-remember-row{display:flex;align-items:center;justify-content:flex-start;margin-top:-4px;}
+.auth-remember-check{display:flex;align-items:center;gap:7px;font-size:12.5px;color:rgba(255,255,255,.75);font-weight:700;cursor:pointer;user-select:none;}
+.auth-remember-check input{accent-color:var(--gold);width:15px;height:15px;cursor:pointer;}
+.auth-card-footer{display:flex;align-items:center;justify-content:center;gap:10px;margin-top:22px;padding-top:18px;border-top:1px solid rgba(255,255,255,.12);}
+.auth-bottom-link{color:rgba(255,255,255,.72);font-size:12px;font-weight:700;text-decoration:none;display:inline-flex;align-items:center;gap:5px;transition:.2s;}
+.auth-bottom-link:hover{color:var(--gold);}
+.auth-footer-sep{color:rgba(255,255,255,.3);font-size:11px;}
+@media(max-width:520px){.auth-card-glass{padding:30px 22px 22px;}}
 /* ============================================================ USER MANAGEMENT */
 .user-avatar-lg{width:52px;height:52px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;color:#fff;overflow:hidden;flex-shrink:0;}
 .user-avatar-lg img{width:100%;height:100%;object-fit:cover;}
@@ -1104,6 +1240,38 @@ input[type="password"]{direction:rtl;text-align:right;padding-left:40px;padding-
 .od-file-grid{display:flex;flex-wrap:wrap;gap:8px;}
 .od-file-thumb{width:64px;height:64px;border-radius:10px;object-fit:cover;border:1px solid var(--border);}
 @media(max-width:640px){.od-summary-grid{grid-template-columns:repeat(2,1fr);}.od-proof-grid{grid-template-columns:1fr;}}
+
+/* ============================================================ MODULE 5 — ORDER DETAIL MODAL SPLIT-COLUMN LAYOUT */
+.od-split{display:grid;grid-template-columns:65% 1fr;gap:20px;align-items:start;}
+.od-left-col{min-width:0;}
+.od-right-col{min-width:0;display:flex;flex-direction:column;gap:14px;position:sticky;top:0;}
+@media(max-width:960px){.od-split{grid-template-columns:1fr;}.od-right-col{position:static;}}
+@media print{.od-split{display:block!important;}.od-activity-chat-panel{max-height:none!important;}}
+
+.od-items-compact-wrap{margin-bottom:16px;overflow-x:auto;}
+.od-items-compact-table{width:100%;border-collapse:collapse;font-size:12px;min-width:520px;}
+.od-items-compact-table th{background:var(--surface-2);color:var(--text-3);font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.3px;padding:8px 10px;text-align:right;border-bottom:1px solid var(--border);white-space:nowrap;}
+.od-items-compact-table td{padding:8px 10px;border-bottom:1px solid var(--border-soft);vertical-align:middle;}
+.od-items-compact-table tr:last-child td{border-bottom:none;}
+.od-items-compact-table select{font-size:11px;padding:4px 6px;border-radius:6px;border:1px solid var(--border);background:var(--surface);max-width:160px;}
+
+.od-activity-chat-panel{background:var(--surface);border:1px solid var(--border-soft);border-radius:var(--radius-lg);box-shadow:var(--shadow-sm);padding:14px;max-height:420px;overflow-y:auto;display:flex;flex-direction:column;gap:10px;}
+
+.od-mgr-controls{background:var(--surface);border:1px solid var(--border-soft);border-radius:var(--radius-lg);box-shadow:var(--shadow-sm);padding:14px;display:flex;flex-direction:column;gap:10px;}
+.od-mgr-controls-title{font-size:11.5px;font-weight:900;color:var(--maroon);display:flex;align-items:center;gap:6px;}
+.od-mgr-quick-row{display:flex;gap:8px;flex-wrap:wrap;}
+
+.od-fin-card{background:linear-gradient(150deg,rgba(255,255,255,.92),rgba(255,255,255,.6));border:1px solid rgba(212,175,55,.35);border-radius:var(--radius-lg);box-shadow:var(--shadow-sm);padding:16px;}
+.od-fin-title{font-size:12.5px;font-weight:900;color:var(--maroon);display:flex;align-items:center;gap:6px;margin-bottom:10px;}
+.od-fin-row{display:flex;align-items:center;justify-content:space-between;padding:6px 0;font-size:12.5px;color:var(--text-2);border-bottom:1px dashed var(--border-soft);}
+.od-fin-row:last-of-type{border-bottom:none;}
+.od-fin-row strong{color:var(--text-1);}
+.od-fin-total{font-size:14px;font-weight:900;color:var(--maroon);border-top:1.5px solid var(--border);margin-top:4px;padding-top:8px;}
+.od-fin-remaining{font-size:14px;font-weight:900;padding:8px 10px;border-radius:10px;margin-top:6px;background:#F0FDF4;color:#166534;}
+.od-fin-remaining.unpaid{background:#FEF2F2;color:#C53030;}
+.od-fin-actions{display:flex;flex-direction:column;gap:8px;margin-top:12px;}
+@media(max-width:640px){.od-items-compact-table{min-width:0;font-size:11px;}}
+
 /* Order modal accordion sections — collapse heavy data blocks (client info,
    items/attachments, financial+timeline) so the modal opens uncluttered. */
 .om-accordion{border:1px solid var(--border-soft);border-radius:var(--radius-md);margin-bottom:12px;overflow:hidden;background:var(--surface);}
@@ -1238,50 +1406,31 @@ input:focus,select:focus,textarea:focus{box-shadow:inset 0 1px 3px rgba(74,14,23
   <div class="portal-bg"></div>
   <div class="portal-wrap">
      <div id="portal-main-view">
-      <div class="portal-header">
-        <div class="p-logo">
-          <svg viewBox="0 0 100 100" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="روائع الأفكار الإعلانية">
-            <text x="50" y="50" text-anchor="middle" dominant-baseline="central" font-family="'Changa',sans-serif" font-weight="800" font-size="62" fill="#fff">ر</text>
-            <rect x="24" y="31" width="5" height="38" rx="2.5" fill="#D4AF37"/>
-          </svg>
+      <div class="auth-card-glass">
+        <div class="auth-card-header">
+          <div class="p-logo">
+            <svg viewBox="0 0 100 100" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="روائع الأفكار الإعلانية">
+              <text x="50" y="50" text-anchor="middle" dominant-baseline="central" font-family="'Changa',sans-serif" font-weight="800" font-size="62" fill="#fff">ر</text>
+              <rect x="24" y="31" width="5" height="38" rx="2.5" fill="#D4AF37"/>
+            </svg>
+          </div>
+          <div class="p-title"><span style="color:#D4AF37;">•</span> روائع الأفكار الإعلانية</div>
+          <div class="p-sub">Rawaee Al-Afkar For Advertising</div>
+          <div class="p-badge">بوابة الدخول الموحد للنظام الداخلي</div>
         </div>
-        <div class="p-title"><span style="color:#D4AF37;">•</span> روائع الأفكار الإعلانية</div>
-        <div class="p-sub">Rawaee Al-Afkar For Advertising</div>
-        <div class="p-badge">بوابة الدخول الموحد للنظام الداخلي</div>
-      </div>
-      <div class="login-cards-container">
-        <div class="l-card admin-card">
-          <div class="l-icon admin-icon"><i class="ti ti-crown"></i></div>
-          <div class="l-title">دخول المدير</div>
-          <div class="l-desc">دخول خاص بمدير النظام للتحكم الكامل</div>
-          <ul class="l-list">
-            <li><i class="ti ti-settings"></i> إدارة جميع الأقسام</li>
-            <li><i class="ti ti-users"></i> الصلاحيات والمستخدمين</li>
-            <li><i class="ti ti-chart-bar"></i> التقارير والإحصائيات</li>
-          </ul>
-          <button class="l-btn admin-btn" onclick="openLoginBox('admin')">تسجيل الدخول <i class="ti ti-chevron-left"></i></button>
+        <div class="auth-fields">
+          <div class="fg"><label>اسم المستخدم / البريد الإلكتروني</label><input type="text" id="lu" placeholder="أدخل اسم المستخدم..." autocomplete="username"/></div>
+          <div class="fg"><label>كلمة المرور</label><input type="password" id="lp" placeholder="••••••••" autocomplete="current-password"/></div>
+          <div class="auth-remember-row">
+            <label class="auth-remember-check"><input type="checkbox" id="l-remember" checked/><span>تذكرني</span></label>
+          </div>
+          <button class="login-btn-main" onclick="doLogin()"><i class="ti ti-login"></i> تأكيد الدخول</button>
+          <div id="lerr" style="color:#EF4444;font-size:12px;display:none;text-align:center;font-weight:700;"><i class="ti ti-alert-circle"></i> بيانات الدخول غير صحيحة</div>
         </div>
-        <div class="l-card dept-card">
-          <div class="l-icon dept-icon"><i class="ti ti-building-factory-2"></i></div>
-          <div class="l-title">دخول الأقسام</div>
-          <div class="l-desc">خاص بأقسام الشركة (تصميم، طباعة، ورشة)</div>
-          <ul class="l-list">
-            <li><i class="ti ti-folder"></i> إدارة أعمال القسم</li>
-            <li><i class="ti ti-clipboard-list"></i> متابعة المهام التشغيلية</li>
-            <li><i class="ti ti-chart-pie"></i> الفرز والتنفيذ</li>
-          </ul>
-          <button class="l-btn dept-btn" onclick="openLoginBox('departments')">تسجيل الدخول <i class="ti ti-chevron-left"></i></button>
-        </div>
-        <div class="l-card user-card">
-          <div class="l-icon user-icon"><i class="ti ti-users"></i></div>
-          <div class="l-title">دخول المستخدمين</div>
-          <div class="l-desc">للموظفين والإداريين (استقبال، محاسبة)</div>
-          <ul class="l-list">
-            <li><i class="ti ti-checkup-list"></i> الوصول للمهام الموكلة</li>
-            <li><i class="ti ti-file-text"></i> تسجيل ومتابعة الطلبات</li>
-            <li><i class="ti ti-message-circle"></i> تواصل وتنسيق مالي</li>
-          </ul>
-          <button class="l-btn user-btn" onclick="openLoginBox('staff')">تسجيل الدخول <i class="ti ti-chevron-left"></i></button>
+        <div class="auth-card-footer">
+          <a href="index.html" class="auth-bottom-link"><i class="ti ti-world"></i> بوابة العملاء</a>
+          <span class="auth-footer-sep">•</span>
+          <a href="#" class="auth-bottom-link" onclick="showForgotPassword();return false;"><i class="ti ti-help-circle"></i> نسيت كلمة المرور؟</a>
         </div>
       </div>
       <div class="portal-footer">
@@ -1290,24 +1439,6 @@ input:focus,select:focus,textarea:focus{box-shadow:inset 0 1px 3px rgba(74,14,23
         <div class="f-item"><i class="ti ti-headset"></i><strong>دعم مستمر</strong><span>فريقنا معك دائماً</span></div>
       </div>
       <div class="f-copy" style="justify-content:center;"><i class="ti ti-shield-lock"></i> جميع الحقوق محفوظة | 2026 © روائع الأفكار الإعلانية</div>
-    </div>
-    <div class="password-box-card" id="portal-password-card">
-      <div style="text-align:center;margin-bottom:22px;">
-        <div class="p-logo" style="width:62px;height:62px;margin:0 auto 12px;">
-          <div style="position:relative;width:100%;height:100%;display:flex;align-items:center;justify-content:center;">
-            <span style="font-family:'Changa',sans-serif;font-weight:800;font-size:34px;line-height:1;color:#fff;">ر</span>
-            <span style="position:absolute;top:9px;left:15px;width:2.5px;height:24px;background:#D4AF37;border-radius:2px;"></span>
-          </div>
-        </div>
-        <strong id="selected-role-label" style="color:var(--maroon);font-size:16px;display:block;margin-top:8px;font-weight:800;"></strong>
-      </div>
-      <div style="display:flex;flex-direction:column;gap:14px;">
-        <div class="fg"><label>اسم المستخدم</label><input type="text" id="lu" placeholder="أدخل اسم المستخدم..."/></div>
-        <div class="fg"><label>كلمة المرور</label><input type="password" id="lp" placeholder="••••••••"/></div>
-        <button class="login-btn-main" onclick="doLogin()"><i class="ti ti-login"></i> تأكيد الدخول</button>
-        <button class="btn btn-out" style="width:100%;justify-content:center;" onclick="backToPortalGrid()"><i class="ti ti-arrow-right"></i> رجوع للخلف</button>
-        <div id="lerr" style="color:#EF4444;font-size:12px;display:none;text-align:center;font-weight:700;"><i class="ti ti-alert-circle"></i> بيانات الدخول غير صحيحة</div>
-      </div>
     </div>
   </div>
 </div>
@@ -1371,6 +1502,8 @@ input:focus,select:focus,textarea:focus{box-shadow:inset 0 1px 3px rgba(74,14,23
         <div class="page" id="page-quote"><div id="quote-content"></div></div>
         <div class="page" id="page-teamchat"><div id="teamchat-content"></div></div>
         <div class="page" id="page-wf"><div id="wf-content"></div></div>
+        <div class="page" id="page-designer"><div id="designer-content"></div></div>
+        <div class="page" id="page-production"><div id="production-content"></div></div>
         <div class="page" id="page-my"><div id="my-content"></div></div>
         <div class="page" id="page-extdash"><div id="extdash-content"></div></div>
         <div class="page" id="page-users"><div id="users-content"></div></div>
@@ -1397,7 +1530,7 @@ input:focus,select:focus,textarea:focus{box-shadow:inset 0 1px 3px rgba(74,14,23
 <!-- PRINT AREA -->
 <div id="print-area"></div>
 <!-- MODALS -->
-<div class="modal-overlay" id="order-modal"><div class="modal-box" dir="rtl" id="order-modal-body" style="max-width:740px;"></div></div>
+<div class="modal-overlay" id="order-modal"><div class="modal-box" dir="rtl" id="order-modal-body" style="max-width:1180px;"></div></div>
 <div class="modal-overlay" id="timeline-modal"><div class="modal-box" dir="rtl" id="timeline-modal-body" style="max-width:480px;"></div></div>
 <div class="modal-overlay" id="add-item-modal"><div class="modal-box" dir="rtl" id="add-item-modal-body" style="max-width:480px;"></div></div>
 <div class="modal-overlay" id="gov-modal"><div class="modal-box" dir="rtl" id="gov-modal-body" style="max-width:480px;"></div></div>
@@ -1648,10 +1781,14 @@ const DEPTS=[
   {key:'print',label:'الطباعة',icon:'ti-printer',color:'#3730A3',roles:['printer']},
   {key:'workshop',label:'الورشة والتركيب',icon:'ti-tools',color:'#9A3412',roles:['workshop']},
 ];
-const PORTAL_ROLE_MAP={
-  admin:['admin'],
-  departments:['designer','printer','workshop','external'],
-  staff:['receiver','accountant','follower']
+// ── Role-based dynamic redirection (unified single-card login) ──
+// Every account type lands on the module most relevant to its job the
+// moment it authenticates, instead of the old 3-portal pre-selection.
+const ROLE_LANDING={
+  admin:'dash',                                    // Admin/Manager → Executive Dashboard
+  designer:'designer',                              // Designer → Designer Workflow Board
+  printer:'production',workshop:'production',external:'production', // Production/Printing/Workshop → Production Pipeline Queue
+  receiver:'wf',accountant:'wf',follower:'wf',      // Staff/Reception/Accounting → Operations & Invoicing Table
 };
 /* ── Service type quick-select helper ── */
 const SERVICE_TYPE_PRESETS={
@@ -1682,7 +1819,7 @@ const INITIAL_USERS={
   workshop1:{pass:'1234',name:'أويس',role:'ورشة',color:'#9A3412',type:'workshop',photo:''},
   external1:{pass:'1234',name:'منفذ خارجي',role:'تنفيذ خارجي',color:'#713F12',type:'external',photo:''},
 };
-let cu=null,orders={},clients={},USERS={},currentSortMode='date-desc',_pendingPortalType=null;
+let cu=null,orders={},clients={},USERS={},currentSortMode='date-desc';
 let submittedRequests={},chats={},standaloneQuotes={},warranties={},teamChat={},govRecords={},urgentRequests={},tasksData={},eventNotifs={};
 let _lastAssignSnapshot=null,_audioCtx=null,_audioUnlocked=false;
 let _navHistory=[];
@@ -1702,22 +1839,18 @@ function startClock(){const el=document.getElementById('header-clock');if(!el)re
 // ============================================================
 // PORTAL / AUTH
 // ============================================================
-function openLoginBox(portalKey){
-  _pendingPortalType=portalKey;
-  const labels={admin:'دخول الإدارة العليا',departments:'بوابة الأقسام التنفيذية',staff:'بوابة الموظفين والمتابعة'};
-  document.getElementById('selected-role-label').textContent=labels[portalKey]||'تسجيل الدخول';
-  document.getElementById('lerr').style.display='none';
-  document.getElementById('lu').value='';document.getElementById('lp').value='';
-  document.getElementById('portal-main-view').style.display='none';
-  document.getElementById('portal-password-card').style.display='block';
+// showForgotPassword: this app has no email/SMS delivery system to reset a
+// password through, so — rather than pretending to send a reset link that
+// would silently go nowhere — this is honest about the real recovery path:
+// an admin resets it for you from the "الموظفين" page.
+function showForgotPassword(){
+  toast('🔒 لإعادة تعيين كلمة المرور، يرجى التواصل مع مدير النظام');
 }
-function backToPortalGrid(){document.getElementById('portal-main-view').style.display='block';document.getElementById('portal-password-card').style.display='none';}
 async function doLogin(){
   await syncUsers();
   const u=document.getElementById('lu').value.trim().toLowerCase();
   const p=document.getElementById('lp').value;
   const e=document.getElementById('lerr');
-  const allowed=PORTAL_ROLE_MAP[_pendingPortalType]||[];
   const rec=USERS[u];
   const hash=rec?await makeSessionToken(u,p):null;
   // rec.pass may still be a legacy plaintext value for accounts that haven't logged in
@@ -1726,14 +1859,21 @@ async function doLogin(){
   const legacyMatch=rec&&!isHashedPass(rec.pass)&&rec.pass===p;
   if(rec&&(rec.pass===hash||legacyMatch)){
     if(legacyMatch){try{await fbPatch(`users/${u}`,{pass:hash});rec.pass=hash;}catch(err){}}
-    if(allowed.length>0&&!allowed.includes(rec.type)){e.style.display='block';e.textContent='هذا الحساب لا ينتمي لهذا القسم';return;}
     showSaving('جاري الدخول...');
     await loadData();hideSaving();
-    localStorage.setItem(SESSION_KEY,JSON.stringify({uname:u,tok:hash}));
+    // "تذكرني" (remember me): checked → persist across browser restarts
+    // (localStorage); unchecked → this tab/session only (sessionStorage,
+    // cleared when the tab/window closes). Only one of the two ever holds
+    // the live session at a time, so a stale copy in the other can't
+    // resurrect a session the user asked not to be remembered.
+    const remember=document.getElementById('l-remember').checked;
+    const sessionPayload=JSON.stringify({uname:u,tok:hash});
+    if(remember){localStorage.setItem(SESSION_KEY,sessionPayload);sessionStorage.removeItem(SESSION_KEY);}
+    else{sessionStorage.setItem(SESSION_KEY,sessionPayload);localStorage.removeItem(SESSION_KEY);}
     enterApp(u);e.style.display='none';
   }else{e.textContent='بيانات الدخول غير صحيحة';e.style.display='block';}
 }
-document.addEventListener('keydown',e=>{if(e.key==='Enter'&&document.getElementById('portal-password-card').style.display==='block')doLogin();});
+document.addEventListener('keydown',e=>{if(e.key==='Enter'&&document.getElementById('ls').style.display!=='none')doLogin();});
 // ── There are no <form> elements anywhere in this app — every input is a
 // bare, independently-wired field. Without this guard, pressing Enter inside
 // any plain text input has no defined behavior of its own, but can still get
@@ -1782,7 +1922,7 @@ function enterApp(u){
   // Without this, any browser/tab reload (mobile OS reclaiming the tab, a
   // manual refresh, a network blip, etc.) silently kicks the user back to
   // the dashboard even if they were in the middle of reviewing another page. ──
-  const _defaultPage=cu.type==='accountant'?'requests':'dash';
+  const _defaultPage=ROLE_LANDING[cu.type]||'dash';
   let _restorePage=_defaultPage;
   try{
     const _saved=localStorage.getItem('rawaee_last_page_'+u);
@@ -1791,7 +1931,7 @@ function enterApp(u){
   nav(_restorePage);
   setInterval(async()=>{await loadData();refreshCurrentPage();},60000);
 }
-function logout(){localStorage.removeItem(SESSION_KEY);location.reload();}
+function logout(){localStorage.removeItem(SESSION_KEY);sessionStorage.removeItem(SESSION_KEY);location.reload();}
 // ============================================================
 // FIREBASE
 // ============================================================
@@ -1930,7 +2070,7 @@ function checkNewAssignments(){
 window.addEventListener('load',async()=>{
   showSaving('جاري التحميل...');
   await syncUsers();
-  const sess=localStorage.getItem(SESSION_KEY);
+  const sess=localStorage.getItem(SESSION_KEY)||sessionStorage.getItem(SESSION_KEY);
   if(sess){
     try{
       const s=JSON.parse(sess);
@@ -1952,7 +2092,7 @@ window.addEventListener('load',async()=>{
         await loadData();hideSaving();enterApp(s.uname);return;
       }
     }catch(e){}
-    localStorage.removeItem(SESSION_KEY);
+    localStorage.removeItem(SESSION_KEY);sessionStorage.removeItem(SESSION_KEY);
   }
   hideSaving();
   document.getElementById('ls').style.display='block';
@@ -2446,7 +2586,7 @@ function buildSidebar(){
       ni('tasks','ti-list-check','مهام'),
     ]);
   }else if(t==='external'){
-    h+=navGroup('أعمالي',[ni('my','ti-user-check','أعمالي الحالية'),ni('extdash','ti-world','لوحة التنفيذ الخارجي')]);
+    h+=navGroup('أعمالي',[ni('production','ti-progress-check','قائمة الإنتاج'),ni('my','ti-user-check','أعمالي الحالية'),ni('extdash','ti-world','لوحة التنفيذ الخارجي')]);
     h+=navGroup('إدارة الطلبات',[
       ni('add','ti-plus','تسجيل طلب'),
       ni('maintreq','ti-tool','طلب صيانة'),
@@ -2454,9 +2594,11 @@ function buildSidebar(){
       ni('wf','ti-grid-dots','سير العمل'),
     ]);
     h+=navGroup('إضافي',[ni('urgent','ti-bolt','طلب عاجل')]);
-  }else if(['designer','printer','workshop'].includes(t)){
-    h+=navGroup('الأعمال',[ni('my','ti-user-check','أعمالي الحالية')]);
-    if(t==='designer'){h+=navGroup('إضافي',[ni('urgent','ti-bolt','طلب عاجل')]);}
+  }else if(t==='designer'){
+    h+=navGroup('لوحة التصميم',[ni('designer','ti-layout-kanban','لوحة العمل'),ni('my','ti-user-check','أعمالي الحالية')]);
+    h+=navGroup('إضافي',[ni('urgent','ti-bolt','طلب عاجل')]);
+  }else if(['printer','workshop'].includes(t)){
+    h+=navGroup('الإنتاج',[ni('production','ti-progress-check','قائمة الإنتاج'),ni('my','ti-user-check','أعمالي الحالية')]);
     if(t==='printer'){h+=navGroup('إضافي',[ni('urgent','ti-bolt','طلب عاجل')]);}
     if(t==='workshop'){h+=navGroup('إضافي',[ni('maintreq','ti-tool','طلب صيانة')]);}
   }else if(t==='follower'){
@@ -2487,6 +2629,7 @@ function buildSidebar(){
     ]);
   }else if(t==='accountant'){
     h+=navGroup('المحاسبة',[
+      ni('wf','ti-grid-dots','سجل العمليات والفواتير'),
       ni('requests','ti-inbox','الطلبات الواردة','','requests-badge'),
       ni('govobligations','ti-building-bank','الالتزامات الحكومية والتشغيلية'),
       ni('export','ti-table-export','تصدير Excel'),
@@ -3360,165 +3503,104 @@ async function handleWfSitePhoto(files){
 // department's own filtered queue page (openDeptStagePage → buildDeptStagePage,
 // the pre-existing per-department page). Pure read of existing order/user
 // data — no new schema.
-function buildDeptStatCardsHtml(){
+// ── Department Workload & Pipeline Overview: horizontal capacity/load bars,
+// one row per department, instead of the old per-dept card grid — a single
+// glanceable strip rather than four separate stat cards repeating the same
+// numbers. "Delivery" has no dedicated currentDept value in the data model
+// (stages are design/external/print/workshop/done) — orders finished in the
+// last 48h are used as the delivery/handover proxy (recently done, not yet
+// long-settled). Capacity is approximated as (team size × assumed 5 concurrent
+// orders/person) since there's no explicit per-employee capacity field;
+// that assumption is intentionally visible in code, not hidden in the UI.
+const ASSUMED_CAPACITY_PER_STAFF=5;
+function buildDeptWorkloadHtml(){
   const arr=ordersArr();
   const now=new Date();
-  const deptsDef=[
-    {key:'design',label:'التصميم',icon:'ti-brush',color:'#6B21A8',roleType:'designer'},
-    {key:'print',label:'الطباعة',icon:'ti-printer',color:'#3730A3',roleType:'printer'},
-    {key:'workshop',label:'الورشة',icon:'ti-tools',color:'#9A3412',roleType:'workshop'},
-    {key:'external',label:'تنفيذ خارجي',icon:'ti-world',color:'#713F12',roleType:'external'}
+  const rows=[
+    {key:'design',label:'التصميم',icon:'ti-brush',color:'#6B21A8',roleType:'designer',
+      count:arr.filter(o=>(o.currentDept||'design')==='design').length},
+    {key:'print',label:'الطباعة',icon:'ti-printer',color:'#2B6CB0',roleType:'printer',
+      count:arr.filter(o=>o.currentDept==='print').length},
+    {key:'workshop',label:'الورشة',icon:'ti-tools',color:'#C05621',roleType:'workshop',
+      count:arr.filter(o=>o.currentDept==='workshop').length},
+    {key:'delivery',label:'التسليم',icon:'ti-truck-delivery',color:'#2F855A',roleType:null,
+      count:arr.filter(o=>o.currentDept==='done'&&o.workshopDoneAt&&(now-new Date(o.workshopDoneAt))<172800000).length},
   ];
-  const cardsHtml=deptsDef.map(d=>{
-    const deptOrders=arr.filter(o=>(o.currentDept||'design')===d.key);
-    const delayed=deptOrders.filter(o=>o.deadline&&o.deadline!=='—'&&new Date(o.deadline)<now).length;
-    // "Waiting for client approval" is only a real, tracked concept at the
-    // design stage (client-approval status on a version) — other stages have
-    // no approval field, so they simply report 0 rather than a fabricated guess.
-    const waitingApproval=d.key==='design'?deptOrders.filter(o=>(o.orderItems||[]).some(it=>itemVersionsForStage(it,'design').some(v=>!v._legacy&&v.files&&v.files.length&&v.status!=='معتمد من العميل'))).length:0;
-    const inProgress=Math.max(0,deptOrders.length-delayed-waitingApproval);
-    const team=Object.values(USERS).filter(u=>u.type===d.roleType).map(u=>u.name).filter(Boolean);
-    return `<div class="card" style="border-right:4px solid ${d.color};display:flex;flex-direction:column;gap:10px;">
-      <div style="display:flex;align-items:center;gap:12px;">
-        <div style="width:46px;height:46px;border-radius:50%;background:${d.color};display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 6px 14px rgba(0,0,0,.18);"><i class="ti ${d.icon}" style="font-size:20px;color:#fff;"></i></div>
-        <div><div style="font-size:22px;font-weight:900;color:var(--text-1);line-height:1;">${deptOrders.length}</div><div style="font-size:12px;color:var(--text-3);font-weight:700;margin-top:2px;">${d.label} — إجمالي الطلبات</div></div>
+  const rowsHtml=rows.map(d=>{
+    const team=d.roleType?Object.values(USERS).filter(u=>u.type===d.roleType):[];
+    const capacity=Math.max(1,team.length*ASSUMED_CAPACITY_PER_STAFF);
+    const pct=Math.min(100,Math.round((d.count/capacity)*100));
+    const overLimit=d.count>capacity;
+    return`<div class="dept-load-row" onclick="${d.key==='delivery'?"dashGoto('done')":`openDeptStagePage('${d.key}')`}">
+      <div class="dept-load-head">
+        <div class="dept-load-icon" style="background:${d.color};"><i class="ti ${d.icon}"></i></div>
+        <div class="dept-load-label">${d.label}</div>
+        <div class="dept-load-count">${d.count} <span>طلب</span></div>
+        <div class="dept-load-team">${team.length?`<i class="ti ti-users"></i> ${team.length} موظف`:''}</div>
       </div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;">
-        <span class="badge b-proc" style="font-size:10px;">قيد التنفيذ: ${inProgress}</span>
-        ${d.key==='design'?`<span class="badge b-new" style="font-size:10px;">بانتظار اعتماد العميل: ${waitingApproval}</span>`:''}
-        <span class="badge" style="font-size:10px;background:${delayed?'#FEE2E2':'var(--surface-2)'};color:${delayed?'#991B1B':'var(--text-3)'};">متأخرة: ${delayed}</span>
-      </div>
-      <div style="font-size:10.5px;color:var(--text-3);"><i class="ti ti-users"></i> ${team.length?esc(team.join('، ')):'لا يوجد موظفون مسجّلون لهذا القسم'}</div>
-      <button class="btn btn-out btn-sm" style="width:100%;justify-content:center;margin-top:auto;" onclick="openDeptStagePage('${d.key}')"><i class="ti ti-arrow-left"></i> فتح القسم</button>
+      <div class="dept-load-track"><div class="dept-load-fill" style="width:${pct}%;background:${overLimit?'#C53030':d.color};"></div></div>
     </div>`;
   }).join('');
-  return `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px;margin-bottom:20px;">${cardsHtml}</div>`;
+  return`<div class="card" style="margin-bottom:16px;">
+    <div class="card-header"><span class="card-title"><i class="ti ti-chart-bar"></i> أعباء العمل وخط الإنتاج بالأقسام</span></div>
+    <div class="dept-load-list">${rowsHtml}</div>
+  </div>`;
 }
 function buildDash(){
   const t=cu.type;
   const arr=ordersArr();
   const running=arr.filter(o=>o.currentDept!=='done');
-  const myArr=['designer','printer','workshop','external'].includes(t)?running.filter(o=>isMyOrder(o)):running;
-  const total=running.length,dn=arr.filter(o=>o.currentDept==='done').length,ug=running.filter(o=>o.priority==='عاجلة').length;
-  const inDesign=running.filter(o=>o.currentDept==='design'||!o.currentDept).length;
-  const inProd=running.filter(o=>['print','workshop','external'].includes(o.currentDept)).length;
-  const roNote=t==='follower'?'<div class="ro-notice"><i class="ti ti-info-circle"></i>وضع المشاهدة فقط — لا يمكنك تعديل البيانات</div>':'';
-  const myNote=['designer','printer','workshop','external'].includes(t)?`<div class="ro-notice" style="background:#EFF6FF;border-color:#BFDBFE;color:#1E40AF"><i class="ti ti-user-check"></i>أعمالك الجارية حالياً: <strong>${myArr.length}</strong></div>`:'';
-  const qtBtns=(t==='admin'||t==='receiver')?`
-    <!-- Primary CTA hero row -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px;">
-      <button onclick="nav('add')" style="background:linear-gradient(135deg,var(--maroon) 0%,#6B1520 100%);color:#fff;border:none;border-radius:14px;padding:20px 22px;cursor:pointer;display:flex;align-items:center;gap:14px;font-family:inherit;transition:.15s;box-shadow:0 6px 24px rgba(74,14,23,.3);" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">
-        <div style="width:46px;height:46px;border-radius:12px;background:rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;flex-shrink:0;"><i class="ti ti-plus" style="font-size:22px;color:#fff;"></i></div>
-        <div style="text-align:right;"><div style="font-size:15px;font-weight:900;color:#fff;">تسجيل طلب</div><div style="font-size:11px;color:rgba(255,255,255,.7);margin-top:2px;">إنشاء أمر تشغيل جديد</div></div>
-      </button>
-      <button onclick="nav('quote')" style="background:linear-gradient(135deg,#78350F 0%,#C89A4A 100%);color:#fff;border:none;border-radius:14px;padding:20px 22px;cursor:pointer;display:flex;align-items:center;gap:14px;font-family:inherit;transition:.15s;box-shadow:0 6px 24px rgba(120,53,15,.25);" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">
-        <div style="width:46px;height:46px;border-radius:12px;background:rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;flex-shrink:0;"><i class="ti ti-receipt-2" style="font-size:22px;color:#fff;"></i></div>
-        <div style="text-align:right;"><div style="font-size:15px;font-weight:900;color:#fff;">إصدار عرض سعر</div><div style="font-size:11px;color:rgba(255,255,255,.7);margin-top:2px;">عرض احترافي للعميل</div></div>
-      </button>
-    </div>
-    <div class="quick-actions">
-      <button class="quick-action-btn" onclick="openQuickTask('proof')">
-        <div class="qa-icon" style="background:#F3E8FF;color:#6B21A8;"><i class="ti ti-brush"></i></div>
-        <div style="text-align:right;"><div style="font-size:13px;font-weight:700;color:var(--maroon)">طلب بروفة عاجلة</div><div style="font-size:11px;color:var(--text-3)">تكليف فوري للمصممين</div></div>
-      </button>
-      <button class="quick-action-btn" onclick="openQuickTask('measure')">
-        <div class="qa-icon" style="background:#FFEDD5;color:#9A3412;"><i class="ti ti-ruler"></i></div>
-        <div style="text-align:right;"><div style="font-size:13px;font-weight:700;color:var(--maroon)">قياسات ميدانية</div><div style="font-size:11px;color:var(--text-3)">تكليف الورشة بالزيارة</div></div>
-      </button>
-      <button class="quick-action-btn" onclick="openQuickTask('test')">
-        <div class="qa-icon" style="background:#E0E7FF;color:#3730A3;"><i class="ti ti-flask"></i></div>
-        <div style="text-align:right;"><div style="font-size:13px;font-weight:700;color:var(--maroon)">تست</div><div style="font-size:11px;color:var(--text-3)">تكليف الطباعة أو التنفيذ الخارجي</div></div>
-      </button>
-    </div>`:'';
-  // ── time-based statistics ────────────────────────────────────────
-  const _now=new Date();
-  const _done=arr.filter(o=>o.currentDept==='done');
-  const _last24h=_done.filter(o=>o.workshopDoneAt&&(_now-new Date(o.workshopDoneAt))<86400000).length;
-  const _last7d =_done.filter(o=>o.workshopDoneAt&&(_now-new Date(o.workshopDoneAt))<604800000).length;
-  const _avgH=function(){const c=_done.filter(o=>o.workshopDoneAt&&o.date);if(!c.length)return 0;return Math.round(c.reduce((s,o)=>{const h=(new Date(o.workshopDoneAt)-new Date(o.date))/3600000;return s+(h>0?h:0);},0)/c.length);}();
-  const _fH=h=>h===0?'—':h<24?h+'س':Math.round(h/24)+' يوم';
-  const _dsAvg=function(){const c=arr.filter(o=>o.designDoneAt&&o.date&&getActiveDepts(o).includes('design'));if(!c.length)return 0;return Math.round(c.reduce((s,o)=>{const h=(new Date(o.designDoneAt)-new Date(o.date))/3600000;return s+(h>0?h:0);},0)/c.length);}();
-  const _prAvg=function(){const c=arr.filter(o=>o.printDoneAt&&o.date&&getActiveDepts(o).includes('print'));if(!c.length)return 0;return Math.round(c.reduce((s,o)=>{const h=(new Date(o.printDoneAt)-new Date(o.date))/3600000;return s+(h>0?h:0);},0)/c.length);}();
-  const _ovr=running.filter(o=>o.deadline&&o.deadline!=='—'&&new Date(o.deadline)<_now).length;
-  const stats=`<div class="stats-row">
-    <div class="stat-card c-gold" onclick="dashGoto('active')"><div class="stat-icon i-gold"><i class="ti ti-loader-2"></i></div><div class="stat-label">جارية الآن</div><div class="stat-value">${total}</div><div class="stat-trend"><span style="background:rgba(212,175,55,.15);color:#92400E;border-radius:8px;padding:1px 6px;font-size:9px;font-weight:800;"><i class="ti ti-bolt"></i>${ug} عاجل</span></div></div>
-    <div class="stat-card c-red" onclick="dashGoto('overdue')"><div class="stat-icon i-red"><i class="ti ti-alarm-minus"></i></div><div class="stat-label">تجاوزت الميعاد</div><div class="stat-value" style="color:#EF4444">${_ovr}</div><div class="stat-trend"><i class="ti ti-brush" style="color:var(--text-3)"></i>&nbsp;<span style="color:var(--text-2)">تصميم: ${inDesign} جارية</span></div></div>
-    <div class="stat-card c-orange" onclick="dashGoto('urgent')"><div class="stat-icon i-orange"><i class="ti ti-bolt"></i></div><div class="stat-label">العاجلة</div><div class="stat-value" style="color:#EA580C">${ug}</div><div class="stat-trend"><i class="ti ti-alert-circle" style="color:var(--text-3)"></i>&nbsp;<span style="color:var(--text-2)">طلبات عاجلة</span></div></div>
-    <div class="stat-card c-green" onclick="dashGoto('done')"><div class="stat-icon i-green"><i class="ti ti-circle-check"></i></div><div class="stat-label">مكتملة</div><div class="stat-value">${dn}</div><div class="stat-trend"><i class="ti ti-calendar" style="color:var(--text-3)"></i>&nbsp;<span style="color:var(--text-2)">7 أيام: ${_last7d} &nbsp;·&nbsp; اليوم: ${_last24h}</span></div></div>
-  </div>
-  <div style="text-align:left;margin:-8px 0 18px;">
-    <button class="btn btn-out btn-sm" onclick="nav('timeline')"><i class="ti ti-list-details"></i> عرض جميع الطلبات (سجل تفصيلي)</button>
-  </div>`;
-  // Alerts
   const now=new Date();
-  const urgentOrders=myArr.filter(o=>o.priority==='عاجلة'&&o.currentDept!=='done');
-  const overdueOrders=myArr.filter(o=>{if(!o.deadline||o.deadline==='—'||o.currentDept==='done')return false;return new Date(o.deadline)<now;});
-  const deadlineOrders=myArr.filter(o=>{if(!o.deadline||o.deadline==='—'||o.currentDept==='done')return false;const dl=new Date(o.deadline);const h=Math.round((dl-now)/3600000);return h>=0&&h<=72;});
-  /* ── Reception inbox alerts ── */
-  /* ── Row renderer (reusable helper) ── */
-  const renderAlertRow=(type,o)=>{
-    const isUrgent=type==='urgent',isOverdue=type==='overdue';
-    const accent=isUrgent?'#DC2626':isOverdue?'#B91C1C':'#D97706';
-    const bgRow=isOverdue?'#FFF8F8':'';
-    const icon=isUrgent?'ti-bolt':isOverdue?'ti-alert-triangle':'ti-clock-exclamation';
-    const tag=isUrgent?'عاجل':isOverdue?'تجاوز الموعد':(()=>{const h=Math.round((new Date(o.deadline)-now)/3600000);return h<24?h+' ساعة':Math.round(h/24)+' يوم';})();
-    const avatarLetter=esc((o.client||'؟').charAt(0));
-    return`<div onclick="openOrderModal('${o._key}')" style="display:flex;align-items:center;gap:12px;padding:8px 14px;border-bottom:1px solid var(--border-soft);cursor:pointer;transition:background .12s;${bgRow?'background:'+bgRow+';':''}" onmouseover="this.style.background='#F9F5F0'" onmouseout="this.style.background='${bgRow}'">
-      <div style="width:32px;height:32px;border-radius:50%;background:${accent}18;border:2px solid ${accent}40;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px;font-weight:800;color:${accent};">${avatarLetter}</div>
-      <div style="flex:1;min-width:0;"><div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;flex-wrap:wrap;"><span style="background:${accent};color:#fff;padding:1px 7px;border-radius:6px;font-size:9px;font-weight:800;display:inline-flex;align-items:center;gap:2px;white-space:nowrap;"><i class="ti ${icon}" style="font-size:9px;"></i> ${tag}</span><strong style="font-size:12px;color:var(--maroon);">${o.id||o._key}</strong></div><div style="font-size:11px;color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(o.client)} ${o.service?'· '+esc(o.service):''}</div></div>
-      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0;">${deptBadge(o.currentDept)}${orderTimerBadge(o)}</div>
-    </div>`;
-  };
-  /* ── Section 1: urgent orders ── */
-  const urgentWrap=urgentOrders.length?`
-  <div style="background:var(--surface);border-radius:var(--radius-lg);border:1px solid var(--border);box-shadow:0 4px 20px rgba(0,0,0,.06);margin-bottom:12px;overflow:hidden;">
-    <div style="padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:linear-gradient(135deg,#7F1D1D 0%,#991B1B 100%);">
-      <div style="display:flex;align-items:center;gap:10px;">
-        <div style="width:30px;height:30px;border-radius:8px;background:rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;"><i class="ti ti-bolt" style="font-size:16px;color:#fff;"></i></div>
-        <div><div style="font-size:12px;font-weight:900;color:#fff;">الطلبات العاجلة</div><div style="font-size:9px;color:rgba(255,255,255,.6);margin-top:1px;">تحتاج تدخل فوري</div></div>
-      </div>
-      <div style="background:rgba(255,255,255,.18);border:1.5px solid rgba(255,255,255,.35);color:#fff;font-size:13px;font-weight:900;min-width:28px;height:28px;padding:0 6px;border-radius:20px;display:flex;align-items:center;justify-content:center;gap:3px;"><i class="ti ti-bolt" style="font-size:12px;"></i>${urgentOrders.length}</div>
+  const todayStr=now.toISOString().slice(0,10);
+  const total=running.length;
+  const ovr=running.filter(o=>o.deadline&&o.deadline!=='—'&&new Date(o.deadline)<now).length;
+  // Today's completions: orders whose workshop/finish timestamp falls on today's calendar date.
+  const doneToday=arr.filter(o=>o.currentDept==='done'&&o.workshopDoneAt&&String(o.workshopDoneAt).slice(0,10)===todayStr).length;
+  // Today's Sales & Collections: no per-payment timestamp exists in the data model (only a
+  // cumulative paidAmount per order), so this is the paidAmount total for orders *created*
+  // today — a defensible proxy for "today's business", not a ledger of collection dates.
+  const todaySales=arr.filter(o=>(o.date||'').slice(0,10)===todayStr).reduce((s,o)=>s+(Number(o.paidAmount)||0),0);
+  // 7-day mini sparkline for the "Total Active Orders" card, from real order creation dates.
+  const sparkDays=Array.from({length:7},(_,i)=>{const d=new Date(now);d.setDate(d.getDate()-(6-i));return d.toISOString().slice(0,10);});
+  const sparkCounts=sparkDays.map(ds=>arr.filter(o=>(o.date||'').slice(0,10)===ds).length);
+  const sparkMax=Math.max(1,...sparkCounts);
+  const sparkline=`<div class="kpi-spark">${sparkCounts.map(c=>`<div class="kpi-spark-bar" style="height:${Math.max(12,Math.round((c/sparkMax)*100))}%;"></div>`).join('')}</div>`;
+  const roNote=t==='follower'?'<div class="ro-notice"><i class="ti ti-info-circle"></i>وضع المشاهدة فقط — لا يمكنك تعديل البيانات</div>':'';
+  // ── Top KPI row: exactly 4 compact cards ──
+  const kpiRow=`<div class="kpi-row">
+    <div class="kpi-card" onclick="dashGoto('active')">
+      <div class="kpi-top"><span class="kpi-icon kc-gold"><i class="ti ti-loader-2"></i></span><span class="kpi-label">إجمالي الطلبات الجارية</span></div>
+      <div class="kpi-value">${total}</div>
+      ${sparkline}
     </div>
-    <div>${urgentOrders.slice(0,6).map(o=>renderAlertRow('urgent',o)).join('')}</div>
-  </div>`:'';
-  /* ── Section 2: deadline / overdue ── */
-  const _deadlineAll=[...overdueOrders,...deadlineOrders.filter(o=>!overdueOrders.includes(o))];
-  const deadlineWrap=_deadlineAll.length?`
-  <div style="background:var(--surface);border-radius:var(--radius-lg);border:1px solid var(--border);box-shadow:0 4px 20px rgba(0,0,0,.06);margin-bottom:18px;overflow:hidden;">
-    <div style="padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:linear-gradient(135deg,#78350F 0%,#92400E 100%);">
-      <div style="display:flex;align-items:center;gap:10px;">
-        <div style="width:30px;height:30px;border-radius:8px;background:rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;"><i class="ti ti-clock-exclamation" style="font-size:16px;color:#fff;"></i></div>
-        <div><div style="font-size:12px;font-weight:900;color:#fff;">تنبيهات التسليم</div><div style="font-size:9px;color:rgba(255,255,255,.6);margin-top:1px;">مواعيد تسليم قريبة أو متجاوزة</div></div>
-      </div>
-      <div style="background:rgba(255,255,255,.18);border:1.5px solid rgba(255,255,255,.35);color:#fff;font-size:13px;font-weight:900;min-width:28px;height:28px;padding:0 6px;border-radius:20px;display:flex;align-items:center;justify-content:center;gap:3px;"><i class="ti ti-clock-exclamation" style="font-size:12px;"></i>${_deadlineAll.length}</div>
+    <div class="kpi-card" onclick="dashGoto('overdue')">
+      <div class="kpi-top"><span class="kpi-icon kc-red"><i class="ti ti-alarm-minus"></i></span><span class="kpi-label">طلبات متأخرة / حرجة</span></div>
+      <div class="kpi-value" style="color:#C53030;">${ovr}</div>
+      <div class="kpi-alert-badge">${ovr>0?'<i class=\"ti ti-alert-triangle\"></i> يتطلب متابعة فورية':'لا توجد طلبات متأخرة'}</div>
     </div>
-    <div>${_deadlineAll.slice(0,6).map(o=>{const type=overdueOrders.includes(o)?'overdue':'deadline';return renderAlertRow(type,o);}).join('')}</div>
+    <div class="kpi-card" onclick="dashGoto('done')">
+      <div class="kpi-top"><span class="kpi-icon kc-green"><i class="ti ti-circle-check"></i></span><span class="kpi-label">مكتملة / تم التسليم اليوم</span></div>
+      <div class="kpi-value">${doneToday}</div>
+    </div>
+    <div class="kpi-card" onclick="nav('revenue')">
+      <div class="kpi-top"><span class="kpi-icon kc-blue"><i class="ti ti-cash-banknote"></i></span><span class="kpi-label">مبيعات وتحصيلات اليوم</span></div>
+      <div class="kpi-value">${fmtMoney(todaySales)} <span style="font-size:12px;font-weight:800;color:var(--text-3);">ر.س</span></div>
+    </div>
+  </div>`;
+  // ── Slim quick action strip (admin/receiver only — the roles that create orders) ──
+  const qaStrip=(t==='admin'||t==='receiver')?`<div class="qa-strip">
+    <button class="qa-strip-btn" onclick="nav('add')"><i class="ti ti-plus"></i> تسجيل طلب</button>
+    <button class="qa-strip-btn" onclick="nav('quote')"><i class="ti ti-receipt-2"></i> عرض سعر فوري</button>
+    <button class="qa-strip-btn" onclick="openQuickTask('measure')"><i class="ti ti-ruler"></i> قياسات ميدانية</button>
+    <button class="qa-strip-btn qa-strip-btn-out" onclick="nav('wf')"><i class="ti ti-list-details"></i> سجل العمليات الكامل</button>
   </div>`:'';
-  const tableRows=myArr.filter(o=>hoursAgo(o.stageStartDate||o.date)<=24).slice(0,8).map(o=>`<tr onclick="openOrderModal('${o._key}')" style="cursor:pointer">
-    <td><strong style="color:var(--maroon)">${o.id||o._key}</strong>${o.priority==='عاجلة'?`<span class="urgent-tag" style="margin-right:5px;font-size:9px;"><i class="ti ti-bolt"></i></span>`:''}</td>
-    <td><strong>${esc(o.client)}</strong></td>
-    <td style="font-size:11px;color:var(--text-2);">${esc(o.service)}</td>
-    <td>${gpbadge(o.priority)}</td>
-    <td>${deptBadge(o.currentDept)}</td>
-    <td>${orderTimerBadge(o)}</td>
-  </tr>`).join('');
-  const deptCardsSection=['admin','follower','receiver'].includes(t)?buildDeptStatCardsHtml():'';
+  const deptWorkload=['admin','follower','receiver'].includes(t)?buildDeptWorkloadHtml():'';
   document.getElementById('page-dash').innerHTML=`
-    <div class="page-header"><div><div class="ptitle"><i class="ti ti-layout-dashboard"></i> لوحة التحكم</div><div class="breadcrumb">مرحباً، ${esc(cu.name)}</div></div></div>
-    ${roNote}${myNote}${qtBtns}
-    ${deptCardsSection}
-    ${stats}
-    ${controlsRow(false)}
-    <div class="card">
-      <div class="card-header">
-        <span class="card-title"><i class="ti ti-list-details"></i> ${['designer','printer','workshop','external'].includes(t)?'أعمالي الجارية':'آخر الطلبات المستلمة'}</span>
-        <button class="btn btn-out btn-sm" onclick="nav('wf')"><i class="ti ti-arrow-left"></i> عرض الكل</button>
-      </div>
-      <div class="tbl-wrap"><table>
-        <thead><tr><th style="width:80px">الطلب</th><th>العميل</th><th>الخدمة</th><th style="width:75px">الأولوية</th><th style="width:90px">المرحلة</th><th style="width:80px">الوقت</th></tr></thead>
-        <tbody>${tableRows||'<tr><td colspan="6" style="text-align:center;color:var(--text-3);padding:30px"><i class="ti ti-inbox" style="font-size:30px;display:block;margin-bottom:8px;"></i>لا توجد طلبات جارية</td></tr>'}</tbody>
-      </table></div>
-    </div>`;
+    <div class="page-header"><div><div class="ptitle"><i class="ti ti-layout-dashboard"></i> لوحة التحكم التنفيذية</div><div class="breadcrumb">مرحباً، ${esc(cu.name)}</div></div></div>
+    ${roNote}
+    ${kpiRow}
+    ${qaStrip}
+    ${deptWorkload}`;
 }
 async function dashGoto(mode){
   if(mode==='done'){
@@ -3550,7 +3632,7 @@ async function dashGoto(mode){
 // ============================================================
 function buildWfGrid(tab){
   _currentWfTab=tab||'active';
-  const view=window._wfView||'kanban';
+  const view=window._wfView||'list';
   document.getElementById('page-wf').innerHTML=`
     <div class="page-header"><div class="ptitle"><i class="ti ti-grid-dots"></i> متابعة سير العمل</div></div>
     <div class="tab-bar" style="margin-bottom:14px;">
@@ -3761,7 +3843,241 @@ function wfMatchesFilters(o,f){
     const assignees=[o.designTo,o.printTo,o.workshopTo,o.externalTo].filter(v=>v&&v!=='none');
     if(!assignees.includes(f.employee))return false;
   }
+  // Instant toggle: ⚠️ عاجل/متأخر فقط — matches either an urgent priority or a
+  // passed deadline on a still-open order (the two conditions the badge column shows).
+  if(f.urgentOverdueOnly){
+    const overdue=o.deadline&&o.deadline!=='—'&&o.currentDept!=='done'&&new Date(o.deadline)<new Date();
+    if(!(o.priority==='عاجلة'||overdue))return false;
+  }
+  // Instant toggle: 💬 ردود بروفة جديدة — orders with a design/print/workshop
+  // proof version uploaded and still awaiting the client's response.
+  if(f.newProofOnly){
+    const proof=proofStatusForOrder(o);
+    if(!proof||proof.key!=='waiting')return false;
+  }
+  if(f.q){
+    const q=f.q.trim().toLowerCase();
+    if(q){
+      const hay=`${o.id||o._key} ${o.client||''} ${o.phone||''}`.toLowerCase();
+      if(!hay.includes(q))return false;
+    }
+  }
   return true;
+}
+// ── Proof & Client Status (module 3, column 4) ──────────────────────────
+// Derived from item version data already tracked for design/print proof
+// approval (v.status === 'معتمد من العميل'), scoped to the order's current
+// active department so a print-stage order isn't shown against a stale
+// design-stage proof. No new schema — a read over existing item versions.
+function proofStatusForOrder(o){
+  const dept=o.currentDept||'design';
+  if(dept==='done')return null;
+  let hasApproved=false,hasPending=false;
+  (o.orderItems||[]).forEach(it=>{
+    itemVersionsForStage(it,dept).forEach(v=>{
+      if(v._legacy||!v.files||!v.files.length)return;
+      if(v.status==='معتمد من العميل')hasApproved=true;else hasPending=true;
+    });
+  });
+  if(hasPending)return{key:'waiting',label:'بانتظار العميل',icon:'ti-send'};
+  if(hasApproved)return{key:'approved',label:'العميل اعتمد',icon:'ti-message-circle-check'};
+  return null;
+}
+// ── Delivery countdown text (module 3, column 5) ──
+function deliveryCountdownText(o){
+  if(!o||!o.deadline||o.deadline==='—')return{text:'—',cls:''};
+  const now=new Date();const dl=new Date(o.deadline);
+  if(isNaN(dl))return{text:o.deadline,cls:''};
+  const diffMs=dl-now;
+  if(o.currentDept==='done')return{text:'تم التسليم',cls:'done'};
+  if(diffMs<0){
+    const hOver=Math.round(-diffMs/3600000);
+    return{text:hOver<24?`متأخر ${hOver} ساعة`:`متأخر ${Math.round(hOver/24)} يوم`,cls:'overdue'};
+  }
+  const isToday=dl.toDateString()===now.toDateString();
+  if(isToday){
+    const timePart=dl.toLocaleTimeString('ar-SA',{hour:'2-digit',minute:'2-digit'});
+    return{text:`اليوم ${timePart}`,cls:diffMs<7200000?'soon':''};
+  }
+  const h=Math.round(diffMs/3600000);
+  if(h<=48)return{text:h<=1?'متبقي ساعة':h<24?`متبقي ${h} ساعات`:'متبقي يوم تقريباً',cls:'soon'};
+  return{text:`متبقي ${Math.round(h/24)} أيام`,cls:''};
+}
+// ── Column 1 badges: unread / urgent / overdue ──
+function orderRowBadges(o){
+  const badges=[];
+  if(typeof hasOrderUpdate==='function'&&hasOrderUpdate(o))badges.push('<span class="row-pill new-pill">جديد</span>');
+  if(o.priority==='عاجلة')badges.push('<span class="row-pill urgent-pill"><i class="ti ti-bolt"></i> عاجل</span>');
+  const overdue=o.deadline&&o.deadline!=='—'&&o.currentDept!=='done'&&new Date(o.deadline)<new Date();
+  if(overdue)badges.push('<span class="row-pill overdue-pill"><i class="ti ti-alert-triangle"></i> متأخر</span>');
+  return badges.join('');
+}
+// ── Column 3: stage pill using the spec's exact stage colors ──
+function stagePillHtml(dept){
+  const m={design:{c:'stage-design',l:'تصميم'},print:{c:'stage-print',l:'طباعة'},workshop:{c:'stage-workshop',l:'ورشة'},external:{c:'stage-external',l:'تنفيذ خارجي'},done:{c:'stage-ready',l:'جاهز'}};
+  const d=m[dept]||m.design;
+  return `<span class="stage-pill ${d.c}">${d.l}</span>`;
+}
+// ── Column 2: client/service summary — primary item name + size/spec ──
+function orderItemSummary(o){
+  const items=o.orderItems||[];
+  if(!items.length)return esc(o.service||'—');
+  const first=items[0];
+  const specs=first.specs?` <span style="color:var(--text-3);">(${esc(first.specs)})</span>`:'';
+  const more=items.length>1?` <span style="color:var(--text-3);">+${items.length-1} بند</span>`:'';
+  return `${esc(first.name||o.service||'—')}${specs}${more}`;
+}
+// ── Column 7: quick actions — WhatsApp / advance stage / view ──
+function orderQuickActionsHtml(o){
+  const next=o.currentDept!=='done'?getNextDept(o):null;
+  const waBtn=(typeof canSeeWhatsappBtn==='function'&&canSeeWhatsappBtn()&&o.phone)?`<button class="qbtn qbtn-wa" title="واتساب" onclick="openWhatsapp('${encodeURIComponent(o.phone)}')"><i class="ti ti-brand-whatsapp"></i></button>`:'';
+  const advBtn=next?`<button class="qbtn qbtn-brand" title="نقل للمرحلة التالية" onclick="sendToNextDept('${o._key}','${next}')"><i class="ti ti-arrow-left"></i></button>`:'';
+  const viewBtn=`<button class="qbtn" title="عرض الطلب" onclick="openOrderModal('${o._key}')"><i class="ti ti-eye"></i></button>`;
+  return `<div style="display:flex;gap:5px;">${waBtn}${advBtn}${viewBtn}</div>`;
+}
+// ── Model-3 filter/search bar for the list view specifically ──
+function wfListFiltersBarHtml(f){
+  const employeeOptions=Object.entries(USERS).filter(([,u])=>['designer','printer','workshop','external'].includes(u.type))
+    .map(([uname,u])=>`<option value="${esc(uname)}"${f.employee===uname?' selected':''}>${esc(u.name)}</option>`).join('');
+  const deptOptions=['design','print','workshop','external','done']
+    .map(k=>`<option value="${k}"${f.dept===k?' selected':''}>${WF_DEPT_META[k].label}</option>`).join('');
+  return `<div class="wf-list-filterbar">
+    <div class="wf-list-search"><i class="ti ti-search"></i><input id="wf-list-q" placeholder="بحث برقم الطلب، اسم العميل، أو رقم الجوال..." value="${esc(f.q||'')}" oninput="setWfListSearch(this.value)"/></div>
+    <select onchange="setWfFilter('employee',this.value)"><option value="">كل المسؤولين</option>${employeeOptions}</select>
+    <select onchange="setWfFilter('dept',this.value)"><option value="">كل المراحل</option>${deptOptions}</select>
+    <button class="wf-toggle-chip ${f.urgentOverdueOnly?'active':''}" onclick="toggleWfFilterFlag('urgentOverdueOnly')"><i class="ti ti-alert-triangle"></i> عاجل / متأخر فقط</button>
+    <button class="wf-toggle-chip ${f.newProofOnly?'active':''}" onclick="toggleWfFilterFlag('newProofOnly')"><i class="ti ti-message-circle"></i> ردود بروفة جديدة</button>
+  </div>`;
+}
+function setWfListSearch(v){
+  window._wfFilters=window._wfFilters||{};window._wfFilters.q=v;
+  const q=v.trim().toLowerCase();
+  document.querySelectorAll('#wf-view-body tbody tr[data-search]').forEach(r=>{
+    r.style.display=(!q||(r.getAttribute('data-search')||'').includes(q))?'':'none';
+  });
+}
+function toggleWfFilterFlag(key){
+  window._wfFilters=window._wfFilters||{};
+  window._wfFilters[key]=!window._wfFilters[key];
+  renderWfListView();
+}
+// ============================================================
+// MODULE 4 — DESIGNER WORKFLOW BOARD (item-level, grouped by parent order)
+// ============================================================
+// Column classification reuses the SAME per-item-kind files that already
+// gate real stage advancement (itemStageRequirementMet) — 'design_proof'
+// (بروفة sent) and 'design_approved' (client-approved artwork) — so an item
+// only shows as "Approved & ready for print" once it has genuinely satisfied
+// that requirement, not a separate/duplicated notion of "approved".
+function itemDesignColumn(it){
+  const hasKind=k=>itemVersions(it).some(v=>!v._legacy&&(v.stage||'design')==='design'&&v.kind===k&&v.files&&v.files.length>0);
+  if(hasKind('design_approved'))return'approved';
+  if(hasKind('design_proof'))return'waiting';
+  return'todo';
+}
+function buildDesignerBoard(){
+  const isAdmin=cu.type==='admin';
+  const buckets={todo:{},waiting:{},approved:{}};
+  ordersArr().forEach(o=>{
+    (o.orderItems||[]).forEach((it,idx)=>{
+      if(itemCurrentDept(it,o)!=='design')return;
+      if(!isAdmin&&!(o.designTo===cu._uname||o.designTo==='all'))return;
+      const col=itemDesignColumn(it);
+      buckets[col][o._key]=buckets[col][o._key]||{o,items:[]};
+      buckets[col][o._key].items.push({it,idx});
+    });
+  });
+  const colDef=[
+    {key:'todo',label:'قيد التصميم',icon:'ti-brush',color:'#6B46C1'},
+    {key:'waiting',label:'بانتظار رد العميل',icon:'ti-send',color:'#D97706'},
+    {key:'approved',label:'معتمد وجاهز للطباعة',icon:'ti-circle-check',color:'#2F855A'},
+  ];
+  const colHtml=colDef.map(c=>{
+    const groups=Object.values(buckets[c.key]);
+    const count=groups.reduce((s,g)=>s+g.items.length,0);
+    const cardsHtml=groups.length?groups.map(g=>designerOrderCardHtml(g.o,g.items,c.key)).join(''):
+      `<div style="text-align:center;color:var(--text-3);padding:24px 10px;font-size:12px;">لا توجد بنود</div>`;
+    return `<div class="designer-col">
+      <div class="designer-col-head" style="border-color:${c.color};">
+        <span class="designer-col-icon" style="background:${c.color};"><i class="ti ${c.icon}"></i></span>
+        <span class="designer-col-label">${c.label}</span>
+        <span class="designer-col-count">${count}</span>
+      </div>
+      <div class="designer-col-body">${cardsHtml}</div>
+    </div>`;
+  }).join('');
+  document.getElementById('page-designer').innerHTML=`
+    <div class="page-header"><div><div class="ptitle"><i class="ti ti-layout-kanban"></i> لوحة عمل التصميم</div><div class="breadcrumb">${esc(cu.name)} — بنود التصميم مجمّعة حسب الطلب</div></div></div>
+    <div class="designer-board">${colHtml}</div>`;
+}
+function designerOrderCardHtml(o,itemEntries,colKey){
+  const itemsHtml=itemEntries.map(({it,idx})=>designerItemRowHtml(o,it,idx,colKey)).join('');
+  const urgentTag=o.priority==='عاجلة'?'<span class="row-pill urgent-pill"><i class="ti ti-bolt"></i> عاجل</span>':'';
+  return `<div class="designer-order-card">
+    <div class="designer-order-head" onclick="openOrderModal('${o._key}')">
+      <div><strong>${esc(o.id||o._key)}</strong> <span style="color:var(--text-3);font-weight:600;">• ${esc(o.client||'—')}</span></div>
+      <div style="font-size:10.5px;color:var(--text-3);display:flex;align-items:center;gap:6px;">${(o.orderItems||[]).length} بند ${urgentTag}</div>
+    </div>
+    <div class="designer-order-items">${itemsHtml}</div>
+  </div>`;
+}
+function designerItemRowHtml(o,it,idx,colKey){
+  const uidBase=`dsb-${o._key}-${idx}`;
+  const specs=it.specs?` <span style="color:var(--text-3);">(${esc(it.specs)})</span>`:'';
+  let actionsHtml='';
+  if(colKey==='todo'){
+    const inputId=uidBase+'-proof';
+    actionsHtml=`<label class="designer-action-btn" for="${inputId}"><i class="ti ti-upload"></i> رفع بروفة</label>
+      <input type="file" multiple id="${inputId}" style="display:none" accept="image/*,.pdf,.ai,.psd" onchange="saveItemKindFiles('${o._key}',${idx},'design_proof','${inputId}')"/>`;
+  }else if(colKey==='waiting'){
+    const inputId=uidBase+'-approved';
+    const waBtn=o.phone?`<button class="designer-action-btn" onclick="openWhatsapp('${encodeURIComponent(o.phone)}')"><i class="ti ti-brand-whatsapp"></i> إرسال للعميل</button>`:'';
+    actionsHtml=`${waBtn}<label class="designer-action-btn" for="${inputId}"><i class="ti ti-upload"></i> رفع الملف المعتمد</label>
+      <input type="file" multiple id="${inputId}" style="display:none" accept="image/*,.pdf,.ai,.psd" onchange="saveItemKindFiles('${o._key}',${idx},'design_approved','${inputId}')"/>`;
+  }else if(colKey==='approved'){
+    actionsHtml=`<button class="designer-action-btn designer-action-primary" onclick="advanceItemDept('${o._key}',${idx})"><i class="ti ti-send-2"></i> اعتماد وإرسال للطباعة</button>`;
+  }
+  // Google-Drive-backed file preview: falls back to the same base64 storage
+  // as everywhere else in the app when Drive isn't configured (see
+  // mediaService-equivalent comments on isGDriveConfigured) — the link still
+  // opens/downloads correctly either way, only the storage backend differs.
+  const previewFiles=itemVersionsForStage(it,'design').filter(v=>!v._legacy).flatMap(v=>v.files||[]);
+  const previewHtml=previewFiles.length?`<div class="designer-item-files">${previewFiles.slice(-3).map(f=>fileLinkHtml(f.name,f.data)).join('')}</div>`:'';
+  return `<div class="designer-item-row" onclick="event.stopPropagation();">
+    <div class="designer-item-name">${esc(it.name||'بند')}${specs}</div>
+    ${previewHtml}
+    <div class="designer-item-actions">${actionsHtml}</div>
+  </div>`;
+}
+// ============================================================
+// PRODUCTION PIPELINE QUEUE (printer / workshop / external landing page)
+// ============================================================
+// Reuses module 3's row helpers (badges/summary/countdown/quick-actions) so
+// the visual language matches the operations table exactly, scoped to the
+// viewer's own department queue instead of the full cross-department list.
+function buildProductionQueue(){
+  const deptForType={printer:'print',workshop:'workshop',external:'external'}[cu.type]||null;
+  document.getElementById('page-production').innerHTML=`
+    <div class="page-header"><div><div class="ptitle"><i class="ti ti-progress-check"></i> قائمة الإنتاج</div><div class="breadcrumb">${esc(cu.name)} — طلبات قيد التنفيذ في قسمك</div></div></div>
+    <div id="production-body"></div>`;
+  renderProductionQueueBody(deptForType);
+}
+function renderProductionQueueBody(deptForType){
+  const arr=ordersArr().filter(o=>o.currentDept===deptForType&&(cu.type==='admin'||isMyOrder(o)));
+  const el=document.getElementById('production-body');if(!el)return;
+  if(!arr.length){el.innerHTML='<div class="card" style="text-align:center;padding:40px;color:var(--text-3);"><i class="ti ti-inbox" style="font-size:30px;display:block;margin-bottom:8px;"></i>لا توجد طلبات في قائمة الإنتاج حالياً</div>';return;}
+  el.innerHTML=`<div class="card"><div class="tbl-wrap"><table class="wf-dense-table">
+    <thead><tr><th style="width:120px">رقم الطلب</th><th>العميل والخدمة</th><th style="width:135px">موعد التسليم</th><th style="width:105px">إجراءات</th></tr></thead>
+    <tbody>${arr.map(o=>{
+      const countdown=deliveryCountdownText(o);
+      return `<tr class="wf-dense-row" onclick="openOrderModal('${o._key}')">
+        <td><strong style="color:var(--maroon);">${esc(o.id||o._key)}</strong><div style="display:flex;gap:4px;margin-top:4px;">${orderRowBadges(o)}</div></td>
+        <td><div style="font-weight:800;font-size:12.5px;">${esc(o.client||'—')}</div><div style="font-size:11px;color:var(--text-3);margin-top:2px;">${orderItemSummary(o)}</div></td>
+        <td><span class="countdown-pill cd-${countdown.cls||'none'}">${countdown.text}</span></td>
+        <td onclick="event.stopPropagation();">${orderQuickActionsHtml(o)}</td>
+      </tr>`;
+    }).join('')}</tbody>
+  </table></div></div>`;
 }
 function wfFiltersBarHtml(f){
   const employeeOptions=Object.entries(USERS).filter(([,u])=>['designer','printer','workshop','external'].includes(u.type))
@@ -3902,23 +4218,32 @@ function closeWfDayPanel(){
 function renderWfListView(){
   const bodyEl=document.getElementById('wf-view-body');if(!bodyEl)return;
   const f=window._wfFilters||{};
-  const arr=ordersArr().filter(o=>wfMatchesFilters(o,f));
-  const canSeeTotal=['admin','follower','receiver'].includes(cu.type);
-  const rows=arr.map(o=>`<tr onclick="openOrderModal('${o._key}')" style="cursor:pointer;">
-    <td><strong style="color:var(--maroon)">${o.id||o._key}</strong></td>
-    <td><strong style="font-size:12.5px;">${esc(o.client||'—')}</strong></td>
-    <td style="font-size:12px;">${esc(o.service||'—')}</td>
-    <td>${deptBadge(o.currentDept)}</td>
-    <td style="font-size:12px;">${esc(currentPersonName(o))}</td>
-    <td style="font-size:11px;">${deadlineDateTime(o)}</td>
-    <td>${gpbadge(o.priority)}</td>
-    ${canSeeTotal?`<td style="font-size:12px;font-weight:800;">${o.totalAmount?fmtMoney(Number(o.totalAmount))+' ر.س':'—'}</td>`:''}
-  </tr>`).join('');
+  const arr=ordersArr().filter(o=>wfMatchesFilters(o,f)).sort((a,b)=>new Date(b.date||0)-new Date(a.date||0));
+  const rows=arr.map(o=>{
+    const overdue=o.deadline&&o.deadline!=='—'&&o.currentDept!=='done'&&new Date(o.deadline)<new Date();
+    const countdown=deliveryCountdownText(o);
+    const proof=proofStatusForOrder(o);
+    const searchHay=esc(`${o.id||o._key} ${o.client||''} ${o.phone||''}`.toLowerCase());
+    return `<tr data-search="${searchHay}" class="wf-dense-row${overdue?' wf-row-overdue':''}" onclick="openOrderModal('${o._key}')">
+      <td>
+        <div style="display:flex;flex-direction:column;gap:4px;">
+          <strong style="color:var(--maroon);">${esc(o.id||o._key)}</strong>
+          <div style="display:flex;gap:4px;flex-wrap:wrap;">${orderRowBadges(o)}</div>
+        </div>
+      </td>
+      <td><div style="font-weight:800;font-size:12.5px;color:var(--text-1);">${esc(o.client||'—')}</div><div style="font-size:11px;color:var(--text-3);margin-top:2px;">${orderItemSummary(o)}</div></td>
+      <td>${stagePillHtml(o.currentDept)}</td>
+      <td>${proof?`<span class="proof-pill proof-${proof.key}"><i class="ti ${proof.icon}"></i> ${proof.label}</span>`:'<span style="color:var(--text-3);font-size:11px;">—</span>'}</td>
+      <td><span class="countdown-pill cd-${countdown.cls||'none'}">${countdown.text}</span></td>
+      <td style="font-size:11.5px;line-height:1.6;"><div><strong>المسؤول:</strong> ${esc(currentPersonName(o))}</div><div style="color:var(--text-3);">${esc(o.createdBy?('أنشئ: '+o.createdBy):'')}</div></td>
+      <td onclick="event.stopPropagation();">${orderQuickActionsHtml(o)}</td>
+    </tr>`;
+  }).join('');
   bodyEl.innerHTML=`
-    <div style="margin-bottom:12px;">${wfFiltersBarHtml(f)}</div>
-    <div class="card"><div class="tbl-wrap"><table>
-    <thead><tr><th style="width:80px">رقم الطلب</th><th>العميل</th><th>الخدمة</th><th style="width:110px">القسم</th><th style="width:110px">المسؤول</th><th style="width:140px">موعد التسليم</th><th style="width:90px">الأولوية</th>${canSeeTotal?'<th style="width:110px">إجمالي المبلغ</th>':''}</tr></thead>
-    <tbody>${rows||`<tr><td colspan="${canSeeTotal?8:7}" style="text-align:center;padding:24px;color:var(--text-3)">لا توجد طلبات مطابقة</td></tr>`}</tbody>
+    ${wfListFiltersBarHtml(f)}
+    <div class="card"><div class="tbl-wrap"><table class="wf-dense-table">
+    <thead><tr><th style="width:130px">رقم الطلب</th><th>العميل والخدمة</th><th style="width:95px">المرحلة</th><th style="width:135px">البروفة والعميل</th><th style="width:135px">موعد التسليم</th><th style="width:150px">المسؤول / المنشئ</th><th style="width:105px">إجراءات</th></tr></thead>
+    <tbody>${rows||`<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text-3)">لا توجد طلبات مطابقة</td></tr>`}</tbody>
     </table></div></div>`;
 }
 function renderWfTimelineView(){
@@ -6742,6 +7067,158 @@ function buildOrderFileManager(o,key){
     <div class="od-file-grid">${c.files.map(f=>fileLinkHtml(f.name,f.url,f.label)).join('')}</div>
   </div>`).join('');
 }
+// ============================================================
+// MODULE 5 — ORDER DETAIL MODAL (split-column layout helpers)
+// ============================================================
+// Compact items table for the left column — a dense, at-a-glance summary of
+// every item's stage/assignee/preview, complementing (not replacing) the
+// detailed version-cards rendered by renderOrderItemsCards() below it. The
+// "status dropdown" only ever offers one real action — advance to the next
+// stage — reusing itemNextDept/itemStageRequirementMet/advanceItemDept
+// exactly as the designer board and department cards do, so this table can
+// never move an item through a gate the rest of the app wouldn't allow.
+function buildCompactItemsTable(o,key,canAct){
+  const items=o.orderItems||[];
+  if(!items.length)return'<div style="font-size:11px;color:var(--text-3);">لا توجد بنود على هذا الطلب</div>';
+  const rows=items.map((it,idx)=>{
+    const dept=itemCurrentDept(it,o);
+    const meta=WF_DEPT_META[dept]||{label:dept};
+    const assigneeUname=dept==='done'?null:o[dept+'To'];
+    const assigneeName=(assigneeUname&&assigneeUname!=='none')?(USERS[assigneeUname]?.name||assigneeUname):(dept==='done'?'—':'—');
+    const vers=itemVersions(it);
+    const lastFile=[...vers].reverse().map(v=>(v.files||[])[0]).find(Boolean);
+    const previewHtml=lastFile?fileLinkHtml(lastFile.name,lastFile.data,''):'<span style="font-size:11px;color:var(--text-3);">—</span>';
+    const nd=itemNextDept(it,o);
+    const canAdvance=canAct&&nd&&itemStageRequirementMet(it,o);
+    const ndLabel=nd?(WF_DEPT_META[nd]?.label||nd):'';
+    const selectHtml=nd?`<select ${canAdvance?'':'disabled'} onchange="if(this.value==='go'){advanceItemDept('${key}',${idx});}else{this.value='';}">
+        <option value="">${esc(meta.label||dept)}${canAdvance?'':' (بانتظار المتطلبات)'}</option>
+        ${canAdvance?`<option value="go">➔ نقل إلى ${esc(ndLabel)}</option>`:''}
+      </select>`:`<span style="font-size:11px;color:var(--text-3);">مكتمل</span>`;
+    return `<tr>
+      <td>#${idx+1}</td>
+      <td><strong>${esc(it.name||'—')}</strong>${it.specs||it.details?`<div style="font-size:10.5px;color:var(--text-3);margin-top:2px;">${esc(it.specs||it.details||'')}</div>`:''}</td>
+      <td>${esc(assigneeName)}</td>
+      <td>${stagePillHtml(dept)}</td>
+      <td>${previewHtml}</td>
+      <td>${selectHtml}</td>
+    </tr>`;
+  }).join('');
+  return `<div class="od-items-compact-wrap"><table class="od-items-compact-table">
+    <thead><tr><th>#</th><th>الوصف والمقاسات</th><th>المسؤول</th><th>المرحلة</th><th>معاينة</th><th>الحالة</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table></div>`;
+}
+// Financial breakdown card for the right-column manager sidebar. o.totalAmount
+// is VAT-inclusive throughout this codebase (matches the quote-builder's own
+// subtotal=total/1.15 convention), so the same math is mirrored here rather
+// than re-deriving VAT from line items.
+function buildFinancialBreakdownCard(o,key){
+  const total=Number(o.totalAmount||0);
+  const subtotal=total?total/1.15:0;
+  const vat=total?total-subtotal:0;
+  const paid=Number(o.paidAmount||0);
+  const remaining=Number(o.remainingAmount!=null?o.remainingAmount:Math.max(0,total-paid));
+  const isUnpaid=remaining>0;
+  const hasPendingReq=Object.values(submittedRequests).some(r=>r.orderKey===key&&(r.status==='pending'||r.status==='accountant_approved'));
+  return `<div class="od-fin-card">
+    <div class="od-fin-title"><i class="ti ti-cash"></i> الملخص المالي</div>
+    <div class="od-fin-row"><span>الإجمالي قبل الضريبة</span><strong>${fmtMoney(subtotal)} ر.س</strong></div>
+    <div class="od-fin-row"><span>ضريبة القيمة المضافة (15%)</span><strong>${fmtMoney(vat)} ر.س</strong></div>
+    <div class="od-fin-row od-fin-total"><span>إجمالي الفاتورة</span><strong>${fmtMoney(total)} ر.س</strong></div>
+    <div class="od-fin-row"><span>المبلغ المدفوع</span><strong>${fmtMoney(paid)} ر.س</strong></div>
+    <div class="od-fin-row"><span>حالة الدفع</span>${paymentBadge(o.paymentStatus)||'<span style="color:var(--text-3);">—</span>'}</div>
+    ${o.paymentMethod?`<div class="od-fin-row"><span>طريقة الدفع</span><strong>${esc(o.paymentMethod)}</strong></div>`:''}
+    <div class="od-fin-remaining ${isUnpaid?'unpaid':''}"><i class="ti ti-${isUnpaid?'alert-triangle':'circle-check'}"></i> المتبقي: ${fmtMoney(remaining)} ر.س</div>
+    <div class="od-fin-actions">
+      ${hasPendingReq?`<span style="font-size:11px;color:var(--text-3);"><i class="ti ti-hourglass"></i> يوجد سند بانتظار مراجعة المحاسب</span>`:`<button class="btn btn-brand btn-sm" style="width:100%;justify-content:center;" onclick="openAddPaymentModal('${key}')"><i class="ti ti-receipt"></i> إضافة دفعة / سند قبض</button>`}
+      <button class="btn btn-out btn-sm" style="width:100%;justify-content:center;" onclick="printOrderDetails()"><i class="ti ti-file-download"></i> تحميل عرض السعر / الفاتورة PDF</button>
+      ${isUnpaid&&o.phone&&o.phone!=='—'?`<button class="btn btn-sm" style="width:100%;justify-content:center;background:#25D366;color:#fff;" onclick="sendWhatsappPaymentClaim('${key}')"><i class="ti ti-brand-whatsapp"></i> مطالبة دفع عبر واتساب</button>`:''}
+    </div>
+  </div>`;
+}
+// Reuses the existing generic add-item-modal shell (same convention already
+// used elsewhere in the app for injecting different content into a shared
+// modal container) with a simplified single-amount + method form. Submission
+// goes through the SAME `requests` Firebase collection + duplicate-guard
+// that submitRequest() uses on the dedicated requests page, so a payment
+// added from here still goes through the normal accountant-approval
+// workflow instead of bypassing it.
+function openAddPaymentModal(key){
+  const o=orders[key];if(!o)return;
+  window._apmFileB64='';window._apmFileName='';
+  document.getElementById('add-item-modal-body').innerHTML=`
+    <div class="modal-header">
+      <span class="modal-title"><i class="ti ti-receipt"></i> إضافة دفعة / سند قبض</span>
+      <button class="btn-close" onclick="closeModal('add-item-modal')">×</button>
+    </div>
+    <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:var(--text-2);">
+      تسجيل دفعة على الطلب <strong style="color:var(--maroon)">${o.id||key}</strong> — ستُرسل لمحاسب المكتب للمراجعة والاعتماد
+    </div>
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <div class="fg"><label>المبلغ المدفوع (ر.س) *</label><input type="text" inputmode="decimal" id="apm-amount" placeholder="0" oninput="normalizeAmountInput(this)" onfocus="this.select()"/></div>
+      <div class="fg"><label>طريقة الدفع *</label><select id="apm-method" onchange="document.getElementById('apm-proof-fg').style.display=this.value==='حوالة'?'':'none';">
+        <option value="شبكة">شبكة (مدى/فيزا)</option>
+        <option value="كاش">كاش</option>
+        <option value="حوالة">حوالة بنكية</option>
+      </select></div>
+      <div class="fg" id="apm-proof-fg" style="display:none;"><label>إثبات التحويل *</label>
+        <input type="file" id="apm-proof-input" accept="image/*,.pdf" onchange="handleApmFile(this.files)"/>
+        <div id="apm-proof-note" style="font-size:11px;color:#10B981;margin-top:4px;font-weight:700;"></div>
+      </div>
+      <button class="btn btn-brand" style="width:100%;justify-content:center;" onclick="submitOrderPaymentFromModal('${key}')"><i class="ti ti-send"></i> إرسال للمحاسب</button>
+    </div>`;
+  openModal('add-item-modal');
+}
+async function handleApmFile(files){
+  if(!files||!files.length)return;
+  showSaving('جاري رفع الملف...');
+  try{
+    window._apmFileB64=await convertFileToBase64(files[0],{});
+    window._apmFileName=files[0].name;
+    hideSaving();
+    const note=document.getElementById('apm-proof-note');if(note)note.textContent='✓ تم إرفاق '+files[0].name;
+  }catch(e){hideSaving();toast(e&&e.message?e.message:'❌ فشل رفع الملف');}
+}
+async function submitOrderPaymentFromModal(key){
+  const o=orders[key];if(!o)return;
+  const amountPaid=Number((document.getElementById('apm-amount')||{}).value||0);
+  const method=(document.getElementById('apm-method')||{}).value||'شبكة';
+  if(!amountPaid||amountPaid<=0){toast('⚠️ يرجى إدخال المبلغ المدفوع');return;}
+  if(method==='حوالة'&&!window._apmFileB64){toast('⚠️ يرجى إرفاق إثبات التحويل');return;}
+  const dup=Object.values(submittedRequests).find(r=>r.orderKey===key&&(r.status==='pending'||r.status==='accountant_approved'));
+  if(dup){toast('⚠️ هذا الطلب مرفوع مسبقاً وبانتظار المراجعة');return;}
+  showSaving('جاري الإرسال...');
+  try{
+    const payload={orderKey:key,client:o.client,payMethod:method,paidNetwork:method==='شبكة'?amountPaid:0,paidCash:method==='كاش'?amountPaid:0,paidTransfer:method==='حوالة'?amountPaid:0,amountPaid,priority:'عادية',status:'pending',fileData:window._apmFileB64||'',fileName:window._apmFileName||'',createdBy:cu.name,createdByUname:cu._uname,createdByRole:cu.role||cu.type,date:new Date().toISOString().split('T')[0],createdAt:new Date().toISOString()};
+    const _res=await fbPush('requests',payload);
+    await loadData();hideSaving();closeModal('add-item-modal');toast('✓ تم إرسال السند للمحاسب');
+    if(_res&&_res.name&&typeof syncFinancialObligationToSheet==='function')syncFinancialObligationToSheet(_res.name);
+    openOrderModal(key);
+  }catch(e){hideSaving();toast('❌ فشل الإرسال');}
+}
+// Manual deep-link only (mirrors openWhatsapp's existing "no automated
+// sending API" convention) — pre-fills a collection-reminder message.
+function sendWhatsappPaymentClaim(key){
+  const o=orders[key];if(!o||!o.phone||o.phone==='—')return;
+  const total=Number(o.totalAmount||0),paid=Number(o.paidAmount||0);
+  const remaining=Number(o.remainingAmount!=null?o.remainingAmount:Math.max(0,total-paid));
+  const n=String(o.phone).replace(/[^0-9]/g,'');
+  const full=n.startsWith('0')?'966'+n.substring(1):n;
+  const msg=`تذكير بخصوص طلبكم ${o.id||key} لدى روائع الأفكار الإعلانية — المبلغ المتبقي على الطلب هو ${fmtMoney(remaining)} ر.س. نأمل تسديده في أقرب وقت ممكن. شكراً لتعاملكم معنا.`;
+  window.open(`https://web.whatsapp.com/send?phone=${full}&text=${encodeURIComponent(msg)}`,'_blank');
+}
+// Sidebar "اعتماد بروفة" / "اعتماد ورشة" quick controls: rather than fabricate
+// a new direct-mutation shortcut whose exact effect on order-level approval
+// fields would be ambiguous, these simply reveal + smooth-scroll to the
+// EXISTING, already-correct "أدوات مراحل الإنتاج" accordion (real upload/
+// approval UI), which openOrderModal wraps with id="od-dept-tools-acc".
+function omJumpToDeptTools(){
+  const wrap=document.getElementById('od-dept-tools-acc');if(!wrap)return;
+  const header=wrap.querySelector('.om-acc-header');
+  if(header&&!header.classList.contains('open'))toggleOmAccordion(header);
+  wrap.scrollIntoView({behavior:'smooth',block:'center'});
+}
 // The app hides everything except #print-area while printing (see the global
 // @media print rule) — cloning the already-rendered modal body into it is the
 // simplest way to reuse that mechanism instead of building a second, separate
@@ -6931,21 +7408,40 @@ function openOrderModal(key){
   // approval controls) are collapsed by default here instead of always-on —
   // still one click away for whoever needs to act, but not duplicating the
   // timeline's status information on every page load.
-  const _deptToolsAcc=(_otherDeptChipsHtml||_deptCardsHtml)?omAccordion('ti-tool','أدوات مراحل الإنتاج',`${_otherDeptChipsHtml}${_deptCardsHtml}`,false):'';
+  const _deptToolsAcc=(_otherDeptChipsHtml||_deptCardsHtml)?`<div id="od-dept-tools-acc">${omAccordion('ti-tool','أدوات مراحل الإنتاج',`${_otherDeptChipsHtml}${_deptCardsHtml}`,false)}</div>`:'';
   const _custInfoAcc=omAccordion('ti-user','معلومات العميل',`<div class="od-summary-grid">
     <div class="od-summary-card"><div class="od-summary-lbl">العميل</div><div class="od-summary-val">${esc(o.client||'—')}</div></div>
     <div class="od-summary-card"><div class="od-summary-lbl">رقم الجوال</div><div class="od-summary-val" style="direction:ltr;">${esc(o.phone||'—')}</div></div>
     <div class="od-summary-card"><div class="od-summary-lbl">الخدمة</div><div class="od-summary-val">${esc(o.service||'—')}</div></div>
     <div class="od-summary-card"><div class="od-summary-lbl">التسليم</div><div class="od-summary-val">${deadlineDateTime(o)}</div></div>
   </div>`,false);
-  // Financial figures are collapsed by default for everyone, and hidden
-  // entirely (not even the collapsed header) for shop-floor production
-  // roles — they rarely need it and it's needless exposure of pricing data.
-  const _finInfoAcc=_myDeptKey?'':omAccordion('ti-cash','المعلومات المالية',`<div class="od-summary-grid">
-    <div class="od-summary-card"><div class="od-summary-lbl">الفاتورة</div><div class="od-summary-val">${o.totalAmount?fmtMoney(Number(o.totalAmount))+' ر.س':'—'}</div></div>
-    <div class="od-summary-card"><div class="od-summary-lbl">حالة الدفع</div><div class="od-summary-val">${esc(o.paymentStatus||'—')}</div></div>
-    <div class="od-summary-card"><div class="od-summary-lbl">المتبقي</div><div class="od-summary-val">${o.remainingAmount?fmtMoney(Number(o.remainingAmount))+' ر.س':'—'}</div></div>
-  </div>`,false);
+  // The dedicated financial breakdown card in the right-column sidebar now
+  // supersedes this collapsed summary for anyone who can see it; it stays
+  // hidden entirely (not even a collapsed header) for shop-floor production
+  // roles, same as before — they rarely need it and it's needless exposure
+  // of pricing data.
+  const _finCardHtml=_myDeptKey?'':buildFinancialBreakdownCard(o,key);
+  // Manager Quick Controls (sidebar): reassignment selector (already
+  // admin-gated internally) plus two shortcuts that reveal + scroll to the
+  // real "أدوات مراحل الإنتاج" accordion rather than fabricating a new
+  // direct-mutation action.
+  const _reassignBoxHtml=buildReassignBox(o,key);
+  const _mgrQuickButtonsHtml=(canAct&&o.currentDept!=='done'&&(_otherDeptChipsHtml||_deptCardsHtml))?`<div class="od-mgr-quick-row">
+      <button class="btn btn-out btn-sm" onclick="omJumpToDeptTools()"><i class="ti ti-brush"></i> اعتماد بروفة</button>
+      <button class="btn btn-out btn-sm" onclick="omJumpToDeptTools()"><i class="ti ti-tools"></i> اعتماد ورشة</button>
+    </div>`:'';
+  const _mgrControlsHtml=(_reassignBoxHtml||_mgrQuickButtonsHtml)?`<div class="od-mgr-controls" id="od-reassign-${key}">
+      <div class="od-mgr-controls-title"><i class="ti ti-settings"></i> أدوات المدير السريعة</div>
+      ${_mgrQuickButtonsHtml}
+      ${_reassignBoxHtml}
+    </div>`:`<div id="od-reassign-${key}"></div>`;
+  const _activityChatHtml=`<div class="od-activity-chat-panel">
+    <div>
+      <div class="od-dept-section-lbl">🕒 السجل الزمني للطلب</div>
+      ${buildOrderActivityTimeline(o,key)}
+    </div>
+    ${renderChatSection(key,o.currentDept==='done')}
+  </div>`;
   document.getElementById('order-modal-body').innerHTML=`
     <div class="od-header">
       <div class="od-header-main">
@@ -6978,29 +7474,32 @@ function openOrderModal(key){
     </div>
     ${fromQuoteHtml}
     ${updateBannerHtml}
-    ${buildOrderProgressTimeline(o,key)}
-    ${_custInfoAcc}
-    ${_finInfoAcc}
-    <div style="margin-bottom:16px;">
-      <div class="od-dept-section-lbl" style="margin-bottom:8px;font-size:12px;">📦 بنود الطلب</div>
-      ${renderOrderItemsCards(o,key,canAct)}
-    </div>
-    ${_deptToolsAcc}
-    ${getActiveDepts(o).includes('design')?buildProofApprovalSection(o,key,canAct):''}
-    ${maintOrderRow}
-    ${maintenanceRow}
-    <div id="od-reassign-${key}">${buildReassignBox(o,key)}</div>
-    <div style="margin-bottom:16px;">
-      <div class="od-dept-section-lbl" style="margin-bottom:8px;font-size:12px;">🗂 مدير الملفات</div>
-      ${buildOrderFileManager(o,key)}
-    </div>
-    <div style="margin-bottom:16px;">
-      <div class="od-dept-section-lbl" style="margin-bottom:8px;font-size:12px;">🕒 السجل الزمني للطلب</div>
-      ${buildOrderActivityTimeline(o,key)}
-    </div>
-    ${renderChatSection(key,o.currentDept==='done')}
-    ${measureActions}
-    ${o.currentDept==='done'&&_canArchive?`<div class="arow"><button class="btn btn-red btn-sm" onclick="archiveOrder('${key}')"><i class="ti ti-archive"></i> إنهاء الطلب وأرشفته</button></div>`:''}`;
+    <div class="od-split">
+      <div class="od-left-col">
+        ${buildOrderProgressTimeline(o,key)}
+        ${_custInfoAcc}
+        <div style="margin-bottom:16px;">
+          <div class="od-dept-section-lbl" style="margin-bottom:8px;font-size:12px;">📦 بنود الطلب</div>
+          ${buildCompactItemsTable(o,key,canAct)}
+          ${renderOrderItemsCards(o,key,canAct)}
+        </div>
+        ${_deptToolsAcc}
+        ${getActiveDepts(o).includes('design')?buildProofApprovalSection(o,key,canAct):''}
+        ${maintOrderRow}
+        ${maintenanceRow}
+        <div style="margin-bottom:16px;">
+          <div class="od-dept-section-lbl" style="margin-bottom:8px;font-size:12px;">🗂 مدير الملفات</div>
+          ${buildOrderFileManager(o,key)}
+        </div>
+        ${measureActions}
+        ${o.currentDept==='done'&&_canArchive?`<div class="arow"><button class="btn btn-red btn-sm" onclick="archiveOrder('${key}')"><i class="ti ti-archive"></i> إنهاء الطلب وأرشفته</button></div>`:''}
+      </div>
+      <div class="od-right-col">
+        ${_activityChatHtml}
+        ${_mgrControlsHtml}
+        ${_finCardHtml}
+      </div>
+    </div>`;
   openModal('order-modal');
   markOrderUpdateSeen(key);
   setTimeout(()=>{generateQR(`order-qr-${key}`,trackingUrl,80);loadAndRenderChat(key);},200);
@@ -9800,6 +10299,8 @@ async function saveEditTask(key){
 function _buildPage(p){
   if(p==='dash')       buildDash();
   else if(p==='wf')    buildWfGrid(_currentWfTab||'active');
+  else if(p==='designer') buildDesignerBoard();
+  else if(p==='production') buildProductionQueue();
   else if(p==='my')    buildMyWork();
   else if(p==='add')   buildAddForm(false);
   else if(p==='quote') buildQuotePage();
