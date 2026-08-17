@@ -319,10 +319,13 @@ tbody tr:hover td{background:var(--surface-2);}
 .designer-col-count{background:var(--surface-2);border:1px solid var(--border);border-radius:20px;padding:2px 10px;font-size:11px;font-weight:800;color:var(--text-2);}
 .designer-col-body{padding:12px;display:flex;flex-direction:column;gap:12px;overflow-y:auto;}
 .designer-order-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);overflow:hidden;box-shadow:var(--shadow-sm);}
-.designer-order-head{padding:10px 14px;background:var(--gold-soft);cursor:pointer;font-size:12.5px;border-bottom:1px solid var(--border-soft);}
+.designer-order-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:10px 14px;background:var(--gold-soft);cursor:pointer;font-size:12.5px;border-bottom:1px solid var(--border-soft);}
 .designer-order-head:hover{background:rgba(212,175,55,.2);}
+.designer-order-toggle{display:flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;border:1.5px solid var(--border);background:var(--surface);color:var(--maroon);cursor:pointer;flex-shrink:0;transition:transform .15s,background .15s;}
+.designer-order-toggle:hover{background:var(--gold-soft);}
 .designer-order-items{display:flex;flex-direction:column;}
-.designer-item-row{padding:10px 14px;border-bottom:1px solid var(--border-soft);cursor:default;}
+.designer-item-row{padding:10px 14px;border-bottom:1px solid var(--border-soft);transition:background .12s;}
+.designer-item-row:hover{background:var(--surface-2);}
 .designer-item-row:last-child{border-bottom:none;}
 .designer-item-name{font-size:12px;font-weight:800;color:var(--text-1);margin-bottom:6px;}
 .designer-item-files{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px;}
@@ -1421,10 +1424,8 @@ input:focus,select:focus,textarea:focus{box-shadow:inset 0 1px 3px rgba(74,14,23
         <div class="auth-fields">
           <div class="fg"><label>اسم المستخدم / البريد الإلكتروني</label><input type="text" id="lu" placeholder="أدخل اسم المستخدم..." autocomplete="username"/></div>
           <div class="fg"><label>كلمة المرور</label><input type="password" id="lp" placeholder="••••••••" autocomplete="current-password"/></div>
-          <div class="auth-remember-row">
-            <label class="auth-remember-check"><input type="checkbox" id="l-remember" checked/><span>تذكرني</span></label>
-          </div>
           <button class="login-btn-main" onclick="doLogin()"><i class="ti ti-login"></i> تأكيد الدخول</button>
+          <div style="font-size:10.5px;color:var(--text-3);text-align:center;margin-top:6px;"><i class="ti ti-shield-lock"></i> لأسباب أمنية، يتم تسجيل الخروج تلقائياً عند إغلاق المتصفح</div>
           <div id="lerr" style="color:#EF4444;font-size:12px;display:none;text-align:center;font-weight:700;"><i class="ti ti-alert-circle"></i> بيانات الدخول غير صحيحة</div>
         </div>
         <div class="auth-card-footer">
@@ -1861,15 +1862,12 @@ async function doLogin(){
     if(legacyMatch){try{await fbPatch(`users/${u}`,{pass:hash});rec.pass=hash;}catch(err){}}
     showSaving('جاري الدخول...');
     await loadData();hideSaving();
-    // "تذكرني" (remember me): checked → persist across browser restarts
-    // (localStorage); unchecked → this tab/session only (sessionStorage,
-    // cleared when the tab/window closes). Only one of the two ever holds
-    // the live session at a time, so a stale copy in the other can't
-    // resurrect a session the user asked not to be remembered.
-    const remember=document.getElementById('l-remember').checked;
+    // Session-only persistence by design: sessionStorage clears automatically
+    // when the tab/browser closes, so every browser restart requires signing
+    // in again — no "remember me" / cross-restart auto-login path exists.
     const sessionPayload=JSON.stringify({uname:u,tok:hash});
-    if(remember){localStorage.setItem(SESSION_KEY,sessionPayload);sessionStorage.removeItem(SESSION_KEY);}
-    else{sessionStorage.setItem(SESSION_KEY,sessionPayload);localStorage.removeItem(SESSION_KEY);}
+    sessionStorage.setItem(SESSION_KEY,sessionPayload);
+    localStorage.removeItem(SESSION_KEY);
     enterApp(u);e.style.display='none';
   }else{e.textContent='بيانات الدخول غير صحيحة';e.style.display='block';}
 }
@@ -1897,7 +1895,10 @@ document.addEventListener('keydown',e=>{
   const orderModal=document.getElementById('order-modal');
   if(orderModal&&orderModal.classList.contains('open')){closeModal('order-modal');return;}
   const openModals=document.querySelectorAll('.modal-overlay.open');
-  if(openModals.length){closeModal(openModals[openModals.length-1].id);}
+  if(openModals.length){closeModal(openModals[openModals.length-1].id);return;}
+  // Team chat is a full-page nav view, not a .modal-overlay — ESC there has
+  // nothing to close above, so treat it the same as clicking back/dashboard.
+  if(typeof _curPage!=='undefined'&&_curPage==='teamchat'&&cu){nav(ROLE_LANDING[cu.type]||'dash');}
 });
 function enterApp(u){
   _navHistory=[];
@@ -2070,7 +2071,11 @@ function checkNewAssignments(){
 window.addEventListener('load',async()=>{
   showSaving('جاري التحميل...');
   await syncUsers();
-  const sess=localStorage.getItem(SESSION_KEY)||sessionStorage.getItem(SESSION_KEY);
+  // Session-only auth: a leftover localStorage token from before this change
+  // (or from a device that never closed its browser) must never auto-login —
+  // only sessionStorage (cleared on browser/tab close) is a valid source now.
+  localStorage.removeItem(SESSION_KEY);
+  const sess=sessionStorage.getItem(SESSION_KEY);
   if(sess){
     try{
       const s=JSON.parse(sess);
@@ -2595,7 +2600,9 @@ function buildSidebar(){
     ]);
     h+=navGroup('إضافي',[ni('urgent','ti-bolt','طلب عاجل')]);
   }else if(t==='designer'){
-    h+=navGroup('لوحة التصميم',[ni('designer','ti-layout-kanban','لوحة العمل'),ni('my','ti-user-check','أعمالي الحالية')]);
+    // Unified single-page designer view: "لوحة العمل" now covers everything
+    // "أعمالي الحالية" used to show separately (see buildDesignerBoard).
+    h+=navGroup('لوحة التصميم',[ni('designer','ti-layout-kanban','لوحة العمل')]);
     h+=navGroup('إضافي',[ni('urgent','ti-bolt','طلب عاجل')]);
   }else if(['printer','workshop'].includes(t)){
     h+=navGroup('الإنتاج',[ni('production','ti-progress-check','قائمة الإنتاج'),ni('my','ti-user-check','أعمالي الحالية')]);
@@ -2886,7 +2893,7 @@ async function advanceItemDept(key,idx){
   showSaving('جاري تحديث حالة البند...');
   try{
     const items=[...o.orderItems];items[idx]={...items[idx],currentDept:nd};
-    const upd={orderItems:items};
+    const upd={orderItems:items,lastItemUpdateAt:new Date().toISOString(),lastItemUpdateBy:cu.name};
     const newOrderDept=computeOrderDeptFromItems(o,items);
     if(newOrderDept&&newOrderDept!==o.currentDept){upd.currentDept=newOrderDept;upd.stageStartDate=new Date().toISOString();}
     await fbPatch(`orders/${key}`,upd);
@@ -3001,7 +3008,11 @@ async function saveItemKindFiles(key,idx,kind,inputId){
     items[idx]={...items[idx],versions:[...priorVersions,newVersion]};
     await fbPatch(`orders/${key}`,{orderItems:items});
     await loadData();hideSaving();toast('✓ تم رفع الملف');
-    buildItemWorkspacePage();
+    // This upload box is used from three different surfaces (the standalone
+    // Item Workspace page, the designer board's inline item rows, and the
+    // full order modal's per-item cards) — _refreshOrderItemsViews refreshes
+    // whichever one is actually showing instead of always rebuilding one.
+    _refreshOrderItemsViews(key);
   }catch(e){hideSaving();toast(e&&e.message?e.message:'❌ فشل الرفع');}
 }
 async function toggleVersionApproval(key,itemIdx,versionId){
@@ -3032,6 +3043,12 @@ async function toggleVersionApproval(key,itemIdx,versionId){
 function _refreshOrderItemsViews(key){
   if(window._openOrderModalKey===key&&document.getElementById('order-modal')?.classList.contains('open'))openOrderModal(key);
   if(window._wfInlinePanelKey===key)openWfInlinePanel(key,true);
+  // Per-item actions (upload, advance) are also reachable from the
+  // standalone Item Workspace page and the designer board — refresh
+  // whichever of those is actually the current page so their status
+  // badges/gates update in place instead of only the modal/panel above.
+  if(_curPage==='itemwork')buildItemWorkspacePage();
+  else if(_curPage==='designer')buildDesignerBoard();
 }
 function renderOrderItemsCards(o,key,canAct){
   const items=o.orderItems&&Array.isArray(o.orderItems)?o.orderItems:[];
@@ -3346,6 +3363,22 @@ function onQtTestDeptChange(dept){
   const workers=getDeptWorkers(dept);
   sel.innerHTML=`<option value="all">📢 جميع موظفي ${dept==='print'?'الطباعة':'التنفيذ الخارجي'}</option>`+workers.map(w=>`<option value="${esc(w.uname)}">${esc(w.name)}</option>`).join('');
 }
+// Single dashboard entry point for all quick-task types: a lightweight
+// type-picker step (reusing #quick-task-modal, same as the existing
+// order-linked mini-menu does) that hands off to the same openQuickTask()
+// form/submit flow — nothing about routing/dispatch logic changes, just
+// how the manager gets there.
+function openQuickTaskPicker(){
+  document.getElementById('qt-modal-title').innerHTML=`<i class="ti ti-bolt"></i> تكليف مهمة فورية`;
+  document.getElementById('qt-modal-body').innerHTML=`
+    <div style="font-size:12px;color:var(--text-2);margin-bottom:12px;">اختر نوع المهمة لتحويلها وتكليفها فوراً للقسم المعني:</div>
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <button class="btn btn-orange" style="justify-content:center;" onclick="openQuickTask('measure')"><i class="ti ti-ruler"></i> قياسات ومعاينة ميدانية</button>
+      <button class="btn btn-purple" style="justify-content:center;" onclick="openQuickTask('proof')"><i class="ti ti-brush"></i> تصميم مستعجل (بروفة عاجلة)</button>
+      <button class="btn" style="justify-content:center;background:linear-gradient(135deg,#0EA5E9,#0284C7);color:#fff;" onclick="openQuickTask('test')"><i class="ti ti-flask"></i> عينة تجريبية / تست</button>
+    </div>`;
+  openModal('quick-task-modal');
+}
 function openQuickTask(type){
   const dw=getDeptWorkers('design');const ww=getDeptWorkers('workshop');const pw=getDeptWorkers('print');
   const isProof=type==='proof';const isTest=type==='test';
@@ -3567,6 +3600,23 @@ function buildDash(){
   const sparkline=`<div class="kpi-spark">${sparkCounts.map(c=>`<div class="kpi-spark-bar" style="height:${Math.max(12,Math.round((c/sparkMax)*100))}%;"></div>`).join('')}</div>`;
   const roNote=t==='follower'?'<div class="ro-notice"><i class="ti ti-info-circle"></i>وضع المشاهدة فقط — لا يمكنك تعديل البيانات</div>':'';
   // ── Top KPI row: exactly 4 compact cards ──
+  // Financial privacy: revenue/collections figures are restricted to
+  // admin + accountant. This page is only ever reachable by those roles
+  // plus receiver/follower today (production roles have no nav entry to
+  // it at all), but the check lives here — not just in the sidebar — so
+  // the money figure can never render for a role it isn't meant for,
+  // regardless of how the page was reached.
+  const canSeeFinance=(t==='admin'||t==='accountant');
+  const newToday=arr.filter(o=>(o.date||'').slice(0,10)===todayStr).length;
+  const fourthCard=canSeeFinance
+    ?`<div class="kpi-card" onclick="nav('revenue')">
+      <div class="kpi-top"><span class="kpi-icon kc-blue"><i class="ti ti-cash-banknote"></i></span><span class="kpi-label">مبيعات وتحصيلات اليوم</span></div>
+      <div class="kpi-value">${fmtMoney(todaySales)} <span style="font-size:12px;font-weight:800;color:var(--text-3);">ر.س</span></div>
+    </div>`
+    :`<div class="kpi-card">
+      <div class="kpi-top"><span class="kpi-icon kc-blue"><i class="ti ti-file-plus"></i></span><span class="kpi-label">طلبات جديدة اليوم</span></div>
+      <div class="kpi-value">${newToday}</div>
+    </div>`;
   const kpiRow=`<div class="kpi-row">
     <div class="kpi-card" onclick="dashGoto('active')">
       <div class="kpi-top"><span class="kpi-icon kc-gold"><i class="ti ti-loader-2"></i></span><span class="kpi-label">إجمالي الطلبات الجارية</span></div>
@@ -3582,16 +3632,13 @@ function buildDash(){
       <div class="kpi-top"><span class="kpi-icon kc-green"><i class="ti ti-circle-check"></i></span><span class="kpi-label">مكتملة / تم التسليم اليوم</span></div>
       <div class="kpi-value">${doneToday}</div>
     </div>
-    <div class="kpi-card" onclick="nav('revenue')">
-      <div class="kpi-top"><span class="kpi-icon kc-blue"><i class="ti ti-cash-banknote"></i></span><span class="kpi-label">مبيعات وتحصيلات اليوم</span></div>
-      <div class="kpi-value">${fmtMoney(todaySales)} <span style="font-size:12px;font-weight:800;color:var(--text-3);">ر.س</span></div>
-    </div>
+    ${fourthCard}
   </div>`;
   // ── Slim quick action strip (admin/receiver only — the roles that create orders) ──
   const qaStrip=(t==='admin'||t==='receiver')?`<div class="qa-strip">
     <button class="qa-strip-btn" onclick="nav('add')"><i class="ti ti-plus"></i> تسجيل طلب</button>
     <button class="qa-strip-btn" onclick="nav('quote')"><i class="ti ti-receipt-2"></i> عرض سعر فوري</button>
-    <button class="qa-strip-btn" onclick="openQuickTask('measure')"><i class="ti ti-ruler"></i> قياسات ميدانية</button>
+    <button class="qa-strip-btn" onclick="openQuickTaskPicker()"><i class="ti ti-bolt"></i> تكليف مهمة فورية</button>
     <button class="qa-strip-btn qa-strip-btn-out" onclick="nav('wf')"><i class="ti ti-list-details"></i> سجل العمليات الكامل</button>
   </div>`:'';
   const deptWorkload=['admin','follower','receiver'].includes(t)?buildDeptWorkloadHtml():'';
@@ -3608,24 +3655,18 @@ async function dashGoto(mode){
     setTimeout(()=>{document.getElementById('timeline-done-section')?.scrollIntoView({behavior:'smooth',block:'start'});},80);
     return;
   }
+  if(mode==='print'){_currentWfTab='active';await nav('wf');filterWfDept('print');return;}
+  // active/overdue/urgent: force the List view (the old .wf-card DOM-toggle
+  // approach only ever worked when the Workflow page happened to already be
+  // showing Kanban — .wf-card elements don't exist in List/Calendar/Timeline
+  // markup, so on a fresh visit — where the view defaults to List — clicking
+  // these KPI cards silently filtered nothing) and apply a real, one-shot
+  // filter that renderWfListView consumes and clears right after rendering,
+  // so it never lingers into a later, unrelated visit to the page.
   _currentWfTab='active';
+  window._wfView='list';
+  window._wfKpiFilterOnce=mode; // 'active' | 'overdue' | 'urgent'
   await nav('wf');
-  if(mode==='print'){
-    filterWfDept('print');
-  }else if(mode==='overdue'){
-    const now=new Date();
-    document.querySelectorAll('.wf-card').forEach(c=>{
-      const key=c.getAttribute('data-key');const o=orders[key];
-      const isOv=o&&o.deadline&&o.deadline!=='—'&&o.currentDept!=='done'&&new Date(o.deadline)<now;
-      c.style.display=isOv?'':'none';
-    });
-  }else if(mode==='urgent'){
-    document.querySelectorAll('.wf-card').forEach(c=>{
-      const key=c.getAttribute('data-key');const o=orders[key];
-      const isUrg=o&&o.priority==='عاجلة'&&o.currentDept!=='done';
-      c.style.display=isUrg?'':'none';
-    });
-  }
 }
 // ============================================================
 // WF GRID
@@ -3709,7 +3750,7 @@ function setWfStatFilter(key){
 function renderWfKanbanView(){
   const arr=ordersArr();
   const _activeStatKey=window._wfStatFilter||'all';
-  const _canSeeCardTotal=['admin','follower','receiver'].includes(cu.type);
+  const _canSeeCardTotal=['admin','follower','receiver','accountant'].includes(cu.type);
   const cardHtml=o=>{
     const pct=orderProgress(o);const col=progressColor(o);
     const showQtActions=o.isQuickTask&&!o.incompleteClient&&o.currentDept!=='done'&&(cu.type==='admin'||cu.type==='receiver');
@@ -3937,14 +3978,23 @@ function orderQuickActionsHtml(o){
 }
 // ── Model-3 filter/search bar for the list view specifically ──
 function wfListFiltersBarHtml(f){
-  const employeeOptions=Object.entries(USERS).filter(([,u])=>['designer','printer','workshop','external'].includes(u.type))
-    .map(([uname,u])=>`<option value="${esc(uname)}"${f.employee===uname?' selected':''}>${esc(u.name)}</option>`).join('');
+  // Dynamic conditional assignee filter: with no department chosen, every
+  // employee across all depts is a candidate (old behavior). Once a
+  // department is picked, the list narrows to just that department's staff —
+  // and if there's only one of them (e.g. Printing), setWfFilter() already
+  // auto-selected them, so the dropdown itself is hidden entirely; there's
+  // nothing left to choose.
+  const deptWorkers=f.dept?getDeptWorkers(f.dept):null;
+  const showEmployeeSelect=!deptWorkers||deptWorkers.length>1;
+  const employeeSource=deptWorkers||Object.entries(USERS).filter(([,u])=>['designer','printer','workshop','external'].includes(u.type)).map(([uname,u])=>({uname,name:u.name}));
+  const employeeOptions=employeeSource.map(u=>`<option value="${esc(u.uname)}"${f.employee===u.uname?' selected':''}>${esc(u.name)}</option>`).join('');
   const deptOptions=['design','print','workshop','external','done']
     .map(k=>`<option value="${k}"${f.dept===k?' selected':''}>${WF_DEPT_META[k].label}</option>`).join('');
+  const singleAssigneeNote=(deptWorkers&&deptWorkers.length===1)?`<span class="wf-toggle-chip active" style="pointer-events:none;"><i class="ti ti-user-check"></i> ${esc(deptWorkers[0].name)}</span>`:'';
   return `<div class="wf-list-filterbar">
     <div class="wf-list-search"><i class="ti ti-search"></i><input id="wf-list-q" placeholder="بحث برقم الطلب، اسم العميل، أو رقم الجوال..." value="${esc(f.q||'')}" oninput="setWfListSearch(this.value)"/></div>
-    <select onchange="setWfFilter('employee',this.value)"><option value="">كل المسؤولين</option>${employeeOptions}</select>
     <select onchange="setWfFilter('dept',this.value)"><option value="">كل المراحل</option>${deptOptions}</select>
+    ${showEmployeeSelect?`<select onchange="setWfFilter('employee',this.value)"><option value="">${deptWorkers?'كل موظفي هذه المرحلة':'كل المسؤولين'}</option>${employeeOptions}</select>`:singleAssigneeNote}
     <button class="wf-toggle-chip ${f.urgentOverdueOnly?'active':''}" onclick="toggleWfFilterFlag('urgentOverdueOnly')"><i class="ti ti-alert-triangle"></i> عاجل / متأخر فقط</button>
     <button class="wf-toggle-chip ${f.newProofOnly?'active':''}" onclick="toggleWfFilterFlag('newProofOnly')"><i class="ti ti-message-circle"></i> ردود بروفة جديدة</button>
   </div>`;
@@ -3975,79 +4025,100 @@ function itemDesignColumn(it){
   if(hasKind('design_proof'))return'waiting';
   return'todo';
 }
+// Unified single-page designer view: merges what used to be split across
+// "لوحة العمل" (this kanban-by-status board) and "أعمالي الحالية"
+// (buildMyWork's whole-order cards) into ONE page. Item-based orders use a
+// dual-interaction card: a down-arrow toggle expands/collapses the item
+// list in place (scrollable once it gets long), clicking the order header
+// opens the full order, and clicking an item opens its own workspace —
+// clicking anywhere else on a row (upload/WhatsApp buttons) stays inline.
+// Quick-task / non-itemized orders assigned to design keep the same
+// whole-order card treatment buildMyWork already used for them.
+const ITEM_DESIGN_STATUS={
+  todo:{label:'قيد التصميم',icon:'ti-brush',cls:'b-proc'},
+  waiting:{label:'📤 تم إرسال البروفة',icon:'ti-send',cls:'b-new'},
+  approved:{label:'✅ معتمد — جاهز للطباعة',icon:'ti-circle-check',cls:'b-done'},
+};
 function buildDesignerBoard(){
-  const isAdmin=cu.type==='admin';
-  const buckets={todo:{},waiting:{},approved:{}};
-  ordersArr().forEach(o=>{
-    (o.orderItems||[]).forEach((it,idx)=>{
-      if(itemCurrentDept(it,o)!=='design')return;
-      if(!isAdmin&&!(o.designTo===cu._uname||o.designTo==='all'))return;
-      const col=itemDesignColumn(it);
-      buckets[col][o._key]=buckets[col][o._key]||{o,items:[]};
-      buckets[col][o._key].items.push({it,idx});
-    });
+  const groups={};
+  myAssignedItems().forEach(({o,idx,it})=>{
+    groups[o._key]=groups[o._key]||{o,items:[]};
+    groups[o._key].items.push({it,idx});
   });
-  const colDef=[
-    {key:'todo',label:'قيد التصميم',icon:'ti-brush',color:'#6B46C1'},
-    {key:'waiting',label:'بانتظار رد العميل',icon:'ti-send',color:'#D97706'},
-    {key:'approved',label:'معتمد وجاهز للطباعة',icon:'ti-circle-check',color:'#2F855A'},
-  ];
-  const colHtml=colDef.map(c=>{
-    const groups=Object.values(buckets[c.key]);
-    const count=groups.reduce((s,g)=>s+g.items.length,0);
-    const cardsHtml=groups.length?groups.map(g=>designerOrderCardHtml(g.o,g.items,c.key)).join(''):
-      `<div style="text-align:center;color:var(--text-3);padding:24px 10px;font-size:12px;">لا توجد بنود</div>`;
-    return `<div class="designer-col">
-      <div class="designer-col-head" style="border-color:${c.color};">
-        <span class="designer-col-icon" style="background:${c.color};"><i class="ti ${c.icon}"></i></span>
-        <span class="designer-col-label">${c.label}</span>
-        <span class="designer-col-count">${count}</span>
-      </div>
-      <div class="designer-col-body">${cardsHtml}</div>
-    </div>`;
-  }).join('');
+  const orderCardsHtml=Object.values(groups).map(g=>designerOrderCardHtml(g.o,g.items)).join('');
+  const simpleOrders=ordersArr().filter(o=>isMyOrder(o)&&(!o.orderItems||!o.orderItems.length));
+  const simpleCardsHtml=simpleOrders.map(o=>designerSimpleOrderCardHtml(o)).join('');
+  const cardsHtml=orderCardsHtml+simpleCardsHtml;
   document.getElementById('page-designer').innerHTML=`
-    <div class="page-header"><div><div class="ptitle"><i class="ti ti-layout-kanban"></i> لوحة عمل التصميم</div><div class="breadcrumb">${esc(cu.name)} — بنود التصميم مجمّعة حسب الطلب</div></div></div>
-    <div class="designer-board">${colHtml}</div>`;
+    <div class="page-header"><div><div class="ptitle"><i class="ti ti-layout-kanban"></i> لوحة العمل</div><div class="breadcrumb">${esc(cu.name)} — كل أعمال التصميم الحالية في مكان واحد</div></div></div>
+    ${cardsHtml?`<div class="wf-grid">${cardsHtml}</div>`:'<div style="color:var(--text-3);padding:30px;text-align:center;"><i class="ti ti-check-circle" style="font-size:36px;display:block;margin-bottom:10px;color:#10B981;"></i>لا توجد أعمال موكلة إليك حالياً</div>'}`;
 }
-function designerOrderCardHtml(o,itemEntries,colKey){
-  const itemsHtml=itemEntries.map(({it,idx})=>designerItemRowHtml(o,it,idx,colKey)).join('');
+function toggleDesignerOrderCard(key){
+  const body=document.getElementById('dsb-body-'+key);
+  const chev=document.getElementById('dsb-chev-'+key);
+  if(!body)return;
+  const opening=body.style.display==='none';
+  body.style.display=opening?'flex':'none';
+  if(chev)chev.style.transform=opening?'rotate(180deg)':'';
+}
+function designerOrderCardHtml(o,itemEntries){
   const urgentTag=o.priority==='عاجلة'?'<span class="row-pill urgent-pill"><i class="ti ti-bolt"></i> عاجل</span>':'';
-  return `<div class="designer-order-card">
+  const newTag=hasOrderUpdate(o)?'<span class="row-pill" style="background:#DCFCE7;color:#15803D;">🟢 جديد</span>':'';
+  const itemsHtml=itemEntries.map(({it,idx})=>designerItemRowHtml(o,it,idx)).join('');
+  const manyItems=itemEntries.length>5;
+  return `<div class="designer-order-card" style="grid-column:1/-1;">
     <div class="designer-order-head" onclick="openOrderModal('${o._key}')">
-      <div><strong>${esc(o.id||o._key)}</strong> <span style="color:var(--text-3);font-weight:600;">• ${esc(o.client||'—')}</span></div>
-      <div style="font-size:10.5px;color:var(--text-3);display:flex;align-items:center;gap:6px;">${(o.orderItems||[]).length} بند ${urgentTag}</div>
+      <div style="display:flex;align-items:center;gap:8px;min-width:0;">
+        <button class="designer-order-toggle" onclick="event.stopPropagation();toggleDesignerOrderCard('${o._key}')" title="فتح/إغلاق قائمة البنود"><i class="ti ti-chevron-down" id="dsb-chev-${o._key}"></i></button>
+        <div style="min-width:0;"><strong>${esc(o.id||o._key)}</strong> <span style="color:var(--text-3);font-weight:600;">• ${esc(o.client||'—')}</span></div>
+      </div>
+      <div style="font-size:10.5px;color:var(--text-3);display:flex;align-items:center;gap:6px;">${itemEntries.length} بند ${urgentTag}${newTag}</div>
     </div>
-    <div class="designer-order-items">${itemsHtml}</div>
+    <div class="designer-order-items" id="dsb-body-${o._key}" style="display:none;${manyItems?'max-height:420px;overflow-y:auto;scroll-behavior:smooth;':''}">${itemsHtml}</div>
   </div>`;
 }
-function designerItemRowHtml(o,it,idx,colKey){
+function designerItemRowHtml(o,it,idx){
+  const colKey=itemDesignColumn(it);
+  const statusMeta=ITEM_DESIGN_STATUS[colKey];
   const uidBase=`dsb-${o._key}-${idx}`;
   const specs=it.specs?` <span style="color:var(--text-3);">(${esc(it.specs)})</span>`:'';
   let actionsHtml='';
   if(colKey==='todo'){
     const inputId=uidBase+'-proof';
-    actionsHtml=`<label class="designer-action-btn" for="${inputId}"><i class="ti ti-upload"></i> رفع بروفة</label>
-      <input type="file" multiple id="${inputId}" style="display:none" accept="image/*,.pdf,.ai,.psd" onchange="saveItemKindFiles('${o._key}',${idx},'design_proof','${inputId}')"/>`;
+    actionsHtml=`<label class="designer-action-btn" for="${inputId}" onclick="event.stopPropagation();"><i class="ti ti-upload"></i> رفع بروفة</label>
+      <input type="file" multiple id="${inputId}" style="display:none" accept="image/*,.pdf,.ai,.psd" onclick="event.stopPropagation();" onchange="event.stopPropagation();saveItemKindFiles('${o._key}',${idx},'design_proof','${inputId}')"/>`;
   }else if(colKey==='waiting'){
     const inputId=uidBase+'-approved';
-    const waBtn=o.phone?`<button class="designer-action-btn" onclick="openWhatsapp('${encodeURIComponent(o.phone)}')"><i class="ti ti-brand-whatsapp"></i> إرسال للعميل</button>`:'';
-    actionsHtml=`${waBtn}<label class="designer-action-btn" for="${inputId}"><i class="ti ti-upload"></i> رفع الملف المعتمد</label>
-      <input type="file" multiple id="${inputId}" style="display:none" accept="image/*,.pdf,.ai,.psd" onchange="saveItemKindFiles('${o._key}',${idx},'design_approved','${inputId}')"/>`;
+    const waBtn=o.phone?`<button class="designer-action-btn" onclick="event.stopPropagation();openWhatsapp('${encodeURIComponent(o.phone)}')"><i class="ti ti-brand-whatsapp"></i> إرسال للعميل</button>`:'';
+    actionsHtml=`${waBtn}<label class="designer-action-btn" for="${inputId}" onclick="event.stopPropagation();"><i class="ti ti-upload"></i> رفع الملف المعتمد</label>
+      <input type="file" multiple id="${inputId}" style="display:none" accept="image/*,.pdf,.ai,.psd" onclick="event.stopPropagation();" onchange="event.stopPropagation();saveItemKindFiles('${o._key}',${idx},'design_approved','${inputId}')"/>`;
   }else if(colKey==='approved'){
-    actionsHtml=`<button class="designer-action-btn designer-action-primary" onclick="advanceItemDept('${o._key}',${idx})"><i class="ti ti-send-2"></i> اعتماد وإرسال للطباعة</button>`;
+    actionsHtml=`<button class="designer-action-btn designer-action-primary" onclick="event.stopPropagation();advanceItemDept('${o._key}',${idx})"><i class="ti ti-send-2"></i> اعتماد وإرسال للطباعة</button>`;
   }
   // Google-Drive-backed file preview: falls back to the same base64 storage
   // as everywhere else in the app when Drive isn't configured (see
   // mediaService-equivalent comments on isGDriveConfigured) — the link still
   // opens/downloads correctly either way, only the storage backend differs.
   const previewFiles=itemVersionsForStage(it,'design').filter(v=>!v._legacy).flatMap(v=>v.files||[]);
-  const previewHtml=previewFiles.length?`<div class="designer-item-files">${previewFiles.slice(-3).map(f=>fileLinkHtml(f.name,f.data)).join('')}</div>`:'';
-  return `<div class="designer-item-row" onclick="event.stopPropagation();">
-    <div class="designer-item-name">${esc(it.name||'بند')}${specs}</div>
+  const previewHtml=previewFiles.length?`<div class="designer-item-files" onclick="event.stopPropagation();">${previewFiles.slice(-3).map(f=>fileLinkHtml(f.name,f.data)).join('')}</div>`:'';
+  return `<div class="designer-item-row" style="cursor:pointer;" onclick="openItemWorkspace('${o._key}',${idx})">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
+      <div class="designer-item-name">${esc(it.name||'بند')}${specs}</div>
+      <span class="badge ${statusMeta.cls}"><i class="ti ${statusMeta.icon}"></i> ${statusMeta.label}</span>
+    </div>
     ${previewHtml}
     <div class="designer-item-actions">${actionsHtml}</div>
   </div>`;
+}
+function designerSimpleOrderCardHtml(o){
+  return`<div class="wf-card" style="${o.isQuickTask?'border:2px solid #C89A4A;background:linear-gradient(135deg,#FFFDF8,#FFF5E0);':''}" onclick="openOrderModal('${o._key}')">${hasOrderUpdate(o)?'<span class="order-update-dot" title="تم تحديث بيانات الطلب"></span>':''}<div class="wf-card-top">
+    <div class="wf-card-id">${o.id||o._key} · ${orderDateTime(o)}${o.isQuickTask?'<span class="urgent-tag" style="margin-right:6px;font-size:9px;background:linear-gradient(135deg,#78350F,#C89A4A);"><i class="ti ti-bolt"></i>مهمة سريعة</span>':''}</div>
+    <div class="wf-card-name">${esc(o.client)}</div>
+    <div class="wf-card-svc">${esc(o.service)}</div>
+    <div style="display:flex;gap:5px;flex-wrap:wrap;">${gpbadge(o.priority)} ${orderTimerBadge(o)}</div>
+    <div style="font-size:10.5px;color:var(--text-3);"><i class="ti ti-calendar-time"></i> التسليم: ${deadlineDateTime(o)}</div>
+    ${(canSeeWhatsappBtn()&&o.phone&&o.phone!=='—')?`<div style="margin-top:8px"><button class="btn btn-whatsapp btn-sm" onclick="event.stopPropagation();openWhatsapp('${encodeURIComponent(o.phone)}')"><i class="ti ti-brand-whatsapp"></i> واتساب</button></div>`:''}
+  </div><div class="wf-card-prog"><div class="wf-card-fill" style="width:${orderProgress(o)}%;background:${progressColor(o)}"></div></div></div>`;
 }
 // ============================================================
 // PRODUCTION PIPELINE QUEUE (printer / workshop / external landing page)
@@ -4097,6 +4168,18 @@ function wfFiltersBarHtml(f){
 function setWfFilter(key,val){
   window._wfFilters=window._wfFilters||{};
   window._wfFilters[key]=val;
+  // Conditional assignee filter: picking a department that has exactly one
+  // staff member auto-selects that person (nothing else to filter by) — a
+  // department with several staff still lets the manager narrow further,
+  // and clearing the department clears any dept-scoped employee selection
+  // since it may no longer apply to "كل المراحل".
+  if(key==='dept'){
+    if(!val){window._wfFilters.employee='';}
+    else{
+      const workers=getDeptWorkers(val);
+      window._wfFilters.employee=workers.length===1?workers[0].uname:'';
+    }
+  }
   const view=window._wfView||'kanban';
   if(view==='calendar')renderWfCalendarView();
   else if(view==='list')renderWfListView();
@@ -4218,7 +4301,23 @@ function closeWfDayPanel(){
 function renderWfListView(){
   const bodyEl=document.getElementById('wf-view-body');if(!bodyEl)return;
   const f=window._wfFilters||{};
-  const arr=ordersArr().filter(o=>wfMatchesFilters(o,f)).sort((a,b)=>new Date(b.date||0)-new Date(a.date||0));
+  // ordersArr() already returns orders in currentSortMode order — re-sorting
+  // here by date-desc unconditionally silently overrode "الأقدم أولاً" and
+  // every other sort mode whenever the List view was open. filter() preserves
+  // the incoming order, so simply dropping the extra .sort() fixes it.
+  let arr=ordersArr().filter(o=>wfMatchesFilters(o,f));
+  // One-shot KPI-card filter from dashGoto() — consumed and cleared
+  // immediately so it never lingers into a later, unrelated visit to this page.
+  const kpiMode=window._wfKpiFilterOnce;
+  window._wfKpiFilterOnce=null;
+  if(kpiMode==='active')arr=arr.filter(o=>o.currentDept!=='done');
+  else if(kpiMode==='overdue')arr=arr.filter(o=>o.deadline&&o.deadline!=='—'&&o.currentDept!=='done'&&new Date(o.deadline)<new Date());
+  else if(kpiMode==='urgent')arr=arr.filter(o=>o.priority==='عاجلة'&&o.currentDept!=='done');
+  const kpiLabels={active:'الطلبات الجارية فقط',overdue:'الطلبات المتأخرة / الحرجة فقط',urgent:'الطلبات العاجلة فقط'};
+  const kpiBanner=kpiMode?`<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--gold-soft);border:1px solid var(--gold);border-radius:10px;padding:8px 14px;margin-bottom:10px;font-size:12px;font-weight:700;color:#8a6d1f;">
+    <span><i class="ti ti-filter"></i> عرض مُفلتر: ${kpiLabels[kpiMode]||kpiMode} (${arr.length})</span>
+    <button class="btn btn-out btn-xs" onclick="renderWfListView()">إظهار كل الطلبات</button>
+  </div>`:'';
   const rows=arr.map(o=>{
     const overdue=o.deadline&&o.deadline!=='—'&&o.currentDept!=='done'&&new Date(o.deadline)<new Date();
     const countdown=deliveryCountdownText(o);
@@ -4240,6 +4339,7 @@ function renderWfListView(){
     </tr>`;
   }).join('');
   bodyEl.innerHTML=`
+    ${kpiBanner}
     ${wfListFiltersBarHtml(f)}
     <div class="card"><div class="tbl-wrap"><table class="wf-dense-table">
     <thead><tr><th style="width:130px">رقم الطلب</th><th>العميل والخدمة</th><th style="width:95px">المرحلة</th><th style="width:135px">البروفة والعميل</th><th style="width:135px">موعد التسليم</th><th style="width:150px">المسؤول / المنشئ</th><th style="width:105px">إجراءات</th></tr></thead>
@@ -4851,7 +4951,7 @@ function buildMyWorkItemCards(){
   const rows=myAssignedItems();
   return rows.map(({o,idx,it})=>{
     const dept=itemCurrentDept(it,o);
-    return `<div class="wf-card" style="cursor:pointer;" onclick="openItemWorkspace('${o._key}',${idx})"><div class="wf-card-top">
+    return `<div class="wf-card" style="cursor:pointer;" onclick="openItemWorkspace('${o._key}',${idx})">${hasOrderUpdate(o)?'<span class="order-update-dot" title="عنصر جديد أو مُحدَّث"></span>':''}<div class="wf-card-top">
       <div class="wf-card-id">${esc(o.id||o._key)} <span class="badge ${dept==='done'?'b-done':'b-new'}" style="margin-right:4px;">${WF_DEPT_META[dept]?.label||dept}</span></div>
       <div class="wf-card-name">${esc(it.name||'—')}</div>
       <div class="wf-card-svc"><i class="ti ti-user"></i> ${esc(o.client||'—')}</div>
@@ -4864,7 +4964,7 @@ function buildMyWorkItemCards(){
 }
 function buildMyWork(){
   const isWorkshop=cu.type==='workshop';
-  const _canSeeCardTotal=['admin','follower','receiver'].includes(cu.type);
+  const _canSeeCardTotal=['admin','follower','receiver','accountant'].includes(cu.type);
   const allMyOrders=ordersArr().filter(o=>isMyOrder(o));
   // Simple (non-itemized) tasks — quick tasks, maintenance requests, and any
   // legacy order without a per-item breakdown — don't fit the item-workspace
@@ -4929,6 +5029,7 @@ function buildMyWork(){
 function openItemWorkspace(orderKey,idx){
   window._itemworkKey=orderKey;window._itemworkIdx=idx;
   window._newVerFiles=window._newVerFiles||{};window._newVerFiles[idx]=[];
+  markOrderUpdateSeen(orderKey);
   nav('itemwork');
 }
 function _itemworkState(){
@@ -6429,11 +6530,18 @@ async function loadAndRenderChat(orderKey){
 function markChatSeen(orderKey){try{localStorage.setItem('chatSeen_'+cu._uname+'_'+orderKey,new Date().toISOString());}catch(e){}}
 function markOrderUpdateSeen(key){try{localStorage.setItem('itemUpdateSeen_'+cu._uname+'_'+key,new Date().toISOString());}catch(e){}}
 function hasOrderUpdate(o){
-  if(!o||!o._key||!o.lastItemUpdateAt)return false;
-  if(o.lastItemUpdateBy&&o.lastItemUpdateBy===cu.name)return false;
+  if(!o||!o._key)return false;
+  // Prefer the explicit item/reassignment/transfer signal; fall back to the
+  // order's own creation timestamp so a brand-new order — never touched
+  // since — still shows "جديد" to whoever it's newly assigned to, without
+  // every order-creation code path needing to remember to stamp one.
+  const signalAt=o.lastItemUpdateAt||o.createdAt||o.date;
+  if(!signalAt)return false;
+  const signalBy=o.lastItemUpdateBy||o.createdBy;
+  if(signalBy&&signalBy===cu.name)return false;
   let lastSeen='1970-01-01T00:00:00.000Z';
   try{lastSeen=localStorage.getItem('itemUpdateSeen_'+cu._uname+'_'+o._key)||lastSeen;}catch(e){}
-  return o.lastItemUpdateAt>lastSeen;
+  return signalAt>lastSeen;
 }
 async function sendChatMsg(orderKey){
   const input=document.getElementById(`chat-input-${orderKey}`);if(!input||!input.value.trim())return;
@@ -6695,6 +6803,10 @@ async function reassignOrderDept(key){
   else if(dept==='workshop'){upd.workshopTo=uname;upd.workshopName=name;}
   else if(dept==='external'){upd.externalTo=uname;upd.externalName=name;}
   else{toast('⚠️ لا يمكن تغيير المسؤول في هذه المرحلة');return;}
+  // Stamps the same signal hasOrderUpdate() reads, so the newly-assigned
+  // employee sees the "جديد" badge on this order across their views —
+  // not just on genuinely new orders, but on ones just reassigned to them.
+  upd.lastItemUpdateAt=new Date().toISOString();upd.lastItemUpdateBy=cu.name;
   showSaving('جاري تحديث المسؤول...');
   try{
     await fbPatch(`orders/${key}`,upd);await loadData();hideSaving();toast('✓ تم تغيير الموظف المسؤول');openOrderModal(key);
@@ -7748,6 +7860,9 @@ async function sendToNextDept(key,next){
   const timeField={design:'designDoneAt',external:'externalDoneAt',print:'printDoneAt',workshop:'workshopDoneAt'};
   const startField={design:'designStartAt',external:'externalStartAt',print:'printStartAt',workshop:'workshopStartAt'};
   const upd={currentDept:next,stageStartDate:new Date().toISOString()};
+  // Same "جديد" signal as reassignment — an order landing in the next
+  // department is effectively newly assigned to whoever's responsible there.
+  upd.lastItemUpdateAt=new Date().toISOString();upd.lastItemUpdateBy=cu.name;
   if(timeField[curDept])upd[timeField[curDept]]=new Date().toISOString();
   if(startField[next])upd[startField[next]]=new Date().toISOString();
   try{
