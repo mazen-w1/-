@@ -2704,6 +2704,12 @@ async function nav(p,skipHistory=false){
   if(pg)pg.classList.add('active');if(nb)nb.classList.add('active');
   _buildPage(p);
   if(!_navBusy){_navBusy=true;try{await loadData();}catch(e){}if(p!=='add'&&p!=='request'&&p!=='quote')_buildPage(p);_navBusy=false;}
+  // Clear the one-shot KPI-card filter (see renderWfListView) once this ENTIRE
+  // navigation — including the post-loadData re-render above — has finished,
+  // not on first read; renderWfListView() itself no longer clears it, since
+  // it runs twice per nav('wf') call and clearing on the first pass wiped the
+  // filter out before the user ever saw the settled page.
+  window._wfKpiFilterOnce=null;
 }
 function navBack(){if(_navHistory.length===0)return;const prev=_navHistory.pop();nav(prev,true);}
 function backBtnHtml(){return`<div style="margin-bottom:16px;"><button class="btn btn-out btn-sm" onclick="navBack()"><i class="ti ti-arrow-right"></i> رجوع</button></div>`;}
@@ -4306,17 +4312,25 @@ function renderWfListView(){
   // every other sort mode whenever the List view was open. filter() preserves
   // the incoming order, so simply dropping the extra .sort() fixes it.
   let arr=ordersArr().filter(o=>wfMatchesFilters(o,f));
-  // One-shot KPI-card filter from dashGoto() — consumed and cleared
-  // immediately so it never lingers into a later, unrelated visit to this page.
+  // KPI-card filter from dashGoto(). NOTE: this is deliberately NOT cleared
+  // here anymore — nav('wf') calls _buildPage('wf') (which reaches this
+  // function) TWICE per visit: once immediately, then again after its
+  // internal `await loadData()` resolves. Clearing the flag on read used to
+  // wipe the filter out right after that second, post-loadData render — so
+  // clicking a KPI card showed the filtered list for a fraction of a second
+  // and then silently reverted to the full unfiltered list. The flag is now
+  // only cleared centrally at the end of nav() (once per full navigation,
+  // after both render passes) and by the "إظهار كل الطلبات" button below, so
+  // it survives the double-render but still never lingers into a later,
+  // unrelated visit to this page.
   const kpiMode=window._wfKpiFilterOnce;
-  window._wfKpiFilterOnce=null;
   if(kpiMode==='active')arr=arr.filter(o=>o.currentDept!=='done');
   else if(kpiMode==='overdue')arr=arr.filter(o=>o.deadline&&o.deadline!=='—'&&o.currentDept!=='done'&&new Date(o.deadline)<new Date());
   else if(kpiMode==='urgent')arr=arr.filter(o=>o.priority==='عاجلة'&&o.currentDept!=='done');
   const kpiLabels={active:'الطلبات الجارية فقط',overdue:'الطلبات المتأخرة / الحرجة فقط',urgent:'الطلبات العاجلة فقط'};
   const kpiBanner=kpiMode?`<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--gold-soft);border:1px solid var(--gold);border-radius:10px;padding:8px 14px;margin-bottom:10px;font-size:12px;font-weight:700;color:#8a6d1f;">
     <span><i class="ti ti-filter"></i> عرض مُفلتر: ${kpiLabels[kpiMode]||kpiMode} (${arr.length})</span>
-    <button class="btn btn-out btn-xs" onclick="renderWfListView()">إظهار كل الطلبات</button>
+    <button class="btn btn-out btn-xs" onclick="window._wfKpiFilterOnce=null;renderWfListView();">إظهار كل الطلبات</button>
   </div>`:'';
   const rows=arr.map(o=>{
     const overdue=o.deadline&&o.deadline!=='—'&&o.currentDept!=='done'&&new Date(o.deadline)<new Date();
