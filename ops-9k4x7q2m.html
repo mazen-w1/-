@@ -1821,7 +1821,7 @@ const INITIAL_USERS={
   workshop1:{pass:'1234',name:'أويس',role:'ورشة',color:'#9A3412',type:'workshop',photo:''},
   external1:{pass:'1234',name:'منفذ خارجي',role:'تنفيذ خارجي',color:'#713F12',type:'external',photo:''},
 };
-let cu=null,orders={},clients={},USERS={},currentSortMode='date-desc';
+let cu=null,orders={},clients={},USERS={},currentSortMode='urgent-auto';
 let submittedRequests={},chats={},standaloneQuotes={},warranties={},teamChat={},govRecords={},urgentRequests={},tasksData={},eventNotifs={};
 let _lastAssignSnapshot=null,_audioCtx=null,_audioUnlocked=false;
 let _navHistory=[];
@@ -2755,24 +2755,41 @@ function paymentBadge(p){
 // sort mode — completed orders always sink to the bottom, then overdue
 // orders float highest, then priority, then how long an order has sat in its
 // current stage without moving (so nothing waits forever unnoticed).
-function orderUrgencyScore(o){
-  if(o.currentDept==='done')return-1000;
-  let score=0;
-  const isOverdue=o.deadline&&o.deadline!=='—'&&new Date(o.deadline)<new Date();
-  if(isOverdue)score+=1000;
-  const pw={'عاجلة':300,'متوسطة':150,'عادية':50};
-  score+=pw[o.priority]||0;
-  const stageAgeH=(Date.now()-new Date(o.stageStartDate||o.date).getTime())/3600000;
-  score+=Math.min(stageAgeH,72);
-  return score;
+// Two-tier operations-table hierarchy: every active order (design/print/
+// workshop/awaiting-client/overdue/urgent — i.e. anything not yet done)
+// stays pinned above every completed one, no matter how old or how the
+// other sort criteria would otherwise rank it. Within the active tier,
+// overdue/urgent orders float to the top, then the rest sort by nearest
+// due date first. Within the completed tier, whichever order finished
+// most recently leads — completing/delivering an order re-sorts it
+// straight to the top of that section the next time the table renders.
+function operationsTableSort(list){
+  const now=Date.now();
+  const isCritical=o=>{
+    const overdue=o.deadline&&o.deadline!=='—'&&new Date(o.deadline).getTime()<now;
+    return overdue||o.priority==='عاجلة';
+  };
+  const completionTs=o=>o.archivedAt||o.workshopDoneAt||o.externalDoneAt||o.printDoneAt||o.stageStartDate||o.date||'';
+  return list.sort((a,b)=>{
+    const aDone=a.currentDept==='done',bDone=b.currentDept==='done';
+    if(aDone!==bDone)return aDone?1:-1;
+    if(!aDone){
+      const aCrit=isCritical(a),bCrit=isCritical(b);
+      if(aCrit!==bCrit)return aCrit?-1:1;
+      const aDl=(a.deadline&&a.deadline!=='—')?new Date(a.deadline).getTime():Infinity;
+      const bDl=(b.deadline&&b.deadline!=='—')?new Date(b.deadline).getTime():Infinity;
+      return aDl-bDl;
+    }
+    return new Date(completionTs(b))-new Date(completionTs(a));
+  });
 }
 function ordersArr(){
   let list=Object.entries(orders).map(([k,v])=>({...v,_key:k}));
   if(currentSortMode==='priority-desc'){const w={'عاجلة':3,'متوسطة':2,'عادية':1};return list.sort((a,b)=>(w[b.priority]||0)-(w[a.priority]||0));}
   if(currentSortMode==='priority-asc'){const w={'عاجلة':3,'متوسطة':2,'عادية':1};return list.sort((a,b)=>(w[a.priority]||0)-(w[b.priority]||0));}
   if(currentSortMode==='date-asc')return list.sort((a,b)=>new Date(a.date)-new Date(b.date));
-  if(currentSortMode==='urgent-auto')return list.sort((a,b)=>orderUrgencyScore(b)-orderUrgencyScore(a));
-  return list.sort((a,b)=>new Date(b.date)-new Date(a.date));
+  if(currentSortMode==='date-desc')return list.sort((a,b)=>new Date(b.date)-new Date(a.date));
+  return operationsTableSort(list);
 }
 function getActiveDepts(o){
   // Orders created with the drag-and-drop workflow builder carry their own
@@ -3300,7 +3317,7 @@ function controlsRow(showSearch=false,searchId='',searchPlaceholder='بحث...')
       <i class="ti ti-arrows-sort" style="color:var(--gold);font-size:15px;"></i>
       <label>ترتيب:</label>
       <select onchange="changeSortMode(this.value)">
-        <option value="urgent-auto" ${currentSortMode==='urgent-auto'?'selected':''}>ترتيب تلقائي (الأكثر إلحاحاً أولاً)</option>
+        <option value="urgent-auto" ${currentSortMode==='urgent-auto'?'selected':''}>ترتيب العمليات (النشطة أولاً، ثم المكتملة)</option>
         <option value="date-desc" ${currentSortMode==='date-desc'?'selected':''}>الأحدث أولاً</option>
         <option value="date-asc" ${currentSortMode==='date-asc'?'selected':''}>الأقدم أولاً</option>
         <option value="priority-desc" ${currentSortMode==='priority-desc'?'selected':''}>الأولوية الأعلى</option>
