@@ -597,6 +597,9 @@ input[type="password"]{direction:rtl;text-align:right;padding-left:40px;padding-
 .quote-line{display:grid;grid-template-columns:2fr 1fr 1fr 0.5fr;gap:8px;margin-bottom:10px;align-items:center;}
 .quote-line input{padding:8px 10px;font-size:12px;}
 @media(max-width:768px){#quote-grid-header,.quote-line{min-width:640px;}}
+.quote-readonly-input{background:var(--surface-2)!important;border:1px solid var(--border-soft)!important;color:var(--maroon)!important;font-weight:800!important;text-align:center;cursor:not-allowed;}
+.quote-readonly-badge{display:flex;align-items:center;justify-content:center;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:8px;padding:6px 8px;font-weight:800;color:var(--maroon);text-align:center;}
+.dim-col-label{font-size:9.5px;font-weight:800;color:var(--text-3);text-align:center;}
 .quote-total-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);padding:16px 20px;margin-top:16px;}
 .qt-row{display:flex;justify-content:space-between;font-size:13px;font-weight:600;color:var(--text-2);margin-bottom:8px;}
 .qt-row.grand{font-size:16px;font-weight:900;color:var(--maroon);border-top:2px solid var(--gold);padding-top:12px;margin-top:4px;}
@@ -5896,18 +5899,30 @@ function quoteLineDimsSummary(l){
   const totalArea=l.dims.reduce((s,d)=>s+(Number(d.w)||0)*(Number(d.h)||0)*(Number(d.q)||0),0);
   return parts.join(' + ')+' | الإجمالي: '+fmtMoney(totalArea)+' م²';
 }
+const DIM_ROW_COLS='1fr 1fr 1fr 1fr auto';
+function dimRowArea(d){return(Number(d.w)||0)*(Number(d.h)||0)*(Number(d.q)||0);}
+function quoteLineDimsHeaderHtml(){
+  return`<div style="display:grid;grid-template-columns:${DIM_ROW_COLS};gap:6px;margin-bottom:4px;">
+    <span class="dim-col-label">العرض (م)</span>
+    <span class="dim-col-label">الارتفاع (م)</span>
+    <span class="dim-col-label">الكمية / العدد</span>
+    <span class="dim-col-label">مساحة المقاس (م²) - تلقائي</span>
+    <span></span>
+  </div>`;
+}
 function quoteLineDimsRowsHtml(l){
-  return(l.dims||[]).map(d=>`<div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:6px;align-items:center;margin-bottom:5px;">
+  return(l.dims||[]).map(d=>`<div style="display:grid;grid-template-columns:${DIM_ROW_COLS};gap:6px;align-items:center;margin-bottom:5px;">
     <input type="text" inputmode="decimal" placeholder="العرض" value="${d.w??''}" oninput="updateQuoteLineDimension('${l.id}','${d.id}','w',this.value)" onfocus="this.select()" style="font-size:11.5px;padding:6px 8px;"/>
     <input type="text" inputmode="decimal" placeholder="الارتفاع" value="${d.h??''}" oninput="updateQuoteLineDimension('${l.id}','${d.id}','h',this.value)" onfocus="this.select()" style="font-size:11.5px;padding:6px 8px;"/>
-    <input type="text" inputmode="decimal" placeholder="الكمية لهذا المقاس" value="${d.q??1}" oninput="updateQuoteLineDimension('${l.id}','${d.id}','q',this.value)" onfocus="this.select()" style="font-size:11.5px;padding:6px 8px;"/>
+    <input type="text" inputmode="decimal" placeholder="الكمية" value="${d.q??1}" oninput="updateQuoteLineDimension('${l.id}','${d.id}','q',this.value)" onfocus="this.select()" style="font-size:11.5px;padding:6px 8px;"/>
+    <div id="q-dim-area-${d.id}" class="quote-readonly-badge" style="font-size:11.5px;">${fmtMoney(dimRowArea(d))}</div>
     <button class="btn btn-red btn-sm btn-icon" onclick="removeQuoteLineDimension('${l.id}','${d.id}')" title="حذف المقاس"><i class="ti ti-trash"></i></button>
   </div>`).join('');
 }
 function quoteLineDimsBoxHtml(l){
   const summary=quoteLineDimsSummary(l);
   return`<div id="q-line-dims-${l.id}" style="grid-column:1/-1;background:var(--surface-2);border:1px dashed var(--border);border-radius:8px;padding:8px 10px;margin-top:4px;${(l.dims&&l.dims.length)?'':'display:none;'}">
-    <div style="font-size:10px;color:var(--text-3);font-weight:800;margin-bottom:6px;">العرض × الارتفاع (متر) × الكمية لهذا المقاس</div>
+    ${quoteLineDimsHeaderHtml()}
     <div id="q-line-dims-rows-${l.id}">${quoteLineDimsRowsHtml(l)}</div>
     ${summary?`<div id="q-line-dims-summary-${l.id}" style="font-size:10.5px;color:var(--maroon);font-weight:700;margin-top:4px;">${esc(summary)}</div>`:`<div id="q-line-dims-summary-${l.id}"></div>`}
   </div>`;
@@ -5919,8 +5934,8 @@ function renderQuoteLines(){
     const hasDims=l.dims&&l.dims.length;
     return`<div class="quote-line" style="grid-template-columns:${quoteGridCols()} auto auto;gap:6px;">
     <input placeholder="وصف البند" value="${esc(l.lbl)}" oninput="updateQuoteLine('${l.id}','lbl',this.value)"/>
-    ${showMeters?`<input type="text" inputmode="decimal" id="q-line-m-${l.id}" placeholder="الامتار" value="${l.m??1}" oninput="updateQuoteLine('${l.id}','m',this.value)" min="0" onfocus="this.select()" ${hasDims?'readonly title="محسوبة تلقائياً من المقاسات"':''}/>`:''}
-    <input type="text" inputmode="decimal" id="q-line-qty-${l.id}" placeholder="الكمية" value="${l.q}" oninput="updateQuoteLine('${l.id}','q',this.value)" min="1" onfocus="this.select()" ${hasDims?'readonly title="محسوبة تلقائياً من المقاسات"':''}/>
+    ${showMeters?`<input type="text" inputmode="decimal" id="q-line-m-${l.id}" placeholder="الامتار" value="${l.m??1}" oninput="updateQuoteLine('${l.id}','m',this.value)" min="0" onfocus="this.select()" ${hasDims?`readonly title="محسوبة تلقائياً من المقاسات أدناه" class="quote-readonly-input"`:''}/>`:''}
+    <input type="text" inputmode="decimal" id="q-line-qty-${l.id}" placeholder="الكمية" value="${l.q}" oninput="updateQuoteLine('${l.id}','q',this.value)" min="1" onfocus="this.select()" ${hasDims?`readonly title="محسوبة تلقائياً من المقاسات أدناه" class="quote-readonly-input"`:''}/>
     <input type="text" inputmode="decimal" id="q-line-notax-${l.id}" placeholder="السعر غير شامل الضريبة" value="${l.p}" oninput="updateQuoteLine('${l.id}','p',this.value)" min="0" onfocus="this.select()"/>
     <input type="text" inputmode="decimal" id="q-line-wtax-${l.id}" placeholder="السعر شامل الضريبة" value="${fmtMoney((l.p*1.15))}" oninput="updateQuoteLineFromTax('${l.id}',this.value)" min="0" onfocus="this.select()"/>
     <div id="q-line-total-${l.id}" style="display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:var(--maroon);background:var(--surface-2);border:1.5px solid var(--border);border-radius:8px;padding:8px 6px;text-align:center;">${fmtMoney((showMeters?(l.m??1):1)*(l.q||0)*(l.p||0)*1.15)}</div>
@@ -5957,6 +5972,7 @@ function updateQuoteLineDimension(lineId,dimId,field,value){
   recomputeLineFromDims(l);
   const qEl=document.getElementById('q-line-qty-'+lineId);if(qEl)qEl.value=l.q;
   const mEl=document.getElementById('q-line-m-'+lineId);if(mEl)mEl.value=l.m;
+  const areaEl=document.getElementById('q-dim-area-'+dimId);if(areaEl)areaEl.textContent=fmtMoney(dimRowArea(d));
   const sumEl=document.getElementById('q-line-dims-summary-'+lineId);if(sumEl)sumEl.textContent=quoteLineDimsSummary(l);
   renderQuoteTotals();
 }
