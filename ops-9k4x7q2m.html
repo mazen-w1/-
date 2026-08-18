@@ -5692,12 +5692,16 @@ function buildQuotePage(){
           <div id="quote-lines-wrap"></div>
         </div>
         <button class="btn btn-out btn-sm" onclick="addQuoteLine()" style="margin-top:8px;"><i class="ti ti-plus"></i> إضافة بند</button>
-        <!-- Grand Total Only (simplified) -->
-        <div style="margin-top:14px;text-align:center;">
+        <!-- Grand Total + (when showing meters) Total Area, side by side -->
+        <div style="margin-top:14px;text-align:center;display:flex;gap:12px;justify-content:center;flex-wrap:wrap;">
           <div style="background:var(--maroon);color:#fff;border-radius:var(--radius-md);padding:10px 18px;display:inline-block;min-width:180px;">
             <div style="font-size:10px;color:var(--gold);font-weight:700;margin-bottom:2px;">الإجمالي شامل ضريبة القيمة المضافة 15%</div>
             <div id="q-grand-total" style="font-size:18px;font-weight:900;color:#fff;">0.00 ر.س</div>
             <div id="q-vat-note" style="font-size:9px;color:rgba(255,255,255,.7);margin-top:2px;"></div>
+          </div>
+          <div id="q-total-area-card" style="background:var(--gold);color:#3B2A0A;border-radius:var(--radius-md);padding:10px 18px;display:none;min-width:180px;">
+            <div style="font-size:10px;color:#5B4B1F;font-weight:700;margin-bottom:2px;">إجمالي الأمتار المربعة</div>
+            <div id="q-total-area" style="font-size:18px;font-weight:900;color:#3B2A0A;">0.00 م²</div>
           </div>
         </div>
         <div class="fg" style="max-width:260px;margin:14px auto 0;">
@@ -5887,20 +5891,33 @@ function onQuoteShowMetersChange(checked){
 // (w*h*qty) across rows — so a line covering several panel sizes (e.g. one
 // order needs 2 panels at 1.06×2.50m plus 2 at 0.77×2.50m) prices correctly
 // off its true total area instead of one manually-guessed "meters" number.
+// Rounding l.m to 2 decimals AT THE SOURCE (not just where it's displayed)
+// matters — width×height×qty summed across several rows in raw floating
+// point reliably lands on things like 5.419000000000000X, and that raw
+// value was getting written straight into the "الامتار" input and into
+// every total derived from it. Rounding once here keeps it out of every
+// downstream field instead of having to remember to round it everywhere.
 function recomputeLineFromDims(l){
   if(!l.dims||!l.dims.length)return;
   l.q=l.dims.reduce((s,d)=>s+(Number(d.q)||0),0);
-  l.m=l.dims.reduce((s,d)=>s+(Number(d.w)||0)*(Number(d.h)||0)*(Number(d.q)||0),0);
+  l.m=Math.round(l.dims.reduce((s,d)=>s+(Number(d.w)||0)*(Number(d.h)||0)*(Number(d.q)||0),0)*100)/100;
 }
 function quoteLineDimsSummary(l){
   if(!l.dims||!l.dims.length)return'';
   const parts=l.dims.filter(d=>Number(d.w)>0&&Number(d.h)>0).map(d=>`(${Number(d.q)||1}) ${Number(d.w).toFixed(2)}×${Number(d.h).toFixed(2)}م`);
   if(!parts.length)return'';
   const totalArea=l.dims.reduce((s,d)=>s+(Number(d.w)||0)*(Number(d.h)||0)*(Number(d.q)||0),0);
-  return parts.join(' + ')+' | الإجمالي: '+fmtMoney(totalArea)+' م²';
+  return parts.join(' + ')+' | الإجمالي: '+totalArea.toFixed(2)+' م²';
 }
 const DIM_ROW_COLS='1fr 1fr 1fr 1fr auto';
 function dimRowArea(d){return(Number(d.w)||0)*(Number(d.h)||0)*(Number(d.q)||0);}
+// Grand total area across every line in the quote (order-wide, not
+// per-line) — feeds the "إجمالي الأمتار المربعة" summary card. Uses each
+// line's l.m directly since that already IS its area in m², whether it
+// came from the dimension calculator or a manually-typed value.
+function quoteGrandTotalArea(){
+  return(window._quoteLines||[]).reduce((s,l)=>s+(Number(l.m)||0),0);
+}
 function quoteLineDimsHeaderHtml(){
   return`<div style="display:grid;grid-template-columns:${DIM_ROW_COLS};gap:6px;margin-bottom:4px;">
     <span class="dim-col-label">العرض (م)</span>
@@ -5915,7 +5932,7 @@ function quoteLineDimsRowsHtml(l){
     <input type="text" inputmode="decimal" placeholder="العرض" value="${d.w??''}" oninput="updateQuoteLineDimension('${l.id}','${d.id}','w',this.value)" onfocus="this.select()" style="font-size:11.5px;padding:6px 8px;"/>
     <input type="text" inputmode="decimal" placeholder="الارتفاع" value="${d.h??''}" oninput="updateQuoteLineDimension('${l.id}','${d.id}','h',this.value)" onfocus="this.select()" style="font-size:11.5px;padding:6px 8px;"/>
     <input type="text" inputmode="decimal" placeholder="الكمية" value="${d.q??1}" oninput="updateQuoteLineDimension('${l.id}','${d.id}','q',this.value)" onfocus="this.select()" style="font-size:11.5px;padding:6px 8px;"/>
-    <div id="q-dim-area-${d.id}" class="quote-readonly-badge" style="font-size:11.5px;">${fmtMoney(dimRowArea(d))}</div>
+    <div id="q-dim-area-${d.id}" class="quote-readonly-badge" style="font-size:11.5px;">${dimRowArea(d).toFixed(2)}</div>
     <button class="btn btn-red btn-sm btn-icon" onclick="removeQuoteLineDimension('${l.id}','${d.id}')" title="حذف المقاس"><i class="ti ti-trash"></i></button>
   </div>`).join('');
 }
@@ -5934,7 +5951,7 @@ function renderQuoteLines(){
     const hasDims=l.dims&&l.dims.length;
     return`<div class="quote-line" style="grid-template-columns:${quoteGridCols()} auto auto;gap:6px;">
     <input placeholder="وصف البند" value="${esc(l.lbl)}" oninput="updateQuoteLine('${l.id}','lbl',this.value)"/>
-    ${showMeters?`<input type="text" inputmode="decimal" id="q-line-m-${l.id}" placeholder="الامتار" value="${l.m??1}" oninput="updateQuoteLine('${l.id}','m',this.value)" min="0" onfocus="this.select()" ${hasDims?`readonly title="محسوبة تلقائياً من المقاسات أدناه" class="quote-readonly-input"`:''}/>`:''}
+    ${showMeters?`<input type="text" inputmode="decimal" id="q-line-m-${l.id}" placeholder="الامتار" value="${hasDims?Number(l.m??0).toFixed(2):(l.m??1)}" oninput="updateQuoteLine('${l.id}','m',this.value)" min="0" onfocus="this.select()" ${hasDims?`readonly title="محسوبة تلقائياً من المقاسات أدناه" class="quote-readonly-input"`:''}/>`:''}
     <input type="text" inputmode="decimal" id="q-line-qty-${l.id}" placeholder="الكمية" value="${l.q}" oninput="updateQuoteLine('${l.id}','q',this.value)" min="1" onfocus="this.select()" ${hasDims?`readonly title="محسوبة تلقائياً من المقاسات أدناه" class="quote-readonly-input"`:''}/>
     <input type="text" inputmode="decimal" id="q-line-notax-${l.id}" placeholder="السعر غير شامل الضريبة" value="${l.p}" oninput="updateQuoteLine('${l.id}','p',this.value)" min="0" onfocus="this.select()"/>
     <input type="text" inputmode="decimal" id="q-line-wtax-${l.id}" placeholder="السعر شامل الضريبة" value="${fmtMoney((l.p*1.15))}" oninput="updateQuoteLineFromTax('${l.id}',this.value)" min="0" onfocus="this.select()"/>
@@ -5971,8 +5988,8 @@ function updateQuoteLineDimension(lineId,dimId,field,value){
   d[field]=value;
   recomputeLineFromDims(l);
   const qEl=document.getElementById('q-line-qty-'+lineId);if(qEl)qEl.value=l.q;
-  const mEl=document.getElementById('q-line-m-'+lineId);if(mEl)mEl.value=l.m;
-  const areaEl=document.getElementById('q-dim-area-'+dimId);if(areaEl)areaEl.textContent=fmtMoney(dimRowArea(d));
+  const mEl=document.getElementById('q-line-m-'+lineId);if(mEl)mEl.value=l.m.toFixed(2);
+  const areaEl=document.getElementById('q-dim-area-'+dimId);if(areaEl)areaEl.textContent=dimRowArea(d).toFixed(2);
   const sumEl=document.getElementById('q-line-dims-summary-'+lineId);if(sumEl)sumEl.textContent=quoteLineDimsSummary(l);
   renderQuoteTotals();
 }
@@ -6046,6 +6063,12 @@ function renderQuoteTotals(){
   const isSeparate=window._quoteCalcMode==='separate';
   if(g)g.textContent=isSeparate?'غير مُجمّع':(fmt(total)+' ر.س');
   if(vn)vn.textContent=isSeparate?'كل بند بسعره الخاص — راجع إجمالي كل بند في الجدول أعلاه':`(قبل الضريبة: ${fmt(subtotal)} + ضريبة: ${fmt(vat)})`;
+  const areaCard=document.getElementById('q-total-area-card');
+  const areaVal=document.getElementById('q-total-area');
+  if(areaCard){
+    areaCard.style.display=showMeters?'inline-block':'none';
+    if(showMeters&&areaVal)areaVal.textContent=quoteGrandTotalArea().toFixed(2)+' م²';
+  }
   const paid=parseFloat(document.getElementById('q-paid-amount')?.value)||0;
   const remWrap=document.getElementById('q-remaining-wrap');
   if(remWrap){
@@ -6172,7 +6195,7 @@ function renderA4Quote(data,key=''){
     return `<tr style="background:${i%2===0?'#ffffff':'#FBF8F2'};">
       ${imgCell}
       <td style="padding:10px 12px;text-align:right;font-size:12.5px;color:#2A2A2A;font-weight:600;line-height:1.4;">${esc(l.lbl||'—')}${quoteLineDimsSummary(l)?`<div style="font-size:10px;color:#9B8F80;font-weight:600;margin-top:3px;">${esc(quoteLineDimsSummary(l))}</div>`:''}</td>
-      ${showMeters?`<td style="padding:10px 12px;text-align:center;font-size:12.5px;color:#5B0F19;font-weight:700;">${meters}</td>`:''}
+      ${showMeters?`<td style="padding:10px 12px;text-align:center;font-size:12.5px;color:#5B0F19;font-weight:700;">${meters.toFixed(2)}</td>`:''}
       <td style="padding:10px 12px;text-align:center;font-size:12.5px;color:#5B0F19;font-weight:700;">${qty}</td>
       <td style="padding:10px 12px;text-align:center;font-size:12.5px;color:#2A2A2A;">${fmt(price)} <span style="font-size:9.5px;color:#9B8F80;">ر.س</span></td>
       <td style="padding:10px 12px;text-align:center;font-size:12.5px;color:#2A2A2A;">${fmt(priceAfterTax)} <span style="font-size:9.5px;color:#9B8F80;">ر.س</span></td>
