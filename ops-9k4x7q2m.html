@@ -4114,6 +4114,13 @@ function wfMatchesFilters(o,f){
     const proof=proofStatusForOrder(o);
     if(!proof||proof.key!=='waiting')return false;
   }
+  // Instant toggle: إخفاء بانتظار العميل — the inverse of newProofOnly above,
+  // for managers who want the "still waiting on the client" noise out of the
+  // way instead of isolated.
+  if(f.hideWaitingClient){
+    const proof=proofStatusForOrder(o);
+    if(proof&&proof.key==='waiting')return false;
+  }
   if(f.q){
     const q=f.q.trim().toLowerCase();
     if(q){
@@ -4215,6 +4222,7 @@ function wfListFiltersBarHtml(f){
     ${showEmployeeSelect?`<select onchange="setWfFilter('employee',this.value)"><option value="">${deptWorkers?'كل موظفي هذه المرحلة':'كل المسؤولين'}</option>${employeeOptions}</select>`:singleAssigneeNote}
     <button class="wf-toggle-chip ${f.urgentOverdueOnly?'active':''}" onclick="toggleWfFilterFlag('urgentOverdueOnly')"><i class="ti ti-alert-triangle"></i> عاجل / متأخر فقط</button>
     <button class="wf-toggle-chip ${f.newProofOnly?'active':''}" onclick="toggleWfFilterFlag('newProofOnly')"><i class="ti ti-message-circle"></i> ردود بروفة جديدة</button>
+    ${cu.type==='admin'?`<button class="wf-toggle-chip ${f.hideWaitingClient?'active':''}" onclick="toggleWfFilterFlag('hideWaitingClient')"><i class="ti ti-eye${f.hideWaitingClient?'-off':''}"></i> ${f.hideWaitingClient?'إظهار':'إخفاء'} بانتظار العميل</button>`:''}
   </div>`;
 }
 function setWfListSearch(v){
