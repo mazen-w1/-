@@ -2361,17 +2361,31 @@ function hideSaving(){document.getElementById('saving-overlay').classList.remove
 // convertFileToBase64() don't need to change at all: they already call
 // showSaving() before starting the upload, and this bar simply appears
 // inside that same overlay once real byte progress starts coming in.
+// xhr.upload.onprogress can fire dozens of times a second on a fast local
+// network hop — writing to the DOM synchronously on every single tick was
+// doing far more layout/paint work than the visible percentage needed,
+// which is what made the overlay feel like it was freezing/stuttering
+// rather than updating smoothly. Collapsing every tick between animation
+// frames down to a single DOM write fixes that without losing any visible
+// granularity (the eye can't tell 60 updates/sec from 1).
+let _uploadProgressRAF=null,_uploadProgressPending=null;
 function setUploadProgress(pct){
-  const wrap=document.getElementById('upload-progress-wrap');
-  const fill=document.getElementById('upload-progress-fill');
-  const pctEl=document.getElementById('upload-progress-pct');
-  if(!wrap||!fill||!pctEl)return;
-  const clamped=Math.max(0,Math.min(100,Math.round(pct)));
-  wrap.style.display='flex';
-  fill.style.width=clamped+'%';
-  pctEl.textContent=clamped+'%';
+  _uploadProgressPending=pct;
+  if(_uploadProgressRAF)return;
+  _uploadProgressRAF=requestAnimationFrame(()=>{
+    _uploadProgressRAF=null;
+    const wrap=document.getElementById('upload-progress-wrap');
+    const fill=document.getElementById('upload-progress-fill');
+    const pctEl=document.getElementById('upload-progress-pct');
+    if(!wrap||!fill||!pctEl)return;
+    const clamped=Math.max(0,Math.min(100,Math.round(_uploadProgressPending)));
+    wrap.style.display='flex';
+    fill.style.width=clamped+'%';
+    pctEl.textContent=clamped+'%';
+  });
 }
 function clearUploadProgress(){
+  if(_uploadProgressRAF){cancelAnimationFrame(_uploadProgressRAF);_uploadProgressRAF=null;}
   const wrap=document.getElementById('upload-progress-wrap');
   const fill=document.getElementById('upload-progress-fill');
   if(wrap)wrap.style.display='none';
@@ -2459,15 +2473,50 @@ async function convertFileToBase64(file,folderCtx){const MAX_IMAGE_SOURCE_BYTES=
   const isPdfOrZip=/application\/(pdf|zip|x-zip-compressed)/.test(file.type||'')||/\.(pdf|zip)$/i.test(file.name||'');
   if(isImage){if(file.size>MAX_IMAGE_SOURCE_BYTES)throw new Error('⚠️ حجم الصورة كبير جداً (الحد الأقصى 25 ميجابايت). يرجى اختيار صورة أصغر.');let uploadPayload=file;if(file.size>800*1024){try{const raw=await _readFileAsDataUrl(file);uploadPayload=await compressImage(raw,1600,0.72);}catch(e){uploadPayload=file;}}return await uploadToCloudinary(uploadPayload);}
   else if(isPdfOrZip){return await uploadToGoogleDrive(file,folderCtx);}
-  else{if(file.size>MAX_OTHER_BYTES)return await uploadToGoogleDrive(file,folderCtx);return await uploadToCloudinary(file);}}
+  else{
+    if(file.size>MAX_OTHER_BYTES){
+      // Drive/proxy failing shouldn't leave the user stuck with no path
+      // forward. Cloudinary is a viable fallback ONLY here — it explicitly
+      // rejects PDF/ZIP (isPdfOrZip above), which is why that branch has no
+      // equivalent fallback and just surfaces the Drive error directly.
+      try{return await uploadToGoogleDrive(file,folderCtx);}
+      catch(driveErr){
+        try{return await uploadToCloudinary(file);}
+        catch(cloudErr){throw driveErr;}
+      }
+    }
+    return await uploadToCloudinary(file);
+  }
+}
 const DRIVE_PROXY_URL='https://rawaee-drive-proxy.vercel.app/api/token';
 const MAX_DRIVE_BYTES=500*1024*1024;
-const DRIVE_CHUNK_BYTES=8*1024*1024; // must be a multiple of 256KB per Google's resumable-upload spec
+const DRIVE_CHUNK_BYTES=16*1024*1024; // must be a multiple of 256KB per Google's resumable-upload spec
+// Files at or under this size skip the resumable (initiate-session + chunk-
+// loop) flow entirely and go through a single multipart POST instead — see
+// _driveUploadMultipart(). That removes the extra initiate round-trip and
+// the per-chunk overhead for the common case (most uploads are well under
+// 25MB), which was the main contributor to uploads visibly stalling early
+// (stuck at a few percent) on a slow/high-latency connection to the proxy.
+const DRIVE_MULTIPART_MAX_BYTES=25*1024*1024;
+const DRIVE_TIMEOUT_MS=15000;
+// A hung connection (proxy or Google API not responding) previously had no
+// bound at all: plain fetch() never times out on its own, so a stalled
+// request just sat there forever with the upload overlay stuck at whatever
+// percentage it last reached. Every Drive/proxy network call in this file
+// goes through one of these two timeout wrappers so a stall becomes a clear,
+// bounded failure (which the existing per-chunk retry loop, or the caller's
+// error toast, can then act on) instead of an infinite wait.
+function fetchWithTimeout(url,opts={},timeoutMs=DRIVE_TIMEOUT_MS){
+  const ctrl=new AbortController();
+  const t=setTimeout(()=>ctrl.abort(),timeoutMs);
+  return fetch(url,{...opts,signal:ctrl.signal}).finally(()=>clearTimeout(t));
+}
 let _driveAccessToken=null;
 async function getGoogleAccessToken(){
   if(_driveAccessToken&&_driveAccessToken.expiresAt>Date.now()+60000)return _driveAccessToken.value;
   let resp;
-  try{resp=await fetch(DRIVE_PROXY_URL);}catch(e){throw new Error('⚠️ تعذر الاتصال بخادم رفع الملفات (rawaee-drive-proxy)، تحقق من الإنترنت أو من أن الخادم يعمل.');}
+  try{resp=await fetchWithTimeout(DRIVE_PROXY_URL);}
+  catch(e){throw new Error(e.name==='AbortError'?'⚠️ خادم رفع الملفات (rawaee-drive-proxy) لا يستجيب، حاول مجدداً.':'⚠️ تعذر الاتصال بخادم رفع الملفات (rawaee-drive-proxy)، تحقق من الإنترنت أو من أن الخادم يعمل.');}
   let data=null;try{data=await resp.json();}catch(e){}
   if(!resp.ok||!data||!data.access_token){
     // Surface whatever the proxy actually said (e.g. invalid_grant on an
@@ -2481,15 +2530,27 @@ async function getGoogleAccessToken(){
   return _driveAccessToken.value;
 }
 function _updateGoogleDriveStatusUI(){}
+// In-memory only (cleared on page reload) — every file uploaded to the same
+// person/order folder during a session previously re-ran a full list query
+// (and possibly a create call) before the actual upload could even start,
+// which is the "repeatedly querying before starting" delay the folder
+// structure adds on top of the network stall issue above.
+const _driveFolderCache={};
 async function _driveFindOrCreateFolder(name,parentId,accessToken){
+  const cacheKey=(parentId||'root')+'/'+name;
+  if(_driveFolderCache[cacheKey])return _driveFolderCache[cacheKey];
   const safeName=String(name).replace(/'/g,"\\'");
   const q="name='"+safeName+"' and '"+(parentId||'root')+"' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false";
-  const listRes=await fetch('https://www.googleapis.com/drive/v3/files?q='+encodeURIComponent(q)+'&fields=files(id,name)',{headers:{Authorization:'Bearer '+accessToken}});
+  const listRes=await fetchWithTimeout('https://www.googleapis.com/drive/v3/files?q='+encodeURIComponent(q)+'&fields=files(id,name)',{headers:{Authorization:'Bearer '+accessToken}});
   const listData=await listRes.json().catch(()=>null);
-  if(listData&&listData.files&&listData.files.length)return listData.files[0].id;
-  const createRes=await fetch('https://www.googleapis.com/drive/v3/files',{method:'POST',headers:{Authorization:'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({name:String(name),mimeType:'application/vnd.google-apps.folder',parents:parentId?[parentId]:undefined})});
+  if(listData&&listData.files&&listData.files.length){
+    _driveFolderCache[cacheKey]=listData.files[0].id;
+    return _driveFolderCache[cacheKey];
+  }
+  const createRes=await fetchWithTimeout('https://www.googleapis.com/drive/v3/files',{method:'POST',headers:{Authorization:'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({name:String(name),mimeType:'application/vnd.google-apps.folder',parents:parentId?[parentId]:undefined})});
   const createData=await createRes.json().catch(()=>null);
   if(!createData||!createData.id)throw new Error('folder_create_failed');
+  _driveFolderCache[cacheKey]=createData.id;
   return createData.id;
 }
 // Uploads one chunk via XHR (not fetch) so xhr.upload.onprogress can report
@@ -2497,15 +2558,31 @@ async function _driveFindOrCreateFolder(name,parentId,accessToken){
 // chunks instead of resetting to 0% at the start of every chunk. Google's
 // resumable endpoint replies 200/201 (with the finished file) on the chunk
 // that completes the upload, or 308 (Resume Incomplete) on every earlier one.
+// A flat xhr.timeout would also cap a perfectly healthy-but-slow transfer (a
+// 16MB chunk on a real 3G connection can legitimately take longer than
+// 15s) — so instead this arms a STALL watchdog that resets on every
+// progress tick and only fires if no bytes have moved for DRIVE_TIMEOUT_MS
+// straight. That's the actual failure mode being fixed (the connection goes
+// dead mid-upload and the overlay is stuck at whatever % it last reached,
+// with no error ever firing to let the retry loop kick in), without
+// punishing a connection that's just slow but still making progress.
+function _armStallWatchdog(xhr,rejectFn){
+  let timer=null;
+  const arm=()=>{clearTimeout(timer);timer=setTimeout(()=>{xhr.abort();rejectFn(new Error('gdrive-stalled'));},DRIVE_TIMEOUT_MS);};
+  arm();
+  return{onProgress:arm,clear:()=>clearTimeout(timer)};
+}
 function _driveUploadChunk(sessionUri,chunk,start,total,contentType,offsetBytes){
   return new Promise((resolve,reject)=>{
     const xhr=new XMLHttpRequest();
     xhr.open('PUT',sessionUri);
     xhr.setRequestHeader('Content-Range',`bytes ${start}-${start+chunk.size-1}/${total}`);
     if(contentType)xhr.setRequestHeader('Content-Type',contentType);
-    xhr.upload.onprogress=e=>{if(e.lengthComputable)setUploadProgress(((offsetBytes+e.loaded)/total)*100);};
-    xhr.onerror=()=>reject(new Error('gdrive-chunk-network-error'));
+    const watchdog=_armStallWatchdog(xhr,reject);
+    xhr.upload.onprogress=e=>{watchdog.onProgress();if(e.lengthComputable)setUploadProgress(((offsetBytes+e.loaded)/total)*100);};
+    xhr.onerror=()=>{watchdog.clear();reject(new Error('gdrive-chunk-network-error'));};
     xhr.onload=()=>{
+      watchdog.clear();
       if(xhr.status===200||xhr.status===201){
         let data=null;try{data=JSON.parse(xhr.responseText);}catch(e){}
         resolve({done:true,data});
@@ -2518,12 +2595,47 @@ function _driveUploadChunk(sessionUri,chunk,start,total,contentType,offsetBytes)
     xhr.send(chunk);
   });
 }
-// Chunked + resumable instead of the old single non-resumable multipart
-// POST: large files no longer need to fit in one request (avoiding
-// timeouts/failures on slow connections), each chunk retries independently
-// on failure instead of restarting the whole file, and the per-chunk
-// progress events give an accurate live percentage instead of an
-// all-or-nothing spinner.
+// Single-request multipart upload for files at/under DRIVE_MULTIPART_MAX_BYTES
+// — metadata + file content in one POST, so there's no initiate-session
+// round trip and no chunk loop at all. This is the main lever for the
+// "stuck at 5%" complaint: most uploads are well under 25MB, and the old
+// path made every one of them pay for a resumable session it didn't need.
+function _driveUploadMultipart(file,parentId,accessToken,contentType){
+  return new Promise((resolve,reject)=>{
+    const boundary='rawaee-'+Date.now().toString(36)+Math.random().toString(36).slice(2);
+    const metadata={name:file.name||('ملف_'+Date.now())};
+    if(parentId)metadata.parents=[parentId];
+    const delimiter='\r\n--'+boundary+'\r\n';
+    const closeDelim='\r\n--'+boundary+'--';
+    const metaPart=delimiter+'Content-Type: application/json; charset=UTF-8\r\n\r\n'+JSON.stringify(metadata);
+    const mediaHeader=delimiter+'Content-Type: '+contentType+'\r\n\r\n';
+    const body=new Blob([metaPart,mediaHeader,file,closeDelim]);
+    const xhr=new XMLHttpRequest();
+    xhr.open('POST','https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id');
+    xhr.setRequestHeader('Authorization','Bearer '+accessToken);
+    xhr.setRequestHeader('Content-Type','multipart/related; boundary='+boundary);
+    const watchdog=_armStallWatchdog(xhr,reject);
+    xhr.upload.onprogress=e=>{watchdog.onProgress();if(e.lengthComputable)setUploadProgress((e.loaded/e.total)*100);};
+    xhr.onerror=()=>{watchdog.clear();reject(new Error('gdrive-multipart-network-error'));};
+    xhr.onload=()=>{
+      watchdog.clear();
+      if(xhr.status>=200&&xhr.status<300){
+        let data=null;try{data=JSON.parse(xhr.responseText);}catch(e){}
+        if(data&&data.id)resolve(data.id);
+        else reject(new Error('gdrive-multipart-no-id'));
+      }else{
+        reject(new Error('gdrive-multipart-http-'+xhr.status));
+      }
+    };
+    xhr.send(body);
+  });
+}
+const MAX_CHUNK_RETRIES=3;
+// Files at/under DRIVE_MULTIPART_MAX_BYTES take the single-request path
+// (_driveUploadMultipart, with its own retry loop); larger files use the
+// original chunked + resumable flow — they still benefit from not needing
+// to fit in one request, from each chunk retrying independently instead of
+// restarting the whole file, and from accurate live per-chunk progress.
 async function uploadToGoogleDrive(file,folderCtx){
   if(file.size>MAX_DRIVE_BYTES)throw new Error('⚠️ حجم الملف كبير جداً حتى لـ Google Drive (الحد الأقصى 500 ميجابايت). يرجى ضغط الملف أو تصغيره.');
   const accessToken=await getGoogleAccessToken();
@@ -2539,36 +2651,45 @@ async function uploadToGoogleDrive(file,folderCtx){
       parentId=await _driveFindOrCreateFolder(String(humanLabel),personFolderId,accessToken);
     }
   }catch(e){parentId=null;}
-  const metadata={name:file.name||('ملف_'+Date.now())};
-  if(parentId)metadata.parents=[parentId];
   const contentType=file.type||'application/octet-stream';
-  let initRes;
-  try{
-    initRes=await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&fields=id',{
-      method:'POST',
-      headers:{Authorization:'Bearer '+accessToken,'Content-Type':'application/json; charset=UTF-8','X-Upload-Content-Type':contentType,'X-Upload-Content-Length':String(file.size)},
-      body:JSON.stringify(metadata)
-    });
-  }catch(netErr){throw new Error('⚠️ تعذر الاتصال بـ Google Drive، تحقق من الإنترنت وحاول مجدداً.');}
-  if(!initRes.ok){throw new Error('⚠️ فشل بدء جلسة الرفع إلى Google Drive: HTTP '+initRes.status);}
-  const sessionUri=initRes.headers.get('Location');
-  if(!sessionUri)throw new Error('⚠️ تعذر إنشاء جلسة رفع قابلة للاستكمال على Google Drive.');
-  let start=0,fileId=null;
-  const MAX_CHUNK_RETRIES=3;
-  while(start<file.size){
-    const chunk=file.slice(start,Math.min(start+DRIVE_CHUNK_BYTES,file.size));
-    let attempt=0,lastErr=null,result=null;
+  let fileId=null;
+  if(file.size<=DRIVE_MULTIPART_MAX_BYTES){
+    let attempt=0,lastErr=null;
     while(attempt<MAX_CHUNK_RETRIES){
-      try{result=await _driveUploadChunk(sessionUri,chunk,start,file.size,contentType,start);lastErr=null;break;}
+      try{fileId=await _driveUploadMultipart(file,parentId,accessToken,contentType);lastErr=null;break;}
       catch(e){lastErr=e;attempt++;if(attempt<MAX_CHUNK_RETRIES)await new Promise(r=>setTimeout(r,800*attempt));}
     }
     if(lastErr)throw new Error('⚠️ فشل رفع الملف إلى Google Drive بعد عدة محاولات، تحقق من الإنترنت وحاول مجدداً.');
-    start+=chunk.size;
-    if(result.done){fileId=result.data&&result.data.id;break;}
+  }else{
+    const metadata={name:file.name||('ملف_'+Date.now())};
+    if(parentId)metadata.parents=[parentId];
+    let initRes;
+    try{
+      initRes=await fetchWithTimeout('https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&fields=id',{
+        method:'POST',
+        headers:{Authorization:'Bearer '+accessToken,'Content-Type':'application/json; charset=UTF-8','X-Upload-Content-Type':contentType,'X-Upload-Content-Length':String(file.size)},
+        body:JSON.stringify(metadata)
+      });
+    }catch(netErr){throw new Error(netErr.name==='AbortError'?'⚠️ Google Drive لا يستجيب، حاول مجدداً.':'⚠️ تعذر الاتصال بـ Google Drive، تحقق من الإنترنت وحاول مجدداً.');}
+    if(!initRes.ok){throw new Error('⚠️ فشل بدء جلسة الرفع إلى Google Drive: HTTP '+initRes.status);}
+    const sessionUri=initRes.headers.get('Location');
+    if(!sessionUri)throw new Error('⚠️ تعذر إنشاء جلسة رفع قابلة للاستكمال على Google Drive.');
+    let start=0;
+    while(start<file.size){
+      const chunk=file.slice(start,Math.min(start+DRIVE_CHUNK_BYTES,file.size));
+      let attempt=0,lastErr=null,result=null;
+      while(attempt<MAX_CHUNK_RETRIES){
+        try{result=await _driveUploadChunk(sessionUri,chunk,start,file.size,contentType,start);lastErr=null;break;}
+        catch(e){lastErr=e;attempt++;if(attempt<MAX_CHUNK_RETRIES)await new Promise(r=>setTimeout(r,800*attempt));}
+      }
+      if(lastErr)throw new Error('⚠️ فشل رفع الملف إلى Google Drive بعد عدة محاولات، تحقق من الإنترنت وحاول مجدداً.');
+      start+=chunk.size;
+      if(result.done){fileId=result.data&&result.data.id;break;}
+    }
+    if(!fileId)throw new Error('⚠️ فشل رفع الملف إلى Google Drive: لم يتم استلام تأكيد الاكتمال.');
   }
-  if(!fileId)throw new Error('⚠️ فشل رفع الملف إلى Google Drive: لم يتم استلام تأكيد الاكتمال.');
   try{
-    await fetch('https://www.googleapis.com/drive/v3/files/'+fileId+'/permissions',{method:'POST',headers:{Authorization:'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({role:'reader',type:'anyone'})});
+    await fetchWithTimeout('https://www.googleapis.com/drive/v3/files/'+fileId+'/permissions',{method:'POST',headers:{Authorization:'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({role:'reader',type:'anyone'})});
   }catch(e){}
   setUploadProgress(100);
   return 'https://drive.google.com/file/d/'+fileId+'/view?usp=sharing';
