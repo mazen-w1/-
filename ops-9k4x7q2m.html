@@ -518,7 +518,7 @@ input[type="password"]{direction:rtl;text-align:right;padding-left:40px;padding-
 .oi-card-head{display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap;cursor:pointer;}
 .oi-card-head-left{display:flex;align-items:center;gap:6px;flex-wrap:wrap;min-width:0;}
 .oi-card-chev{font-size:13px;color:var(--text-3);flex-shrink:0;transition:transform .15s;}
-.oi-card-name{font-size:12px;color:var(--maroon);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:150px;}
+.oi-card-name{font-size:12px;color:var(--maroon);white-space:normal;line-height:1.4;word-break:break-word;}
 .oi-card-qty{font-size:10px;color:var(--text-3);font-weight:700;}
 .oi-card-metrics{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-top:5px;font-size:10px;color:var(--text-3);font-weight:600;}
 .oi-card-metrics span{display:inline-flex;align-items:center;gap:3px;}
@@ -600,6 +600,9 @@ input[type="password"]{direction:rtl;text-align:right;padding-left:40px;padding-
 .quote-readonly-input{background:var(--surface-2)!important;border:1px solid var(--border-soft)!important;color:var(--maroon)!important;font-weight:800!important;text-align:center;cursor:not-allowed;}
 .quote-readonly-badge{display:flex;align-items:center;justify-content:center;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:8px;padding:6px 8px;font-weight:800;color:var(--maroon);text-align:center;}
 .dim-col-label{font-size:9.5px;font-weight:800;color:var(--text-3);text-align:center;}
+.dim-row-input{font-size:10.5px!important;padding:4px 6px!important;height:26px;}
+.dim-row-del-btn{width:22px;height:22px;border-radius:6px;border:1px solid #F3D9D9;background:#FEF2F2;color:#DC2626;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:10.5px;flex-shrink:0;transition:.12s;}
+.dim-row-del-btn:hover{background:#FEE2E2;border-color:#EFC2C2;}
 .quote-total-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);padding:16px 20px;margin-top:16px;}
 .qt-row{display:flex;justify-content:space-between;font-size:13px;font-weight:600;color:var(--text-2);margin-bottom:8px;}
 .qt-row.grand{font-size:16px;font-weight:900;color:var(--maroon);border-top:2px solid var(--gold);padding-top:12px;margin-top:4px;}
@@ -1541,6 +1544,7 @@ input:focus,select:focus,textarea:focus{box-shadow:inset 0 1px 3px rgba(74,14,23
 <div class="modal-overlay" id="task-modal"><div class="modal-box" dir="rtl" id="task-modal-body" style="max-width:440px;"></div></div>
 <div class="modal-overlay" id="itemwork-review-modal"><div class="modal-box" dir="rtl" id="itemwork-review-modal-body" style="max-width:520px;"></div></div>
 <div class="modal-overlay" id="client-feedback-modal"><div class="modal-box" dir="rtl" id="client-feedback-modal-body" style="max-width:520px;"></div></div>
+<div class="modal-overlay" id="order-edit-modal"><div class="modal-box" dir="rtl" id="order-edit-modal-body" style="max-width:640px;"></div></div>
 <div class="modal-overlay" id="notif-modal">
   <div class="modal-box" dir="rtl" style="max-width:480px;">
     <div class="modal-header"><span class="modal-title"><i class="ti ti-bell"></i> التنبيهات</span><button class="btn-close" onclick="closeModal('notif-modal')">×</button></div>
@@ -2717,6 +2721,9 @@ async function nav(p,skipHistory=false){
 }
 function navBack(){if(_navHistory.length===0)return;const prev=_navHistory.pop();nav(prev,true);}
 function backBtnHtml(){return`<div style="margin-bottom:16px;"><button class="btn btn-out btn-sm" onclick="navBack()"><i class="ti ti-arrow-right"></i> رجوع</button></div>`;}
+// Item Workspace's own back button — see itemworkBack(): must return to the
+// parent order's modal, not the generic page-history stack navBack() uses.
+function itemworkBackBtnHtml(){return`<div style="margin-bottom:16px;"><button class="btn btn-out btn-sm" onclick="itemworkBack()"><i class="ti ti-arrow-right"></i> رجوع</button></div>`;}
 function refreshCurrentPage(){
   const p=_curPage;
   if(p==='add'||p==='request'||p==='quote')return;
@@ -5086,10 +5093,25 @@ function buildMyWork(){
 // rather than introducing any new schema.
 // ============================================================
 function openItemWorkspace(orderKey,idx){
+  // Closing any open order modal first (rather than just navigating on top
+  // of it) avoids the backdrop staying locked/dimmed behind the Item
+  // Workspace page — nav('itemwork') swaps the underlying page, but a
+  // .modal-overlay it doesn't know about would otherwise keep intercepting
+  // clicks and blocking scroll on top of it.
+  closeModal('order-modal');
   window._itemworkKey=orderKey;window._itemworkIdx=idx;
   window._newVerFiles=window._newVerFiles||{};window._newVerFiles[idx]=[];
   markOrderUpdateSeen(orderKey);
   nav('itemwork');
+}
+// "رجوع" from the Item Workspace must land the user exactly back where they
+// almost always came from — the parent order's modal, open on the same item
+// grid — not the generic page-history back-stack (which would land on
+// whatever list page was showing, i.e. effectively the dashboard).
+async function itemworkBack(){
+  const key=window._itemworkKey;
+  await nav(ROLE_LANDING[cu.type]||'dash',true);
+  if(key&&orders[key])openOrderModal(key);
 }
 function _itemworkState(){
   const key=window._itemworkKey;const idx=window._itemworkIdx;
@@ -5108,6 +5130,20 @@ function isMyItem(o,it){
   const assignee=o[deptKey+'To'];
   if(!assignee||assignee==='none')return false;
   return assignee===cu._uname||(allowAll&&assignee==='all');
+}
+// Design files (design_approved/design_proof/workshop_production) need a
+// wider permission window than isMyItem(): auto-advance (saveItemKindFiles)
+// moves an item out of the 'design' stage the instant its files satisfy the
+// requirement, which made isMyItem — and therefore the delete/replace
+// buttons — go false immediately, even for the designer who just uploaded
+// it and even for admin, the moment before the client had actually signed
+// off on anything. The assigned designer (or admin) keeps the ability to
+// fix/replace design files until the item — or the whole order — is done.
+function canEditDesignFiles(o,it){
+  if(cu.type==='admin')return true;
+  if(cu.type!=='designer')return false;
+  if(itemCurrentDept(it,o)==='done'||o.currentDept==='done')return false;
+  return o.designTo===cu._uname||o.designTo==='all';
 }
 function removeQueuedItemworkFile(idx,fi){
   const q=window._newVerFiles&&window._newVerFiles[idx];if(!q)return;
@@ -5177,7 +5213,7 @@ function buildItemWorkspacePage(){
   const{key,idx,o,it}=_itemworkState();
   const el=document.getElementById('itemwork-content');
   if(!el)return;
-  if(!o||!it){el.innerHTML=`${backBtnHtml()}<div style="text-align:center;color:var(--text-3);padding:40px;"><i class="ti ti-mood-sad" style="font-size:32px;display:block;margin-bottom:8px;"></i>تعذر العثور على هذا البند</div>`;return;}
+  if(!o||!it){el.innerHTML=`${itemworkBackBtnHtml()}<div style="text-align:center;color:var(--text-3);padding:40px;"><i class="ti ti-mood-sad" style="font-size:32px;display:block;margin-bottom:8px;"></i>تعذر العثور على هذا البند</div>`;return;}
   const dept=itemCurrentDept(it,o);
   const stillMine=isMyItem(o,it);
   const canAct=stillMine||cu.type==='admin';
@@ -5190,7 +5226,7 @@ function buildItemWorkspacePage(){
   const specsHtml=(it.template&&PRODUCT_TEMPLATES[it.template]&&it.specs&&Object.values(it.specs).some(v=>v))
     ?`<div class="fg"><label>المواصفات / المقاسات</label><div style="font-size:12.5px;line-height:1.8;">${PRODUCT_TEMPLATES[it.template].fields.filter(f=>it.specs[f.key]).map(f=>`<div><strong>${esc(f.label)}:</strong> ${esc(String(it.specs[f.key]))}</div>`).join('')}</div></div>`:'';
   el.innerHTML=`
-    ${backBtnHtml()}
+    ${itemworkBackBtnHtml()}
     <div class="page-header"><div class="ptitle"><i class="ti ti-box"></i> ${esc(it.name||'بند')}</div><span class="badge ${dept==='done'?'b-done':'b-new'}">${WF_DEPT_META[dept]?.label||dept}</span></div>
     <div class="card" style="margin-bottom:14px;padding:16px 20px 8px;">${buildOrderProgressTimeline(o,key)}</div>
     <div class="card" style="margin-bottom:14px;">
@@ -5221,18 +5257,25 @@ function buildItemWorkspacePage(){
         // Workshop-only (no printing): just one approved design proof — not
         // the full "approved design + separate box per dept" combo used
         // whenever printing is involved.
+        const canEditDesign=canEditDesignFiles(o,it);
         const boxes=!printActive&&workshopActive
-          ?[renderItemKindBox(it,key,idx,'workshop_production',dept,canAct,'بروفة تصميم معتمدة')]
-          :[renderItemKindBox(it,key,idx,'design_approved',dept,canAct),renderItemKindBox(it,key,idx,'design_proof',dept,canAct),...(workshopActive?[renderItemKindBox(it,key,idx,'workshop_production',dept,canAct)]:[])];
+          ?[renderItemKindBox(it,key,idx,'workshop_production',dept,canEditDesign,'بروفة تصميم معتمدة')]
+          :[renderItemKindBox(it,key,idx,'design_approved',dept,canEditDesign),renderItemKindBox(it,key,idx,'design_proof',dept,canEditDesign),...(workshopActive?[renderItemKindBox(it,key,idx,'workshop_production',dept,canEditDesign)]:[])];
         return`<div class="card" style="margin-bottom:14px;">
           <div class="card-header"><span class="card-title"><i class="ti ti-upload"></i> ملفات التصميم المطلوبة</span></div>
           <div style="padding:16px 20px;">${boxes.join('')}</div>
         </div>`;
       }
       if(dept==='print'){
+        // Printers still only ever see this read-only (canEditDesignFiles is
+        // false for their role) — but admin and the designer who owned this
+        // item keep the ability to fix/replace a wrong file here too, since
+        // the item having auto-advanced to print doesn't mean the client has
+        // actually signed off on anything yet.
+        const canEditDesign=canEditDesignFiles(o,it);
         return`<div class="card" style="margin-bottom:14px;">
           <div class="card-header"><span class="card-title"><i class="ti ti-printer"></i> الملفات المستلمة من التصميم</span></div>
-          <div style="padding:16px 20px;">${renderItemKindBox(it,key,idx,'design_approved','design',false)}${renderItemKindBox(it,key,idx,'design_proof','design',false)}</div>
+          <div style="padding:16px 20px;">${renderItemKindBox(it,key,idx,'design_approved','design',canEditDesign)}${renderItemKindBox(it,key,idx,'design_proof','design',canEditDesign)}</div>
         </div>`;
       }
       if(dept==='workshop'){
@@ -5902,12 +5945,36 @@ function recomputeLineFromDims(l){
   l.q=l.dims.reduce((s,d)=>s+(Number(d.q)||0),0);
   l.m=Math.round(l.dims.reduce((s,d)=>s+(Number(d.w)||0)*(Number(d.h)||0)*(Number(d.q)||0),0)*100)/100;
 }
+// A bare "4" in the printed Quantity column is ambiguous once an item is
+// priced by area (Meters shown) — it reads like a stray number rather than
+// the panel/piece count it represents. Returns just the unit word so callers
+// can suffix it onto the number the same way price cells suffix "ر.س".
+// Arabic noun-count agreement: 1 قطعة, 2 قطعتان, 3-10 قطع, 11+ قطعة —
+// standard Arabic numeral rules, not project-specific.
+function qtyPiecesWord(qty){
+  const n=Number(qty)||0;
+  if(n===2)return'قطعتان';
+  return'قطع'+(n===1||n>10?'ة':'');
+}
 function quoteLineDimsSummary(l){
   if(!l.dims||!l.dims.length)return'';
   const parts=l.dims.filter(d=>Number(d.w)>0&&Number(d.h)>0).map(d=>`(${Number(d.q)||1}) ${Number(d.w).toFixed(2)}×${Number(d.h).toFixed(2)}م`);
   if(!parts.length)return'';
   const totalArea=l.dims.reduce((s,d)=>s+(Number(d.w)||0)*(Number(d.h)||0)*(Number(d.q)||0),0);
   return parts.join(' + ')+' | الإجمالي: '+totalArea.toFixed(2)+' م²';
+}
+// Print-only rendering of the same dimension breakdown as small muted chips
+// (one per size, plus a solid total-area chip) instead of one long joined
+// string — reads as a distinct annotation under the item name rather than
+// clutter fighting the name itself for attention. Built straight from the
+// numeric dims (no user text), so no esc() is needed.
+function quoteLineDimsPrintHtml(l){
+  if(!l.dims||!l.dims.length)return'';
+  const parts=l.dims.filter(d=>Number(d.w)>0&&Number(d.h)>0);
+  if(!parts.length)return'';
+  const totalArea=parts.reduce((s,d)=>s+(Number(d.w)||0)*(Number(d.h)||0)*(Number(d.q)||0),0);
+  const chips=parts.map(d=>`<span style="display:inline-block;background:#F8F4EA;border:1px solid #EEE3D3;color:#8A7A5C;border-radius:5px;padding:2px 7px;font-size:9.5px;font-weight:700;margin:2px 0 0 4px;">${Number(d.q)||1}× ${Number(d.w).toFixed(2)}×${Number(d.h).toFixed(2)}م</span>`).join('');
+  return`<div style="margin-top:5px;">${chips}<span style="display:inline-block;background:#5B0F19;color:#fff;border-radius:5px;padding:2px 8px;font-size:9.5px;font-weight:800;margin-top:2px;">الإجمالي: ${totalArea.toFixed(2)} م²</span></div>`;
 }
 const DIM_ROW_COLS='1fr 1fr 1fr 1fr auto';
 function dimRowArea(d){return(Number(d.w)||0)*(Number(d.h)||0)*(Number(d.q)||0);}
@@ -5919,7 +5986,7 @@ function quoteGrandTotalArea(){
   return(window._quoteLines||[]).reduce((s,l)=>s+(Number(l.m)||0),0);
 }
 function quoteLineDimsHeaderHtml(){
-  return`<div style="display:grid;grid-template-columns:${DIM_ROW_COLS};gap:6px;margin-bottom:4px;">
+  return`<div style="display:grid;grid-template-columns:${DIM_ROW_COLS};gap:5px;margin-bottom:4px;">
     <span class="dim-col-label">العرض (م)</span>
     <span class="dim-col-label">الارتفاع (م)</span>
     <span class="dim-col-label">الكمية / العدد</span>
@@ -5927,18 +5994,23 @@ function quoteLineDimsHeaderHtml(){
     <span></span>
   </div>`;
 }
+// Sub-rows are deliberately smaller than the parent item's fields (10px font,
+// tight padding, 26px height) so they read at a glance as nested "sub-details"
+// under the item rather than peers of it — same reasoning behind the dim-row-*
+// delete button being a small subtle chip instead of the full-size .btn-icon
+// used for the parent row's delete action.
 function quoteLineDimsRowsHtml(l){
-  return(l.dims||[]).map(d=>`<div style="display:grid;grid-template-columns:${DIM_ROW_COLS};gap:6px;align-items:center;margin-bottom:5px;">
-    <input type="text" inputmode="decimal" placeholder="العرض" value="${d.w??''}" oninput="updateQuoteLineDimension('${l.id}','${d.id}','w',this.value)" onfocus="this.select()" style="font-size:11.5px;padding:6px 8px;"/>
-    <input type="text" inputmode="decimal" placeholder="الارتفاع" value="${d.h??''}" oninput="updateQuoteLineDimension('${l.id}','${d.id}','h',this.value)" onfocus="this.select()" style="font-size:11.5px;padding:6px 8px;"/>
-    <input type="text" inputmode="decimal" placeholder="الكمية" value="${d.q??1}" oninput="updateQuoteLineDimension('${l.id}','${d.id}','q',this.value)" onfocus="this.select()" style="font-size:11.5px;padding:6px 8px;"/>
-    <div id="q-dim-area-${d.id}" class="quote-readonly-badge" style="font-size:11.5px;">${dimRowArea(d).toFixed(2)}</div>
-    <button class="btn btn-red btn-sm btn-icon" onclick="removeQuoteLineDimension('${l.id}','${d.id}')" title="حذف المقاس"><i class="ti ti-trash"></i></button>
+  return(l.dims||[]).map(d=>`<div style="display:grid;grid-template-columns:${DIM_ROW_COLS};gap:5px;align-items:center;margin-bottom:4px;">
+    <input type="text" inputmode="decimal" placeholder="العرض" value="${d.w??''}" oninput="updateQuoteLineDimension('${l.id}','${d.id}','w',this.value)" onfocus="this.select()" class="dim-row-input"/>
+    <input type="text" inputmode="decimal" placeholder="الارتفاع" value="${d.h??''}" oninput="updateQuoteLineDimension('${l.id}','${d.id}','h',this.value)" onfocus="this.select()" class="dim-row-input"/>
+    <input type="text" inputmode="decimal" placeholder="الكمية" value="${d.q??1}" oninput="updateQuoteLineDimension('${l.id}','${d.id}','q',this.value)" onfocus="this.select()" class="dim-row-input"/>
+    <div id="q-dim-area-${d.id}" class="quote-readonly-badge" style="font-size:10.5px;padding:4px 6px;height:26px;">${dimRowArea(d).toFixed(2)}</div>
+    <button class="dim-row-del-btn" onclick="removeQuoteLineDimension('${l.id}','${d.id}')" title="حذف المقاس"><i class="ti ti-trash"></i></button>
   </div>`).join('');
 }
 function quoteLineDimsBoxHtml(l){
   const summary=quoteLineDimsSummary(l);
-  return`<div id="q-line-dims-${l.id}" style="grid-column:1/-1;background:var(--surface-2);border:1px dashed var(--border);border-radius:8px;padding:8px 10px;margin-top:4px;${(l.dims&&l.dims.length)?'':'display:none;'}">
+  return`<div id="q-line-dims-${l.id}" style="grid-column:1/-1;background:#F8F9FA;border:1px solid #E9ECEF;border-radius:10px;padding:10px 12px;margin-top:6px;${(l.dims&&l.dims.length)?'':'display:none;'}">
     ${quoteLineDimsHeaderHtml()}
     <div id="q-line-dims-rows-${l.id}">${quoteLineDimsRowsHtml(l)}</div>
     ${summary?`<div id="q-line-dims-summary-${l.id}" style="font-size:10.5px;color:var(--maroon);font-weight:700;margin-top:4px;">${esc(summary)}</div>`:`<div id="q-line-dims-summary-${l.id}"></div>`}
@@ -6194,9 +6266,9 @@ function renderA4Quote(data,key=''){
       :`<td style="padding:8px;text-align:center;"><div style="width:44px;height:44px;border-radius:8px;background:#F3EEE4;display:inline-flex;align-items:center;justify-content:center;"><i class="ti ti-photo" style="color:#C9A227;font-size:16px;"></i></div></td>`):'';
     return `<tr style="background:${i%2===0?'#ffffff':'#FBF8F2'};">
       ${imgCell}
-      <td style="padding:10px 12px;text-align:right;font-size:12.5px;color:#2A2A2A;font-weight:600;line-height:1.4;">${esc(l.lbl||'—')}${quoteLineDimsSummary(l)?`<div style="font-size:10px;color:#9B8F80;font-weight:600;margin-top:3px;">${esc(quoteLineDimsSummary(l))}</div>`:''}</td>
+      <td style="padding:10px 12px;text-align:right;font-size:12.5px;color:#2A2A2A;font-weight:600;line-height:1.4;">${esc(l.lbl||'—')}${quoteLineDimsPrintHtml(l)}</td>
       ${showMeters?`<td style="padding:10px 12px;text-align:center;font-size:12.5px;color:#5B0F19;font-weight:700;">${meters.toFixed(2)}</td>`:''}
-      <td style="padding:10px 12px;text-align:center;font-size:12.5px;color:#5B0F19;font-weight:700;">${qty}</td>
+      <td style="padding:10px 12px;text-align:center;font-size:12.5px;color:#5B0F19;font-weight:700;">${qty}${showMeters?` <span style="font-size:9px;font-weight:600;color:#9B8F80;">${qtyPiecesWord(qty)}</span>`:''}</td>
       <td style="padding:10px 12px;text-align:center;font-size:12.5px;color:#2A2A2A;">${fmt(price)} <span style="font-size:9.5px;color:#9B8F80;">ر.س</span></td>
       <td style="padding:10px 12px;text-align:center;font-size:12.5px;color:#2A2A2A;">${fmt(priceAfterTax)} <span style="font-size:9.5px;color:#9B8F80;">ر.س</span></td>
       <td style="padding:10px 12px;text-align:center;font-weight:800;color:#5B0F19;font-size:12.5px;">${fmt(lineTotal)} <span style="font-size:9.5px;font-weight:600;color:#9B8F80;">ر.س</span></td>
@@ -6978,6 +7050,100 @@ async function reassignOrderDept(key){
   }
   catch(e){hideSaving();toast('❌ فشل تحديث المسؤول');}
 }
+// ============================================================
+// UNIFIED ORDER EDIT MODAL (⋮ → "تعديل الطلب") — admin + order registrars
+// (reception) only. Consolidates every order-composition edit — item
+// details/qty/specs, cross-department staff reassignment, the production
+// stage sequence, and adding new items — into one explicit, deliberate
+// mode, instead of leaving always-visible inline-editable controls (like
+// the old sidebar reassignment box) sitting in the order modal where a
+// stray click could change something by accident.
+// ============================================================
+function canEditOrderComposition(){return cu.type==='admin'||cu.type==='receiver';}
+function openOrderEditModal(key){
+  if(!canEditOrderComposition()){toast('⚠️ هذا الإجراء متاح للمدير أو موظف الاستقبال فقط');return;}
+  const o=orders[key];if(!o)return;
+  document.getElementById('order-edit-modal-body').innerHTML=orderEditModalHtml(key);
+  openModal('order-edit-modal');
+}
+function orderEditModalHtml(key){
+  const o=orders[key];if(!o)return'';
+  const items=o.orderItems||[];
+  const itemsHtml=items.length?items.map((it,i)=>`<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:8px;padding:8px 12px;margin-bottom:6px;">
+    <div style="min-width:0;"><strong style="font-size:12px;color:var(--maroon);">بند #${i+1} — ${esc(it.name||'—')}</strong>${it.qty?`<span style="font-size:11px;color:var(--text-3);"> ×${esc(String(it.qty))}</span>`:''}${it.details?`<div style="font-size:11px;color:var(--text-2);margin-top:2px;">${esc(it.details)}</div>`:''}</div>
+    <button class="btn btn-out btn-xs" onclick="closeModal('order-edit-modal');openAddItemModal('${key}',${i})"><i class="ti ti-pencil"></i> تعديل</button>
+  </div>`).join(''):'<div style="font-size:11.5px;color:var(--text-3);">لا توجد بنود بعد</div>';
+  const seq=getActiveDepts(o);
+  const reassignHtml=seq.map(dk=>{
+    const meta=WF_DEPT_META[dk]||{label:dk};
+    const workers=getDeptWorkers(dk);
+    const curTo=o[dk+'To'];
+    const options=`<option value="none">❌ بدون تكليف</option>`+workers.map(w=>`<option value="${esc(w.uname)}" ${w.uname===curTo?'selected':''}>${esc(w.name)}</option>`).join('');
+    return`<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
+      <span style="font-size:11.5px;font-weight:800;color:var(--text-2);min-width:70px;">${esc(meta.label)}</span>
+      <select id="oe-reassign-${dk}-${key}" style="flex:1;min-width:150px;">${options}</select>
+      <button class="btn btn-brand btn-xs" onclick="saveOrderEditReassign('${key}','${dk}')"><i class="ti ti-check"></i> حفظ</button>
+    </div>`;
+  }).join('');
+  const orderHtml=seq.map((dk,i)=>{
+    const meta=WF_DEPT_META[dk]||{label:dk};
+    return`<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:8px;padding:7px 12px;margin-bottom:5px;">
+      <span style="font-size:12px;font-weight:800;color:var(--maroon);">${i+1}. ${esc(meta.label)}</span>
+      <div style="display:flex;gap:4px;">
+        <button class="btn btn-out btn-xs" ${i===0?'disabled style="opacity:.4;"':''} onclick="moveOrderWorkflowStage('${key}',${i},-1)" title="نقل لأعلى"><i class="ti ti-arrow-up"></i></button>
+        <button class="btn btn-out btn-xs" ${i===seq.length-1?'disabled style="opacity:.4;"':''} onclick="moveOrderWorkflowStage('${key}',${i},1)" title="نقل لأسفل"><i class="ti ti-arrow-down"></i></button>
+      </div>
+    </div>`;
+  }).join('');
+  return`
+    <div class="modal-header"><span class="modal-title"><i class="ti ti-settings"></i> تعديل الطلب — ${esc(o.id||key)}</span><button class="btn-close" onclick="closeModal('order-edit-modal')">×</button></div>
+    <div style="display:flex;flex-direction:column;gap:16px;">
+      <div>
+        <div style="font-size:12.5px;font-weight:800;color:var(--maroon);margin-bottom:8px;"><i class="ti ti-package"></i> بنود الطلب</div>
+        ${itemsHtml}
+        <button class="btn btn-out btn-xs" style="margin-top:6px;" onclick="closeModal('order-edit-modal');openAddItemModal('${key}')"><i class="ti ti-square-rounded-plus"></i> إضافة بند جديد</button>
+      </div>
+      <div>
+        <div style="font-size:12.5px;font-weight:800;color:var(--maroon);margin-bottom:8px;"><i class="ti ti-users"></i> إعادة توزيع الموظفين</div>
+        ${reassignHtml||'<div style="font-size:11.5px;color:var(--text-3);">لا توجد أقسام نشطة</div>'}
+      </div>
+      <div>
+        <div style="font-size:12.5px;font-weight:800;color:var(--maroon);margin-bottom:8px;"><i class="ti ti-arrows-sort"></i> ترتيب مراحل الإنتاج</div>
+        ${orderHtml||'<div style="font-size:11.5px;color:var(--text-3);">لا توجد مراحل نشطة</div>'}
+      </div>
+    </div>`;
+}
+async function saveOrderEditReassign(key,dept){
+  const o=orders[key];if(!o)return;
+  if(!canEditOrderComposition()){toast('⚠️ هذا الإجراء غير متاح لك');return;}
+  const sel=document.getElementById(`oe-reassign-${dept}-${key}`);if(!sel)return;
+  const uname=sel.value;
+  const name=uname==='none'?'❌ معفى':(USERS[uname]?.name||uname);
+  const upd={[`${dept}To`]:uname,[`${dept}Name`]:name,lastItemUpdateAt:new Date().toISOString(),lastItemUpdateBy:cu.name};
+  showSaving('جاري تحديث المسؤول...');
+  try{
+    await fbPatch(`orders/${key}`,upd);await loadData();hideSaving();toast('✓ تم تغيير الموظف المسؤول');
+    if(uname!=='none')pushNotification({type:'employee_changed',message:`تم تكليفك بالطلب ${esc(o.id||key)} — ${esc(WF_DEPT_META[dept]?.label||dept)}`,orderKey:key,orderId:o.id,client:o.client,targetUname:uname});
+    openOrderEditModal(key);
+    _refreshOrderItemsViews(key);
+  }catch(e){hideSaving();toast('❌ فشل تحديث المسؤول');}
+}
+async function moveOrderWorkflowStage(key,idx,dir){
+  const o=orders[key];if(!o)return;
+  if(!canEditOrderComposition()){toast('⚠️ هذا الإجراء غير متاح لك');return;}
+  const seq=getActiveDepts(o);
+  const newIdx=idx+dir;
+  if(newIdx<0||newIdx>=seq.length)return;
+  const reordered=[...seq];
+  [reordered[idx],reordered[newIdx]]=[reordered[newIdx],reordered[idx]];
+  showSaving('جاري تحديث الترتيب...');
+  try{
+    await fbPatch(`orders/${key}`,{workflowOrder:reordered});
+    await loadData();hideSaving();toast('✓ تم تحديث الترتيب');
+    openOrderEditModal(key);
+    _refreshOrderItemsViews(key);
+  }catch(e){hideSaving();toast('❌ فشل تحديث الترتيب');}
+}
 function openUnpaidOrderSummary(key){
   const o=orders[key];if(!o)return;
   const total=Number(o.totalAmount||0);
@@ -7701,7 +7867,11 @@ function openOrderModal(key){
   // admin-gated internally) plus two shortcuts that reveal + scroll to the
   // real "أدوات مراحل الإنتاج" accordion rather than fabricating a new
   // direct-mutation action.
-  const _reassignBoxHtml=buildReassignBox(o,key);
+  // buildReassignBox's always-visible inline single-dept reassignment box is
+  // superseded by the unified "تعديل الطلب" modal (openOrderEditModal) reached
+  // from the pencil quick-action / ⋮ menu — inline editing here is locked to
+  // avoid accidental changes outside the explicit edit flow.
+  const _reassignBoxHtml='';
   const _mgrQuickButtonsHtml=(canAct&&o.currentDept!=='done'&&(_otherDeptChipsHtml||_deptCardsHtml))?`<div class="od-mgr-quick-row">
       <button class="btn btn-out btn-sm" onclick="omJumpToDeptTools()"><i class="ti ti-brush"></i> اعتماد بروفة</button>
       <button class="btn btn-out btn-sm" onclick="omJumpToDeptTools()"><i class="ti ti-tools"></i> اعتماد ورشة</button>
@@ -7736,10 +7906,11 @@ function openOrderModal(key){
       <div class="od-quick-actions">
         <button class="od-qa-btn" title="طباعة" onclick="printOrderDetails()"><i class="ti ti-printer"></i></button>
         ${(canSeeWhatsappBtn()&&o.phone&&o.phone!=='—')?`<button class="od-qa-btn" title="واتساب" onclick="openWhatsapp('${encodeURIComponent(o.phone)}')"><i class="ti ti-brand-whatsapp"></i></button>`:''}
-        ${cu.type==='admin'?`<button class="od-qa-btn" title="تعديل / إعادة التوزيع" onclick="document.getElementById('od-reassign-${key}').scrollIntoView({behavior:'smooth',block:'center'})"><i class="ti ti-edit"></i></button>`:''}
+        ${canEditOrderComposition()?`<button class="od-qa-btn" title="تعديل الطلب" onclick="openOrderEditModal('${key}')"><i class="ti ti-edit"></i></button>`:''}
         <div class="row-menu-wrap">
           <button class="od-qa-btn" title="أكثر" onclick="toggleRowMenu('od-more-${key}')"><i class="ti ti-dots"></i></button>
           <div class="row-menu" id="od-more-${key}" style="display:none;">
+            ${canEditOrderComposition()?`<button onclick="closeAllRowMenus();openOrderEditModal('${key}')"><i class="ti ti-settings"></i> تعديل الطلب</button>`:''}
             <button onclick="closeAllRowMenus();openTimelineModal('${key}')"><i class="ti ti-clock"></i> مراحل الطلب بالتفصيل</button>
             ${_canRevert?`<button onclick="closeAllRowMenus();revertOrderToPrevDept('${key}')"><i class="ti ti-arrow-back-up"></i> إرجاع للمرحلة السابقة</button>`:''}
             ${_canArchive?`<button onclick="closeAllRowMenus();archiveOrder('${key}')" style="color:#DC2626;"><i class="ti ti-archive"></i> إنهاء الطلب وأرشفته</button>`:''}
@@ -7797,8 +7968,9 @@ function openAddItemModal(key,editIdx){
     </div>
     <div style="display:flex;flex-direction:column;gap:10px;">
       <div class="fg"><label>اسم البند *</label><input id="new-item-name" placeholder="مثال: لوحة إعلانية إضافية" value="${nameVal}"/></div>
+      <div class="fg"><label>الكمية</label><input type="text" inputmode="decimal" id="new-item-qty" placeholder="1" min="1" value="${isEdit?(existing.qty||''):''}" onfocus="this.select()"/></div>
       <div class="fg"><label>سعر البند (ر.س) <span style="color:#EF4444">*</span></label><input type="text" inputmode="decimal" id="new-item-price" placeholder="0" min="0" value="${isEdit?(existing.price||''):''}" oninput="normalizeAmountInput(this)" onfocus="this.select()"/></div>
-      <div class="fg"><label>التفاصيل والمواصفات</label><textarea id="new-item-details" placeholder="المقاسات، المواد..." style="min-height:60px;">${esc(detailsVal)}</textarea></div>
+      <div class="fg"><label>التفاصيل والمواصفات (المقاسات/الأبعاد)</label><textarea id="new-item-details" placeholder="المقاسات، المواد..." style="min-height:60px;">${esc(detailsVal)}</textarea></div>
       <div class="fg"><label>إرفاق ملف (اختياري)</label>
         <div class="dept-upload-box" onclick="document.getElementById('new-item-file-input').click()"><i class="ti ti-upload" style="font-size:20px;color:var(--gold);"></i><br>اضغط لإرفاق ملف أو أكثر</div>
         <input type="file" id="new-item-file-input" style="display:none" accept="image/*,.pdf,.doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" multiple onchange="handleNewItemFiles(this.files,'${key}')"/>
@@ -7830,6 +8002,8 @@ async function submitNewOrderItem(key){
   // without narrowing who's legitimately allowed to edit order composition.
   if(['designer','printer','workshop','follower'].includes(cu.type)){toast('⚠️ هذا الإجراء غير متاح لك');return;}
   const name=document.getElementById('new-item-name').value.trim();
+  const qtyRaw=normalizeDigits(document.getElementById('new-item-qty')?.value||'');
+  const qty=qtyRaw?parseFloat(qtyRaw):undefined;
   const priceRaw=normalizeDigits(document.getElementById('new-item-price').value);
   const details=document.getElementById('new-item-details').value.trim();
   if(!name){toast('⚠️ يرجى إدخال اسم البند');return;}
@@ -7842,9 +8016,9 @@ async function submitNewOrderItem(key){
     const items=Array.isArray(o.orderItems)?[...o.orderItems]:[];
     if(isEdit){
       const prev=items[editIdx]||{};
-      items[editIdx]={...prev,name,details,price,files:window._newItemFiles||[],edited:true,editedAt:new Date().toISOString(),editedBy:cu.name};
+      items[editIdx]={...prev,name,qty,details,price,files:window._newItemFiles||[],edited:true,editedAt:new Date().toISOString(),editedBy:cu.name};
     }else{
-      items.push({name,details,price,files:window._newItemFiles||[],addedLater:true,addedAt:new Date().toISOString(),addedBy:cu.name});
+      items.push({name,qty,details,price,files:window._newItemFiles||[],addedLater:true,addedAt:new Date().toISOString(),addedBy:cu.name});
     }
     // Keep order-level totals in sync with item prices whenever the order already tracks payment.
     const newTotal=items.reduce((s,it)=>s+(parseFloat(it.price)||0),0);
