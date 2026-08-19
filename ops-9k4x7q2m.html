@@ -6280,8 +6280,14 @@ function renderA4Quote(data,key=''){
 #print-area *{box-sizing:border-box;font-family:'Tajawal','Cairo',sans-serif;}
 #print-area{direction:rtl;background:#FAF8F5;max-width:794px;margin:0 auto;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
 /* Keep each product row and its image intact instead of letting the browser's
-   native print pagination slice through them at a page boundary. */
-#print-area table{break-inside:avoid!important;page-break-inside:avoid!important;page-break-after:auto!important;}
+   native print pagination slice through them at a page boundary — but only at
+   the row level. break-inside:avoid on the <table> itself (as this used to be)
+   tells the browser to treat the WHOLE table as one unsplittable block: the
+   instant it doesn't fully fit in whatever space is left on page 1, the entire
+   table gets pushed to page 2, leaving a large empty gap under the header/
+   client cards on page 1. Letting the table flow naturally (no break rule on
+   it or its parent card) while only protecting individual rows/cells/images
+   gives the intended behavior: fill page 1, spill remaining rows to page 2.*/
 #print-area tr{break-inside:avoid!important;page-break-inside:avoid!important;page-break-after:auto!important;}
 #print-area td,#print-area th{break-inside:avoid!important;page-break-inside:avoid!important;}
 #print-area img{break-inside:avoid!important;page-break-inside:avoid!important;}
