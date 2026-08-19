@@ -1910,7 +1910,17 @@ document.addEventListener('keydown',e=>{
 });
 function enterApp(u){
   _navHistory=[];
-  cu=USERS[u];cu._uname=u;
+  // A frozen SHALLOW COPY, not the live USERS[u] reference: every permission
+  // check in the app reads cu.type/cu._uname directly, so leaving cu mutable
+  // meant a single `cu.type='admin'` in the browser console instantly passed
+  // every client-side admin gate for the rest of the session. Object.freeze
+  // makes that specific one-liner attack silently no-op (strict-mode
+  // assignment throws instead). This is a deterrent against casual tampering,
+  // NOT a real security boundary — anyone editing this page's own JS in
+  // DevTools can still redefine functions or patch around a frozen object,
+  // so the actual authorization boundary has to live server-side, in the
+  // Firebase Realtime Database Security Rules — see the fbReq() comment.
+  cu=Object.freeze({...USERS[u],_uname:u});
   document.getElementById('ls').style.display='none';
   document.getElementById('ma').style.display='block';
   document.getElementById('hn').textContent=cu.name;
@@ -1944,6 +1954,30 @@ function logout(){localStorage.removeItem(SESSION_KEY);sessionStorage.removeItem
 // ============================================================
 // FIREBASE
 // ============================================================
+// IMPORTANT — where the real authorization boundary lives:
+// firebase.auth().signInAnonymously() (see initializeApp above) means every
+// visitor to this page — before ever touching the username/password screen —
+// already holds a valid Firebase Auth session. That anonymous auth.uid
+// carries no notion of staff role, so Firebase Realtime Database Security
+// Rules, whatever they currently are, cannot distinguish an admin from a
+// designer from an anonymous stranger who found the URL: they can only grant
+// or deny "any signed-in (anonymous) client." The role model this app
+// enforces (cu.type checks, isMyItem, canEditDesignFiles, canEditOrder-
+// Composition, guardWrite() below, etc.) is entirely client-side JavaScript.
+// It stops the UI from OFFERING actions a role shouldn't see, and — as of
+// the Object.freeze(cu) in enterApp() and guardWrite() below — it raises the
+// bar against casual console tampering, but none of it is a real security
+// boundary: anyone can load this page's own source, edit it, and call fbSet/
+// fbPatch/fbDelete directly with whatever payload they want, and Firebase
+// will accept it under the same anonymous session. Closing that gap for
+// real requires moving enforcement server-side — e.g. Realtime Database
+// Security Rules keyed off a genuine per-user identity (Firebase Auth
+// email/password or custom tokens minted by a trusted backend, with role
+// encoded as a custom claim or read from a rules-protected /users/{uid}
+// node) instead of anonymous auth. That's an infrastructure change outside
+// this file's reach from here — flagged for the project owner to action in
+// the Firebase console / a backend, not something a static HTML file can
+// self-enforce.
 async function fbReq(path,method='GET',data=null){
   if(window._fbAuthReady) await window._fbAuthReady;
   let authQS='';
@@ -1957,6 +1991,21 @@ const fbSet=(p,d)=>fbReq(p,'PUT',d);
 const fbPush=(p,d)=>fbReq(p,'POST',d);
 const fbPatch=(p,d)=>fbReq(p,'PATCH',d);
 const fbDelete=p=>fbReq(p,'DELETE');
+// Centralized authorization guard: a single choke point for the boolean role
+// checks that already precede sensitive fbPatch/fbDelete calls throughout
+// this file (cu.type==='admin', canEditOrderComposition(), etc.), so a
+// mutation function can assert its precondition in one line instead of
+// re-deriving/duplicating the toast+return boilerplate at every call site —
+// and so a missing check (see archiveOrder() below, which had none until
+// this pass) is easy to spot by searching for functions that call fbPatch/
+// fbDelete without a guardWrite() line above them. As documented at fbReq()
+// above, this is still purely a client-side courtesy check, not a real
+// security boundary.
+function guardWrite(ok,msg){
+  if(ok)return true;
+  toast(msg||'⚠️ لا تملك صلاحية تنفيذ هذا الإجراء');
+  return false;
+}
 async function syncUsers(){
   try{
     const r=await fbGet('users');
@@ -3813,7 +3862,7 @@ function renderWfKanbanView(){
           <button style="color:#DC2626;" onclick="deleteOrderSingle('${o._key}')"><i class="ti ti-trash"></i> حذف</button>
         </div>
       </div>`:'';
-    return `<div class="wf-card" data-dept="${o.currentDept||'design'}" data-name="${(o.client||'').toLowerCase()}" data-key="${o._key}" onclick="wfCardClick(event,'${o._key}')">${hasOrderUpdate(o)?'<span class="order-update-dot" title="تم تحديث بيانات الطلب"></span>':''}${cardMenu}<input type="checkbox" class="wf-check" data-key="${o._key}" onchange="toggleWfSelect('${o._key}',this.checked)"/><div class="wf-card-top">
+    return `<div class="wf-card" data-dept="${o.currentDept||'design'}" data-name="${esc((o.client||'').toLowerCase())}" data-key="${o._key}" onclick="wfCardClick(event,'${o._key}')">${hasOrderUpdate(o)?'<span class="order-update-dot" title="تم تحديث بيانات الطلب"></span>':''}${cardMenu}<input type="checkbox" class="wf-check" data-key="${o._key}" onchange="toggleWfSelect('${o._key}',this.checked)"/><div class="wf-card-top">
         <div style="display:flex;justify-content:center;margin-bottom:4px;"><div style="width:22px;height:22px;border-radius:50%;background:var(--maroon);display:flex;align-items:center;justify-content:center;position:relative;flex-shrink:0;box-shadow:0 1px 3px rgba(0,0,0,.25);"><span style="font-family:'Changa',sans-serif;font-weight:800;font-size:12px;line-height:1;color:rgba(255,255,255,.92);">ر</span><span style="position:absolute;top:3px;left:5px;width:1px;height:9px;background:#D4AF37;border-radius:1px;"></span></div></div>
         <div class="wf-card-id">${o.id||o._key} · ${orderDateTime(o)}${o.isQuickTask?'<span class="urgent-tag" style="margin-right:6px;font-size:9px;"><i class="ti ti-bolt"></i>سريعة</span>':''}</div>
         <div class="wf-card-name">${esc(o.client)}</div>
@@ -4893,6 +4942,11 @@ async function bulkDeleteSelected(){
   toast('✓ تم حذف الطلبات المحددة');buildWfGrid(_currentWfTab||'active');
 }
 async function bulkAdvanceSelected(){
+  // The multi-select bar itself is only rendered for admin/receiver (see the
+  // wf-multi-btn gate above) — this function had no check of its own, so
+  // calling it directly (after seeding window._wfSelected) let any role
+  // bulk-advance arbitrary orders.
+  if(!guardWrite(cu.type==='admin'||cu.type==='receiver','⚠️ هذا الإجراء متاح للمدير أو موظف الاستقبال فقط'))return;
   if(!window._wfSelected.size){toast('لم يتم تحديد أي طلبات');return;}
   const deptOrder=['design','external','print','workshop','done'];
   const selKeys=[...window._wfSelected];
@@ -5063,7 +5117,7 @@ function buildMyWork(){
       <div style="font-size:10.5px;color:var(--text-3);"><i class="ti ti-calendar-time"></i> التسليم: ${deadlineDateTime(o)}</div>
       ${_canSeeCardTotal&&o.totalAmount?`<div style="font-size:11px;font-weight:800;color:var(--maroon);margin-top:3px;"><i class="ti ti-cash"></i> إجمالي المبلغ: ${fmtMoney(Number(o.totalAmount))} ر.س</div>`:''}
       ${deadlineBadge(o.deadline)}
-      ${o.quickTaskLocation?`<div style="font-size:11px;color:#9A3412;margin-top:6px;"><i class="ti ti-map-pin"></i> ${o.quickTaskLocation}</div>`:''}
+      ${o.quickTaskLocation?`<div style="font-size:11px;color:#9A3412;margin-top:6px;"><i class="ti ti-map-pin"></i> ${esc(o.quickTaskLocation)}</div>`:''}
       ${isWorkshop&&o.isQuickTask&&!o.workshopFeedbackDone?`<div style="margin-top:8px;"><button class="btn btn-orange btn-sm" onclick="event.stopPropagation();openWorkshopFeedback('${o._key}')"><i class="ti ti-clipboard-check"></i> إدخال القياسات</button></div>`:''}
       ${o.workshopFeedbackDone?`<div style="margin-top:6px;background:#F0FDF4;border:1px solid #BBF7D0;border-radius:6px;padding:6px 10px;font-size:11px;"><i class="ti ti-check" style="color:#10B981"></i> تم رفع التقرير — بانتظار الإجراء</div>`:''}
       ${(canSeeWhatsappBtn()&&o.phone&&o.phone!=='—')?`<div style="margin-top:8px"><button class="btn btn-whatsapp btn-sm" onclick="event.stopPropagation();openWhatsapp('${encodeURIComponent(o.phone)}')"><i class="ti ti-brand-whatsapp"></i> واتساب</button></div>`:''}
@@ -5153,6 +5207,11 @@ function removeQueuedItemworkFile(idx,fi){
 async function deleteItemVersion(key,idx,versionId){
   const o=orders[key];if(!o)return;
   const it=o.orderItems[idx];if(!it)return;
+  // Render sites only show this button when canAct is true (isMyItem()/
+  // canEditDesignFiles()-derived, or admin) — the function itself had no
+  // matching check, so calling it directly deleted any item's files on any
+  // order regardless of assignment.
+  if(!guardWrite(cu.type==='admin'||isMyItem(o,it)||canEditDesignFiles(o,it),'⚠️ لا تملك صلاحية حذف هذا الملف'))return;
   if(!confirm('حذف هذا الملف؟'))return;
   showSaving('جاري الحذف...');
   try{
@@ -6522,18 +6581,18 @@ async function convertSavedQuoteToOrder(key,preloadedData=null){
   document.getElementById('order-modal-body').innerHTML=`
     <div class="modal-header"><span class="modal-title"><i class="ti ti-transfer"></i> تحويل لأمر تشغيل</span><button class="btn-close" onclick="closeModal('order-modal')">×</button></div>
     <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-md);padding:14px;margin-bottom:16px;">
-      <div style="font-size:14px;font-weight:700;color:var(--maroon);">${data.client}</div>
+      <div style="font-size:14px;font-weight:700;color:var(--maroon);">${esc(data.client)}</div>
       <div style="font-size:12px;color:var(--text-2);margin-top:3px;">الإجمالي: <strong>${fmtMoney(Number(data.totalWithVat||0))} ر.س</strong></div>
     </div>
     <div style="display:flex;flex-direction:column;gap:12px;">
-      <div class="fg"><label>رقم الجوال *</label><input id="co-phone" inputmode="tel" value="${data.phone||''}" placeholder="05XXXXXXXX"/></div>
+      <div class="fg"><label>رقم الجوال *</label><input id="co-phone" inputmode="tel" value="${esc(data.phone||'')}" placeholder="05XXXXXXXX"/></div>
       <div class="fg">
         <label>البنود (بدون أسعار للقسم الموكل)</label>
         <div id="co-items-wrap" style="display:flex;flex-direction:column;gap:10px;">
           ${(data.lines||[]).map((l,i)=>`
           <div style="border:1px solid var(--border);border-radius:var(--radius-md);padding:10px 12px;background:var(--surface-2);">
             <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
-              <strong style="font-size:13px;color:var(--maroon);">${l.lbl||'بند '+(i+1)}</strong>
+              <strong style="font-size:13px;color:var(--maroon);">${esc(l.lbl||'بند '+(i+1))}</strong>
               <span style="font-size:11px;color:var(--text-3);">الكمية: ${l.q||1}</span>
             </div>
             <div style="margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
@@ -6588,7 +6647,7 @@ function renderCoProductionLines(){
     const avail=quoteLines.map((x,idx)=>({x,idx})).filter(({x})=>(x.lbl||'').trim());
     if(!avail.length)return'<div style="font-size:10px;color:var(--text-3);">لا توجد بنود في هذا العرض</div>';
     return avail.map(({x,idx})=>`<label style="display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:700;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:4px 8px;margin:0 4px 4px 0;cursor:pointer;">
-      <input type="checkbox" value="${idx}" ${((l.itemIdxs)||[]).includes(idx)?'checked':''} onchange="toggleCoProductionLineItem('${l.id}',${idx},this.checked)" style="width:13px;height:13px;accent-color:var(--gold);"/> ${x.lbl}
+      <input type="checkbox" value="${idx}" ${((l.itemIdxs)||[]).includes(idx)?'checked':''} onchange="toggleCoProductionLineItem('${l.id}',${idx},this.checked)" style="width:13px;height:13px;accent-color:var(--gold);"/> ${esc(x.lbl)}
     </label>`).join('');
   };
   wrap.innerHTML=lines.map((l,i)=>`
@@ -7163,7 +7222,7 @@ function openUnpaidOrderSummary(key){
     <div style="padding:16px;display:grid;gap:12px;">
       <div>
         <div style="font-weight:800;font-size:15px;">${esc(o.client||'—')}</div>
-        <div style="font-size:12px;color:var(--text-3);margin-top:2px;">${(o.orderItems&&o.orderItems.length?o.orderItems[0].name:o.service)||'—'}</div>
+        <div style="font-size:12px;color:var(--text-3);margin-top:2px;">${esc((o.orderItems&&o.orderItems.length?o.orderItems[0].name:o.service)||'—')}</div>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
         <span class="badge ${o.paymentStatus==='دفع جزئي'?'b-proc':'b-new'}">${o.paymentStatus||'—'}</span>
@@ -7373,10 +7432,15 @@ function deptFilesForStage(o,dk){
   return files;
 }
 function saveDeptNote(key,dk){
+  const o=orders[key];if(!o)return;
+  // The note textarea is only rendered inside a canAct-gated dept card
+  // (cu.type==='admin'||isMyOrder(o)) — this function had no check of its
+  // own, so calling it directly overwrote another department's internal
+  // notes on any order.
+  if(!guardWrite(cu.type==='admin'||isMyOrder(o),'⚠️ لا تملك صلاحية حفظ هذه الملاحظة'))return;
   const el=document.getElementById('od-note-'+dk);if(!el)return;
   const noteVal=el.value.trim();
   const upd={};upd['deptNotes_'+dk]=noteVal;
-  const o=orders[key];
   fbPatch(`orders/${key}`,upd).then(()=>{
     toast('✓ تم حفظ الملاحظة');
     if(noteVal&&o)pushNotification({type:'comment',message:`ملاحظة جديدة على الطلب ${esc(o.id||key)} — ${esc(WF_DEPT_META[dk]?.label||dk)}`,orderKey:key,orderId:o.id,client:o.client});
@@ -8100,7 +8164,12 @@ async function _uploadOneFileData(file,key){
 async function uploadFileDirect(key,ff,fn2,inputId){
   const el=document.getElementById(inputId);if(!el||!el.files||!el.files.length)return;
   const files=Array.from(el.files);
-  const o=orders[key];
+  const o=orders[key];if(!o)return;
+  // The upload input itself only exists inside an `if(isMine||t==='admin')`
+  // block at render time — this function had no matching check, so calling
+  // it directly overwrote approved design/print/workshop files on any order
+  // regardless of assignment.
+  if(!guardWrite(cu.type==='admin'||isMyOrder(o),'⚠️ لا تملك صلاحية رفع هذا الملف'))return;
   showSaving(files.length>1?'جاري حفظ الملفات...':'جاري حفظ الملف...');
   try{
     const uploaded=[];
@@ -8135,6 +8204,11 @@ async function uploadFileDirect(key,ff,fn2,inputId){
 // ever reads the primary field.
 async function deleteApprovalFile(key,ff,slot){
   const o=orders[key];if(!o)return;
+  // Render sites only show this button under the same canAct
+  // (cu.type==='admin'||isMyOrder(o)) gate used for uploads — this function
+  // had no check of its own, so calling it directly deleted approved
+  // design/print/workshop files on any order regardless of assignment.
+  if(!guardWrite(cu.type==='admin'||isMyOrder(o),'⚠️ لا تملك صلاحية حذف هذا الملف'))return;
   if(!confirm('حذف هذا الملف؟'))return;
   const fn2=ff+'Name';
   const extra=Array.isArray(o[ff+'Extra'])?[...o[ff+'Extra']]:[];
@@ -8184,6 +8258,11 @@ async function saveExternalNote(key){
 }
 async function sendToNextDept(key,next){
   const o=orders[key];if(!o)return;
+  // The "نقل للمرحلة التالية" button is only rendered under canAct
+  // (cu.type==='admin'||isMyOrder(o)) — this function had no check of its
+  // own, so calling it directly moved any order to any department
+  // regardless of ownership/role.
+  if(!guardWrite(cu.type==='admin'||isMyOrder(o),'⚠️ لا تملك صلاحية نقل هذا الطلب'))return;
   const curDept=o.currentDept;
   // Mandatory proof/spec linkage: an order cannot leave the design stage for
   // print or workshop until the corresponding approved proof file has been
@@ -8281,8 +8360,12 @@ async function resolveMaintenanceOrder(key){
   }catch(e){hideSaving();toast('❌ فشل الحفظ، حاول مرة أخرى');}
 }
 async function finishOrder(key){
+  const o=orders[key];if(!o)return;
+  // Same canAct gate as sendToNextDept() — this function had no check of
+  // its own, so calling it directly archived/marked-done any order
+  // regardless of ownership/role.
+  if(!guardWrite(cu.type==='admin'||isMyOrder(o),'⚠️ لا تملك صلاحية إغلاق هذا الطلب'))return;
   showSaving('جاري الإغلاق...');
-  const o=orders[key];
   try{
     await fbPatch(`orders/${key}`,{currentDept:'done',status:'مكتمل',workshopDoneAt:new Date().toISOString()});
     await createWarrantyIfNeeded(key,o);
@@ -8295,6 +8378,11 @@ async function finishOrder(key){
 }
 async function archiveOrder(key){
   const o=orders[key];
+  // Was previously gated only by the ⋮ menu not rendering this button for
+  // non-admins (_canArchive at the order modal's render site) — the function
+  // itself had no check, so calling archiveOrder('<key>') directly (e.g. from
+  // the browser console) archived the order regardless of role.
+  if(!guardWrite(cu.type==='admin'&&!(o?.isQuickTask&&o?.approvedPrintFile),'⚠️ إنهاء وأرشفة الطلب متاح للمدير فقط'))return;
   if(!confirm(`إنهاء وأرشفة الطلب "${o?.id||key}"؟`))return;
   showSaving('جاري الأرشفة...');
   try{
@@ -8664,7 +8752,7 @@ function renderProductionLines(){
     const avail=(window._orderLines||[]).filter(x=>(x.name||'').trim());
     if(!avail.length)return'<div style="font-size:10px;color:var(--text-3);">أضف بنود الطلب أولاً</div>';
     return avail.map(x=>`<label style="display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:700;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:4px 8px;margin:0 4px 4px 0;cursor:pointer;">
-      <input type="checkbox" value="${x.id}" ${((l.itemIds)||[]).includes(x.id)?'checked':''} onchange="toggleProductionLineItem('${l.id}','${x.id}',this.checked)" style="width:13px;height:13px;accent-color:var(--gold);"/> ${x.name}
+      <input type="checkbox" value="${x.id}" ${((l.itemIds)||[]).includes(x.id)?'checked':''} onchange="toggleProductionLineItem('${l.id}','${x.id}',this.checked)" style="width:13px;height:13px;accent-color:var(--gold);"/> ${esc(x.name)}
     </label>`).join('');
   };
   wrap.innerHTML=lines.map((l,i)=>`
@@ -9795,8 +9883,8 @@ function buildEmpPage(){
         </div>
         <div style="flex:1;min-width:200px;">
           <div style="font-size:11px;font-weight:800;color:#D4AF37;letter-spacing:.6px;margin-bottom:4px;"><i class="ti ti-trophy"></i> موظف الشهر — ${monthLabel}</div>
-          <div style="font-size:20px;font-weight:900;">${empOfMonth.name||empOfMonth.uname}</div>
-          <div style="font-size:12px;opacity:.85;margin-top:2px;">${empOfMonth.role||ROLE_LABELS[empOfMonth.type]||empOfMonth.type}</div>
+          <div style="font-size:20px;font-weight:900;">${esc(empOfMonth.name||empOfMonth.uname)}</div>
+          <div style="font-size:12px;opacity:.85;margin-top:2px;">${esc(empOfMonth.role||ROLE_LABELS[empOfMonth.type]||empOfMonth.type)}</div>
         </div>
         <div style="display:flex;gap:10px;flex-wrap:wrap;">
           <div style="background:rgba(255,255,255,.14);border-radius:12px;padding:10px 18px;text-align:center;min-width:84px;">
@@ -9858,8 +9946,8 @@ function buildEmpPage(){
                 <div style="position:absolute;bottom:0;left:0;width:8px;height:8px;border-radius:50%;background:${active.length>0?'#10B981':'#94A3B8'};border:2px solid var(--surface);"></div>
               </div>
               <div style="flex:1;min-width:0;">
-                <div onclick="openEmpDetail('${e.uname}')" title="عرض ملف ${e.name||e.uname}" style="font-size:11.5px;font-weight:800;color:var(--maroon);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;text-decoration:underline;text-decoration-color:transparent;transition:text-decoration-color .15s;" onmouseover="this.style.textDecorationColor='var(--gold)'" onmouseout="this.style.textDecorationColor='transparent'">${e.name||e.uname}</div>
-                <div style="font-size:9px;color:var(--text-3);font-weight:600;">${e.role||ROLE_LABELS[e.type]||e.type}</div>
+                <div onclick="openEmpDetail('${e.uname}')" title="عرض ملف ${esc(e.name||e.uname)}" style="font-size:11.5px;font-weight:800;color:var(--maroon);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;text-decoration:underline;text-decoration-color:transparent;transition:text-decoration-color .15s;" onmouseover="this.style.textDecorationColor='var(--gold)'" onmouseout="this.style.textDecorationColor='transparent'">${esc(e.name||e.uname)}</div>
+                <div style="font-size:9px;color:var(--text-3);font-weight:600;">${esc(e.role||ROLE_LABELS[e.type]||e.type)}</div>
               </div>
               <div style="text-align:center;flex-shrink:0;">
                 <div style="width:36px;height:36px;border-radius:50%;background:conic-gradient(${barCol} ${pct*3.6}deg, var(--border) 0deg);display:flex;align-items:center;justify-content:center;margin:0 auto 2px;">
