@@ -297,6 +297,10 @@ tbody tr:hover td{background:var(--surface-2);}
 .proof-pill{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:8px;font-size:10.5px;font-weight:800;white-space:nowrap;}
 .proof-waiting{background:#FEF3C7;color:#92400E;}
 .proof-approved{background:#D1FAE5;color:#065F46;}
+.revision-badge{background:linear-gradient(135deg,#F97316,#EF4444);color:#fff;padding:3px 10px;border-radius:20px;font-size:10.5px;font-weight:800;display:inline-flex;align-items:center;gap:4px;white-space:nowrap;}
+.revision-notes-box{background:#FFF7ED;border:1.5px solid #FDBA74;border-radius:10px;padding:10px 12px;margin-top:8px;}
+.revision-notes-box .rn-title{font-size:11px;font-weight:800;color:#9A3412;display:flex;align-items:center;gap:5px;margin-bottom:4px;}
+.revision-notes-box .rn-text{font-size:12px;color:#7C2D12;line-height:1.6;}
 /* Column-5 delivery countdown pills */
 .countdown-pill{display:inline-block;font-size:11px;font-weight:800;color:var(--text-2);}
 .countdown-pill.cd-soon{color:#C05621;}
@@ -1830,6 +1834,14 @@ const INITIAL_USERS={
 };
 let cu=null,orders={},clients={},USERS={},currentSortMode='urgent-auto';
 let submittedRequests={},chats={},standaloneQuotes={},warranties={},teamChat={},govRecords={},urgentRequests={},tasksData={},eventNotifs={};
+// Per-user order-seen map (orderKey -> ISO timestamp), backed by Firebase at
+// orderSeen/{uname} instead of localStorage — see markOrderUpdateSeen()/
+// hasOrderUpdate() below. Loaded once at login (enterApp) and refreshed on
+// every loadData() cycle, same pattern as orders/clients/USERS: a
+// server-synced value read synchronously from an in-memory cache, so the
+// "New" badge stays consistent across devices/browsers for the same account
+// instead of resetting the moment localStorage isn't shared.
+let orderSeenMap={};
 let _lastAssignSnapshot=null,_audioCtx=null,_audioUnlocked=false;
 let _navHistory=[];
 let _nuPhotoB64='',_euPhotoB64='',_euSelectedColor='',_nuSelectedColor='';
@@ -1908,7 +1920,7 @@ document.addEventListener('keydown',e=>{
   // nothing to close above, so treat it the same as clicking back/dashboard.
   if(typeof _curPage!=='undefined'&&_curPage==='teamchat'&&cu){nav(ROLE_LANDING[cu.type]||'dash');}
 });
-function enterApp(u){
+async function enterApp(u){
   _navHistory=[];
   // A frozen SHALLOW COPY, not the live USERS[u] reference: every permission
   // check in the app reads cu.type/cu._uname directly, so leaving cu mutable
@@ -1947,6 +1959,12 @@ function enterApp(u){
     const _saved=localStorage.getItem('rawaee_last_page_'+u);
     if(_saved&&document.getElementById('n-'+_saved))_restorePage=_saved;
   }catch(e){}
+  // loadData() already ran once before enterApp() was called (doLogin awaits
+  // it first) but with cu still null at that point, so it couldn't fetch
+  // this user's orderSeen map — fetch it directly here, before the first
+  // render, so "New" badges are correct immediately rather than flashing on
+  // then clearing once the 60s poll catches up.
+  try{orderSeenMap=(await fbGet('orderSeen/'+u))||{};}catch(e){}
   nav(_restorePage);
   setInterval(async()=>{await loadData();refreshCurrentPage();},60000);
 }
@@ -2058,6 +2076,13 @@ async function loadData(){
     ['urgentRequests',v=>urgentRequests=v],
     ['tasks',v=>tasksData=v],
   ];
+  // cu is still null on the very first loadData() call (doLogin awaits it
+  // BEFORE calling enterApp(), which is what actually sets cu) — that
+  // first-load case is handled separately by enterApp() fetching
+  // orderSeen/{uname} directly before its first render. Every subsequent
+  // call (the 60s poll, explicit refreshes after mutations) has cu set and
+  // keeps this in sync with what other devices/sessions have marked seen.
+  if(cu&&cu._uname)fetches.push(['orderSeen/'+cu._uname,v=>orderSeenMap=v]);
   const results=await Promise.all(fetches.map(([path])=>fbGet(path).then(v=>({ok:true,v})).catch(()=>({ok:false}))));
   let anyFailed=false;
   results.forEach((r,i)=>{
@@ -2186,10 +2211,11 @@ function getNotifications(){
 // ── Event notification log (new orders, transfers, uploads, comments,
 // completion) — additive to the derived urgent/deadline alerts above, which
 // keep working exactly as before. Stored in Firebase (eventNotifs/) so every
-// user sees the same event history; "read" state is per-device via
-// localStorage, following the same pattern already used for team-chat and
-// per-item update badges elsewhere in this app (see teamChatSeen_/
-// itemUpdateSeen_ — mark-all-read-on-open, not per-notification tracking).
+// user sees the same event history; "read" state here is still per-device
+// via localStorage (see teamChatSeen_ — mark-all-read-on-open, not
+// per-notification tracking). The order-card "جديد" badge used to follow
+// this same per-device pattern (itemUpdateSeen_) but is now server-synced
+// instead — see orderSeenMap/markOrderUpdateSeen()/hasOrderUpdate().
 const NOTIF_TYPE_META={
   new_order:{label:'طلب جديد',icon:'ti-file-plus',color:'#2563EB'},
   transfer:{label:'تحويل قسم',icon:'ti-transfer',color:'#8a6d1f'},
@@ -3304,6 +3330,7 @@ function renderOrderItemsCards(o,key,canAct){
   function renderOneItemGridCard(it,i){
     const dept=itemCurrentDept(it,o);
     const dims=itemDimensionsText(it);
+    const revisionNote=it.needsRevision?latestClientFeedbackNote(it):null;
     return `<div class="order-item-card" data-search="${esc((it.name||'').toLowerCase())}">
       <div class="oi-card-head" style="cursor:default;">
         <div class="oi-card-head-left">
@@ -3311,10 +3338,14 @@ function renderOrderItemsCards(o,key,canAct){
           <strong class="oi-card-name" title="${esc(it.name||'—')}">${esc(it.name||'—')}</strong>
           ${it.qty?`<span class="oi-card-qty">×${esc(String(it.qty))}</span>`:''}
         </div>
-        <span class="badge ${dept==='done'?'b-done':'b-new'}">${WF_DEPT_META[dept]?.label||dept}</span>
+        <div style="display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end;">
+          ${it.needsRevision?`<span class="revision-badge"><i class="ti ti-refresh"></i> يتطلب تعديل</span>`:''}
+          <span class="badge ${dept==='done'?'b-done':'b-new'}">${WF_DEPT_META[dept]?.label||dept}</span>
+        </div>
       </div>
       ${dims?`<div style="font-size:11px;color:var(--text-2);margin-top:6px;"><i class="ti ti-ruler-2"></i> ${dims}</div>`:''}
       <div style="margin-top:8px;">${gpbadge(o.priority)}</div>
+      ${revisionNote?`<div class="revision-notes-box"><div class="rn-title"><i class="ti ti-message-2"></i> ملاحظات مراجعة العميل</div>${revisionNote.notes?`<div class="rn-text">${esc(revisionNote.notes)}</div>`:''}${(revisionNote.files&&revisionNote.files.length)?`<div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px;">${revisionNote.files.map(f=>fileLinkHtml(f.name,f.data)).join('')}</div>`:''}</div>`:''}
       <div style="display:flex;gap:6px;margin-top:10px;">
         ${(canSeeWhatsappBtn()&&o.phone&&o.phone!=='—')?`<button class="btn btn-whatsapp btn-sm" onclick="event.stopPropagation();openWhatsapp('${encodeURIComponent(o.phone)}')" title="واتساب"><i class="ti ti-brand-whatsapp"></i></button>`:''}
         ${canSeeClientFeedback()?`<button class="btn btn-out btn-sm" onclick="event.stopPropagation();openClientFeedbackPanel('${key}',${i})" title="ردود وملاحظات العميل"><i class="ti ti-message-2"></i></button>`:''}
@@ -4249,6 +4280,13 @@ function toggleWfFilterFlag(key){
 // around waiting for a manual "send" click. 'approved' can still be returned
 // here defensively (e.g. legacy data saved before that auto-advance existed)
 // so nothing is silently lost, but it should be rare/transient in practice.
+// Shared by the item card and the Item Workspace page's "ملاحظات مراجعة
+// العميل" section — both need the SAME most-recent client_feedback note,
+// so this is the one place that decides which version counts as "latest".
+function latestClientFeedbackNote(it){
+  const fb=itemVersions(it).filter(v=>!v._legacy&&v.kind==='client_feedback').sort((a,b)=>new Date(b.createdAt||0)-new Date(a.createdAt||0));
+  return fb[0]||null;
+}
 function itemDesignColumn(it){
   // A client-feedback revision request always wins over stale kind history —
   // otherwise an item that already had a design_proof/design_approved
@@ -5413,9 +5451,11 @@ function buildItemWorkspacePage(){
   const queued=(window._newVerFiles&&window._newVerFiles[idx])||[];
   const specsHtml=(it.template&&PRODUCT_TEMPLATES[it.template]&&it.specs&&Object.values(it.specs).some(v=>v))
     ?`<div class="fg"><label>المواصفات / المقاسات</label><div style="font-size:12.5px;line-height:1.8;">${PRODUCT_TEMPLATES[it.template].fields.filter(f=>it.specs[f.key]).map(f=>`<div><strong>${esc(f.label)}:</strong> ${esc(String(it.specs[f.key]))}</div>`).join('')}</div></div>`:'';
+  const revisionNote=it.needsRevision?latestClientFeedbackNote(it):null;
   el.innerHTML=`
     ${itemworkBackBtnHtml()}
-    <div class="page-header"><div class="ptitle"><i class="ti ti-box"></i> ${esc(it.name||'بند')}</div><span class="badge ${dept==='done'?'b-done':'b-new'}">${WF_DEPT_META[dept]?.label||dept}</span></div>
+    <div class="page-header"><div class="ptitle"><i class="ti ti-box"></i> ${esc(it.name||'بند')}</div><div style="display:flex;gap:6px;flex-wrap:wrap;">${it.needsRevision?`<span class="revision-badge"><i class="ti ti-refresh"></i> يتطلب تعديل</span>`:''}<span class="badge ${dept==='done'?'b-done':'b-new'}">${WF_DEPT_META[dept]?.label||dept}</span></div></div>
+    ${revisionNote?`<div class="revision-notes-box" style="margin-bottom:14px;"><div class="rn-title"><i class="ti ti-message-2"></i> ملاحظات مراجعة العميل</div>${revisionNote.notes?`<div class="rn-text">${esc(revisionNote.notes)}</div>`:''}${(revisionNote.files&&revisionNote.files.length)?`<div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px;">${revisionNote.files.map(f=>fileLinkHtml(f.name,f.data)).join('')}</div>`:''}<div style="font-size:10px;color:#9A3412;margin-top:6px;opacity:.8;">${esc(revisionNote.createdBy||'—')} · ${fmtDateTime(revisionNote.createdAt)}</div></div>`:''}
     <div class="card" style="margin-bottom:14px;padding:16px 20px 8px;">${buildOrderProgressTimeline(o,key)}</div>
     <div class="card" style="margin-bottom:14px;">
       <div style="padding:18px 20px;display:flex;flex-direction:column;gap:12px;">
@@ -6958,7 +6998,18 @@ async function loadAndRenderChat(orderKey){
   }catch(e){container.innerHTML='<div style="text-align:center;color:#EF4444;font-size:11px;padding:16px;">خطأ في تحميل الرسائل</div>';}
 }
 function markChatSeen(orderKey){try{localStorage.setItem('chatSeen_'+cu._uname+'_'+orderKey,new Date().toISOString());}catch(e){}}
-function markOrderUpdateSeen(key){try{localStorage.setItem('itemUpdateSeen_'+cu._uname+'_'+key,new Date().toISOString());}catch(e){}}
+// Server-backed (orderSeen/{uname}/{orderKey}), not localStorage — a
+// device/browser-local flag meant "opened it on my phone" still showed
+// "جديد" when the same account opened the same order from a desktop or an
+// incognito window. Updates the in-memory cache immediately (so the badge
+// disappears without waiting on a round trip) and persists it via a PATCH
+// (merges just this one key, doesn't clobber the rest of the user's map).
+function markOrderUpdateSeen(key){
+  if(!cu)return;
+  const now=new Date().toISOString();
+  orderSeenMap[key]=now;
+  fbPatch('orderSeen/'+cu._uname,{[key]:now}).catch(()=>{});
+}
 function hasOrderUpdate(o){
   if(!o||!o._key)return false;
   // Prefer the explicit item/reassignment/transfer signal; fall back to the
@@ -6969,8 +7020,7 @@ function hasOrderUpdate(o){
   if(!signalAt)return false;
   const signalBy=o.lastItemUpdateBy||o.createdBy;
   if(signalBy&&signalBy===cu.name)return false;
-  let lastSeen='1970-01-01T00:00:00.000Z';
-  try{lastSeen=localStorage.getItem('itemUpdateSeen_'+cu._uname+'_'+o._key)||lastSeen;}catch(e){}
+  const lastSeen=(orderSeenMap&&orderSeenMap[o._key])||'1970-01-01T00:00:00.000Z';
   return signalAt>lastSeen;
 }
 async function sendChatMsg(orderKey){
@@ -8071,7 +8121,10 @@ function openOrderModal(key){
   // from the pencil quick-action / ⋮ menu — inline editing here is locked to
   // avoid accidental changes outside the explicit edit flow.
   const _reassignBoxHtml='';
-  const _mgrQuickButtonsHtml=(canAct&&o.currentDept!=='done'&&(_otherDeptChipsHtml||_deptCardsHtml))?`<div class="od-mgr-quick-row">
+  // Admin-only: designers previously saw these too whenever canAct was true
+  // for their own order (isMyOrder(o)) — these are manager-facing shortcuts,
+  // not something the assigned designer needs on their own order.
+  const _mgrQuickButtonsHtml=(cu.type==='admin'&&o.currentDept!=='done'&&(_otherDeptChipsHtml||_deptCardsHtml))?`<div class="od-mgr-quick-row">
       <button class="btn btn-out btn-sm" onclick="omJumpToDeptTools()"><i class="ti ti-brush"></i> اعتماد بروفة</button>
       <button class="btn btn-out btn-sm" onclick="omJumpToDeptTools()"><i class="ti ti-tools"></i> اعتماد ورشة</button>
     </div>`:'';
@@ -8129,7 +8182,7 @@ function openOrderModal(key){
           ${renderOrderItemsCards(o,key,canAct)}
         </div>
         ${_deptToolsAcc}
-        ${getActiveDepts(o).includes('design')?buildProofApprovalSection(o,key,canAct):''}
+        ${(cu.type!=='designer'&&getActiveDepts(o).includes('design'))?buildProofApprovalSection(o,key,canAct):''}
         ${maintOrderRow}
         ${maintenanceRow}
         <div style="margin-bottom:16px;">
