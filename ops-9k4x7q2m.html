@@ -297,6 +297,7 @@ tbody tr:hover td{background:var(--surface-2);}
 .proof-pill{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:8px;font-size:10.5px;font-weight:800;white-space:nowrap;}
 .proof-waiting{background:#FEF3C7;color:#92400E;}
 .proof-approved{background:#D1FAE5;color:#065F46;}
+.proof-revision{background:#FFEDD5;color:#9A3412;}
 .revision-badge{background:linear-gradient(135deg,#F97316,#EF4444);color:#fff;padding:3px 10px;border-radius:20px;font-size:10.5px;font-weight:800;display:inline-flex;align-items:center;gap:4px;white-space:nowrap;}
 .revision-notes-box{background:#FFF7ED;border:1.5px solid #FDBA74;border-radius:10px;padding:10px 12px;margin-top:8px;}
 .revision-notes-box .rn-title{font-size:11px;font-weight:800;color:#9A3412;display:flex;align-items:center;gap:5px;margin-bottom:4px;}
@@ -3081,6 +3082,26 @@ function itemVersions(it){
   if(!legacyFiles.length)return[];
   return[{id:'legacy',label:'النسخة الأصلية',status:'قيد التنفيذ',files:legacyFiles,notes:it.details||'',createdBy:it.addedBy||it.createdBy||'—',createdAt:it.addedAt||it.createdAt||'',_legacy:true}];
 }
+// THE FIX for the "disappearing attachments" bug: itemVersions() above only
+// ever returns it.versions once that array is non-empty — it stops looking
+// at the old flat it.files/it.fileData permanently from that point on. Every
+// write path that builds a new versions[] array for an item still on the
+// legacy (pre-versions[]) schema MUST go through this helper, which promotes
+// the synthesized legacy pseudo-version into a real, permanently-persisted
+// entry (stripping _legacy and giving it a proper unique id) instead of
+// discarding it — the previous pattern of
+// `itemVersions(it).filter(v=>!v._legacy)` did exactly the discarding, which
+// is why a legacy item's original files vanished from every render path the
+// instant any new version got saved on it, even though the raw it.files
+// field was still sitting untouched (and now unreachable) in Firebase.
+function priorVersionsForWrite(it){
+  if(Array.isArray(it.versions))return it.versions;
+  return itemVersions(it).map(v=>{
+    if(!v._legacy)return v;
+    const{_legacy,...rest}=v;
+    return{...rest,id:'v'+Date.now()+Math.random().toString(36).slice(2,6)};
+  });
+}
 // Workflow control rule: an item cannot move to its next stage until the
 // required deliverable for its CURRENT stage exists — a client-approved
 // design version (with files) while at the design stage, or simply an
@@ -3204,7 +3225,7 @@ async function saveNewItemVersion(key,idx){
   showSaving('جاري حفظ النسخة...');
   try{
     const items=[...o.orderItems];
-    const priorVersions=Array.isArray(items[idx].versions)?items[idx].versions:itemVersions(items[idx]).filter(v=>!v._legacy);
+    const priorVersions=priorVersionsForWrite(items[idx]);
     items[idx]={...items[idx],versions:[...priorVersions,newVersion]};
     await fbPatch(`orders/${key}`,{orderItems:items});
     await loadData();hideSaving();toast('✓ تم إضافة نسخة تصميم جديدة');
@@ -3234,12 +3255,17 @@ async function saveItemKindFiles(key,idx,kind,inputId){
     }
     const newVersion={id:'v'+Date.now(),label:ITEM_KIND_LABELS[kind]||kind,status:'قيد التنفيذ',stage:itemCurrentDept(it,o),kind,files:uploaded,notes:'',createdBy:cu.name,createdAt:new Date().toISOString()};
     const items=[...o.orderItems];
-    const priorVersions=Array.isArray(items[idx].versions)?items[idx].versions:itemVersions(items[idx]).filter(v=>!v._legacy);
+    const priorVersions=priorVersionsForWrite(items[idx]);
     // A fresh design_proof/design_approved upload resolves whatever client
     // feedback sent this item back for revision — clear the flag so it
     // reads as a normal in-progress item again instead of still flagging
     // "🔄 يتطلب تعديل" once the requested rework has actually been done.
-    items[idx]={...items[idx],versions:[...priorVersions,newVersion],needsRevision:(kind==='design_proof'||kind==='design_approved'||kind==='workshop_production')?false:items[idx].needsRevision};
+    // A fresh proof upload also invalidates any prior client approval — that
+    // approval was for the version(s) that existed before this one, not for
+    // whatever just got uploaded, so it needs to be re-earned via a fresh
+    // approveItemProof() call rather than silently carrying over.
+    const isFreshProofKind=kind==='design_proof'||kind==='design_approved'||kind==='workshop_production';
+    items[idx]={...items[idx],versions:[...priorVersions,newVersion],needsRevision:isFreshProofKind?false:items[idx].needsRevision,clientApproved:isFreshProofKind?false:items[idx].clientApproved};
     // Auto-advance: once this upload satisfies every required design file for
     // the item (design_approved/design_proof, or workshop_production on a
     // workshop-only path), it leaves the designer's queue immediately rather
@@ -3267,27 +3293,30 @@ async function saveItemKindFiles(key,idx,kind,inputId){
     _refreshOrderItemsViews(key);
   }catch(e){hideSaving();toast(e&&e.message?e.message:'❌ فشل الرفع');}
 }
-async function toggleVersionApproval(key,itemIdx,versionId){
+// Reception/manager-facing approval action — the sibling of
+// openClientFeedbackPanel()/saveClientFeedback() (the "تعديل مطلوب" path):
+// where that one tags the item needsRevision, this one tags it clientApproved.
+// A plain item-level boolean instead of a per-version status field (the
+// previous toggleVersionApproval() attempt at this, which had no caller
+// anywhere in the UI and was never actually reachable) — itemDesignColumn()
+// reads it directly, so it drives the exact same badge shown on the item
+// card, the Item Workspace page, and the order header strip.
+function canApproveClientProof(){return cu.type==='admin'||cu.type==='receiver';}
+async function approveItemProof(key,idx){
+  if(!canApproveClientProof()){toast('⚠️ هذا الإجراء متاح للمدير أو موظف الاستقبال فقط');return;}
   const o=orders[key];if(!o)return;
-  if(cu.type!=='admin'&&!isMyOrder(o)){toast('⚠️ هذا الإجراء غير متاح لك');return;}
-  const it=o.orderItems[itemIdx];if(!it)return;
-  const versions=itemVersions(it).filter(v=>!v._legacy);
-  const vIdx=versions.findIndex(v=>v.id===versionId);if(vIdx===-1)return;
-  const approved=versions[vIdx].status==='معتمد من العميل';
-  showSaving('جاري التحديث...');
+  const it=o.orderItems&&o.orderItems[idx];if(!it)return;
+  showSaving('جاري الاعتماد...');
   try{
     const items=[...o.orderItems];
-    const newVersions=[...versions];
-    newVersions[vIdx]={...newVersions[vIdx],status:approved?'قيد التنفيذ':'معتمد من العميل',approvedBy:approved?null:cu.name,approvedAt:approved?null:new Date().toISOString()};
-    items[itemIdx]={...items[itemIdx],versions:newVersions};
-    await fbPatch(`orders/${key}`,{orderItems:items});
-    await loadData();hideSaving();toast(approved?'تم إلغاء الاعتماد':'✓ تم اعتماد النسخة من العميل');
-    // Un-approving just reverts a version to "in progress" — there is no
-    // separate "client rejected" state in the schema, so only the approval
-    // transition (not its reversal) is worth notifying the designer about.
-    if(!approved)pushNotification({type:'client_approved',message:`تم اعتماد نسخة تصميم من العميل — الطلب ${esc(o.id||key)}`,orderKey:key,orderId:o.id,client:o.client,targetUname:(o.designTo&&o.designTo!=='none')?o.designTo:'all-admin'});
+    items[idx]={...items[idx],clientApproved:true,clientApprovedBy:cu.name,clientApprovedAt:new Date().toISOString()};
+    const upd={orderItems:items,lastItemUpdateAt:new Date().toISOString(),lastItemUpdateBy:cu.name};
+    await fbPatch(`orders/${key}`,upd);
+    await loadData();hideSaving();toast('✓ تم اعتماد التصميم من العميل');
+    const dTo=orders[key]&&orders[key].designTo;
+    if(dTo&&dTo!=='none')pushNotification({type:'client_approved',message:`تم اعتماد التصميم من العميل — الطلب ${esc(o.id||key)}`,orderKey:key,orderId:o.id,client:o.client,targetUname:dTo==='all'?'all-admin':dTo});
     _refreshOrderItemsViews(key);
-  }catch(e){hideSaving();toast('❌ فشل التحديث');}
+  }catch(e){hideSaving();toast('❌ فشل الاعتماد');}
 }
 // Re-render whichever order-handling view is currently showing this order,
 // without a full page rebuild — keeps the user in place after a version/item
@@ -3330,6 +3359,8 @@ function renderOrderItemsCards(o,key,canAct){
   function renderOneItemGridCard(it,i){
     const dept=itemCurrentDept(it,o);
     const dims=itemDimensionsText(it);
+    const dcol=itemDesignColumn(it);
+    const statusMeta=ITEM_DESIGN_STATUS[dcol];
     const revisionNote=it.needsRevision?latestClientFeedbackNote(it):null;
     return `<div class="order-item-card" data-search="${esc((it.name||'').toLowerCase())}">
       <div class="oi-card-head" style="cursor:default;">
@@ -3339,18 +3370,20 @@ function renderOrderItemsCards(o,key,canAct){
           ${it.qty?`<span class="oi-card-qty">×${esc(String(it.qty))}</span>`:''}
         </div>
         <div style="display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end;">
-          ${it.needsRevision?`<span class="revision-badge"><i class="ti ti-refresh"></i> يتطلب تعديل</span>`:''}
+          ${dcol==='revision'?`<span class="revision-badge"><i class="ti ti-refresh"></i> يتطلب تعديل</span>`
+            :(dcol==='waiting'||dcol==='approved')?`<span class="badge ${statusMeta.cls}"><i class="ti ${statusMeta.icon}"></i> ${statusMeta.label}</span>`:''}
           <span class="badge ${dept==='done'?'b-done':'b-new'}">${WF_DEPT_META[dept]?.label||dept}</span>
         </div>
       </div>
       ${dims?`<div style="font-size:11px;color:var(--text-2);margin-top:6px;"><i class="ti ti-ruler-2"></i> ${dims}</div>`:''}
       <div style="margin-top:8px;">${gpbadge(o.priority)}</div>
       ${revisionNote?`<div class="revision-notes-box"><div class="rn-title"><i class="ti ti-message-2"></i> ملاحظات مراجعة العميل</div>${revisionNote.notes?`<div class="rn-text">${esc(revisionNote.notes)}</div>`:''}${(revisionNote.files&&revisionNote.files.length)?`<div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px;">${revisionNote.files.map(f=>fileLinkHtml(f.name,f.data)).join('')}</div>`:''}</div>`:''}
-      <div style="display:flex;gap:6px;margin-top:10px;">
+      <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap;">
         ${(canSeeWhatsappBtn()&&o.phone&&o.phone!=='—')?`<button class="btn btn-whatsapp btn-sm" onclick="event.stopPropagation();openWhatsapp('${encodeURIComponent(o.phone)}')" title="واتساب"><i class="ti ti-brand-whatsapp"></i></button>`:''}
-        ${canSeeClientFeedback()?`<button class="btn btn-out btn-sm" onclick="event.stopPropagation();openClientFeedbackPanel('${key}',${i})" title="ردود وملاحظات العميل"><i class="ti ti-message-2"></i></button>`:''}
-        <button class="btn btn-brand btn-sm" style="flex:1;justify-content:center;" onclick="openItemWorkspace('${key}',${i})"><i class="ti ti-arrow-left"></i> فتح البند</button>
+        ${canSeeClientFeedback()?`<button class="btn btn-out btn-sm" onclick="event.stopPropagation();openClientFeedbackPanel('${key}',${i})"><i class="ti ti-message-2"></i> تعديل مطلوب</button>`:''}
+        ${(canApproveClientProof()&&dcol==='waiting')?`<button class="btn btn-green btn-sm" onclick="event.stopPropagation();approveItemProof('${key}',${i})"><i class="ti ti-circle-check"></i> تعميد التصميم</button>`:''}
       </div>
+      <button class="btn btn-brand btn-sm" style="width:100%;justify-content:center;margin-top:8px;" onclick="openItemWorkspace('${key}',${i})"><i class="ti ti-arrow-left"></i> فتح البند</button>
     </div>`;
   }
   // With many items the grid gets long and hard to scan — a quick name
@@ -3435,12 +3468,12 @@ async function saveClientFeedback(){
   try{
     const newVersion={id:'v'+Date.now(),label:'رد العميل',status:'قيد التنفيذ',stage:'design',kind:'client_feedback',files,notes,createdBy:cu.name,createdAt:new Date().toISOString()};
     const items=[...o.orderItems];
-    const priorVersions=Array.isArray(items[idx].versions)?items[idx].versions:itemVersions(items[idx]).filter(v=>!v._legacy);
+    const priorVersions=priorVersionsForWrite(items[idx]);
     // needsRevision forces itemDesignColumn() back to "قيد التصميم" even
     // though older design_proof/design_approved versions still exist in
     // history — otherwise a stale prior proof would make the item look like
     // it's already "بانتظار رد العميل" again instead of needing fresh work.
-    items[idx]={...items[idx],versions:[...priorVersions,newVersion],needsRevision:true,currentDept:'design'};
+    items[idx]={...items[idx],versions:[...priorVersions,newVersion],needsRevision:true,clientApproved:false,currentDept:'design'};
     const upd={orderItems:items,lastItemUpdateAt:new Date().toISOString(),lastItemUpdateBy:cu.name};
     const newOrderDept=computeOrderDeptFromItems(o,items);
     if(newOrderDept&&newOrderDept!==o.currentDept){upd.currentDept=newOrderDept;upd.stageStartDate=new Date().toISOString();}
@@ -4161,23 +4194,22 @@ function wfMatchesFilters(o,f){
   }
   return true;
 }
-// ── Proof & Client Status (module 3, column 4) ──────────────────────────
-// Derived from item version data already tracked for design/print proof
-// approval (v.status === 'معتمد من العميل'), scoped to the order's current
-// active department so a print-stage order isn't shown against a stale
-// design-stage proof. No new schema — a read over existing item versions.
+// ── Proof & Client Status (module 3, column 4; also the order header strip
+// pill in openOrderModal) — aggregates itemDesignColumn() across every item
+// so the SAME wording/logic drives the workflow list table, the order
+// header, and each individual item card/Item Workspace page instead of each
+// surface deriving its own notion of "proof status". Any item needing a
+// revision wins (most urgent); otherwise any item still awaiting a client
+// response shows "sent"; only once EVERY item has been explicitly approved
+// (it.clientApproved, via approveItemProof()) does the order show approved.
 function proofStatusForOrder(o){
-  const dept=o.currentDept||'design';
-  if(dept==='done')return null;
-  let hasApproved=false,hasPending=false;
-  (o.orderItems||[]).forEach(it=>{
-    itemVersionsForStage(it,dept).forEach(v=>{
-      if(v._legacy||!v.files||!v.files.length)return;
-      if(v.status==='معتمد من العميل')hasApproved=true;else hasPending=true;
-    });
-  });
-  if(hasPending)return{key:'waiting',label:'بانتظار العميل',icon:'ti-send'};
-  if(hasApproved)return{key:'approved',label:'العميل اعتمد',icon:'ti-message-circle-check'};
+  if(o.currentDept==='done')return null;
+  const items=o.orderItems||[];
+  if(!items.length)return null;
+  const cols=items.map(itemDesignColumn);
+  if(cols.includes('revision'))return{key:'revision',label:'🔄 يتطلب تعديل — رد من العميل',icon:'ti-refresh'};
+  if(cols.includes('waiting'))return{key:'waiting',label:'📤 تم إرسال البروفة',icon:'ti-send'};
+  if(cols.every(c=>c==='approved'))return{key:'approved',label:'✅ تم الاعتماد من العميل',icon:'ti-circle-check'};
   return null;
 }
 // ── Delivery countdown text (module 3, column 5) ──
@@ -4272,14 +4304,15 @@ function toggleWfFilterFlag(key){
 // MODULE 4 — DESIGNER WORKFLOW BOARD (item-level, grouped by parent order)
 // ============================================================
 // Status classification reuses the SAME per-item-kind files that already
-// gate real stage advancement (itemStageRequirementMet) — 'design_proof'
-// (بروفة sent) and 'design_approved' (client-approved artwork). There is no
-// steady-state "Approved" bucket in the designer view: saveItemKindFiles()
-// now auto-advances an item the instant its upload satisfies every required
-// design file, so it leaves the design queue immediately instead of sitting
-// around waiting for a manual "send" click. 'approved' can still be returned
-// here defensively (e.g. legacy data saved before that auto-advance existed)
-// so nothing is silently lost, but it should be rare/transient in practice.
+// gate real stage advancement (itemStageRequirementMet) — 'design_proof'/
+// 'design_approved' kind files existing means a proof was SENT ('waiting'),
+// while itemDesignColumn()'s 'approved' state is a separate, explicit signal
+// (it.clientApproved, set by reception/manager via approveItemProof()) that
+// the client actually signed off — the two used to be conflated (any
+// design_approved-kind upload alone flipped the badge to "approved" with no
+// real client involvement). saveItemKindFiles() still auto-advances an item
+// out of the design stage the instant its files satisfy requirements, same
+// as before — that's independent of and unaffected by the approval signal.
 // Shared by the item card and the Item Workspace page's "ملاحظات مراجعة
 // العميل" section — both need the SAME most-recent client_feedback note,
 // so this is the one place that decides which version counts as "latest".
@@ -4293,9 +4326,17 @@ function itemDesignColumn(it){
   // version from a PRIOR cycle would misleadingly look "بانتظار رد العميل"
   // or "approved" again right after being sent back for rework.
   if(it.needsRevision)return'revision';
+  // 'approved' means the CLIENT approved (it.clientApproved, set by
+  // approveItemProof() — reception/manager's explicit "تعميد التصميم"
+  // action), not just "the designer uploaded a design_approved-kind file".
+  // Those used to be conflated: a proof sent for review looked identical to
+  // one the client had actually signed off on. clientApproved is cleared
+  // automatically the moment a newer proof/approved/production file gets
+  // uploaded (see saveItemKindFiles) or a revision gets requested, so it
+  // can't linger stale against a version the client never saw.
+  if(it.clientApproved)return'approved';
   const hasKind=k=>itemVersions(it).some(v=>!v._legacy&&(v.stage||'design')==='design'&&v.kind===k&&v.files&&v.files.length>0);
-  if(hasKind('design_approved'))return'approved';
-  if(hasKind('design_proof'))return'waiting';
+  if(hasKind('design_approved')||hasKind('design_proof'))return'waiting';
   return'todo';
 }
 // Unified single-page designer view: merges what used to be split across
@@ -4310,7 +4351,7 @@ function itemDesignColumn(it){
 const ITEM_DESIGN_STATUS={
   todo:{label:'قيد التصميم',icon:'ti-brush',cls:'b-proc'},
   waiting:{label:'📤 تم إرسال البروفة',icon:'ti-send',cls:'b-new'},
-  approved:{label:'✅ معتمد — جاهز للطباعة',icon:'ti-circle-check',cls:'b-done'},
+  approved:{label:'✅ تم الاعتماد من العميل',icon:'ti-circle-check',cls:'b-done'},
   revision:{label:'🔄 يتطلب تعديل — رد من العميل',icon:'ti-refresh',cls:'b-urg'},
 };
 function buildDesignerBoard(){
@@ -5451,10 +5492,16 @@ function buildItemWorkspacePage(){
   const queued=(window._newVerFiles&&window._newVerFiles[idx])||[];
   const specsHtml=(it.template&&PRODUCT_TEMPLATES[it.template]&&it.specs&&Object.values(it.specs).some(v=>v))
     ?`<div class="fg"><label>المواصفات / المقاسات</label><div style="font-size:12.5px;line-height:1.8;">${PRODUCT_TEMPLATES[it.template].fields.filter(f=>it.specs[f.key]).map(f=>`<div><strong>${esc(f.label)}:</strong> ${esc(String(it.specs[f.key]))}</div>`).join('')}</div></div>`:'';
+  const dcol=itemDesignColumn(it);
+  const statusMeta=ITEM_DESIGN_STATUS[dcol];
   const revisionNote=it.needsRevision?latestClientFeedbackNote(it):null;
   el.innerHTML=`
     ${itemworkBackBtnHtml()}
-    <div class="page-header"><div class="ptitle"><i class="ti ti-box"></i> ${esc(it.name||'بند')}</div><div style="display:flex;gap:6px;flex-wrap:wrap;">${it.needsRevision?`<span class="revision-badge"><i class="ti ti-refresh"></i> يتطلب تعديل</span>`:''}<span class="badge ${dept==='done'?'b-done':'b-new'}">${WF_DEPT_META[dept]?.label||dept}</span></div></div>
+    <div class="page-header"><div class="ptitle"><i class="ti ti-box"></i> ${esc(it.name||'بند')}</div><div style="display:flex;gap:6px;flex-wrap:wrap;">${dcol==='revision'?`<span class="revision-badge"><i class="ti ti-refresh"></i> يتطلب تعديل</span>`:(dcol==='waiting'||dcol==='approved')?`<span class="badge ${statusMeta.cls}"><i class="ti ${statusMeta.icon}"></i> ${statusMeta.label}</span>`:''}<span class="badge ${dept==='done'?'b-done':'b-new'}">${WF_DEPT_META[dept]?.label||dept}</span></div></div>
+    ${(canSeeClientFeedback()||canApproveClientProof())?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;">
+      ${canSeeClientFeedback()?`<button class="btn btn-out btn-sm" onclick="openClientFeedbackPanel('${key}',${idx})"><i class="ti ti-message-2"></i> تعديل مطلوب</button>`:''}
+      ${(canApproveClientProof()&&dcol==='waiting')?`<button class="btn btn-green btn-sm" onclick="approveItemProof('${key}',${idx})"><i class="ti ti-circle-check"></i> تعميد التصميم</button>`:''}
+    </div>`:''}
     ${revisionNote?`<div class="revision-notes-box" style="margin-bottom:14px;"><div class="rn-title"><i class="ti ti-message-2"></i> ملاحظات مراجعة العميل</div>${revisionNote.notes?`<div class="rn-text">${esc(revisionNote.notes)}</div>`:''}${(revisionNote.files&&revisionNote.files.length)?`<div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px;">${revisionNote.files.map(f=>fileLinkHtml(f.name,f.data)).join('')}</div>`:''}<div style="font-size:10px;color:#9A3412;margin-top:6px;opacity:.8;">${esc(revisionNote.createdBy||'—')} · ${fmtDateTime(revisionNote.createdAt)}</div></div>`:''}
     <div class="card" style="margin-bottom:14px;padding:16px 20px 8px;">${buildOrderProgressTimeline(o,key)}</div>
     <div class="card" style="margin-bottom:14px;">
@@ -8147,6 +8194,7 @@ function openOrderModal(key){
         <div class="od-header-meta">
           <span>الخدمة: <strong>${esc(o.service)}</strong></span>
           <span>الحالة: ${deptBadge(o.currentDept)}</span>
+          ${(()=>{const proof=proofStatusForOrder(o);return proof?`<span><i class="ti ${proof.icon}"></i> <strong class="proof-pill proof-${proof.key}">${proof.label}</strong></span>`:'';})()}
           <span>الأولوية: ${gpbadge(o.priority)}</span>
           <span>المسؤول: <strong>${esc(currentPersonName(o))}</strong></span>
           <span>أنشئ بواسطة: <strong>${esc(o.createdBy||'—')}</strong></span>
