@@ -1555,6 +1555,7 @@ input:focus,select:focus,textarea:focus{box-shadow:inset 0 1px 3px rgba(74,14,23
         <div class="page" id="page-urgent"><div id="urgent-content"></div></div>
         <div class="page" id="page-tasks"><div id="tasks-content"></div></div>
         <div class="page" id="page-itemwork"><div id="itemwork-content"></div></div>
+        <div class="page" id="page-orderdetails"><div id="orderdetails-content"></div></div>
       </div>
     </div>
   </div>
@@ -2308,7 +2309,7 @@ function renderNotifPanelBody(){
   if(filter!=='all')all=all.filter(n=>n.type===filter);
   const body=document.getElementById('notif-panel-body');
   if(all.length===0){body.innerHTML='<div style="text-align:center;color:var(--text-3);padding:30px;"><i class="ti ti-check" style="font-size:36px;color:#10B981;display:block;margin-bottom:10px;"></i>لا توجد تنبيهات</div>';return;}
-  body.innerHTML=all.map(n=>`<div style="display:flex;align-items:center;gap:10px;padding:13px 4px;border-bottom:1px solid var(--border-soft);cursor:pointer;" onclick="closeModal('notif-modal');${n.key?`openOrderModal('${n.key}')`:''}">
+  body.innerHTML=all.map(n=>`<div style="display:flex;align-items:center;gap:10px;padding:13px 4px;border-bottom:1px solid var(--border-soft);cursor:pointer;" onclick="closeModal('notif-modal');${n.key?`openOrderPage('${n.key}')`:''}">
     <div style="width:10px;height:10px;border-radius:50%;background:${n.color};flex-shrink:0;"></div>
     <div style="flex:1;"><div style="font-size:13px;font-weight:600;color:var(--text-1)">${n.msg}</div>${n.isEvent?`<div style="font-size:10.5px;color:var(--text-3);margin-top:2px;">${notifTimeAgo(n.createdAt)}</div>`:''}</div>
   </div>`).join('');
@@ -3536,7 +3537,7 @@ async function approveItemProof(key,idx){
 // without a full page rebuild — keeps the user in place after a version/item
 // action, exactly like the rest of the order-detail actions already do.
 function _refreshOrderItemsViews(key){
-  if(window._openOrderModalKey===key&&document.getElementById('order-modal')?.classList.contains('open'))openOrderModal(key);
+  if(_curPage==='orderdetails'&&window._orderDetailsKey===key)buildOrderDetailsPage();
   if(window._wfInlinePanelKey===key)openWfInlinePanel(key,true);
   // Per-item actions (upload, advance) are also reachable from the
   // standalone Item Workspace page and the designer board — refresh
@@ -4224,8 +4225,8 @@ function renderWfFilesView(){
       <th style="width:90px;">رقم الطلب</th><th>العميل</th><th>الملف / البند</th><th style="width:130px;">رفع بواسطة</th><th style="width:130px;">التاريخ</th><th style="width:90px;"></th>
     </tr></thead><tbody>${rows.length?rows.map(r=>`
       <tr data-search="${esc((r.orderId+' '+r.client+' '+r.fileName).toLowerCase())}">
-        <td onclick="openOrderModal('${r.key}')" style="cursor:pointer;"><strong style="color:var(--maroon)">${esc(r.orderId)}</strong></td>
-        <td onclick="openOrderModal('${r.key}')" style="cursor:pointer;font-size:12px;">${esc(r.client||'—')}</td>
+        <td onclick="openOrderPage('${r.key}')" style="cursor:pointer;"><strong style="color:var(--maroon)">${esc(r.orderId)}</strong></td>
+        <td onclick="openOrderPage('${r.key}')" style="cursor:pointer;font-size:12px;">${esc(r.client||'—')}</td>
         <td style="font-size:12px;"><i class="ti ${r.icon}"></i> ${esc(r.label)} <span style="color:var(--text-3);">(${esc(r.fileName)})</span></td>
         <td style="font-size:11.5px;">${esc(r.uploadedBy)}</td>
         <td style="font-size:11px;">${formatDate(r.uploadedAt)}</td>
@@ -4257,7 +4258,7 @@ function renderWfKanbanView(){
     const cardMenu=cu.type==='admin'?`<div class="wf-card-menu row-menu-wrap" onclick="event.stopPropagation();">
         <button class="btn btn-out btn-xs" style="padding:2px 6px;" onclick="toggleRowMenu('wfcm-${o._key}')"><i class="ti ti-dots-vertical"></i></button>
         <div class="row-menu" id="wfcm-${o._key}" style="display:none;">
-          <button onclick="closeAllRowMenus();openOrderModal('${o._key}')"><i class="ti ti-edit"></i> فتح / تعديل</button>
+          <button onclick="closeAllRowMenus();openOrderPage('${o._key}')"><i class="ti ti-edit"></i> فتح / تعديل</button>
           <button style="color:#DC2626;" onclick="deleteOrderSingle('${o._key}')"><i class="ti ti-trash"></i> حذف</button>
         </div>
       </div>`:'';
@@ -4475,7 +4476,7 @@ function orderQuickActionsHtml(o){
   const next=o.currentDept!=='done'?getNextDept(o):null;
   const waBtn=(typeof canSeeWhatsappBtn==='function'&&canSeeWhatsappBtn()&&o.phone)?`<button class="qbtn qbtn-wa" title="واتساب" onclick="openWhatsapp('${encodeURIComponent(o.phone)}')"><i class="ti ti-brand-whatsapp"></i></button>`:'';
   const advBtn=next?`<button class="qbtn qbtn-brand" title="نقل للمرحلة التالية" onclick="sendToNextDept('${o._key}','${next}')"><i class="ti ti-arrow-left"></i></button>`:'';
-  const viewBtn=`<button class="qbtn" title="عرض الطلب" onclick="openOrderModal('${o._key}')"><i class="ti ti-eye"></i></button>`;
+  const viewBtn=`<button class="qbtn" title="عرض الطلب" onclick="openOrderPage('${o._key}')"><i class="ti ti-eye"></i></button>`;
   return `<div style="display:flex;gap:5px;">${waBtn}${advBtn}${viewBtn}</div>`;
 }
 // ── Model-3 filter/search bar for the list view specifically ──
@@ -4602,7 +4603,7 @@ function designerOrderCardHtml(o,itemEntries){
   const itemsHtml=itemEntries.map(({it,idx})=>designerItemRowHtml(o,it,idx)).join('');
   const manyItems=itemEntries.length>5;
   return `<div class="designer-order-card" style="grid-column:1/-1;">
-    <div class="designer-order-head" onclick="openOrderModal('${o._key}')">
+    <div class="designer-order-head" onclick="openOrderPage('${o._key}')">
       <div style="display:flex;align-items:center;gap:8px;min-width:0;">
         <button class="designer-order-toggle" onclick="event.stopPropagation();toggleDesignerOrderCard('${o._key}')" title="فتح/إغلاق قائمة البنود"><i class="ti ti-chevron-down" id="dsb-chev-${o._key}"></i></button>
         <div style="min-width:0;"><strong>${esc(o.id||o._key)}</strong> <span style="color:var(--text-3);font-weight:600;">• ${esc(o.client||'—')}</span></div>
@@ -4646,7 +4647,7 @@ function designerItemRowHtml(o,it,idx){
   </div>`;
 }
 function designerSimpleOrderCardHtml(o){
-  return`<div class="wf-card" style="${o.isQuickTask?'border:2px solid #C89A4A;background:linear-gradient(135deg,#FFFDF8,#FFF5E0);':''}" onclick="openOrderModal('${o._key}')">${hasOrderUpdate(o)?'<span class="order-update-dot" title="تم تحديث بيانات الطلب"></span>':''}<div class="wf-card-top">
+  return`<div class="wf-card" style="${o.isQuickTask?'border:2px solid #C89A4A;background:linear-gradient(135deg,#FFFDF8,#FFF5E0);':''}" onclick="openOrderPage('${o._key}')">${hasOrderUpdate(o)?'<span class="order-update-dot" title="تم تحديث بيانات الطلب"></span>':''}<div class="wf-card-top">
     <div class="wf-card-id">${o.id||o._key} · ${orderDateTime(o)}${o.isQuickTask?'<span class="urgent-tag" style="margin-right:6px;font-size:9px;background:linear-gradient(135deg,#78350F,#C89A4A);"><i class="ti ti-bolt"></i>مهمة سريعة</span>':''}</div>
     <div class="wf-card-name">${esc(o.client)}</div>
     <div class="wf-card-svc">${esc(o.service)}</div>
@@ -4676,7 +4677,7 @@ function renderProductionQueueBody(deptForType){
     <thead><tr><th style="width:120px">رقم الطلب</th><th>العميل والخدمة</th><th style="width:135px">موعد التسليم</th><th style="width:105px">إجراءات</th></tr></thead>
     <tbody>${arr.map(o=>{
       const countdown=deliveryCountdownText(o);
-      return `<tr class="wf-dense-row" onclick="openOrderModal('${o._key}')">
+      return `<tr class="wf-dense-row" onclick="openOrderPage('${o._key}')">
         <td><strong style="color:var(--maroon);">${esc(o.id||o._key)}</strong><div style="display:flex;gap:4px;margin-top:4px;">${orderRowBadges(o)}</div></td>
         <td><div style="font-weight:800;font-size:12.5px;">${esc(o.client||'—')}</div><div style="font-size:11px;color:var(--text-3);margin-top:2px;">${orderItemSummary(o)}</div></td>
         <td><span class="countdown-pill cd-${countdown.cls||'none'}">${countdown.text}</span></td>
@@ -4732,8 +4733,8 @@ function wfDayJobCardHtml(o){
     </div>
     <div style="font-size:10.5px;color:var(--text-3);margin-bottom:8px;"><i class="ti ti-calendar-time"></i> وقت التسليم: ${deadlineDateTime(o)}</div>
     <div style="display:flex;gap:6px;flex-wrap:wrap;">
-      <button class="btn btn-out btn-xs" onclick="openOrderModal('${o._key}')"><i class="ti ti-eye"></i> فتح الطلب</button>
-      <button class="btn btn-out btn-xs" onclick="openOrderModal('${o._key}')"><i class="ti ti-edit"></i> تعديل</button>
+      <button class="btn btn-out btn-xs" onclick="openOrderPage('${o._key}')"><i class="ti ti-eye"></i> فتح الطلب</button>
+      <button class="btn btn-out btn-xs" onclick="openOrderPage('${o._key}')"><i class="ti ti-edit"></i> تعديل</button>
       ${next?`<button class="btn btn-brand btn-xs" onclick="sendToNextDept('${o._key}','${next}');closeWfDayPanel();"><i class="ti ti-arrow-left"></i> تغيير الحالة</button>`:''}
     </div>
   </div>`;
@@ -4866,7 +4867,7 @@ function renderWfListView(){
     const countdown=deliveryCountdownText(o);
     const proof=proofStatusForOrder(o);
     const searchHay=esc(`${o.id||o._key} ${o.client||''} ${o.phone||''}`.toLowerCase());
-    return `<tr data-search="${searchHay}" class="wf-dense-row${overdue?' wf-row-overdue':''}" onclick="openOrderModal('${o._key}')">
+    return `<tr data-search="${searchHay}" class="wf-dense-row${overdue?' wf-row-overdue':''}" onclick="openOrderPage('${o._key}')">
       <td>
         <div style="display:flex;flex-direction:column;gap:4px;">
           <strong style="color:var(--maroon);">${esc(o.id||o._key)}</strong>
@@ -4901,7 +4902,7 @@ function renderWfTimelineView(){
       <div class="wf-tl-date">${formatDate(d)}</div>
       <div class="wf-tl-items">${byDate[d].map(o=>{
         const meta=WF_DEPT_META[o.currentDept]||{color:'#94A3B8'};
-        return `<div class="wf-tl-item" onclick="openOrderModal('${o._key}')">
+        return `<div class="wf-tl-item" onclick="openOrderPage('${o._key}')">
           <span class="wf-cal-dot" style="background:${meta.color}"></span>
           <strong>${esc(o.client||'—')}</strong> — <span style="color:var(--text-2)">${esc(o.service||'—')}</span> ${deptBadge(o.currentDept)} ${gpbadge(o.priority)}
         </div>`;
@@ -4924,7 +4925,7 @@ function wfCardClick(e,key){
     // this is the one place users open an order from the Kanban board, so
     // routing everyone through the same function is what keeps the view
     // from fragmenting again.
-    openOrderModal(key);
+    openOrderPage(key);
   }
 }
 // ============================================================
@@ -4932,7 +4933,7 @@ function wfCardClick(e,key){
 // Reuses the exact same `orders` data/fields as the Kanban board and the
 // full order modal — no separate store, nothing renamed/added. Deeper
 // editing (items, chat, dept-file approvals, reassignment) still routes
-// through the existing openOrderModal(); this panel is the at-a-glance +
+// through the existing openOrderPage(); this panel is the at-a-glance +
 // quick-action surface requested for inline expansion under the board.
 // ============================================================
 function wfRemainingLabel(o){
@@ -5019,7 +5020,7 @@ function openWfInlinePanel(key,skipScroll){
       <div class="wf-detail-actions">
         ${nextBtn} ${revertBtn}
         <button class="btn btn-out btn-sm" onclick="openTimelineModal('${key}')"><i class="ti ti-clock"></i> مراحل الطلب</button>
-        <button class="btn btn-out btn-sm" onclick="openOrderModal('${key}')"><i class="ti ti-arrows-maximize"></i> فتح النافذة الكاملة</button>
+        <button class="btn btn-out btn-sm" onclick="openOrderPage('${key}')"><i class="ti ti-arrows-maximize"></i> فتح النافذة الكاملة</button>
       </div>
     </div>`;
   slot.classList.add('open');
@@ -5213,7 +5214,7 @@ function buildDeptStagePage(){
     .sort((a,b)=>new Date(b.date)-new Date(a.date));
   window._deptStageSelected=new Set();
   const searchBlob=o=>esc([o.id,o._key,o.client,o.service].filter(Boolean).join(' ').toLowerCase());
-  const rows=arr.map(o=>isCompleted?`<tr data-search="${searchBlob(o)}" onclick="openOrderModal('${o._key}')" style="cursor:pointer;">
+  const rows=arr.map(o=>isCompleted?`<tr data-search="${searchBlob(o)}" onclick="openOrderPage('${o._key}')" style="cursor:pointer;">
     ${canDelete?`<td style="width:150px;" onclick="event.stopPropagation()">
       <div class="deptstage-action-box">
         <input type="checkbox" class="deptstage-check" data-key="${o._key}" onchange="toggleDeptStageSelect('${o._key}',this.checked)" title="تحديد للحذف الجماعي"/>
@@ -5226,11 +5227,11 @@ function buildDeptStagePage(){
     <td style="font-size:12px;">${esc(o.service||'—')}</td>
     <td style="font-size:12px;">${esc(o.createdBy||'—')}</td>
     <td style="font-size:11px;">${o.date||'—'}</td>
-  </tr>`:`<div class="wf-card" data-search="${searchBlob(o)}"${hasAssignee?` data-assignee="${esc(o[assigneeField]||'')}"`:''} onclick="openOrderModal('${o._key}')" style="cursor:pointer;">
+  </tr>`:`<div class="wf-card" data-search="${searchBlob(o)}"${hasAssignee?` data-assignee="${esc(o[assigneeField]||'')}"`:''} onclick="openOrderPage('${o._key}')" style="cursor:pointer;">
     ${cu.type==='admin'?`<div class="row-menu-wrap" style="position:absolute;top:8px;left:8px;z-index:2;" onclick="event.stopPropagation()">
       <button class="btn btn-out btn-xs" style="padding:2px 6px;" onclick="toggleRowMenu('dsam-${o._key}')" title="إجراءات سريعة"><i class="ti ti-dots-vertical"></i></button>
       <div class="row-menu" id="dsam-${o._key}" style="display:none;">
-        <button onclick="closeAllRowMenus();openOrderModal('${o._key}')"><i class="ti ti-edit"></i> فتح / تعديل</button>
+        <button onclick="closeAllRowMenus();openOrderPage('${o._key}')"><i class="ti ti-edit"></i> فتح / تعديل</button>
         <button style="color:#DC2626;" onclick="deleteOrderSingle('${o._key}')"><i class="ti ti-trash"></i> حذف</button>
       </div>
     </div>`:''}
@@ -5434,8 +5435,8 @@ function buildExternalDashboard(){
     <div class="wf-stat-top"><div class="wf-stat-icon" style="background:${color};"><i class="ti ${icon}"></i></div><div><div class="wf-stat-num">${num}</div><div class="wf-stat-lbl">${label}</div></div></div>
   </div>`;
   const jobRow=o=>`<tr>
-    <td onclick="openOrderModal('${o._key}')" style="cursor:pointer;"><strong style="color:var(--maroon)">${esc(o.id||o._key)}</strong></td>
-    <td onclick="openOrderModal('${o._key}')" style="cursor:pointer;font-size:12px;">${esc(o.client||'—')}</td>
+    <td onclick="openOrderPage('${o._key}')" style="cursor:pointer;"><strong style="color:var(--maroon)">${esc(o.id||o._key)}</strong></td>
+    <td onclick="openOrderPage('${o._key}')" style="cursor:pointer;font-size:12px;">${esc(o.client||'—')}</td>
     <td style="font-size:11.5px;">${esc(o.service||'—')}</td>
     <td style="font-size:11px;">${deadlineDateTime(o)}</td>
     <td>${gpbadge(o.priority)}</td>
@@ -5535,7 +5536,7 @@ function buildMyWork(){
   const simpleCards=myOrders.map(o=>{
       const isMnt=o.orderKind==='maintenance';
       const cardBorder=isMnt?'border:2px solid #DC2626;background:linear-gradient(135deg,#FEF2F2,#FFF5F5);':o.isQuickTask?'border:2px solid #C89A4A;background:linear-gradient(135deg,#FFFDF8,#FFF5E0);':'';
-      return`<div class="wf-card" style="${cardBorder}" onclick="openOrderModal('${o._key}')">${hasOrderUpdate(o)?'<span class="order-update-dot" title="تم تحديث بيانات الطلب"></span>':''}<div class="wf-card-top">
+      return`<div class="wf-card" style="${cardBorder}" onclick="openOrderPage('${o._key}')">${hasOrderUpdate(o)?'<span class="order-update-dot" title="تم تحديث بيانات الطلب"></span>':''}<div class="wf-card-top">
       <div class="wf-card-id">${o.id||o._key} · ${orderDateTime(o)}${isMnt?'<span class="urgent-tag" style="margin-right:6px;font-size:9px;background:linear-gradient(135deg,#991B1B,#DC2626);"><i class="ti ti-tool"></i>صيانة</span>':''}${o.isQuickTask?'<span class="urgent-tag" style="margin-right:6px;font-size:9px;background:linear-gradient(135deg,#78350F,#C89A4A);"><i class="ti ti-bolt"></i>مهمة سريعة</span>':''}</div>
       <div class="wf-card-name">${esc(o.client)}</div>
       <div class="wf-card-svc">${esc(o.service)}</div>
@@ -5575,25 +5576,19 @@ function buildMyWork(){
 // rather than introducing any new schema.
 // ============================================================
 function openItemWorkspace(orderKey,idx){
-  // Closing any open order modal first (rather than just navigating on top
-  // of it) avoids the backdrop staying locked/dimmed behind the Item
-  // Workspace page — nav('itemwork') swaps the underlying page, but a
-  // .modal-overlay it doesn't know about would otherwise keep intercepting
-  // clicks and blocking scroll on top of it.
-  closeModal('order-modal');
   window._itemworkKey=orderKey;window._itemworkIdx=idx;
   window._newVerFiles=window._newVerFiles||{};window._newVerFiles[idx]=[];
   markOrderUpdateSeen(orderKey);
   nav('itemwork');
 }
 // "رجوع" from the Item Workspace must land the user exactly back where they
-// almost always came from — the parent order's modal, open on the same item
-// grid — not the generic page-history back-stack (which would land on
-// whatever list page was showing, i.e. effectively the dashboard).
+// almost always came from — the parent order's details page, open on the
+// same item grid — not the generic page-history back-stack (which would
+// land on whatever list page was showing, i.e. effectively the dashboard).
 async function itemworkBack(){
   const key=window._itemworkKey;
   await nav(ROLE_LANDING[cu.type]||'dash',true);
-  if(key&&orders[key])openOrderModal(key);
+  if(key&&orders[key])openOrderPage(key);
 }
 function _itemworkState(){
   const key=window._itemworkKey;const idx=window._itemworkIdx;
@@ -5928,7 +5923,7 @@ function buildMaintRequestPage(){
 function buildMaintReqRows(warrantyOnly){
   const arr=ordersArr().filter(o=>o.orderKind==='maintenance'&&!!o.warrantyRequested===warrantyOnly).sort((a,b)=>new Date(b.createdAt||b.date)-new Date(a.createdAt||a.date)).slice(0,20);
   if(!arr.length)return'<tr><td colspan="4" style="text-align:center;color:var(--text-3);padding:24px">لا توجد طلبات بعد</td></tr>';
-  return arr.map(o=>`<tr onclick="openOrderModal('${o._key}')" style="cursor:pointer">
+  return arr.map(o=>`<tr onclick="openOrderPage('${o._key}')" style="cursor:pointer">
     <td><strong>${esc(o.client||'—')}</strong></td>
     <td style="font-size:12px;max-width:260px;">${esc(o.notes||'—')}${o.attachmentFile?` ${fileLinkHtml(o.attachmentFileName||'ملف',o.attachmentFile)}`:''}</td>
     <td>${o.currentDept==='done'?'<span class="badge b-done">تم الحل</span>':'<span class="badge" style="background:#FFEDD5;color:#9A3412;">قيد المعالجة</span>'}</td>
@@ -7556,7 +7551,7 @@ async function reassignOrderDept(key){
   upd.lastItemUpdateAt=new Date().toISOString();upd.lastItemUpdateBy=cu.name;
   showSaving('جاري تحديث المسؤول...');
   try{
-    await fbPatch(`orders/${key}`,upd);await loadData();hideSaving();toast('✓ تم تغيير الموظف المسؤول');openOrderModal(key);
+    await fbPatch(`orders/${key}`,upd);await loadData();hideSaving();toast('✓ تم تغيير الموظف المسؤول');openOrderPage(key);
     if(uname!=='none')pushNotification({type:'employee_changed',message:`تم تكليفك بالطلب ${esc(o.id||key)} — ${esc(WF_DEPT_META[dept]?.label||dept)}`,orderKey:key,orderId:o.id,client:o.client,targetUname:uname});
   }
   catch(e){hideSaving();toast('❌ فشل تحديث المسؤول');}
@@ -7675,7 +7670,7 @@ function openUnpaidOrderSummary(key){
         <span style="font-size:12px;color:var(--text-3);"><i class="ti ti-calendar"></i> ${o.date||'—'}</span>
       </div>
       ${orderPaymentBreakdownHtml(o)}
-      <button class="btn btn-out btn-sm" style="width:100%;justify-content:center;" onclick="openOrderModal('${key}')"><i class="ti ti-file-text"></i> عرض تفاصيل الطلب كاملة</button>
+      <button class="btn btn-out btn-sm" style="width:100%;justify-content:center;" onclick="openOrderPage('${key}')"><i class="ti ti-file-text"></i> عرض تفاصيل الطلب كاملة</button>
     </div>
   `;
   openModal('order-modal');
@@ -7700,7 +7695,7 @@ function openOrderStageView(key){
     '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">'+
     deptBadge(o.currentDept)+stageTimeHtml+
     '<span style="font-size:12px;color:var(--text-3);"><i class="ti ti-calendar"></i> '+(o.date||'—')+'</span></div>'+
-    '<button class="btn btn-out btn-sm" style="width:100%;justify-content:center;" onclick="openOrderModal(\''+key+'\')"><i class="ti ti-file-text"></i> عرض تفاصيل الطلب كاملة</button>'+
+    '<button class="btn btn-out btn-sm" style="width:100%;justify-content:center;" onclick="openOrderPage(\''+key+'\')"><i class="ti ti-file-text"></i> عرض تفاصيل الطلب كاملة</button>'+
     '</div>';
   openModal('order-modal');
 }
@@ -7795,7 +7790,7 @@ function openOrderTimelineView(key){
     stageBar(o,key)+
     '<div><div style="font-size:12px;font-weight:800;color:var(--maroon);margin-bottom:6px;"><i class="ti ti-package"></i> بنود الطلب</div>'+itemsList+'</div>'+
     (stageDurationsHtml?'<div><div style="font-size:12px;font-weight:800;color:var(--maroon);margin-bottom:6px;"><i class="ti ti-hourglass"></i> الوقت المستغرق في كل مرحلة</div>'+stageDurationsHtml+'</div>':'')+
-    '<button class="btn btn-out btn-sm" style="width:100%;justify-content:center;" onclick="openOrderModal(\''+key+'\')"><i class="ti ti-file-text"></i> عرض تفاصيل الطلب كاملة</button>'+
+    '<button class="btn btn-out btn-sm" style="width:100%;justify-content:center;" onclick="openOrderPage(\''+key+'\')"><i class="ti ti-file-text"></i> عرض تفاصيل الطلب كاملة</button>'+
     '</div>';
   openModal('order-modal');
 }
@@ -7939,7 +7934,7 @@ async function uploadDesignProofField(key,field,inputId){
   try{
     const url=await convertFileToBase64(el.files[0],{order:key});
     const upd={};upd[field]=url;upd[field+'Name']=el.files[0].name;
-    await fbPatch(`orders/${key}`,upd);await loadData();hideSaving();toast('✓ تم الرفع');openOrderModal(key);
+    await fbPatch(`orders/${key}`,upd);await loadData();hideSaving();toast('✓ تم الرفع');openOrderPage(key);
   }catch(e){hideSaving();toast(e&&e.message?e.message:'❌ فشل الرفع');}
 }
 async function saveDesignProofMeta(key,type){
@@ -7952,7 +7947,7 @@ async function saveDesignProofMeta(key,type){
     upd.workshopProofVersion=((document.getElementById('wsp-version')||{}).value||'').trim();
     upd.workshopProofNotes=((document.getElementById('wsp-notes')||{}).value||'').trim();
   }
-  try{await fbPatch(`orders/${key}`,upd);await loadData();toast('✓ تم الحفظ');openOrderModal(key);}catch(e){toast('❌ فشل الحفظ');}
+  try{await fbPatch(`orders/${key}`,upd);await loadData();toast('✓ تم الحفظ');openOrderPage(key);}catch(e){toast('❌ فشل الحفظ');}
 }
 // The actual approved-design-file/workshop-proof-file UPLOADS now happen in
 // one place — the consolidated design-stage upload box in openOrderModal
@@ -8152,7 +8147,7 @@ async function submitOrderPaymentFromModal(key){
     const _res=await fbPush('requests',payload);
     await loadData();hideSaving();closeModal('add-item-modal');toast('✓ تم إرسال السند للمحاسب');
     if(_res&&_res.name&&typeof syncFinancialObligationToSheet==='function')syncFinancialObligationToSheet(_res.name);
-    openOrderModal(key);
+    openOrderPage(key);
   }catch(e){hideSaving();toast('❌ فشل الإرسال');}
 }
 // Manual deep-link only (mirrors openWhatsapp's existing "no automated
@@ -8178,20 +8173,31 @@ function omJumpToDeptTools(){
   wrap.scrollIntoView({behavior:'smooth',block:'center'});
 }
 // The app hides everything except #print-area while printing (see the global
-// @media print rule) — cloning the already-rendered modal body into it is the
-// simplest way to reuse that mechanism instead of building a second, separate
-// print-layout template that could drift out of sync with the on-screen one.
+// @media print rule) — cloning the already-rendered order details content
+// into it is the simplest way to reuse that mechanism instead of building a
+// second, separate print-layout template that could drift out of sync with
+// the on-screen one.
 function printOrderDetails(){
-  const src=document.getElementById('order-modal-body');
+  const src=document.getElementById('orderdetails-content');
   const dest=document.getElementById('print-area');
   if(!src||!dest)return;
   dest.innerHTML=`<div style="padding:24px;direction:rtl;">${src.innerHTML}</div>`;
   window.print();
   setTimeout(()=>{dest.innerHTML='';},500);
 }
-function openOrderModal(key){
-  const o=orders[key];if(!o)return;
-  window._openOrderModalKey=key;
+// Navigates to the dedicated full-page order view instead of opening a
+// modal — window._orderDetailsKey is read by buildOrderDetailsPage() below,
+// the same store-then-nav()-then-page-builder-reads-it pattern already used
+// by openItemWorkspace()/buildItemWorkspacePage()/_itemworkState().
+function openOrderPage(key){
+  window._orderDetailsKey=key;
+  nav('orderdetails');
+}
+function buildOrderDetailsPage(){
+  const key=window._orderDetailsKey;
+  const el=document.getElementById('orderdetails-content');if(!el)return;
+  const o=orders[key];
+  if(!o){el.innerHTML=`${backBtnHtml()}<div style="text-align:center;color:var(--text-3);padding:40px;"><i class="ti ti-mood-sad" style="font-size:32px;display:block;margin-bottom:8px;"></i>تعذر العثور على هذا الطلب</div>`;return;}
   const t=cu.type,isMine=isMyOrder(o),canAct=t==='admin'||isMine;
   const nd=getNextDept(o);
   const _prevDept=getPrevDept(o);
@@ -8321,7 +8327,7 @@ function openOrderModal(key){
   const _measureBtns=(k,cl,ph)=>`
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
       <button class="btn btn-brand btn-sm" onclick="transferQuickTaskToOrder('${k}')"><i class="ti ti-transfer"></i> تحويل لأمر تشغيل</button>
-      <button class="btn btn-sm" style="background:linear-gradient(135deg,#78350F,#C89A4A);color:#fff;" onclick="closeModal('order-modal');goToQuoteWithPrefill('${encodeURIComponent(cl||'')}','${encodeURIComponent(ph||'')}','${k}')"><i class="ti ti-receipt-2"></i> إنشاء عرض سعر</button>
+      <button class="btn btn-sm" style="background:linear-gradient(135deg,#78350F,#C89A4A);color:#fff;" onclick="goToQuoteWithPrefill('${encodeURIComponent(cl||'')}','${encodeURIComponent(ph||'')}','${k}')"><i class="ti ti-receipt-2"></i> إنشاء عرض سعر</button>
       <button class="btn btn-out btn-sm" onclick="markAsIncomplete('${k}')"><i class="ti ti-user-off"></i> لم يرغب العميل</button>
     </div>`;
   const _measureDone=o.isQuickTask&&o.workshopFeedbackDone&&o.currentDept!=='done'&&!o.incompleteClient&&(cu.type==='admin'||cu.type==='receiver');
@@ -8407,7 +8413,8 @@ function openOrderModal(key){
     </div>
     ${renderChatSection(key,o.currentDept==='done')}
   </div>`;
-  document.getElementById('order-modal-body').innerHTML=`
+  el.innerHTML=`
+    ${backBtnHtml()}
     <div class="od-header">
       <div class="od-header-main">
         <div class="od-header-title"><i class="ti ti-file-text"></i> ${o.id||key} — ${esc(o.client)}${o.orderKind==='maintenance'?'<span class="urgent-tag" style="font-size:9px;background:linear-gradient(135deg,#991B1B,#DC2626);"><i class="ti ti-tool"></i>صيانة</span>':''}${o.isQuickTask?'<span class="urgent-tag" style="font-size:9px;"><i class="ti ti-bolt"></i>مهمة سريعة</span>':''}</div>
@@ -8436,7 +8443,6 @@ function openOrderModal(key){
             ${_canArchive?`<button onclick="closeAllRowMenus();archiveOrder('${key}')" style="color:#DC2626;"><i class="ti ti-archive"></i> إنهاء الطلب وأرشفته</button>`:''}
           </div>
         </div>
-        <button class="btn-close" onclick="closeModal('order-modal')">×</button>
       </div>
     </div>
     ${fromQuoteHtml}
@@ -8466,7 +8472,6 @@ function openOrderModal(key){
         ${_finCardHtml}
       </div>
     </div>`;
-  openModal('order-modal');
   markOrderUpdateSeen(key);
   setTimeout(()=>{generateQR(`order-qr-${key}`,trackingUrl,80);loadAndRenderChat(key);},200);
 }
@@ -8554,7 +8559,7 @@ async function submitNewOrderItem(key){
     hideSaving();closeModal('add-item-modal');
     toast(isEdit?'✓ تم حفظ التعديلات — تم تحديث الطلب':'✓ تم إضافة البند الجديد — تم تحديث الطلب');
     window._editingItemIndex=null;
-    openOrderModal(key);
+    openOrderPage(key);
   }catch(e){hideSaving();toast(isEdit?'❌ فشل الحفظ':'❌ فشل الإضافة');}
 }
 function openTimelineModal(key){
@@ -8613,7 +8618,7 @@ async function _uploadOneFileData(file,key,onProgress){
 // out files a delete didn't touch.
 // Background-queued — see saveItemKindFiles() above for the pattern/
 // reasoning. Note the completion callback no longer force-reopens the order
-// modal unconditionally (the old openOrderModal(key) call): that was fine
+// modal unconditionally (the old openOrderPage(key) call): that was fine
 // for a blocking upload the user was necessarily still staring at, but
 // would be wrong here — popping a modal back open over whatever page the
 // user has since navigated to. _refreshOrderItemsViews() only reopens it if
@@ -8691,7 +8696,7 @@ async function deleteApprovalFile(key,ff,slot){
     upd[ff+'Extra']=extra.length?extra:null;
   }
   showSaving('جاري الحذف...');
-  try{await fbPatch(`orders/${key}`,upd);await loadData();hideSaving();toast('✓ تم الحذف');openOrderModal(key);}
+  try{await fbPatch(`orders/${key}`,upd);await loadData();hideSaving();toast('✓ تم الحذف');openOrderPage(key);}
   catch(e){hideSaving();toast('❌ فشل الحذف');}
 }
 // Shared renderer for every "approval upload box" (design's approved-design/
@@ -8715,7 +8720,7 @@ function renderApprovalFileList(o,key,ff,canAct){
 async function saveExternalNote(key){
   const el=document.getElementById('f-ext-note-input');if(!el)return;
   showSaving('جاري الحفظ...');
-  try{await fbPatch(`orders/${key}`,{externalNote:el.value.trim()});await loadData();hideSaving();toast('✓ تم حفظ الملاحظة');openOrderModal(key);}
+  try{await fbPatch(`orders/${key}`,{externalNote:el.value.trim()});await loadData();hideSaving();toast('✓ تم حفظ الملاحظة');openOrderPage(key);}
   catch(e){hideSaving();toast('❌ فشل الحفظ');}
 }
 async function sendToNextDept(key,next){
@@ -8806,7 +8811,7 @@ async function submitMaintVisit(){
   try{
     const visits=(o.maintenanceVisits||[]).concat([{date:new Date().toISOString(),reason,photo:window.__mvPhotoUrl||''}]);
     await fbPatch(`orders/${key}`,{maintenanceVisits:visits,maintenanceVisitsCount:visits.length,currentDept:'workshop',stageStartDate:new Date().toISOString()});
-    await loadData();hideSaving();closeModal('maint-visit-modal');openOrderModal(key);
+    await loadData();hideSaving();closeModal('maint-visit-modal');openOrderPage(key);
     toast('✓ تم تسجيل طلب الصيانة');
   }catch(e){hideSaving();toast('⚠️ فشل تسجيل طلب الصيانة');}
 }
@@ -9732,7 +9737,7 @@ function openCustomerProfile(nameEncoded){
   const phone=(ords.find(o=>o.phone)||{}).phone||(clientRec||{}).phone||'—';
   const rows=ords.map(o=>{
     const itemsText=esc([o.service||'',...((o.orderItems||[]).map(it=>it.name||''))].join(' | '));
-    return`<tr data-items="${itemsText.toLowerCase()}" onclick="closeModal('order-modal');setTimeout(()=>openOrderModal('${o._key}'),50)" style="cursor:pointer;">
+    return`<tr data-items="${itemsText.toLowerCase()}" onclick="closeModal('order-modal');setTimeout(()=>openOrderPage('${o._key}'),50)" style="cursor:pointer;">
     <td><strong style="color:var(--maroon)">${o.id||o._key}</strong></td>
     <td style="font-size:12px;">${esc(o.service||'—')}</td>
     <td style="font-size:11px;">${o.date||'—'}</td>
@@ -9791,7 +9796,7 @@ function buildTimelinePage(){
   const makeRow=o=>{
     const pct=orderProgress(o);const col=progressColor(o);
     const mntBadge=(o.currentDept==='done'&&hasLaterMaintenanceForOrder(o))?' <span class="badge" style="background:#FEE2E2;color:#991B1B;font-size:9px;"><i class="ti ti-tool"></i> طلب صيانة لاحق</span>':'';
-    return`<tr onclick="openOrderModal('${o._key}')" style="cursor:pointer"><td><strong style="color:var(--maroon)">${o.id||o._key}</strong></td><td><strong style="font-size:13px;color:var(--text-1);">${esc(o.client||'—')}</strong>${mntBadge}</td><td>${deptBadge(o.currentDept)}</td><td><div style="width:80px;background:var(--border);border-radius:4px;height:6px"><div style="width:${pct}%;background:${col};height:6px;border-radius:4px"></div></div></td></tr>`;
+    return`<tr onclick="openOrderPage('${o._key}')" style="cursor:pointer"><td><strong style="color:var(--maroon)">${o.id||o._key}</strong></td><td><strong style="font-size:13px;color:var(--text-1);">${esc(o.client||'—')}</strong>${mntBadge}</td><td>${deptBadge(o.currentDept)}</td><td><div style="width:80px;background:var(--border);border-radius:4px;height:6px"><div style="width:${pct}%;background:${col};height:6px;border-radius:4px"></div></div></td></tr>`;
   };
   const thead=`<thead><tr><th style="width:90px">الطلب</th><th>العميل</th><th style="width:110px">المرحلة</th><th style="width:110px">الإنجاز</th></tr></thead>`;
   const activeRows=activeArr.map(makeRow).join('');
@@ -9829,7 +9834,7 @@ function openQuickTaskForOrder(orderKey){
   if(relTasks.length){
     relHtml='<div style="border-top:1px solid var(--border-soft);padding-top:10px;margin-top:4px;">'
       +'<div style="font-size:11px;font-weight:800;color:var(--text-2);margin-bottom:8px;">مهام سريعة جارية ('+relTasks.length+')</div>'
-      +relTasks.map(t=>`<div onclick="closeModal('quick-task-modal');openOrderModal('${t._key}')" style="display:flex;align-items:center;justify-content:space-between;padding:7px 10px;background:var(--bg);border-radius:7px;margin-bottom:4px;cursor:pointer;font-size:12px;"><span><i class="ti ti-bolt" style="color:var(--gold);margin-left:5px;"></i>${esc(t.service)}</span>${deptBadge(t.currentDept)}</div>`).join('')
+      +relTasks.map(t=>`<div onclick="closeModal('quick-task-modal');openOrderPage('${t._key}')" style="display:flex;align-items:center;justify-content:space-between;padding:7px 10px;background:var(--bg);border-radius:7px;margin-bottom:4px;cursor:pointer;font-size:12px;"><span><i class="ti ti-bolt" style="color:var(--gold);margin-left:5px;"></i>${esc(t.service)}</span>${deptBadge(t.currentDept)}</div>`).join('')
       +'</div>';
   }
   document.getElementById('qt-modal-body').innerHTML=`<div style="background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:11px 14px;margin-bottom:14px;"><strong style="color:var(--maroon)">${esc(client)}</strong><span style="color:var(--text-3);font-size:11px;margin-right:8px;">(${esc(orderKey)})</span></div><div style="display:flex;flex-direction:column;gap:10px;"><button class="btn btn-purple" style="justify-content:center;" onclick="openQuickTaskLinked('proof','${orderKey}')"><i class="ti ti-brush"></i> بروفة عاجلة للمصممين</button><button class="btn btn-orange" style="justify-content:center;" onclick="openQuickTaskLinked('measure','${orderKey}')"><i class="ti ti-ruler"></i> قياسات ميدانية للورشة</button>${relHtml}</div>`;
@@ -10207,7 +10212,7 @@ function buildRevenuePage(){
   else if(metric==='paid')displayOrds=filtered.filter(o=>(Number(o.paidAmount)||0)>0);
   else if(metric==='remaining')displayOrds=filtered.filter(o=>(Number(o.remainingAmount)||0)>0);
   const cardActive=k=>metric===k?'outline:2.5px solid var(--gold);':'';
-  const rows=displayOrds.map(o=>`<tr onclick="openOrderModal('${o._key}')" style="cursor:pointer;">
+  const rows=displayOrds.map(o=>`<tr onclick="openOrderPage('${o._key}')" style="cursor:pointer;">
     <td><strong style="color:var(--maroon)">${o.id||o._key}</strong></td>
     <td><strong style="font-size:13px;">${esc(o.client||'—')}</strong></td>
     <td style="font-size:12px;">${esc(o.service||'—')}</td>
@@ -10567,7 +10572,7 @@ function buildIncompletePage(){
   if(arr.length===0){
     cards='<div style="text-align:center;color:var(--text-3);padding:48px 20px;"><i class="ti ti-user-check" style="font-size:52px;display:block;margin-bottom:12px;color:#10B981;"></i><div style="font-size:16px;font-weight:700;">لا توجد مهام غير مكتملة</div><div style="font-size:13px;margin-top:6px;">المهام السريعة التي لم يرغب العميل بإكمالها ستظهر هنا</div></div>';
   }else{
-    cards=`<div class="wf-grid">${arr.map(o=>`<div class="wf-card" style="border:2px solid #FECACA;background:linear-gradient(135deg,#FFF8F8,#FEF2F2);" onclick="openOrderModal('${o._key}')">${hasOrderUpdate(o)?'<span class="order-update-dot" title="تم تحديث بيانات الطلب"></span>':''}<div class="wf-card-top">
+    cards=`<div class="wf-grid">${arr.map(o=>`<div class="wf-card" style="border:2px solid #FECACA;background:linear-gradient(135deg,#FFF8F8,#FEF2F2);" onclick="openOrderPage('${o._key}')">${hasOrderUpdate(o)?'<span class="order-update-dot" title="تم تحديث بيانات الطلب"></span>':''}<div class="wf-card-top">
       <div class="wf-card-id">${o.id||o._key} · ${orderDateTime(o)}<span class="urgent-tag" style="margin-right:6px;font-size:9px;background:#991B1B;"><i class="ti ti-user-off"></i>غير مكتمل</span></div>
       <div class="wf-card-name">${esc(o.client)}</div>
       <div class="wf-card-svc">${esc(o.service)}</div>
@@ -11122,8 +11127,8 @@ function buildWarrantyPage(){
           ?`<span class="badge" style="background:#FEF3C7;color:#92400E;">يستحق صيانة قريباً (${daysLeft} يوم)</span>`
           :`<span class="badge" style="background:#D1FAE5;color:#065F46;">ساري (${daysLeft} يوم متبقي)</span>`;
       return`<div class="warranty-card" style="border-top:4px solid ${accent};">
-        <div class="warranty-card-icon" style="color:${accent};" ${w.orderKey?`onclick="openOrderModal('${w.orderKey}')" style="cursor:pointer;"`:''}><i class="ti ti-photo-shield"></i></div>
-        <div class="warranty-card-item" ${w.orderKey?`onclick="openOrderModal('${w.orderKey}')" style="cursor:pointer;"`:''}>${esc(w.boardItem||'—')}</div>
+        <div class="warranty-card-icon" style="color:${accent};" ${w.orderKey?`onclick="openOrderPage('${w.orderKey}')" style="cursor:pointer;"`:''}><i class="ti ti-photo-shield"></i></div>
+        <div class="warranty-card-item" ${w.orderKey?`onclick="openOrderPage('${w.orderKey}')" style="cursor:pointer;"`:''}>${esc(w.boardItem||'—')}</div>
         <div class="warranty-card-client" onclick="openWarrantyClientProfile('${encodeURIComponent(w.client||'')}')" style="cursor:pointer;text-decoration:underline;text-decoration-color:transparent;" onmouseover="this.style.textDecorationColor='var(--gold)'" onmouseout="this.style.textDecorationColor='transparent'"><i class="ti ti-user"></i> ${esc(w.client||'—')}</div>
         <div class="warranty-card-dates">
           <span><i class="ti ti-calendar-check"></i> ${w.completedAt?new Date(w.completedAt).toLocaleDateString('ar-SA'):'—'}</span>
@@ -11331,6 +11336,7 @@ function _buildPage(p){
   else if(p==='tasks') buildTasksPage();
   else if(p==='extdash') buildExternalDashboard();
   else if(p==='itemwork') buildItemWorkspacePage();
+  else if(p==='orderdetails') buildOrderDetailsPage();
 }
    </script>
 <script>
