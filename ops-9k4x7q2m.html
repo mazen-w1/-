@@ -862,6 +862,26 @@ input[type="password"]{direction:rtl;text-align:right;padding-left:40px;padding-
 @keyframes spin{to{transform:rotate(360deg);}}
 .toast-el{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--maroon);color:var(--gold);padding:12px 24px;border-radius:var(--radius-md);font-size:13px;font-weight:700;border:1px solid var(--gold);transition:transform .28s;z-index:9999;pointer-events:none;white-space:nowrap;}
 .toast-el.show{transform:translateX(-50%) translateY(0);}
+/* ============================================================ BACKGROUND UPLOAD QUEUE
+   Floating bottom-corner widget (WhatsApp/Drive-style) — independent of
+   .saving-overlay so an upload keeps running (and stays visible) while the
+   user navigates anywhere else in the app. left:20px (not right) so it
+   doesn't collide with the sidebar in this RTL layout. */
+.upload-queue-widget{position:fixed;left:20px;bottom:20px;width:300px;max-width:calc(100vw - 40px);z-index:9997;display:flex;flex-direction:column-reverse;gap:8px;}
+.uq-item{background:var(--surface,#fff);border:1px solid var(--border);border-radius:12px;padding:10px 14px;box-shadow:0 8px 28px rgba(0,0,0,.16);animation:uqSlideIn .18s ease-out;}
+@keyframes uqSlideIn{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:translateY(0);}}
+.uq-item-top{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;}
+.uq-item-name{font-size:12px;font-weight:700;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:170px;display:flex;align-items:center;gap:6px;}
+.uq-item-right{display:flex;align-items:center;gap:8px;flex-shrink:0;}
+.uq-item-status{font-size:10.5px;font-weight:800;white-space:nowrap;}
+.uq-item-status.uploading{color:#2563EB;}
+.uq-item-status.done{color:#10B981;}
+.uq-item-status.error{color:#DC2626;}
+.uq-item-close{cursor:pointer;color:var(--text-3);font-size:14px;line-height:1;}
+.uq-item-close:hover{color:var(--maroon);}
+.uq-bar-track{height:5px;border-radius:3px;background:var(--surface-2);overflow:hidden;}
+.uq-bar-fill{height:100%;background:var(--maroon);border-radius:3px;transition:width .15s linear;}
+.uq-item-error-msg{font-size:10.5px;color:#DC2626;margin-top:5px;line-height:1.4;}
 /* ============================================================ MOBILE */
 @media(max-width:768px){
   :root{--sidebar-w:220px;}
@@ -1652,6 +1672,7 @@ input:focus,select:focus,textarea:focus{box-shadow:inset 0 1px 3px rgba(74,14,23
   </div>
 </div>
 <div class="toast-el" id="toast"></div>
+<div class="upload-queue-widget" id="upload-queue-widget" style="display:none;"></div>
 <script>
 // ============================================================
 // SECURITY: HTML ESCAPING + GLOBAL ERROR HANDLING
@@ -1843,7 +1864,7 @@ let submittedRequests={},chats={},standaloneQuotes={},warranties={},teamChat={},
 // "New" badge stays consistent across devices/browsers for the same account
 // instead of resetting the moment localStorage isn't shared.
 let orderSeenMap={};
-let _lastAssignSnapshot=null,_audioCtx=null,_audioUnlocked=false;
+let _lastAssignSnapshot=null,_lastNotifSnapshot=null,_audioCtx=null,_audioUnlocked=false;
 let _navHistory=[];
 let _nuPhotoB64='',_euPhotoB64='',_euSelectedColor='',_nuSelectedColor='';
 let _curPage=null,_navBusy=false;
@@ -2101,6 +2122,7 @@ async function loadData(){
   try{
     updateNotifBell();updateRequestsBadgeSidebar();updateTeamChatBadge();updatePrepBadgeSidebar();
     checkNewAssignments();
+    checkNewEventNotifs();
     cleanExpiredWarranties();
   }catch(e){console.error('loadData post-processing failed',e);}
   if(anyFailed)toast('⚠️ تعذر تحديث بعض البيانات، يتم عرض آخر نسخة محفوظة');
@@ -2147,6 +2169,21 @@ function checkNewAssignments(){
   const isNew=current.some(k=>!_lastAssignSnapshot.has(k));
   if(isNew){playNotifSound();toast('🔔 تم تكليفك بمهمة جديدة');}
   _lastAssignSnapshot=new Set(current);
+}
+// Generalizes the same "detect something new since the last loadData()
+// cycle, play a sound" pattern to every targeted eventNotif (client_
+// feedback/client_approved included) instead of only new-assignment — the
+// only way this can play "for the assigned designer" without a live
+// websocket connection is for the designer's OWN browser tab to notice the
+// new notification on its own next poll (up to 60s, or sooner on any action
+// that triggers loadData()) and play it there.
+function checkNewEventNotifs(){
+  if(!cu)return;
+  const mine=myEventNotifs(); // newest-first, already filtered to isEventNotifForMe
+  const latestAt=mine.length?mine[0].createdAt:null;
+  if(_lastNotifSnapshot===null){_lastNotifSnapshot=latestAt;return;}
+  if(latestAt&&latestAt!==_lastNotifSnapshot)playNotifSound();
+  _lastNotifSnapshot=latestAt;
 }
 // ============================================================
 // STARTUP
@@ -2227,6 +2264,7 @@ const NOTIF_TYPE_META={
   employee_changed:{label:'تغيير موظف',icon:'ti-user-cog',color:'#0F766E'},
   client_approved:{label:'اعتماد العميل',icon:'ti-thumb-up',color:'#10B981'},
   client_rejected:{label:'رفض العميل',icon:'ti-thumb-down',color:'#DC2626'},
+  client_feedback:{label:'طلب تعديل من العميل',icon:'ti-refresh',color:'#EA580C'},
   message:{label:'رسالة جديدة',icon:'ti-message',color:'#7C3AED'},
 };
 async function pushNotification(n){
@@ -2418,6 +2456,73 @@ function clearUploadProgress(){
   if(wrap)wrap.style.display='none';
   if(fill)fill.style.width='0%';
 }
+// ============================================================
+// BACKGROUND UPLOAD QUEUE — floating widget, independent of showSaving()
+// ============================================================
+// Each entry: {id, fileName, progress, status:'uploading'|'done'|'error', errorMsg}.
+// runQueuedUpload() below is the actual entry point callers use — this array
+// and its render function are internal bookkeeping.
+window._uploadQueue=[];
+let _uqIdSeq=1,_uqRenderRAF=null;
+function _uqRender(){
+  const wrap=document.getElementById('upload-queue-widget');if(!wrap)return;
+  if(!window._uploadQueue.length){wrap.style.display='none';wrap.innerHTML='';return;}
+  wrap.style.display='flex';
+  wrap.innerHTML=window._uploadQueue.map(u=>{
+    const pct=Math.max(0,Math.min(100,Math.round(u.progress)));
+    const statusLabel=u.status==='uploading'?`${pct}%`:u.status==='done'?'<i class="ti ti-circle-check"></i> تم الرفع':'<i class="ti ti-alert-circle"></i> فشل';
+    const icon=u.status==='uploading'?'ti-loader-2':(u.status==='done'?'ti-circle-check':'ti-alert-circle');
+    return`<div class="uq-item">
+      <div class="uq-item-top">
+        <span class="uq-item-name" title="${esc(u.fileName)}"><i class="ti ${icon}"></i> ${esc(u.fileName)}</span>
+        <span class="uq-item-right">
+          <span class="uq-item-status ${u.status}">${statusLabel}</span>
+          <span class="uq-item-close" onclick="dismissUploadQueueItem(${u.id})" title="إخفاء"><i class="ti ti-x"></i></span>
+        </span>
+      </div>
+      ${u.status==='uploading'?`<div class="uq-bar-track"><div class="uq-bar-fill" style="width:${pct}%;"></div></div>`:''}
+      ${u.status==='error'?`<div class="uq-item-error-msg">${esc(u.errorMsg||'حدث خطأ')}</div>`:''}
+    </div>`;
+  }).join('');
+}
+// Same rAF-batching rationale as setUploadProgress() — xhr.upload.onprogress
+// can fire far more often than the eye needs a repaint for.
+function _uqRenderThrottled(){
+  if(_uqRenderRAF)return;
+  _uqRenderRAF=requestAnimationFrame(()=>{_uqRenderRAF=null;_uqRender();});
+}
+function dismissUploadQueueItem(id){
+  window._uploadQueue=window._uploadQueue.filter(u=>u.id!==id);
+  _uqRender();
+}
+// The core building block every migrated upload flow uses instead of
+// showSaving()/hideSaving(). `uploadFn(onProgress)` does the actual network
+// upload(s) and resolves with whatever the caller needs (a URL, an array of
+// {data,name} objects, etc.) — it must be self-contained and not assume any
+// particular page/modal is still open, since the user is free to navigate
+// away while it runs. `onDone(result)` fires after a successful upload and
+// is where the caller does its Firebase patch + local refresh + toast; it
+// must ALSO not assume anything about the current page (re-read `orders`
+// fresh, use _refreshOrderItemsViews()-style page-aware refresh dispatchers,
+// let already-defensive render functions no-op if their page isn't showing).
+function runQueuedUpload(label,uploadFn,onDone){
+  const id=_uqIdSeq++;
+  const entry={id,fileName:label,progress:0,status:'uploading'};
+  window._uploadQueue.push(entry);
+  _uqRender();
+  (async()=>{
+    try{
+      const result=await uploadFn(pct=>{entry.progress=pct;_uqRenderThrottled();});
+      entry.status='done';entry.progress=100;_uqRender();
+      setTimeout(()=>dismissUploadQueueItem(id),4000);
+      if(onDone)await onDone(result);
+    }catch(err){
+      entry.status='error';entry.errorMsg=(err&&err.message)||'فشل الرفع';_uqRender();
+      toast((err&&err.message)||'❌ فشل رفع الملف');
+    }
+  })();
+  return id;
+}
 function _readFileAsDataUrl(file){return new Promise((res,rej)=>{const r=new FileReader();r.readAsDataURL(file);r.onload=()=>res(r.result);r.onerror=()=>rej(new Error('read-failed'));});}
 function compressImage(dataUrl,maxDim=1600,quality=0.72){
   return new Promise((res,rej)=>{
@@ -2439,6 +2544,47 @@ function compressImage(dataUrl,maxDim=1600,quality=0.72){
     img.onerror=()=>rej(new Error('image-decode-failed'));
     img.src=dataUrl;
   });
+}
+// Non-blocking, zero-base64 compression for the actual network upload path
+// (convertFileToBase64 below) — deliberately separate from compressImage()
+// above, which two OTHER call sites still need on purpose: a quote-image
+// feature that intentionally stores a base64 data URI directly in Firebase
+// (see convertQuoteImageToBase64's comment) and _uploadOneFileData's
+// last-resort fallback when the real upload pipeline has already failed.
+// Neither of those is part of "the upload pipeline" being optimized here,
+// so compressImage()/_readFileAsDataUrl() are left exactly as they were.
+//
+// createImageBitmap() decodes off the main thread (unlike `new Image()` +
+// FileReader.readAsDataURL, which reads the whole file into a base64 string
+// first, then decodes THAT), and OffscreenCanvas.convertToBlob() encodes
+// straight to a Blob without ever producing a base64 string or blocking the
+// main thread for the encode step — canvas.toBlob() (the fallback for
+// browsers without OffscreenCanvas) is likewise async/non-blocking, just
+// running on the regular DOM canvas instead. A dedicated Web Worker was
+// considered but isn't needed: both the decode and the encode are already
+// off-main-thread here, so the only synchronous work left is a single
+// drawImage() blit, not the base64 round trip or JPEG encoding that were
+// actually causing the freeze.
+async function compressImageFile(file,maxDim=1600,quality=0.72){
+  const bitmap=await createImageBitmap(file);
+  try{
+    let w=bitmap.width,h=bitmap.height;
+    if(w>maxDim||h>maxDim){
+      if(w>=h){h=Math.round(h*(maxDim/w));w=maxDim;}
+      else{w=Math.round(w*(maxDim/h));h=maxDim;}
+    }
+    if(typeof OffscreenCanvas!=='undefined'){
+      const canvas=new OffscreenCanvas(w,h);
+      canvas.getContext('2d').drawImage(bitmap,0,0,w,h);
+      return await canvas.convertToBlob({type:'image/jpeg',quality});
+    }
+    const canvas=document.createElement('canvas');
+    canvas.width=w;canvas.height=h;
+    canvas.getContext('2d').drawImage(bitmap,0,0,w,h);
+    return await new Promise((res,rej)=>canvas.toBlob(b=>b?res(b):rej(new Error('canvas-toblob-failed')),'image/jpeg',quality));
+  }finally{
+    bitmap.close();
+  }
 }
 // ============================================================
 // CLOUDINARY FILE STORAGE
@@ -2469,14 +2615,21 @@ function cloudinaryThumb(url,width=200){
 // XHR instead of fetch() specifically because fetch has no upload-progress
 // event — xhr.upload.onprogress is the only way in a browser to get a real,
 // live byte-level percentage while the request body is still being sent.
-function uploadToCloudinary(fileOrDataUrl){
+// Takes a native File/Blob only — never a base64 data URL. FormData sends
+// it as a real binary multipart part (no ~33% base64 inflation, no extra
+// string-encode/decode passes in either direction).
+// onProgress is optional — defaults to the global setUploadProgress (the
+// showSaving-overlay bar) so every pre-existing caller keeps working
+// unchanged; runQueuedUpload() passes its own per-item callback instead.
+function uploadToCloudinary(file,onProgress){
+  const report=onProgress||setUploadProgress;
   return new Promise((resolve,reject)=>{
     const fd=new FormData();
-    fd.append('file',fileOrDataUrl);
+    fd.append('file',file,file.name||('upload.'+((file.type||'').split('/')[1]||'bin')));
     fd.append('upload_preset',CLOUDINARY_UPLOAD_PRESET);
     const xhr=new XMLHttpRequest();
     xhr.open('POST',`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/auto/upload`);
-    xhr.upload.onprogress=e=>{if(e.lengthComputable)setUploadProgress((e.loaded/e.total)*100);};
+    xhr.upload.onprogress=e=>{if(e.lengthComputable)report((e.loaded/e.total)*100);};
     xhr.onerror=()=>reject(new Error('⚠️ تعذر الاتصال بخدمة رفع الملفات، تحقق من الإنترنت وحاول مجدداً.'));
     xhr.onload=()=>{
       let data=null;
@@ -2486,38 +2639,53 @@ function uploadToCloudinary(fileOrDataUrl){
         reject(new Error('⚠️ فشل رفع الملف: '+msg));
         return;
       }
-      setUploadProgress(100);
+      report(100);
       resolve(data.secure_url);
     };
     xhr.send(fd);
   });
 }
-async function convertFileToBase64(file,folderCtx){const MAX_IMAGE_SOURCE_BYTES=25*1024*1024;const MAX_OTHER_BYTES=10*1024*1024;const isImage=file.type&&file.type.startsWith('image/');
+async function convertFileToBase64(file,folderCtx,onProgress){const MAX_IMAGE_SOURCE_BYTES=25*1024*1024;const MAX_OTHER_BYTES=10*1024*1024;const isImage=file.type&&file.type.startsWith('image/');
   // Cloudinary blocks delivery of PDF/ZIP by default (a security restriction on the
   // account, separate from the unsigned-upload preset) — even accounts with that
   // restriction lifted have shown stale-CDN failures, so PDFs/ZIPs always go to
   // Drive instead of Cloudinary. Every other file type is unaffected.
   const isPdfOrZip=/application\/(pdf|zip|x-zip-compressed)/.test(file.type||'')||/\.(pdf|zip)$/i.test(file.name||'');
-  if(isImage){if(file.size>MAX_IMAGE_SOURCE_BYTES)throw new Error('⚠️ حجم الصورة كبير جداً (الحد الأقصى 25 ميجابايت). يرجى اختيار صورة أصغر.');let uploadPayload=file;if(file.size>800*1024){try{const raw=await _readFileAsDataUrl(file);uploadPayload=await compressImage(raw,1600,0.72);}catch(e){uploadPayload=file;}}return await uploadToCloudinary(uploadPayload);}
-  else if(isPdfOrZip){return await uploadToGoogleDrive(file,folderCtx);}
+  if(isImage){
+    if(file.size>MAX_IMAGE_SOURCE_BYTES)throw new Error('⚠️ حجم الصورة كبير جداً (الحد الأقصى 25 ميجابايت). يرجى اختيار صورة أصغر.');
+    let uploadPayload=file;
+    if(file.size>800*1024){
+      try{uploadPayload=await compressImageFile(file,1600,0.72);}catch(e){uploadPayload=file;}
+    }
+    return await uploadToCloudinary(uploadPayload,onProgress);
+  }
+  else if(isPdfOrZip){return await uploadToGoogleDrive(file,folderCtx,onProgress);}
   else{
     if(file.size>MAX_OTHER_BYTES){
       // Drive/proxy failing shouldn't leave the user stuck with no path
       // forward. Cloudinary is a viable fallback ONLY here — it explicitly
       // rejects PDF/ZIP (isPdfOrZip above), which is why that branch has no
       // equivalent fallback and just surfaces the Drive error directly.
-      try{return await uploadToGoogleDrive(file,folderCtx);}
+      try{return await uploadToGoogleDrive(file,folderCtx,onProgress);}
       catch(driveErr){
-        try{return await uploadToCloudinary(file);}
+        try{return await uploadToCloudinary(file,onProgress);}
         catch(cloudErr){throw driveErr;}
       }
     }
-    return await uploadToCloudinary(file);
+    return await uploadToCloudinary(file,onProgress);
   }
 }
 const DRIVE_PROXY_URL='https://rawaee-drive-proxy.vercel.app/api/token';
 const MAX_DRIVE_BYTES=500*1024*1024;
-const DRIVE_CHUNK_BYTES=16*1024*1024; // must be a multiple of 256KB per Google's resumable-upload spec
+// Adaptive chunk size instead of one fixed value: each chunk's measured
+// throughput sizes the NEXT chunk, clamped to [2MB, 5MB] (all multiples of
+// 256KB, per Google's resumable-upload spec) — fast enough for real progress
+// events to keep landing every ~1s on typical connections, without paying a
+// too-small chunk's proportionally larger per-request overhead on a fast
+// line, or a too-large chunk's "stuck at X%" wait on a slow one.
+const DRIVE_CHUNK_MIN_BYTES=2*1024*1024;
+const DRIVE_CHUNK_MAX_BYTES=5*1024*1024;
+const DRIVE_CHUNK_TARGET_MS=1000;
 // Files at or under this size skip the resumable (initiate-session + chunk-
 // loop) flow entirely and go through a single multipart POST instead — see
 // _driveUploadMultipart(). That removes the extra initiate round-trip and
@@ -2599,22 +2767,28 @@ function _armStallWatchdog(xhr,rejectFn){
   arm();
   return{onProgress:arm,clear:()=>clearTimeout(timer)};
 }
-function _driveUploadChunk(sessionUri,chunk,start,total,contentType,offsetBytes){
+function _driveUploadChunk(sessionUri,chunk,start,total,contentType,offsetBytes,onProgress){
+  const report=onProgress||setUploadProgress;
   return new Promise((resolve,reject)=>{
     const xhr=new XMLHttpRequest();
+    const t0=performance.now();
     xhr.open('PUT',sessionUri);
     xhr.setRequestHeader('Content-Range',`bytes ${start}-${start+chunk.size-1}/${total}`);
     if(contentType)xhr.setRequestHeader('Content-Type',contentType);
     const watchdog=_armStallWatchdog(xhr,reject);
-    xhr.upload.onprogress=e=>{watchdog.onProgress();if(e.lengthComputable)setUploadProgress(((offsetBytes+e.loaded)/total)*100);};
+    xhr.upload.onprogress=e=>{watchdog.onProgress();if(e.lengthComputable)report(((offsetBytes+e.loaded)/total)*100);};
     xhr.onerror=()=>{watchdog.clear();reject(new Error('gdrive-chunk-network-error'));};
     xhr.onload=()=>{
       watchdog.clear();
+      // elapsedMs feeds the adaptive chunk sizer in uploadToGoogleDrive's
+      // chunk loop below — how long THIS chunk actually took to transfer is
+      // the input for sizing the NEXT one toward DRIVE_CHUNK_TARGET_MS.
+      const elapsedMs=performance.now()-t0;
       if(xhr.status===200||xhr.status===201){
         let data=null;try{data=JSON.parse(xhr.responseText);}catch(e){}
-        resolve({done:true,data});
+        resolve({done:true,data,elapsedMs});
       }else if(xhr.status===308){
-        resolve({done:false});
+        resolve({done:false,elapsedMs});
       }else{
         reject(new Error('gdrive-chunk-http-'+xhr.status));
       }
@@ -2627,7 +2801,8 @@ function _driveUploadChunk(sessionUri,chunk,start,total,contentType,offsetBytes)
 // round trip and no chunk loop at all. This is the main lever for the
 // "stuck at 5%" complaint: most uploads are well under 25MB, and the old
 // path made every one of them pay for a resumable session it didn't need.
-function _driveUploadMultipart(file,parentId,accessToken,contentType){
+function _driveUploadMultipart(file,parentId,accessToken,contentType,onProgress){
+  const report=onProgress||setUploadProgress;
   return new Promise((resolve,reject)=>{
     const boundary='rawaee-'+Date.now().toString(36)+Math.random().toString(36).slice(2);
     const metadata={name:file.name||('ملف_'+Date.now())};
@@ -2642,7 +2817,7 @@ function _driveUploadMultipart(file,parentId,accessToken,contentType){
     xhr.setRequestHeader('Authorization','Bearer '+accessToken);
     xhr.setRequestHeader('Content-Type','multipart/related; boundary='+boundary);
     const watchdog=_armStallWatchdog(xhr,reject);
-    xhr.upload.onprogress=e=>{watchdog.onProgress();if(e.lengthComputable)setUploadProgress((e.loaded/e.total)*100);};
+    xhr.upload.onprogress=e=>{watchdog.onProgress();if(e.lengthComputable)report((e.loaded/e.total)*100);};
     xhr.onerror=()=>{watchdog.clear();reject(new Error('gdrive-multipart-network-error'));};
     xhr.onload=()=>{
       watchdog.clear();
@@ -2663,7 +2838,7 @@ const MAX_CHUNK_RETRIES=3;
 // original chunked + resumable flow — they still benefit from not needing
 // to fit in one request, from each chunk retrying independently instead of
 // restarting the whole file, and from accurate live per-chunk progress.
-async function uploadToGoogleDrive(file,folderCtx){
+async function uploadToGoogleDrive(file,folderCtx,onProgress){
   if(file.size>MAX_DRIVE_BYTES)throw new Error('⚠️ حجم الملف كبير جداً حتى لـ Google Drive (الحد الأقصى 500 ميجابايت). يرجى ضغط الملف أو تصغيره.');
   const accessToken=await getGoogleAccessToken();
   let parentId=null;
@@ -2683,7 +2858,7 @@ async function uploadToGoogleDrive(file,folderCtx){
   if(file.size<=DRIVE_MULTIPART_MAX_BYTES){
     let attempt=0,lastErr=null;
     while(attempt<MAX_CHUNK_RETRIES){
-      try{fileId=await _driveUploadMultipart(file,parentId,accessToken,contentType);lastErr=null;break;}
+      try{fileId=await _driveUploadMultipart(file,parentId,accessToken,contentType,onProgress);lastErr=null;break;}
       catch(e){lastErr=e;attempt++;if(attempt<MAX_CHUNK_RETRIES)await new Promise(r=>setTimeout(r,800*attempt));}
     }
     if(lastErr)throw new Error('⚠️ فشل رفع الملف إلى Google Drive بعد عدة محاولات، تحقق من الإنترنت وحاول مجدداً.');
@@ -2701,24 +2876,33 @@ async function uploadToGoogleDrive(file,folderCtx){
     if(!initRes.ok){throw new Error('⚠️ فشل بدء جلسة الرفع إلى Google Drive: HTTP '+initRes.status);}
     const sessionUri=initRes.headers.get('Location');
     if(!sessionUri)throw new Error('⚠️ تعذر إنشاء جلسة رفع قابلة للاستكمال على Google Drive.');
-    let start=0;
+    let start=0,chunkBytes=DRIVE_CHUNK_MIN_BYTES; // ramp up from a conservative first chunk
     while(start<file.size){
-      const chunk=file.slice(start,Math.min(start+DRIVE_CHUNK_BYTES,file.size));
+      const chunk=file.slice(start,Math.min(start+chunkBytes,file.size));
       let attempt=0,lastErr=null,result=null;
       while(attempt<MAX_CHUNK_RETRIES){
-        try{result=await _driveUploadChunk(sessionUri,chunk,start,file.size,contentType,start);lastErr=null;break;}
+        try{result=await _driveUploadChunk(sessionUri,chunk,start,file.size,contentType,start,onProgress);lastErr=null;break;}
         catch(e){lastErr=e;attempt++;if(attempt<MAX_CHUNK_RETRIES)await new Promise(r=>setTimeout(r,800*attempt));}
       }
       if(lastErr)throw new Error('⚠️ فشل رفع الملف إلى Google Drive بعد عدة محاولات، تحقق من الإنترنت وحاول مجدداً.');
       start+=chunk.size;
       if(result.done){fileId=result.data&&result.data.id;break;}
+      // Size the NEXT chunk from this one's measured throughput, targeting
+      // ~DRIVE_CHUNK_TARGET_MS per request — steady progress-bar movement on
+      // whatever the connection actually turns out to be, rather than one
+      // fixed size guessed in advance.
+      if(result.elapsedMs>0){
+        const bytesPerMs=chunk.size/result.elapsedMs;
+        const target=Math.round(bytesPerMs*DRIVE_CHUNK_TARGET_MS/262144)*262144;
+        chunkBytes=Math.min(DRIVE_CHUNK_MAX_BYTES,Math.max(DRIVE_CHUNK_MIN_BYTES,target||DRIVE_CHUNK_MIN_BYTES));
+      }
     }
     if(!fileId)throw new Error('⚠️ فشل رفع الملف إلى Google Drive: لم يتم استلام تأكيد الاكتمال.');
   }
   try{
     await fetchWithTimeout('https://www.googleapis.com/drive/v3/files/'+fileId+'/permissions',{method:'POST',headers:{Authorization:'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({role:'reader',type:'anyone'})});
   }catch(e){}
-  setUploadProgress(100);
+  (onProgress||setUploadProgress)(100);
   return 'https://drive.google.com/file/d/'+fileId+'/view?usp=sharing';
 }
 function normalizeSaudiPhone(v){
@@ -3199,19 +3383,32 @@ function toggleAddItemVersionForm(idx){
   if(el)el.style.display=el.style.display==='none'?'flex':'none';
 }
 window._newVerFiles={};
-async function handleNewVersionFiles(idx,files){
+// Background-queued: this is the "attach" half of a two-step attach-then-
+// save flow (saveNewItemVersion() is the explicit "حفظ ورفع الملفات" click
+// that actually patches Firebase) — window._newVerFiles[idx] is a plain
+// global array, not tied to any page/DOM state, so it keeps accumulating
+// uploaded files correctly even if the user navigates away from the Item
+// Workspace page and back (or never comes back at all — the eventual "حفظ"
+// click, whenever it happens, just uses whatever's in the array by then).
+function handleNewVersionFiles(idx,files){
   if(!files||!files.length)return;
   window._newVerFiles[idx]=window._newVerFiles[idx]||[];
-  showSaving('جاري تحميل الملفات...');
-  try{
-    for(const f of Array.from(files)){
-      const b64=await convertFileToBase64(f);
-      window._newVerFiles[idx].push({data:b64,name:f.name});
+  const fileList=Array.from(files);
+  const label=fileList.length>1?`${fileList.length} ملفات — نسخة جديدة`:fileList[0].name;
+  runQueuedUpload(label,async onProgress=>{
+    const results=[];
+    for(let i=0;i<fileList.length;i++){
+      const f=fileList[i];
+      const b64=await convertFileToBase64(f,undefined,pct=>onProgress(((i+pct/100)/fileList.length)*100));
+      results.push({data:b64,name:f.name});
     }
+    return results;
+  },results=>{
+    window._newVerFiles[idx]=window._newVerFiles[idx]||[];
+    window._newVerFiles[idx].push(...results);
     const note=document.getElementById('new-ver-file-note-'+idx);
     if(note)note.textContent='✓ '+window._newVerFiles[idx].length+' ملف مرفق';
-  }catch(e){toast(e&&e.message?e.message:'⚠️ فشل تحميل الملف');}
-  hideSaving();
+  });
 }
 async function saveNewItemVersion(key,idx){
   const o=orders[key];if(!o)return;
@@ -3240,21 +3437,36 @@ const ITEM_KIND_LABELS={design_approved:'التصميم المعتمد',design_p
 // individually instead of "any file for this stage." Files upload and save
 // in one step (no separate queue-then-save flow) to match the same UX as
 // the order-level upload boxes.
-async function saveItemKindFiles(key,idx,kind,inputId){
+// Background-queued (runQueuedUpload) instead of showSaving()-blocking: the
+// upload itself runs detached from this call, tracked in the floating
+// widget, so the user is free to navigate anywhere else while it's in
+// flight. Everything the completion needs (key/idx/kind/it.name) is
+// captured up front; the completion callback re-reads orders[key] FRESH
+// rather than trusting the `o`/`it` snapshot from before the upload, since
+// other data may have changed in the meantime (this device's own periodic
+// refresh, or the item having moved) — same reasoning as saveNewItemVersion
+// and uploadFileDirect below.
+function saveItemKindFiles(key,idx,kind,inputId){
   const el=document.getElementById(inputId);if(!el||!el.files||!el.files.length)return;
   const o=orders[key];if(!o)return;
   const it=o.orderItems&&o.orderItems[idx];if(!it)return;
   if(cu.type!=='admin'&&!isMyItem(o,it)){toast('⚠️ هذا الإجراء غير متاح لك');return;}
   const files=Array.from(el.files);
-  showSaving(files.length>1?'جاري حفظ الملفات...':'جاري حفظ الملف...');
-  try{
+  el.value=''; // clear now so re-selecting the same file(s) while this upload is still running fires onchange again
+  const label=(files.length>1?`${files.length} ملفات — `:'')+(it.name||'بند');
+  runQueuedUpload(label,async onProgress=>{
     const uploaded=[];
-    for(const f of files){
-      const{data}=await _uploadOneFileData(f,key);
+    for(let i=0;i<files.length;i++){
+      const f=files[i];
+      const{data}=await _uploadOneFileData(f,key,pct=>onProgress(((i+pct/100)/files.length)*100));
       uploaded.push({data,name:f.name});
     }
-    const newVersion={id:'v'+Date.now(),label:ITEM_KIND_LABELS[kind]||kind,status:'قيد التنفيذ',stage:itemCurrentDept(it,o),kind,files:uploaded,notes:'',createdBy:cu.name,createdAt:new Date().toISOString()};
-    const items=[...o.orderItems];
+    return uploaded;
+  },async uploaded=>{
+    const o2=orders[key];if(!o2)return;
+    if(!o2.orderItems||!o2.orderItems[idx])return;
+    const newVersion={id:'v'+Date.now(),label:ITEM_KIND_LABELS[kind]||kind,status:'قيد التنفيذ',stage:itemCurrentDept(o2.orderItems[idx],o2),kind,files:uploaded,notes:'',createdBy:cu.name,createdAt:new Date().toISOString()};
+    const items=[...o2.orderItems];
     const priorVersions=priorVersionsForWrite(items[idx]);
     // A fresh design_proof/design_approved upload resolves whatever client
     // feedback sent this item back for revision — clear the flag so it
@@ -3273,25 +3485,27 @@ async function saveItemKindFiles(key,idx,kind,inputId){
     // is no third "معتمد" column to manually push items out of anymore.
     const upd={orderItems:items};
     let autoAdvanced=false;
-    if(itemCurrentDept(items[idx],o)==='design'&&itemStageRequirementMet(items[idx],o)){
-      const nd=itemNextDept(items[idx],o);
+    if(itemCurrentDept(items[idx],o2)==='design'&&itemStageRequirementMet(items[idx],o2)){
+      const nd=itemNextDept(items[idx],o2);
       if(nd){
         items[idx]={...items[idx],currentDept:nd};
         upd.orderItems=items;
         upd.lastItemUpdateAt=new Date().toISOString();upd.lastItemUpdateBy=cu.name;
-        const newOrderDept=computeOrderDeptFromItems(o,items);
-        if(newOrderDept&&newOrderDept!==o.currentDept){upd.currentDept=newOrderDept;upd.stageStartDate=new Date().toISOString();}
+        const newOrderDept=computeOrderDeptFromItems(o2,items);
+        if(newOrderDept&&newOrderDept!==o2.currentDept){upd.currentDept=newOrderDept;upd.stageStartDate=new Date().toISOString();}
         autoAdvanced=true;
       }
     }
     await fbPatch(`orders/${key}`,upd);
-    await loadData();hideSaving();toast(autoAdvanced?'✓ تم الاعتماد — تم نقل البند تلقائياً للمرحلة التالية':'✓ تم رفع الملف');
+    await loadData();
+    toast(autoAdvanced?'✓ تم الاعتماد — تم نقل البند تلقائياً للمرحلة التالية':'✓ تم رفع الملف');
     // This upload box is used from three different surfaces (the standalone
     // Item Workspace page, the designer board's inline item rows, and the
     // full order modal's per-item cards) — _refreshOrderItemsViews refreshes
-    // whichever one is actually showing instead of always rebuilding one.
+    // whichever one is actually showing (a no-op if the user navigated away
+    // from all three while the upload was running in the background).
     _refreshOrderItemsViews(key);
-  }catch(e){hideSaving();toast(e&&e.message?e.message:'❌ فشل الرفع');}
+  });
 }
 // Reception/manager-facing approval action — the sibling of
 // openClientFeedbackPanel()/saveClientFeedback() (the "تعديل مطلوب" path):
@@ -3314,7 +3528,7 @@ async function approveItemProof(key,idx){
     await fbPatch(`orders/${key}`,upd);
     await loadData();hideSaving();toast('✓ تم اعتماد التصميم من العميل');
     const dTo=orders[key]&&orders[key].designTo;
-    if(dTo&&dTo!=='none')pushNotification({type:'client_approved',message:`تم اعتماد التصميم من العميل — الطلب ${esc(o.id||key)}`,orderKey:key,orderId:o.id,client:o.client,targetUname:dTo==='all'?'all-admin':dTo});
+    if(dTo&&dTo!=='none')pushNotification({type:'client_approved',message:`✅ تم الاعتماد من العميل — الطلب ${esc(o.id||key)} · البند "${esc(it.name||'بند')}"`,orderKey:key,orderId:o.id,client:o.client,targetUname:dTo==='all'?'all-admin':dTo});
     _refreshOrderItemsViews(key);
   }catch(e){hideSaving();toast('❌ فشل الاعتماد');}
 }
@@ -3481,7 +3695,7 @@ async function saveClientFeedback(){
     await loadData();hideSaving();closeModal('client-feedback-modal');
     toast('✓ تم حفظ ملاحظات العميل وإعادة البند لقسم التصميم');
     const dTo=orders[key]&&orders[key].designTo;
-    if(dTo&&dTo!=='none')pushNotification({type:'client_feedback',message:`ملاحظات جديدة من العميل تتطلب تعديل — الطلب ${esc(o.id||key)}`,orderKey:key,orderId:o.id,client:o.client,targetUname:dTo==='all'?'all-admin':dTo});
+    if(dTo&&dTo!=='none')pushNotification({type:'client_feedback',message:`🔄 يتطلب تعديل — الطلب ${esc(o.id||key)} · البند "${esc(it.name||'بند')}"`,orderKey:key,orderId:o.id,client:o.client,targetUname:dTo==='all'?'all-admin':dTo});
     _refreshOrderItemsViews(key);
   }catch(e){hideSaving();toast('❌ فشل الحفظ');}
 }
@@ -4379,6 +4593,12 @@ function toggleDesignerOrderCard(key){
 function designerOrderCardHtml(o,itemEntries){
   const urgentTag=o.priority==='عاجلة'?'<span class="row-pill urgent-pill"><i class="ti ti-bolt"></i> عاجل</span>':'';
   const newTag=hasOrderUpdate(o)?'<span class="row-pill" style="background:#DCFCE7;color:#15803D;">🟢 جديد</span>':'';
+  // Same order-wide signal shown in the order header strip and the workflow
+  // list table — surfaced here too so the collapsed card (before expanding
+  // any item row) already tells a designer/manager whether this order needs
+  // attention (a revision request) without opening it.
+  const proof=proofStatusForOrder(o);
+  const proofTag=proof?`<span class="proof-pill proof-${proof.key}"><i class="ti ${proof.icon}"></i> ${proof.label}</span>`:'';
   const itemsHtml=itemEntries.map(({it,idx})=>designerItemRowHtml(o,it,idx)).join('');
   const manyItems=itemEntries.length>5;
   return `<div class="designer-order-card" style="grid-column:1/-1;">
@@ -4387,7 +4607,7 @@ function designerOrderCardHtml(o,itemEntries){
         <button class="designer-order-toggle" onclick="event.stopPropagation();toggleDesignerOrderCard('${o._key}')" title="فتح/إغلاق قائمة البنود"><i class="ti ti-chevron-down" id="dsb-chev-${o._key}"></i></button>
         <div style="min-width:0;"><strong>${esc(o.id||o._key)}</strong> <span style="color:var(--text-3);font-weight:600;">• ${esc(o.client||'—')}</span></div>
       </div>
-      <div style="font-size:10.5px;color:var(--text-3);display:flex;align-items:center;gap:6px;">${itemEntries.length} بند ${urgentTag}${newTag}</div>
+      <div style="font-size:10.5px;color:var(--text-3);display:flex;align-items:center;gap:6px;flex-wrap:wrap;">${itemEntries.length} بند ${urgentTag}${newTag}${proofTag}</div>
     </div>
     <div class="designer-order-items" id="dsb-body-${o._key}" style="display:none;${manyItems?'max-height:420px;overflow-y:auto;scroll-behavior:smooth;':''}">${itemsHtml}</div>
   </div>`;
@@ -5574,7 +5794,7 @@ function buildItemWorkspacePage(){
           ${(canAct&&nd)?`
           <div style="margin-top:6px;">
             <div class="dept-upload-box" onclick="document.getElementById('itemwork-file-input').click()"><i class="ti ti-cloud-upload" style="font-size:20px;color:var(--gold);"></i><br>اضغط لرفع الملف</div>
-            <input type="file" id="itemwork-file-input" multiple style="display:none" onchange="handleNewVersionFiles(${idx},this.files).then(buildItemWorkspacePage)"/>
+            <input type="file" id="itemwork-file-input" multiple style="display:none" onchange="handleNewVersionFiles(${idx},this.files)"/>
             ${queued.length?`<div style="display:flex;flex-direction:column;gap:5px;margin-top:8px;">${queued.map((f,fi)=>`<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;background:#F0FDF4;border:1px solid #BBF7D0;border-radius:8px;padding:6px 10px;font-size:11.5px;"><span><i class="ti ti-paperclip"></i> ${esc(f.name)}</span><button class="btn btn-out btn-xs" onclick="removeQueuedItemworkFile(${idx},${fi})"><i class="ti ti-x"></i></button></div>`).join('')}</div>
             <textarea id="new-ver-notes-${idx}" placeholder="ملاحظات (اختياري)..." style="min-height:44px;font-size:12px;margin-top:8px;"></textarea>
             <button class="btn btn-brand btn-sm" style="margin-top:8px;" onclick="saveNewItemVersion('${key}',${idx}).then(buildItemWorkspacePage)"><i class="ti ti-device-floppy"></i> حفظ ورفع الملفات</button>`:''}
@@ -8364,9 +8584,9 @@ function openTimelineModal(key){
 // below as a resilience fallback if that primary upload throws — it must not
 // run on the happy path, since convertFileToBase64() returns a hosted URL
 // here, not a base64 data URI.
-async function _uploadOneFileData(file,key){
+async function _uploadOneFileData(file,key,onProgress){
   try{
-    return{data:await convertFileToBase64(file,{order:key}),storage:'cloud'};
+    return{data:await convertFileToBase64(file,{order:key},onProgress),storage:'cloud'};
   }catch(primaryErr){
     console.warn('الرفع الأساسي فشل، تجربة المسار الاحتياطي',primaryErr);
     const localB64=await _readFileAsDataUrl(file);
@@ -8391,7 +8611,14 @@ async function _uploadOneFileData(file,key){
 // box supports "delete this one file" individually (deleteApprovalFile) —
 // re-opening the file picker to add one more file must never silently wipe
 // out files a delete didn't touch.
-async function uploadFileDirect(key,ff,fn2,inputId){
+// Background-queued — see saveItemKindFiles() above for the pattern/
+// reasoning. Note the completion callback no longer force-reopens the order
+// modal unconditionally (the old openOrderModal(key) call): that was fine
+// for a blocking upload the user was necessarily still staring at, but
+// would be wrong here — popping a modal back open over whatever page the
+// user has since navigated to. _refreshOrderItemsViews() only reopens it if
+// it's already the thing showing for this order.
+function uploadFileDirect(key,ff,fn2,inputId){
   const el=document.getElementById(inputId);if(!el||!el.files||!el.files.length)return;
   const files=Array.from(el.files);
   const o=orders[key];if(!o)return;
@@ -8400,16 +8627,21 @@ async function uploadFileDirect(key,ff,fn2,inputId){
   // it directly overwrote approved design/print/workshop files on any order
   // regardless of assignment.
   if(!guardWrite(cu.type==='admin'||isMyOrder(o),'⚠️ لا تملك صلاحية رفع هذا الملف'))return;
-  showSaving(files.length>1?'جاري حفظ الملفات...':'جاري حفظ الملف...');
-  try{
+  el.value='';
+  const label=(files.length>1?`${files.length} ملفات — `:'')+(o.id||key);
+  runQueuedUpload(label,async onProgress=>{
     const uploaded=[];
-    for(const file of files){
-      const{data,storage}=await _uploadOneFileData(file,key);
+    for(let i=0;i<files.length;i++){
+      const file=files[i];
+      const{data,storage}=await _uploadOneFileData(file,key,pct=>onProgress(((i+pct/100)/files.length)*100));
       uploaded.push({data,storage,name:file.name,uploadedBy:cu.name||cu._uname||'—',uploadedAt:new Date().toISOString()});
     }
-    const existingExtra=Array.isArray(o&&o[ff+'Extra'])?o[ff+'Extra']:[];
+    return uploaded;
+  },async uploaded=>{
+    const o2=orders[key];if(!o2)return;
+    const existingExtra=Array.isArray(o2[ff+'Extra'])?o2[ff+'Extra']:[];
     const upd={};
-    if(o&&o[ff]){
+    if(o2[ff]){
       upd[ff+'Extra']=[...existingExtra,...uploaded];
     }else{
       const[first,...rest]=uploaded;
@@ -8417,15 +8649,15 @@ async function uploadFileDirect(key,ff,fn2,inputId){
       upd[ff+'UploadedBy']=first.uploadedBy;upd[ff+'UploadedAt']=first.uploadedAt;
       upd[ff+'Extra']=[...existingExtra,...rest];
     }
-    await fbPatch(`orders/${key}`,upd);await loadData();hideSaving();toast('✓ تم التحديث');
+    await fbPatch(`orders/${key}`,upd);await loadData();toast('✓ تم التحديث');
     if(ff==='approvedPrintFile'||ff==='approvedWorkshopFile')dispatchAutoWhatsapp(orders[key],'proof_ready');
     const _uo=orders[key];
     if(_uo){
       const _isProof=ff==='approvedPrintFile'&&_uo.currentDept==='design';
       pushNotification({type:'upload',message:_isProof?`تم رفع بروفة تصميم على الطلب ${esc(_uo.id||key)}`:`تم رفع ملف على الطلب ${esc(_uo.id||key)} — ${esc(uploaded[0].name)}`,orderKey:key,orderId:_uo.id,client:_uo.client});
     }
-    openOrderModal(key);
-  }catch(e){hideSaving();toast(e&&e.message?e.message:'❌ فشل الرفع');}
+    _refreshOrderItemsViews(key);
+  });
 }
 // Deletes one file from an approval upload box — slot is 'primary' or the
 // index of an entry in `${ff}Extra`. Deleting the primary file promotes the
