@@ -654,6 +654,27 @@ input[type="password"]{direction:rtl;text-align:right;padding-left:40px;padding-
 .dept-upload-box{background:var(--surface-2);border:2px dashed var(--border);border-radius:var(--radius-md);padding:16px;margin-top:10px;cursor:pointer;text-align:center;transition:.15s;}
 .dept-upload-box:hover{border-color:var(--gold);background:var(--gold-soft);}
 .dept-upload-title{font-size:12px;font-weight:700;color:var(--maroon);margin-bottom:10px;display:flex;align-items:center;gap:6px;}
+/* ============================================================ ITEM WORKSPACE — file kind cards */
+.ik-page-wrap{max-width:900px;margin:0 auto;}
+.ik-kind-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;}
+@media(max-width:640px){.ik-kind-grid{grid-template-columns:1fr;}}
+.ik-kind-card{background:var(--surface,#fff);border:1px solid var(--border-soft);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:10px;}
+.ik-kind-head{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;}
+.ik-kind-title{font-size:12.5px;font-weight:800;color:var(--maroon);display:flex;align-items:center;gap:6px;}
+.ik-kind-status{font-size:10px;font-weight:800;padding:2px 9px;border-radius:20px;display:inline-flex;align-items:center;gap:4px;white-space:nowrap;}
+.ik-kind-status.done{background:#D1FAE5;color:#065F46;}
+.ik-kind-status.pending{background:#F3F4F6;color:#6B7280;}
+.ik-file-row{display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:8px;padding:8px 10px;}
+.ik-file-row-main{min-width:0;flex:1;}
+.ik-file-links{display:flex;flex-wrap:wrap;gap:5px;}
+.ik-file-meta{font-size:10px;color:var(--text-3);margin-top:4px;}
+.ik-file-del{width:26px;height:26px;border-radius:7px;border:1px solid #F3D9D9;background:#FEF2F2;color:#DC2626;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:11px;flex-shrink:0;transition:.12s;}
+.ik-file-del:hover{background:#FEE2E2;}
+.ik-empty{font-size:11px;color:var(--text-3);padding:6px 0;}
+.ik-dropzone{display:flex;align-items:center;justify-content:center;gap:6px;cursor:pointer;border:1.5px dashed var(--border);border-radius:8px;padding:10px;font-size:11.5px;font-weight:700;color:var(--text-2);transition:.15s;}
+.ik-dropzone:hover{border-color:var(--gold);color:var(--maroon);background:var(--surface-2);}
+.ik-sticky-footer{position:sticky;bottom:0;background:var(--surface,#fff);border:1px solid var(--border);border-radius:14px 14px 0 0;padding:14px 18px;box-shadow:0 -8px 24px rgba(0,0,0,.08);z-index:5;}
+.ik-footer-warning{font-size:11px;color:#DC2626;margin-top:8px;text-align:center;display:flex;align-items:center;justify-content:center;gap:5px;}
 .file-download-link{display:inline-flex;align-items:center;gap:6px;color:#2563EB;font-weight:700;text-decoration:none;background:#EFF6FF;padding:5px 12px;border-radius:6px;border:1px solid #BFDBFE;transition:.15s;font-size:11px;max-width:280px;}
 .file-download-link:hover{background:#DBEAFE;}
 .file-link-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:150px;}
@@ -2411,13 +2432,22 @@ document.addEventListener('input',function(e){
 document.addEventListener('change',function(e){
   if(e.target&&e.target.closest&&e.target.closest('#add-content'))saveOrderDraftDebounced();
 });
+// Persists open/closed per accId across a full innerHTML rebuild (e.g.
+// buildOrderDetailsPage() re-rendering after returning from an item) — a
+// plain toggle on the DOM node alone is lost the instant the page rebuilds,
+// which is exactly what made an accordion the user had opened snap back
+// closed every time they came back from an item.
+window._omAccState=window._omAccState||{};
 function toggleOmAccordion(headerEl){
   const body=headerEl.nextElementSibling;if(!body)return;
   const isOpen=headerEl.classList.toggle('open');
   body.style.display=isOpen?'':'none';
+  const accId=headerEl.closest('.om-accordion')?.dataset.accId;
+  if(accId)window._omAccState[accId]=isOpen;
 }
-function omAccordion(icon,title,bodyHtml,startOpen){
-  return`<div class="om-accordion"><div class="om-acc-header${startOpen?' open':''}" onclick="toggleOmAccordion(this)"><span><i class="ti ${icon}"></i> ${title}</span><i class="ti ti-chevron-down om-acc-caret"></i></div><div class="om-acc-body dg" style="display:${startOpen?'':'none'};">${bodyHtml}</div></div>`;
+function omAccordion(icon,title,bodyHtml,startOpen,accId){
+  const open=(accId&&Object.prototype.hasOwnProperty.call(window._omAccState,accId))?window._omAccState[accId]:startOpen;
+  return`<div class="om-accordion"${accId?` data-acc-id="${esc(accId)}"`:''}><div class="om-acc-header${open?' open':''}" onclick="toggleOmAccordion(this)"><span><i class="ti ${icon}"></i> ${title}</span><i class="ti ti-chevron-down om-acc-caret"></i></div><div class="om-acc-body dg" style="display:${open?'':'none'};">${bodyHtml}</div></div>`;
 }
 function showSaving(msg='جاري...'){document.getElementById('saving-msg').textContent=msg;document.getElementById('saving-overlay').classList.add('show');}
 function hideSaving(){document.getElementById('saving-overlay').classList.remove('show');clearUploadProgress();}
@@ -5576,6 +5606,9 @@ function buildMyWork(){
 // rather than introducing any new schema.
 // ============================================================
 function openItemWorkspace(orderKey,idx){
+  // Captured so itemworkBack() can restore the exact scroll position on the
+  // order details page instead of landing back at the top of it.
+  window._orderDetailsScrollY=window.scrollY;
   window._itemworkKey=orderKey;window._itemworkIdx=idx;
   window._newVerFiles=window._newVerFiles||{};window._newVerFiles[idx]=[];
   markOrderUpdateSeen(orderKey);
@@ -5585,10 +5618,27 @@ function openItemWorkspace(orderKey,idx){
 // almost always came from — the parent order's details page, open on the
 // same item grid — not the generic page-history back-stack (which would
 // land on whatever list page was showing, i.e. effectively the dashboard).
+//
+// This used to detour through nav(ROLE_LANDING) first (a leftover from when
+// the order view was a modal that needed some background page to sit on
+// top of) before opening the order — with the order now a real page in its
+// own right, that detour just meant a visible flash through the dashboard
+// on every single "رجوع" from an item, and it corrupted the back-stack
+// besides (nav('orderdetails') without skipHistory would push whatever
+// _curPage the detour left behind — 'dash' — onto _navHistory, so the
+// user's NEXT "رجوع" from the order page would jump to the dashboard
+// instead of wherever they actually came from before opening the item).
+// Going straight to 'orderdetails' with skipHistory=true avoids both.
 async function itemworkBack(){
   const key=window._itemworkKey;
+  const savedScrollY=window._orderDetailsScrollY;
+  if(key&&orders[key]){
+    window._orderDetailsKey=key;
+    await nav('orderdetails',true);
+    if(typeof savedScrollY==='number')window.scrollTo(0,savedScrollY);
+    return;
+  }
   await nav(ROLE_LANDING[cu.type]||'dash',true);
-  if(key&&orders[key])openOrderPage(key);
 }
 function _itemworkState(){
   const key=window._itemworkKey;const idx=window._itemworkIdx;
@@ -5678,24 +5728,30 @@ async function confirmItemworkSend(){
 function renderItemKindBox(it,key,idx,kind,dept,canAct,labelOverride){
   const label=labelOverride||ITEM_KIND_LABELS[kind]||kind;
   const versions=itemVersions(it).filter(v=>!v._legacy&&(v.stage||'design')===dept&&(v.kind===kind||(kind==='final_work'&&!v.kind)));
-  const filesHtml=versions.length?versions.map(v=>`<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:8px;padding:6px 10px;">
-    <div>
-      <div style="display:flex;flex-wrap:wrap;gap:5px;">${(v.files||[]).map(f=>fileLinkHtml(f.name,f.data)).join('')}</div>
-      <div style="font-size:10px;color:var(--text-3);margin-top:4px;"><i class="ti ti-user"></i> ${esc(v.createdBy||'—')} ${v.createdAt?'· '+fmtDateTime(v.createdAt):''}</div>
+  const hasFiles=versions.length>0;
+  const filesHtml=versions.map(v=>`<div class="ik-file-row">
+    <div class="ik-file-row-main">
+      <div class="ik-file-links">${(v.files||[]).map(f=>fileLinkHtml(f.name,f.data)).join('')}</div>
+      <div class="ik-file-meta"><i class="ti ti-user"></i> ${esc(v.createdBy||'—')} ${v.createdAt?'· '+fmtDateTime(v.createdAt):''}</div>
     </div>
-    ${canAct?`<button class="btn btn-red btn-xs" onclick="deleteItemVersion('${key}',${idx},'${v.id}')"><i class="ti ti-trash"></i></button>`:''}
-  </div>`).join(''):'<div style="font-size:11px;color:var(--text-3);">لا توجد ملفات بعد</div>';
+    ${canAct?`<button class="ik-file-del" onclick="deleteItemVersion('${key}',${idx},'${v.id}')" title="حذف"><i class="ti ti-trash"></i></button>`:''}
+  </div>`).join('');
   const inputId=`itemwork-${kind}-input`;
-  return `<div class="fg" style="margin-bottom:10px"><label>${esc(label)}:</label>
-    ${canAct?`<input type="file" multiple id="${inputId}" accept="image/*,.pdf,.ai,.psd,.eps,.svg,.cdr,application/postscript,application/pdf,image/vnd.adobe.photoshop,video/*,.doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onchange="saveItemKindFiles('${key}',${idx},'${kind}','${inputId}')"/>`:''}
-    <div style="display:flex;flex-direction:column;gap:5px;margin-top:6px;">${filesHtml}</div>
+  return `<div class="ik-kind-card">
+    <div class="ik-kind-head">
+      <span class="ik-kind-title"><i class="ti ti-file-description"></i> ${esc(label)}</span>
+      <span class="ik-kind-status ${hasFiles?'done':'pending'}">${hasFiles?'<i class="ti ti-circle-check"></i> تم الرفع':'<i class="ti ti-clock"></i> بانتظار الرفع'}</span>
+    </div>
+    ${filesHtml||'<div class="ik-empty">لا توجد ملفات بعد</div>'}
+    ${canAct?`<label class="ik-dropzone" for="${inputId}"><i class="ti ti-cloud-upload"></i> ${hasFiles?'استبدال / إضافة ملف':'اضغط لرفع الملف'}</label>
+    <input type="file" multiple id="${inputId}" style="display:none" accept="image/*,.pdf,.ai,.psd,.eps,.svg,.cdr,application/postscript,application/pdf,image/vnd.adobe.photoshop,video/*,.doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onchange="saveItemKindFiles('${key}',${idx},'${kind}','${inputId}')"/>`:''}
   </div>`;
 }
 function buildItemWorkspacePage(){
   const{key,idx,o,it}=_itemworkState();
   const el=document.getElementById('itemwork-content');
   if(!el)return;
-  if(!o||!it){el.innerHTML=`${itemworkBackBtnHtml()}<div style="text-align:center;color:var(--text-3);padding:40px;"><i class="ti ti-mood-sad" style="font-size:32px;display:block;margin-bottom:8px;"></i>تعذر العثور على هذا البند</div>`;return;}
+  if(!o||!it){el.innerHTML=`<div class="ik-page-wrap">${itemworkBackBtnHtml()}<div style="text-align:center;color:var(--text-3);padding:40px;"><i class="ti ti-mood-sad" style="font-size:32px;display:block;margin-bottom:8px;"></i>تعذر العثور على هذا البند</div></div>`;return;}
   const dept=itemCurrentDept(it,o);
   const stillMine=isMyItem(o,it);
   const canAct=stillMine||cu.type==='admin';
@@ -5710,7 +5766,7 @@ function buildItemWorkspacePage(){
   const dcol=itemDesignColumn(it);
   const statusMeta=ITEM_DESIGN_STATUS[dcol];
   const revisionNote=it.needsRevision?latestClientFeedbackNote(it):null;
-  el.innerHTML=`
+  el.innerHTML=`<div class="ik-page-wrap">
     ${itemworkBackBtnHtml()}
     <div class="page-header"><div class="ptitle"><i class="ti ti-box"></i> ${esc(it.name||'بند')}</div><div style="display:flex;gap:6px;flex-wrap:wrap;">${dcol==='revision'?`<span class="revision-badge"><i class="ti ti-refresh"></i> يتطلب تعديل</span>`:(dcol==='waiting'||dcol==='approved')?`<span class="badge ${statusMeta.cls}"><i class="ti ${statusMeta.icon}"></i> ${statusMeta.label}</span>`:''}<span class="badge ${dept==='done'?'b-done':'b-new'}">${WF_DEPT_META[dept]?.label||dept}</span></div></div>
     ${(canSeeClientFeedback()||canApproveClientProof())?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;">
@@ -5753,7 +5809,7 @@ function buildItemWorkspacePage(){
           :[renderItemKindBox(it,key,idx,'design_approved',dept,canEditDesign),renderItemKindBox(it,key,idx,'design_proof',dept,canEditDesign),...(workshopActive?[renderItemKindBox(it,key,idx,'workshop_production',dept,canEditDesign)]:[])];
         return`<div class="card" style="margin-bottom:14px;">
           <div class="card-header"><span class="card-title"><i class="ti ti-upload"></i> ملفات التصميم المطلوبة</span></div>
-          <div style="padding:16px 20px;">${boxes.join('')}</div>
+          <div style="padding:16px 20px;" class="ik-kind-grid">${boxes.join('')}</div>
         </div>`;
       }
       if(dept==='print'){
@@ -5765,7 +5821,7 @@ function buildItemWorkspacePage(){
         const canEditDesign=canEditDesignFiles(o,it);
         return`<div class="card" style="margin-bottom:14px;">
           <div class="card-header"><span class="card-title"><i class="ti ti-printer"></i> الملفات المستلمة من التصميم</span></div>
-          <div style="padding:16px 20px;">${renderItemKindBox(it,key,idx,'design_approved','design',canEditDesign)}${renderItemKindBox(it,key,idx,'design_proof','design',canEditDesign)}</div>
+          <div style="padding:16px 20px;" class="ik-kind-grid">${renderItemKindBox(it,key,idx,'design_approved','design',canEditDesign)}${renderItemKindBox(it,key,idx,'design_proof','design',canEditDesign)}</div>
         </div>`;
       }
       if(dept==='workshop'){
@@ -5797,16 +5853,14 @@ function buildItemWorkspacePage(){
         </div>
       </div>`;
     })()}
-    ${nd?`<div class="card">
-      <div style="padding:16px 20px;">
+    ${nd?`<div class="ik-sticky-footer">
         ${canAct?(reqMet
           ?`<button class="btn btn-brand" style="width:100%;justify-content:center;" onclick="openItemworkReviewModal()"><i class="ti ti-send"></i> إرسال إلى ${WF_DEPT_META[nd]?.label||nd}</button>`
           :`<button class="btn btn-out" style="width:100%;justify-content:center;opacity:.5;cursor:not-allowed;" disabled><i class="ti ti-lock"></i> إرسال إلى ${WF_DEPT_META[nd]?.label||nd}</button>
-             <div style="font-size:11px;color:#DC2626;margin-top:6px;text-align:center;"><i class="ti ti-alert-triangle"></i> يجب رفع جميع الملفات المطلوبة قبل الانتقال للمرحلة التالية</div>`)
+             <div class="ik-footer-warning"><i class="ti ti-alert-triangle"></i> يجب رفع جميع الملفات المطلوبة قبل الانتقال للمرحلة التالية</div>`)
           :`<div style="font-size:12px;color:var(--text-3);text-align:center;">${stillMine?'':'هذا البند غير موكل إليك في هذه المرحلة'}</div>`}
-      </div>
     </div>`:`<div class="card"><div style="padding:16px 20px;text-align:center;color:#10B981;font-weight:700;font-size:12.5px;"><i class="ti ti-check-circle"></i> تم إنجاز هذا البند بالكامل</div></div>`}
-  `;
+  </div>`;
 }
 // ============================================================
 // MAINTENANCE REQUEST PAGE — a detached, simplified channel for logging
@@ -8372,13 +8426,13 @@ function buildOrderDetailsPage(){
   // approval controls) are collapsed by default here instead of always-on —
   // still one click away for whoever needs to act, but not duplicating the
   // timeline's status information on every page load.
-  const _deptToolsAcc=(_otherDeptChipsHtml||_deptCardsHtml)?`<div id="od-dept-tools-acc">${omAccordion('ti-tool','أدوات مراحل الإنتاج',`${_otherDeptChipsHtml}${_deptCardsHtml}`,false)}</div>`:'';
+  const _deptToolsAcc=(_otherDeptChipsHtml||_deptCardsHtml)?`<div id="od-dept-tools-acc">${omAccordion('ti-tool','أدوات مراحل الإنتاج',`${_otherDeptChipsHtml}${_deptCardsHtml}`,false,'od-deptTools-'+key)}</div>`:'';
   const _custInfoAcc=omAccordion('ti-user','معلومات العميل',`<div class="od-summary-grid">
     <div class="od-summary-card"><div class="od-summary-lbl">العميل</div><div class="od-summary-val">${esc(o.client||'—')}</div></div>
     <div class="od-summary-card"><div class="od-summary-lbl">رقم الجوال</div><div class="od-summary-val" style="direction:ltr;">${esc(o.phone||'—')}</div></div>
     <div class="od-summary-card"><div class="od-summary-lbl">الخدمة</div><div class="od-summary-val">${esc(o.service||'—')}</div></div>
     <div class="od-summary-card"><div class="od-summary-lbl">التسليم</div><div class="od-summary-val">${deadlineDateTime(o)}</div></div>
-  </div>`,false);
+  </div>`,false,'od-custInfo-'+key);
   // The dedicated financial breakdown card in the right-column sidebar now
   // supersedes this collapsed summary for anyone who can see it; it stays
   // hidden entirely (not even a collapsed header) for shop-floor production
