@@ -1479,6 +1479,15 @@ input:focus,select:focus,textarea:focus{box-shadow:inset 0 1px 3px rgba(74,14,23
     firebase.auth().onAuthStateChanged(function(user){
       if(user) resolve(user);
     });
+    // Safety net: if anonymous sign-in never completes (provider disabled,
+    // a network hiccup at boot, etc.) this promise must not stay pending
+    // forever — every fbGet/fbPatch/fbPush/fbDelete call in the app awaits
+    // it first (see fbReq()), so a permanently-unresolved promise would
+    // silently freeze the very first load AND every 60s background refresh
+    // with no error at all. Resolving after a few seconds lets requests
+    // proceed (unauthenticated if truly necessary) and turns any real
+    // permission problem into a normal, per-request fetch failure instead.
+    setTimeout(function(){resolve(null);},5000);
   });
   firebase.auth().signInAnonymously().catch(function(e){ console.error("Anon auth failed", e); });
 })();
@@ -2233,22 +2242,28 @@ function _restoreDataCache(){
   }catch(e){return false;}
 }
 async function loadData(){
-  // Each fetch is tracked individually so a single failing endpoint (network
-  // blip, momentary Firebase outage) can't wipe out unrelated in-memory data —
-  // a failed field simply keeps its last-known value instead of being reset to
-  // {} on every 60s refresh, and the user gets one clear warning instead of the
-  // page silently looking like all records were deleted.
-  const fetches=[
+  // Essential vs. auxiliary data, split deliberately:
+  //   - Essential: orders (+ clients, the current user's orderSeen map, and
+  //     the staff directory via syncUsers()). These are the records the
+  //     whole app is built around. A transient failure here keeps the
+  //     last-known value instead of being reset to {} (same resilience as
+  //     before), but only a failed ORDERS fetch is worth interrupting the
+  //     user for — that's the one signal that the page may be showing
+  //     meaningfully stale data.
+  //   - Auxiliary/secondary: eventNotifs, tasks, govRecords, urgentRequests,
+  //     warranties, team_chat, submittedRequests, chats, standalone_quotes.
+  //     Each of these is an additive feature whose Firebase path may not
+  //     exist in every deployment's database rules yet (added after those
+  //     rules were last configured), or may be scoped away from certain
+  //     roles/anonymous sessions. A 401/404/permission error on any ONE of
+  //     them must recover silently (fall back to {}, log a console warning)
+  //     and must NEVER flip anyFailed or trigger the generic "⚠️ تعذر تحديث
+  //     بعض البيانات..." banner — that banner exists to warn about orders
+  //     itself, not to alarm users over a feature they may not even have
+  //     enabled server-side.
+  const essential=[
     ['orders',v=>orders=v],
     ['clients',v=>clients=v],
-    ['requests',v=>submittedRequests=v],
-    ['chats',v=>chats=v],
-    ['standalone_quotes',v=>standaloneQuotes=v],
-    ['warranties',v=>warranties=v],
-    ['team_chat',v=>teamChat=v],
-    ['govRecords',v=>govRecords=v],
-    ['urgentRequests',v=>urgentRequests=v],
-    ['tasks',v=>tasksData=v],
   ];
   // cu is still null on the very first loadData() call (doLogin awaits it
   // BEFORE calling enterApp(), which is what actually sets cu) — that
@@ -2256,21 +2271,39 @@ async function loadData(){
   // orderSeen/{uname} directly before its first render. Every subsequent
   // call (the 60s poll, explicit refreshes after mutations) has cu set and
   // keeps this in sync with what other devices/sessions have marked seen.
-  if(cu&&cu._uname)fetches.push(['orderSeen/'+cu._uname,v=>orderSeenMap=v]);
-  const results=await Promise.all(fetches.map(([path])=>fbGet(path).then(v=>({ok:true,v})).catch(()=>({ok:false}))));
+  if(cu&&cu._uname)essential.push(['orderSeen/'+cu._uname,v=>orderSeenMap=v]);
+  // Every fbGet() call below (essential and auxiliary alike) goes through
+  // fbReq(), which already awaits window._fbAuthReady and attaches a valid
+  // ID token before firing — see fbReq() and the _fbAuthReady safety-net
+  // above. That's what keeps a background refresh from racing anonymous
+  // auth and getting spurious permission errors.
+  const results=await Promise.all(essential.map(([path])=>fbGet(path).then(v=>({ok:true,v})).catch(()=>({ok:false}))));
   let anyFailed=false;
   results.forEach((r,i)=>{
-    if(r.ok){fetches[i][1]((r.v&&typeof r.v==='object')?r.v:{});}
-    else{anyFailed=true;}
+    const[path,assign]=essential[i];
+    if(r.ok){assign((r.v&&typeof r.v==='object')?r.v:{});}
+    else if(path==='orders'){anyFailed=true;}
   });
-  // eventNotifs is fetched separately from the core business-data list above —
-  // it's an additive, non-critical feature (the event notification log), and
-  // its Firebase path may not exist in every deployment's database rules yet
-  // (added after those rules were last configured). A permission error here
-  // must never trigger the generic "some data failed to update" banner that's
-  // meant to warn about orders/clients/etc. — that would alarm users over a
-  // feature they may not even have enabled server-side.
-  try{eventNotifs=(await fbGet('eventNotifs'))||{};}catch(e){console.warn('eventNotifs fetch failed (non-fatal — check Firebase rules allow this path)',e);}
+  // Staff directory: syncUsers() already wraps its own fbGet('users') in a
+  // try/catch and falls back to INITIAL_USERS internally on failure, so it
+  // never throws and never needs to participate in anyFailed — it's called
+  // here so the directory also refreshes on the 60s poll, not just at login.
+  await syncUsers();
+  const aux=[
+    ['eventNotifs',v=>eventNotifs=v],
+    ['tasks',v=>tasksData=v],
+    ['govRecords',v=>govRecords=v],
+    ['urgentRequests',v=>urgentRequests=v],
+    ['warranties',v=>warranties=v],
+    ['team_chat',v=>teamChat=v],
+    ['requests',v=>submittedRequests=v],
+    ['chats',v=>chats=v],
+    ['standalone_quotes',v=>standaloneQuotes=v],
+  ];
+  await Promise.all(aux.map(async([path,assign])=>{
+    try{assign((await fbGet(path))||{});}
+    catch(e){console.warn(`${path} fetch failed (non-fatal — check Firebase rules allow this path)`,e);}
+  }));
   try{
     updateNotifBell();updateRequestsBadgeSidebar();updateTeamChatBadge();updatePrepBadgeSidebar();
     checkNewAssignments();
