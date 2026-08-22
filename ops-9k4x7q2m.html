@@ -254,7 +254,7 @@ tr:last-child td{border-bottom:none;}
 tbody tr:hover td{background:var(--surface-2);}
 .tbl-wrap{overflow-x:auto;}
 /* ============================================================ BADGES */
-.badge{display:inline-flex;align-items:center;gap:3px;padding:3px 10px;border-radius:20px;font-size:10px;font-weight:700;white-space:nowrap;}
+.badge{display:inline-flex;align-items:center;gap:3px;padding:3px 10px;border-radius:20px;font-size:10px;font-weight:700;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis;vertical-align:middle;}
 .b-new{background:#DBEAFE;color:#1E40AF;}
 .b-proc{background:#FEF3C7;color:#92400E;}
 .b-done{background:#D1FAE5;color:#065F46;}
@@ -266,7 +266,7 @@ tbody tr:hover td{background:var(--surface-2);}
 .b-paid{background:#D1FAE5;color:#065F46;}
 .b-partial{background:#FEF3C7;color:#92400E;}
 .b-delivery{background:#E0E7FF;color:#3730A3;}
-.urgent-tag{background:#EF4444;color:#fff;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;display:inline-flex;align-items:center;gap:3px;}
+.urgent-tag{background:#EF4444;color:#fff;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;display:inline-flex;align-items:center;gap:3px;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis;vertical-align:middle;}
 /* ============================================================ MODULE 3 — DATA-DENSE OPERATIONS TABLE */
 .wf-list-filterbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px;}
 .wf-list-search{flex:1;min-width:230px;display:flex;align-items:center;gap:8px;background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius-md);padding:8px 12px;}
@@ -281,13 +281,13 @@ tbody tr:hover td{background:var(--surface-2);}
 .wf-dense-row.wf-row-overdue{background:#FFF8F8;box-shadow:inset 3px 0 0 #C53030;}
 .wf-dense-row:hover{background:var(--surface-2);}
 /* Column-1 pills: unread / urgent / overdue */
-.row-pill{display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:20px;font-size:9.5px;font-weight:800;color:#fff;white-space:nowrap;}
+.row-pill{display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:20px;font-size:9.5px;font-weight:800;color:#fff;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis;vertical-align:middle;}
 .new-pill{background:#2F855A;box-shadow:0 0 0 3px rgba(47,133,90,.18);animation:rowPillPulse 2s infinite;}
 @keyframes rowPillPulse{0%,100%{box-shadow:0 0 0 0 rgba(47,133,90,.35);}50%{box-shadow:0 0 0 5px rgba(47,133,90,0);}}
 .urgent-pill{background:#C05621;}
 .overdue-pill{background:#C53030;}
 /* Column-3 stage pills — spec's exact stage palette */
-.stage-pill{display:inline-flex;align-items:center;padding:4px 12px;border-radius:999px;font-size:11px;font-weight:800;color:#fff;white-space:nowrap;}
+.stage-pill{display:inline-flex;align-items:center;padding:4px 12px;border-radius:999px;font-size:11px;font-weight:800;color:#fff;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis;vertical-align:middle;}
 .stage-design{background:#6B46C1;}
 .stage-print{background:#2B6CB0;}
 .stage-workshop{background:#C05621;}
@@ -304,7 +304,7 @@ tbody tr:hover td{background:var(--surface-2);}
 .proof-waiting{background:#FEF3C7;color:#92400E;}
 .proof-approved{background:#D1FAE5;color:#065F46;}
 .proof-revision{background:#FFEDD5;color:#9A3412;}
-.revision-badge{background:linear-gradient(135deg,#F97316,#EF4444);color:#fff;padding:3px 10px;border-radius:20px;font-size:10.5px;font-weight:800;display:inline-flex;align-items:center;gap:4px;white-space:nowrap;}
+.revision-badge{background:linear-gradient(135deg,#F97316,#EF4444);color:#fff;padding:3px 10px;border-radius:20px;font-size:10.5px;font-weight:800;display:inline-flex;align-items:center;gap:4px;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis;vertical-align:middle;}
 .revision-notes-box{background:#FFF7ED;border:1.5px solid #FDBA74;border-radius:10px;padding:10px 12px;margin-top:8px;}
 .revision-notes-box .rn-title{font-size:11px;font-weight:800;color:#9A3412;display:flex;align-items:center;gap:5px;margin-bottom:4px;}
 .revision-notes-box .rn-text{font-size:12px;color:#7C2D12;line-height:1.6;}
@@ -474,7 +474,7 @@ input[type="password"]{direction:rtl;text-align:right;padding-left:40px;padding-
    Uses the site's existing design tokens (--maroon/--gold/--radius-*/--shadow-*)
    throughout so this matches the current brand identity exactly. ── */
 .wf-stats-row{display:grid!important;grid-template-columns:repeat(6,1fr)!important;flex-direction:row!important;gap:10px!important;width:100%!important;clear:both!important;align-items:stretch;margin-bottom:20px;}
-.wf-stat-card{position:relative;width:100%!important;max-width:none!important;margin:0!important;min-height:110px;background:var(--wf-stat-bg,var(--surface));border:2px solid transparent;border-radius:16px!important;padding:14px 14px 12px;display:flex;flex-direction:column;gap:9px;box-shadow:5px 5px 12px rgba(0,0,0,.08),-5px -5px 12px #ffffff!important;transition:transform .2s ease,box-shadow .2s ease!important;cursor:pointer!important;}
+.wf-stat-card{position:relative;width:100%!important;max-width:none!important;min-width:0!important;margin:0!important;min-height:110px;background:var(--wf-stat-bg,var(--surface));border:2px solid transparent;border-radius:16px!important;padding:14px 14px 12px;display:flex;flex-direction:column;gap:9px;box-shadow:5px 5px 12px rgba(0,0,0,.08),-5px -5px 12px #ffffff!important;transition:transform .2s ease,box-shadow .2s ease!important;cursor:pointer!important;}
 .wf-stat-card:hover{transform:translateY(-3px)!important;box-shadow:7px 7px 16px rgba(0,0,0,.1),-7px -7px 16px #ffffff!important;}
 .wf-stat-card:active{transform:translateY(2px)!important;box-shadow:inset 2px 2px 5px rgba(0,0,0,.15)!important;}
 .wf-stat-card.wf-stat-active{transform:translateY(2px);box-shadow:inset 3px 3px 8px rgba(0,0,0,.15),inset -3px -3px 8px rgba(255,255,255,.7)!important;border-color:var(--wf-stat-accent,var(--maroon));}
@@ -529,7 +529,7 @@ input[type="password"]{direction:rtl;text-align:right;padding-left:40px;padding-
    margin-top:auto, this anchors each card's action buttons/"فتح البند" to
    the same bottom line regardless of how much varies above it (dimensions,
    the revision-notes box, etc. aren't the same length on every card). */
-.order-item-card{background:var(--surface);border:1px solid var(--border-soft);border-radius:var(--radius-md);padding:10px 12px;box-shadow:var(--shadow-sm);transition:box-shadow .2s,transform .2s;display:flex;flex-direction:column;height:100%;}
+.order-item-card{background:var(--surface);border:1px solid var(--border-soft);border-radius:var(--radius-md);padding:10px 12px;box-shadow:var(--shadow-sm);transition:box-shadow .2s,transform .2s;display:flex;flex-direction:column;height:100%;min-width:0;}
 .oi-card-actions{margin-top:auto;padding-top:10px;}
 .order-item-card:hover{box-shadow:var(--shadow-md);transform:translateY(-2px);}
 .order-item-card-head{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;padding-bottom:6px;border-bottom:1px solid var(--border-soft);margin-bottom:6px;}
@@ -671,7 +671,7 @@ input[type="password"]{direction:rtl;text-align:right;padding-left:40px;padding-
 .ik-page-wrap{max-width:900px;margin:0 auto;}
 .ik-kind-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;}
 @media(max-width:640px){.ik-kind-grid{grid-template-columns:1fr;}}
-.ik-kind-card{background:var(--surface,#fff);border:1px solid var(--border-soft);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:10px;}
+.ik-kind-card{background:var(--surface,#fff);border:1px solid var(--border-soft);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:10px;min-width:0;}
 .ik-kind-head{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;}
 .ik-kind-title{font-size:12.5px;font-weight:800;color:var(--maroon);display:flex;align-items:center;gap:6px;}
 .ik-kind-status{font-size:10px;font-weight:800;padding:2px 9px;border-radius:20px;display:inline-flex;align-items:center;gap:4px;white-space:nowrap;}
@@ -1461,7 +1461,7 @@ input:focus,select:focus,textarea:focus{box-shadow:inset 0 1px 3px rgba(74,14,23
 /* Strict end-of-head override: guarantees the workflow stat cards never stack
    vertically, regardless of any earlier rule in the cascade. */
 .wf-stats-row{display:grid!important;grid-template-columns:repeat(6,1fr)!important;gap:10px!important;width:100%!important;clear:both!important;}
-.wf-stat-card{display:flex!important;flex-direction:column!important;width:100%!important;max-width:none!important;margin:0!important;}
+.wf-stat-card{display:flex!important;flex-direction:column!important;width:100%!important;max-width:none!important;min-width:0!important;margin:0!important;}
 @media(max-width:900px){.wf-stats-row{grid-template-columns:repeat(3,1fr)!important;}}
 @media(max-width:520px){.wf-stats-row{grid-template-columns:repeat(2,1fr)!important;}}
 </style>
