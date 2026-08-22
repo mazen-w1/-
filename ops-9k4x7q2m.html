@@ -2901,11 +2901,25 @@ function fetchWithTimeout(url,opts={},timeoutMs=DRIVE_TIMEOUT_MS){
   return fetch(url,{...opts,signal:ctrl.signal}).finally(()=>clearTimeout(t));
 }
 let _driveAccessToken=null;
-async function getGoogleAccessToken(){
-  if(_driveAccessToken&&_driveAccessToken.expiresAt>Date.now()+60000)return _driveAccessToken.value;
+const TOKEN_FETCH_MAX_RETRIES=3;
+// One attempt at getting a token from the proxy. Errors are tagged
+// `retryable` so the loop below knows what's worth retrying:
+//  - a network drop / AbortError (fetchWithTimeout's timeout firing, e.g. on
+//    a Vercel cold start) is transient → retryable.
+//  - a 5xx or an empty/unparseable body means the proxy process itself is
+//    unhealthy (crash, deploy in progress) → also worth another attempt.
+//  - a 4xx with a real Google error payload (invalid_grant, invalid_client,
+//    missing env vars) means the credentials themselves are rejected —
+//    retrying changes nothing, so this fails fast instead of stalling the
+//    user for ~3x the timeout before showing them the real error.
+async function _fetchGoogleAccessTokenOnce(){
   let resp;
   try{resp=await fetchWithTimeout(DRIVE_PROXY_URL);}
-  catch(e){throw new Error(e.name==='AbortError'?'⚠️ خادم رفع الملفات (rawaee-drive-proxy) لا يستجيب، حاول مجدداً.':'⚠️ تعذر الاتصال بخادم رفع الملفات (rawaee-drive-proxy)، تحقق من الإنترنت أو من أن الخادم يعمل.');}
+  catch(e){
+    const err=new Error(e.name==='AbortError'?'⚠️ خادم رفع الملفات (rawaee-drive-proxy) لا يستجيب، حاول مجدداً.':'⚠️ تعذر الاتصال بخادم رفع الملفات (rawaee-drive-proxy)، تحقق من الإنترنت أو من أن الخادم يعمل.');
+    err.retryable=true;
+    throw err;
+  }
   let data=null;try{data=await resp.json();}catch(e){}
   if(!resp.ok||!data||!data.access_token){
     // Surface whatever the proxy actually said (e.g. invalid_grant on an
@@ -2913,10 +2927,24 @@ async function getGoogleAccessToken(){
     // instead of a generic message — this is the only signal available from
     // here into a failure that actually happens in a separate deployment.
     const detail=(data&&(data.error_description||data.error))||('HTTP '+resp.status);
-    throw new Error(`⚠️ تعذر تجهيز صلاحية Google Drive — رد الخادم: ${detail}`);
+    const err=new Error(`⚠️ تعذر تجهيز صلاحية Google Drive — رد الخادم: ${detail}`);
+    err.retryable=!resp.status||resp.status>=500;
+    throw err;
   }
-  _driveAccessToken={value:data.access_token,expiresAt:Date.now()+((data.expires_in||3500)*1000)};
-  return _driveAccessToken.value;
+  return{value:data.access_token,expiresAt:Date.now()+((data.expires_in||3500)*1000)};
+}
+async function getGoogleAccessToken(){
+  if(_driveAccessToken&&_driveAccessToken.expiresAt>Date.now()+60000)return _driveAccessToken.value;
+  let lastErr=null;
+  for(let attempt=0;attempt<TOKEN_FETCH_MAX_RETRIES;attempt++){
+    try{_driveAccessToken=await _fetchGoogleAccessTokenOnce();return _driveAccessToken.value;}
+    catch(e){
+      lastErr=e;
+      if(!e.retryable)break;
+      if(attempt<TOKEN_FETCH_MAX_RETRIES-1)await new Promise(r=>setTimeout(r,800*(attempt+1)));
+    }
+  }
+  throw lastErr;
 }
 function _updateGoogleDriveStatusUI(){}
 // In-memory only (cleared on page reload) — every file uploaded to the same
@@ -4148,7 +4176,7 @@ async function handleQtFile(files){
   if(!files||!files.length)return;
   showSaving('جاري معالجة الملف...');
   try{window._qtFileB64=await convertFileToBase64(files[0]);window._qtFileName=files[0].name;document.getElementById('qt-file-note').textContent='✓ تم: '+files[0].name;}
-  catch(e){toast('فشل قراءة الملف');}
+  catch(e){toast(e&&e.message?e.message:'فشل قراءة الملف');}
   hideSaving();
 }
 async function submitQuickTask(type){
