@@ -903,20 +903,23 @@ input[type="password"]{direction:rtl;text-align:right;padding-left:40px;padding-
    .saving-overlay so an upload keeps running (and stays visible) while the
    user navigates anywhere else in the app. left:20px (not right) so it
    doesn't collide with the sidebar in this RTL layout. */
-.upload-queue-widget{position:fixed;left:20px;bottom:20px;width:300px;max-width:calc(100vw - 40px);z-index:9997;display:flex;flex-direction:column-reverse;gap:8px;}
-.uq-item{background:var(--surface,#fff);border:1px solid var(--border);border-radius:12px;padding:10px 14px;box-shadow:0 8px 28px rgba(0,0,0,.16);animation:uqSlideIn .18s ease-out;}
+.upload-queue-widget{position:fixed;left:20px;bottom:20px;width:300px;max-width:calc(100vw - 40px);z-index:99999;display:flex;flex-direction:column-reverse;gap:10px;}
+.uq-item{background:var(--surface,#fff);border:1px solid var(--border);border-radius:20px;padding:12px 16px;box-shadow:0 6px 20px rgba(0,0,0,.12);animation:uqSlideIn .18s ease-out;transition:opacity .3s ease,transform .3s ease;}
 @keyframes uqSlideIn{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:translateY(0);}}
-.uq-item-top{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;}
+.uq-item.fading{opacity:0;transform:translateY(8px) scale(.96);}
+.uq-item-top{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;}
 .uq-item-name{font-size:12px;font-weight:700;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:170px;display:flex;align-items:center;gap:6px;}
 .uq-item-right{display:flex;align-items:center;gap:8px;flex-shrink:0;}
 .uq-item-status{font-size:10.5px;font-weight:800;white-space:nowrap;}
 .uq-item-status.uploading{color:#2563EB;}
 .uq-item-status.done{color:#10B981;}
 .uq-item-status.error{color:#DC2626;}
+.uq-item-status.done i{display:inline-block;animation:uqCheckPop .35s ease-out;}
+@keyframes uqCheckPop{0%{transform:scale(.4);opacity:0;}60%{transform:scale(1.25);opacity:1;}100%{transform:scale(1);}}
 .uq-item-close{cursor:pointer;color:var(--text-3);font-size:14px;line-height:1;}
 .uq-item-close:hover{color:var(--maroon);}
 .uq-bar-track{height:5px;border-radius:3px;background:var(--surface-2);overflow:hidden;}
-.uq-bar-fill{height:100%;background:var(--maroon);border-radius:3px;transition:width .15s linear;}
+.uq-bar-fill{height:100%;background:linear-gradient(90deg,var(--maroon),var(--gold));border-radius:3px;transition:width .15s linear;}
 .uq-item-error-msg{font-size:10.5px;color:#DC2626;margin-top:5px;line-height:1.4;}
 /* ============================================================ WEEKLY STAR RECOGNITION TICKER
    Floating bottom bar, centered so it stays clear of the upload-queue
@@ -927,21 +930,22 @@ input[type="password"]{direction:rtl;text-align:right;padding-left:40px;padding-
 .star-ticker-video-fallback-icon{display:none;position:absolute;inset:0;align-items:center;justify-content:center;font-size:28px;color:#D4AF37;background:radial-gradient(circle,rgba(212,175,55,.22),transparent 70%);}
 .star-ticker-video-wrap.star-ticker-video-fallback .star-ticker-video{display:none;}
 .star-ticker-video-wrap.star-ticker-video-fallback .star-ticker-video-fallback-icon{display:flex;}
-.star-ticker-body{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center;gap:5px;padding:10px 40px 10px 14px;}
-.star-ticker-label{font-size:11px;font-weight:800;color:#D4AF37;letter-spacing:.3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.star-ticker-track-wrap{overflow:hidden;width:100%;}
-.star-ticker-track{display:flex;gap:28px;width:max-content;animation:starTickerScroll 22s linear infinite;}
-.star-ticker:hover .star-ticker-track{animation-play-state:paused;}
-@keyframes starTickerScroll{from{transform:translateX(0);}to{transform:translateX(-50%);}}
-.star-ticker-chip{display:flex;align-items:center;gap:6px;white-space:nowrap;font-size:12px;color:#fff;}
-.star-ticker-chip i{color:#D4AF37;font-size:14px;}
-.star-ticker-chip .stc-role{color:rgba(255,255,255,.7);font-weight:700;}
-.star-ticker-chip .stc-name{font-weight:900;color:#fff;}
-.star-ticker-chip .stc-count{color:#D4AF37;font-weight:800;}
-.star-ticker-chip .stc-fallback-tag{color:rgba(255,255,255,.55);font-weight:600;font-size:10.5px;}
+.star-ticker-body{flex:1;min-width:0;display:flex;align-items:center;gap:14px;padding:14px 40px 14px 14px;}
+.star-ticker-badge{display:flex;align-items:center;gap:8px;flex-shrink:0;padding-left:14px;border-left:1px solid rgba(212,175,55,.25);}
+.star-ticker-badge i{color:#D4AF37;font-size:20px;}
+.star-ticker-badge .stb-title{font-size:9.5px;font-weight:800;color:rgba(255,255,255,.65);letter-spacing:.3px;}
+.star-ticker-badge .stb-name{font-size:12.5px;font-weight:900;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px;}
+/* Dynamic text announcements — see TICKER_ANNOUNCEMENTS below. */
+.ticker-stream-wrap{flex:1;min-width:0;overflow:hidden;}
+.ticker-stream{display:flex;align-items:center;gap:14px;width:max-content;animation:tickerStreamScroll 26s linear infinite;}
+.star-ticker:hover .ticker-stream{animation-play-state:paused;}
+@keyframes tickerStreamScroll{from{transform:translateX(0);}to{transform:translateX(-50%);}}
+.ticker-item{display:flex;align-items:center;gap:6px;white-space:nowrap;font-size:12px;color:#fff;font-weight:600;}
+.ticker-item i{color:#D4AF37;font-size:13px;}
+.ticker-sep{color:rgba(212,175,55,.5);font-size:11px;}
 .star-ticker-close{position:absolute;top:6px;left:8px;width:22px;height:22px;border-radius:50%;border:none;background:rgba(255,255,255,.12);color:#fff;font-size:14px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:.15s;}
 .star-ticker-close:hover{background:rgba(255,255,255,.25);}
-@media(max-width:560px){.star-ticker{bottom:80px;width:calc(100vw - 24px);}.star-ticker-video-wrap{display:none;}.star-ticker-body{padding:9px 34px 9px 12px;}}
+@media(max-width:560px){.star-ticker{bottom:80px;width:calc(100vw - 24px);}.star-ticker-video-wrap{display:none;}.star-ticker-badge{display:none;}.star-ticker-body{padding:9px 34px 9px 12px;}}
 /* ============================================================ MOBILE */
 @media(max-width:768px){
   :root{--sidebar-w:220px;}
@@ -1791,8 +1795,8 @@ input:focus,select:focus,textarea:focus{box-shadow:inset 0 1px 3px rgba(74,14,23
     <div class="star-ticker-video-fallback-icon"><i class="ti ti-trophy"></i></div>
   </div>
   <div class="star-ticker-body">
-    <div class="star-ticker-label" id="star-ticker-label"></div>
-    <div class="star-ticker-track-wrap"><div class="star-ticker-track" id="star-ticker-track"></div></div>
+    <div class="star-ticker-badge" id="star-ticker-badge" style="display:none;"></div>
+    <div class="ticker-stream-wrap"><div class="ticker-stream" id="ticker-stream"></div></div>
   </div>
 </div>
 <script>
@@ -2115,25 +2119,43 @@ function computeWeeklyStarPerformers(){
     workshop:resultFor('workshop'),
   };
 }
-function fmtWeekRangeLabel(start,end){
-  const startDay=start.toLocaleDateString('ar-SA',{day:'numeric'});
-  const endDay=end.toLocaleDateString('ar-SA',{day:'numeric'});
-  const startMonth=start.toLocaleDateString('ar-SA',{month:'long'});
-  const endMonth=end.toLocaleDateString('ar-SA',{month:'long'});
-  return startMonth===endMonth?`${startDay} - ${endDay} ${endMonth}`:`${startDay} ${startMonth} - ${endDay} ${endMonth}`;
+// Edit this array to change what scrolls across the ticker's middle track —
+// each string becomes one announcement chip (alternating bell/sparkle icon),
+// joined with ✦ separators. No other code needs to change to add, remove,
+// or reorder announcements.
+const TICKER_ANNOUNCEMENTS=[
+  'مرحباً بكم في نظام إدارة العمليات الداخلي لروائع الأفكار للدعاية والإعلان',
+  'يرجى تحديث بيانات التواصل الخاصة بالعملاء بشكل دوري',
+  'التزامكم بمواعيد التسليم يعزز رضا عملائنا الكرام',
+];
+function renderTickerStream(){
+  const track=document.getElementById('ticker-stream');
+  if(!track)return;
+  if(!TICKER_ANNOUNCEMENTS.length){track.innerHTML='';return;}
+  const chip=(txt,i)=>`<span class="ticker-item"><i class="ti ${i%2===0?'ti-bell-ringing':'ti-sparkles'}"></i>${esc(txt)}</span>`;
+  const sep='<span class="ticker-sep">✦</span>';
+  const one=TICKER_ANNOUNCEMENTS.map(chip).join(sep);
+  // Duplicated (with a separator bridging the two copies) so the CSS marquee
+  // (translateX to -50% of the track's own width) loops seamlessly.
+  track.innerHTML=one+sep+one+sep;
+}
+function renderStarTickerBadge(){
+  const el=document.getElementById('star-ticker-badge');if(!el)return false;
+  let stats;
+  try{stats=computeWeeklyStarPerformers();}catch(e){el.style.display='none';return false;}
+  const items=[stats.designer,stats.printer,stats.workshop].filter(Boolean);
+  if(!items.length){el.style.display='none';return false;}
+  const top=items.reduce((best,cur)=>cur.count>best.count?cur:best);
+  el.innerHTML=`<i class="ti ti-trophy"></i><div><div class="stb-title">موظف الأسبوع</div><div class="stb-name">${esc(top.name)}</div></div>`;
+  el.style.display='flex';
+  return true;
 }
 function renderStarTicker(){
   const wrap=document.getElementById('star-ticker');
   if(!wrap||!cu||_starTickerClosed)return;
-  let stats;
-  try{stats=computeWeeklyStarPerformers();}catch(e){wrap.style.display='none';return;}
-  const items=[stats.designer,stats.printer,stats.workshop].filter(Boolean);
-  if(!items.length){wrap.style.display='none';return;}
-  document.getElementById('star-ticker-label').textContent=`🏆 أبطال الأسبوع: ${fmtWeekRangeLabel(stats.weekStart,stats.weekEnd)}`;
-  const chipHtml=it=>`<div class="star-ticker-chip"><i class="ti ${it.icon}"></i><span class="stc-role">${esc(it.roleLabel)}:</span><span class="stc-name">${esc(it.name)}</span><span class="stc-count">— ${it.count} ${esc(it.metricLabel)}</span>${it.isFallback?`<span class="stc-fallback-tag">(الأفضل عموماً)</span>`:''}</div>`;
-  const chips=items.map(chipHtml).join('');
-  // Duplicated so the CSS marquee (translateX to -50% of track width) loops seamlessly.
-  document.getElementById('star-ticker-track').innerHTML=chips+chips;
+  const hasBadge=renderStarTickerBadge();
+  renderTickerStream();
+  if(!hasBadge&&!TICKER_ANNOUNCEMENTS.length){wrap.style.display='none';return;}
   wrap.style.display='flex';
 }
 function closeStarTicker(){
@@ -2823,12 +2845,12 @@ function _uqRender(){
     const pct=Math.max(0,Math.min(100,Math.round(u.progress)));
     const statusLabel=u.status==='uploading'?`${pct}%`:u.status==='done'?'<i class="ti ti-circle-check"></i> تم الرفع':'<i class="ti ti-alert-circle"></i> فشل';
     const icon=u.status==='uploading'?'ti-loader-2':(u.status==='done'?'ti-circle-check':'ti-alert-circle');
-    return`<div class="uq-item">
+    return`<div class="uq-item${u.fadingOut?' fading':''}">
       <div class="uq-item-top">
         <span class="uq-item-name" title="${esc(u.fileName)}"><i class="ti ${icon}"></i> ${esc(u.fileName)}</span>
         <span class="uq-item-right">
           <span class="uq-item-status ${u.status}">${statusLabel}</span>
-          <span class="uq-item-close" onclick="dismissUploadQueueItem(${u.id})" title="إخفاء"><i class="ti ti-x"></i></span>
+          <span class="uq-item-close" onclick="dismissUploadQueueItemAnimated(${u.id})" title="إخفاء"><i class="ti ti-x"></i></span>
         </span>
       </div>
       ${u.status==='uploading'?`<div class="uq-bar-track"><div class="uq-bar-fill" style="width:${pct}%;"></div></div>`:''}
@@ -2845,6 +2867,13 @@ function _uqRenderThrottled(){
 function dismissUploadQueueItem(id){
   window._uploadQueue=window._uploadQueue.filter(u=>u.id!==id);
   _uqRender();
+}
+// Used by the ✕ button so a manual dismiss gets the same fade-out as an
+// automatic one, instead of the card just vanishing instantly.
+function dismissUploadQueueItemAnimated(id){
+  const u=window._uploadQueue.find(x=>x.id===id);if(!u)return;
+  u.fadingOut=true;_uqRender();
+  setTimeout(()=>dismissUploadQueueItem(id),320);
 }
 // The core building block every migrated upload flow uses instead of
 // showSaving()/hideSaving(). `uploadFn(onProgress)` does the actual network
@@ -2865,7 +2894,12 @@ function runQueuedUpload(label,uploadFn,onDone){
     try{
       const result=await uploadFn(pct=>{entry.progress=pct;_uqRenderThrottled();});
       entry.status='done';entry.progress=100;_uqRender();
-      setTimeout(()=>dismissUploadQueueItem(id),4000);
+      // Hold the success checkmark visible for 3s, then fade the card out
+      // (the .fading CSS transition) before actually removing it.
+      setTimeout(()=>{
+        entry.fadingOut=true;_uqRender();
+        setTimeout(()=>dismissUploadQueueItem(id),320);
+      },3000);
       if(onDone)await onDone(result);
     }catch(err){
       entry.status='error';entry.errorMsg=(err&&err.message)||'فشل الرفع';_uqRender();
@@ -7015,27 +7049,27 @@ async function convertQuoteImageToBase64(file){
   const raw=await _readFileAsDataUrl(file);
   try{return await compressImage(raw,1200,0.75);}catch(e){return raw;}
 }
-async function attachLineImage(id,files){
+function attachLineImage(id,files){
   if(!files||!files.length)return;
-  showSaving('جاري تجهيز الصورة...');
-  try{
-    const b64=await convertQuoteImageToBase64(files[0]);
-    const l=window._quoteLines.find(x=>x.id===id);if(l)l.img=b64;
+  const file=files[0];
+  runQueuedUpload(file.name,()=>convertQuoteImageToBase64(file),async b64=>{
+    // Re-find the line fresh instead of trusting a closed-over reference —
+    // the user is free to navigate away and back (or the calc mode/line set
+    // can change) while this is still running in the background queue.
+    const l=(window._quoteLines||[]).find(x=>x.id===id);if(!l)return;
+    l.img=b64;
     renderQuoteLines();
-  }catch(e){toast(e&&e.message?e.message:'⚠️ فشل تحميل الصورة');}
-  hideSaving();
+  });
 }
-async function handleQuoteAttachment(files){
+function handleQuoteAttachment(files){
   if(!files||!files.length)return;
-  showSaving('جاري تجهيز الملف...');
-  try{
-    const b64=await convertQuoteImageToBase64(files[0]);
+  const file=files[0];
+  runQueuedUpload(file.name,()=>convertQuoteImageToBase64(file),async b64=>{
     window._quoteAttachmentB64=b64;
-    window._quoteAttachmentName=files[0].name;
+    window._quoteAttachmentName=file.name;
     const note=document.getElementById('q-attachment-note');
-    if(note)note.textContent='✓ تم: '+files[0].name;
-  }catch(e){toast(e&&e.message?e.message:'⚠️ فشل تحميل الملف');}
-  hideSaving();
+    if(note)note.textContent='✓ تم: '+file.name;
+  });
 }
 function renderQuoteTotals(){
   const fmt=n=>fmtMoney(Number(n||0));
@@ -9863,21 +9897,29 @@ function renderOrderLines(){
     </div>`).join('');
   recalcOrderTotal();
 }
-async function attachOrderLineFile(id,files){
+function attachOrderLineFile(id,files){
   if(!files||!files.length)return;
-  showSaving('جاري تحميل الملفات...');
-  try{
-    const l=(window._orderLines||[]).find(x=>x.id===id);
-    if(!l)return;
-    if(!l.files)l.files=[];
-    for(const file of Array.from(files)){
-      const b64=await convertFileToBase64(file);
-      l.files.push({data:b64,name:file.name});
+  const fileList=Array.from(files);
+  const label=(fileList.length>1?`${fileList.length} ملفات — `:'')+'مرفقات البند';
+  runQueuedUpload(label,async onProgress=>{
+    const results=[];
+    for(let i=0;i<fileList.length;i++){
+      const file=fileList[i];
+      const b64=await convertFileToBase64(file,undefined,pct=>onProgress(((i+pct/100)/fileList.length)*100));
+      results.push({data:b64,name:file.name});
     }
+    return results;
+  },async results=>{
+    // Re-find the line fresh instead of trusting a closed-over reference —
+    // the user is free to navigate away and back while this runs in the
+    // background queue, and buildAddForm()/restoreOrderDraft() can replace
+    // window._orderLines with a whole new array in the meantime.
+    const l=(window._orderLines||[]).find(x=>x.id===id);if(!l)return;
+    if(!l.files)l.files=[];
+    l.files.push(...results);
     renderOrderLines();
     saveOrderDraft();
-  }catch(e){toast(e&&e.message?e.message:'⚠️ فشل تحميل الملف');}
-  hideSaving();
+  });
 }
 function removeOrderLineFile(id,idx){
   const l=(window._orderLines||[]).find(x=>x.id===id);
