@@ -294,7 +294,13 @@ tbody tr:hover td{background:var(--surface-2);}
 .stage-ready{background:#2F855A;}
 .stage-external{background:#713F12;}
 /* Column-4 proof/client-status pills */
-.proof-pill{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:8px;font-size:10.5px;font-weight:800;white-space:nowrap;}
+/* max-width:100%+overflow:hidden+ellipsis keeps a long label (e.g. the
+   revision-request proof pill) from visually spilling past its table cell's
+   fixed width into the next column — table-layout:fixed already stops the
+   COLUMN itself from growing, but an unbreakable (white-space:nowrap) badge
+   wider than that column still renders past its edge unless it's told to
+   clip itself. */
+.proof-pill{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:8px;font-size:10.5px;font-weight:800;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis;vertical-align:middle;}
 .proof-waiting{background:#FEF3C7;color:#92400E;}
 .proof-approved{background:#D1FAE5;color:#065F46;}
 .proof-revision{background:#FFEDD5;color:#9A3412;}
@@ -303,7 +309,7 @@ tbody tr:hover td{background:var(--surface-2);}
 .revision-notes-box .rn-title{font-size:11px;font-weight:800;color:#9A3412;display:flex;align-items:center;gap:5px;margin-bottom:4px;}
 .revision-notes-box .rn-text{font-size:12px;color:#7C2D12;line-height:1.6;}
 /* Column-5 delivery countdown pills */
-.countdown-pill{display:inline-block;font-size:11px;font-weight:800;color:var(--text-2);}
+.countdown-pill{display:inline-block;font-size:11px;font-weight:800;color:var(--text-2);white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis;vertical-align:middle;}
 .countdown-pill.cd-soon{color:#C05621;}
 .countdown-pill.cd-overdue{color:#C53030;font-weight:900;}
 .countdown-pill.cd-done{color:#2F855A;}
@@ -516,8 +522,15 @@ input[type="password"]{direction:rtl;text-align:right;padding-left:40px;padding-
 .wf-htimeline-node.done .wf-htimeline-lbl,.wf-htimeline-node.active .wf-htimeline-lbl{color:var(--text-1);}
 .wf-detail-actions{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding-top:20px;margin-top:20px;border-top:1px solid var(--border-soft);}
 /* ── Per-item independent workflow cards + design versions ── */
-.order-items-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:8px;}
-.order-item-card{background:var(--surface);border:1px solid var(--border-soft);border-radius:var(--radius-md);padding:10px 12px;box-shadow:var(--shadow-sm);transition:box-shadow .2s,transform .2s;}
+.order-items-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:8px;align-items:stretch;}
+/* display:flex + height:100% so every card in a row matches the row's
+   height (grid items stretch by default, but the CARD's own content still
+   sized to itself without this) — combined with .oi-card-actions's
+   margin-top:auto, this anchors each card's action buttons/"فتح البند" to
+   the same bottom line regardless of how much varies above it (dimensions,
+   the revision-notes box, etc. aren't the same length on every card). */
+.order-item-card{background:var(--surface);border:1px solid var(--border-soft);border-radius:var(--radius-md);padding:10px 12px;box-shadow:var(--shadow-sm);transition:box-shadow .2s,transform .2s;display:flex;flex-direction:column;height:100%;}
+.oi-card-actions{margin-top:auto;padding-top:10px;}
 .order-item-card:hover{box-shadow:var(--shadow-md);transform:translateY(-2px);}
 .order-item-card-head{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;padding-bottom:6px;border-bottom:1px solid var(--border-soft);margin-bottom:6px;}
 .oi-card-head{display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap;cursor:pointer;}
@@ -3355,7 +3368,11 @@ async function advanceItemDept(key,idx){
   const it=o.orderItems[idx];if(!it)return;
   if(cu.type!=='admin'&&!isMyItem(o,it)){toast('⚠️ هذا الإجراء غير متاح لك');return;}
   const nd=itemNextDept(it,o);if(!nd)return;
-  if(!itemStageRequirementMet(it,o)){toast('⚠️ يجب رفع جميع الملفات المطلوبة لهذه المرحلة أولاً');return;}
+  // Files are a soft requirement for regular staff advancing their own
+  // work, but never a hard block for admin — a manager needs to be able to
+  // push an order/item forward regardless of upload state (a client
+  // approved verbally, a file got lost, a workaround is needed, etc.).
+  if(cu.type!=='admin'&&!itemStageRequirementMet(it,o)){toast('⚠️ يجب رفع جميع الملفات المطلوبة لهذه المرحلة أولاً');return;}
   showSaving('جاري تحديث حالة البند...');
   try{
     const items=[...o.orderItems];items[idx]={...items[idx],currentDept:nd};
@@ -3395,7 +3412,7 @@ async function bulkAdvanceItems(key){
     checks.forEach(idx=>{
       const it=items[idx];if(!it)return;
       const nd=itemNextDept(it,o);if(!nd)return;
-      if(!itemStageRequirementMet(it,o)){blocked++;return;}
+      if(cu.type!=='admin'&&!itemStageRequirementMet(it,o)){blocked++;return;}
       items[idx]={...it,currentDept:nd};moved++;
     });
     if(moved){
@@ -3623,12 +3640,14 @@ function renderOrderItemsCards(o,key,canAct){
       ${dims?`<div style="font-size:11px;color:var(--text-2);margin-top:6px;"><i class="ti ti-ruler-2"></i> ${dims}</div>`:''}
       <div style="margin-top:8px;">${gpbadge(o.priority)}</div>
       ${revisionNote?`<div class="revision-notes-box"><div class="rn-title"><i class="ti ti-message-2"></i> ملاحظات مراجعة العميل</div>${revisionNote.notes?`<div class="rn-text">${esc(revisionNote.notes)}</div>`:''}${(revisionNote.files&&revisionNote.files.length)?`<div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px;">${revisionNote.files.map(f=>fileLinkHtml(f.name,f.data)).join('')}</div>`:''}</div>`:''}
-      <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap;">
-        ${(canSeeWhatsappBtn()&&o.phone&&o.phone!=='—')?`<button class="btn btn-whatsapp btn-sm" onclick="event.stopPropagation();openWhatsapp('${encodeURIComponent(o.phone)}')" title="واتساب"><i class="ti ti-brand-whatsapp"></i></button>`:''}
-        ${canSeeClientFeedback()?`<button class="btn btn-out btn-sm" onclick="event.stopPropagation();openClientFeedbackPanel('${key}',${i})"><i class="ti ti-message-2"></i> تعديل مطلوب</button>`:''}
-        ${(canApproveClientProof()&&dcol==='waiting')?`<button class="btn btn-green btn-sm" onclick="event.stopPropagation();approveItemProof('${key}',${i})"><i class="ti ti-circle-check"></i> تعميد التصميم</button>`:''}
+      <div class="oi-card-actions">
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          ${(canSeeWhatsappBtn()&&o.phone&&o.phone!=='—')?`<button class="btn btn-whatsapp btn-sm" onclick="event.stopPropagation();openWhatsapp('${encodeURIComponent(o.phone)}')" title="واتساب"><i class="ti ti-brand-whatsapp"></i></button>`:''}
+          ${canSeeClientFeedback()?`<button class="btn btn-out btn-sm" onclick="event.stopPropagation();openClientFeedbackPanel('${key}',${i})"><i class="ti ti-message-2"></i> تعديل مطلوب</button>`:''}
+          ${(canApproveClientProof()&&dcol==='waiting')?`<button class="btn btn-green btn-sm" onclick="event.stopPropagation();approveItemProof('${key}',${i})"><i class="ti ti-circle-check"></i> تعميد التصميم</button>`:''}
+        </div>
+        <button class="btn btn-brand btn-sm" style="width:100%;justify-content:center;margin-top:8px;" onclick="openItemWorkspace('${key}',${i})"><i class="ti ti-arrow-left"></i> فتح البند</button>
       </div>
-      <button class="btn btn-brand btn-sm" style="width:100%;justify-content:center;margin-top:8px;" onclick="openItemWorkspace('${key}',${i})"><i class="ti ti-arrow-left"></i> فتح البند</button>
     </div>`;
   }
   // With many items the grid gets long and hard to scan — a quick name
@@ -3753,6 +3772,25 @@ function fmtStageDuration(hours){
     return m>0?(h+'س '+m+'د'):(h+'س');
   }
   return(hours/24).toFixed(1)+' يوم';
+}
+// Verbose "X ساعات و Y دقيقة" / "يوم و X ساعات" phrasing for the completed-
+// order stage-duration breakdown — distinct from the compact fmtStageDuration
+// ("4س 15د") used elsewhere (badges, dense lists), which stays untouched
+// since other UI already depends on that terse format.
+function fmtStageDurationVerbose(hours){
+  if(!hours||hours<=0)return'—';
+  const totalMinutes=Math.round(hours*60);
+  const days=Math.floor(totalMinutes/1440);
+  const hrs=Math.floor((totalMinutes%1440)/60);
+  const mins=totalMinutes%60;
+  const parts=[];
+  if(days>0)parts.push(days===1?'يوم':days+' أيام');
+  if(hrs>0)parts.push(hrs===1?'ساعة':hrs===2?'ساعتان':hrs+' ساعات');
+  // Minutes are only meaningful at hour-scale — once the duration spans
+  // whole days, per-minute precision isn't useful, matching how a manager
+  // actually talks about it ("يوم و 3 ساعات", not "يوم و 3 ساعات و 12 دقيقة").
+  if(mins>0&&days===0)parts.push(mins===1?'دقيقة':mins+' دقيقة');
+  return parts.length?parts.join(' و '):'أقل من دقيقة';
 }
 function preciseTimeBadge(hours){
   const txt=fmtStageDuration(hours);
@@ -5257,6 +5295,7 @@ function buildDeptStagePage(){
     <td style="font-size:12px;">${esc(o.service||'—')}</td>
     <td style="font-size:12px;">${esc(o.createdBy||'—')}</td>
     <td style="font-size:11px;">${o.date||'—'}</td>
+    <td style="width:110px;" onclick="event.stopPropagation()"><button class="btn btn-out btn-xs" onclick="openOrderTimelineView('${o._key}')" title="عرض تفصيل مدة كل مرحلة"><i class="ti ti-hourglass"></i> مدة المراحل</button></td>
   </tr>`:`<div class="wf-card" data-search="${searchBlob(o)}"${hasAssignee?` data-assignee="${esc(o[assigneeField]||'')}"`:''} onclick="openOrderPage('${o._key}')" style="cursor:pointer;">
     ${cu.type==='admin'?`<div class="row-menu-wrap" style="position:absolute;top:8px;left:8px;z-index:2;" onclick="event.stopPropagation()">
       <button class="btn btn-out btn-xs" style="padding:2px 6px;" onclick="toggleRowMenu('dsam-${o._key}')" title="إجراءات سريعة"><i class="ti ti-dots-vertical"></i></button>
@@ -5276,7 +5315,7 @@ function buildDeptStagePage(){
     <div class="wf-card-prog"><div class="wf-card-fill" style="width:${orderProgress(o)}%;background:${progressColor(o)}"></div></div>
   </div>`).join('');
   const thead=isCompleted
-    ?`${canDelete?'<th style="width:150px;">إجراءات</th>':''}<th style="width:80px">رقم الطلب</th><th>العميل</th><th style="width:100px">المبلغ</th><th>الخدمة</th><th style="width:120px">منشئ الطلب</th><th style="width:90px">التاريخ</th>`
+    ?`${canDelete?'<th style="width:150px;">إجراءات</th>':''}<th style="width:80px">رقم الطلب</th><th>العميل</th><th style="width:100px">المبلغ</th><th>الخدمة</th><th style="width:120px">منشئ الطلب</th><th style="width:90px">التاريخ</th><th style="width:110px">المدة الزمنية</th>`
     :`<th style="width:80px">رقم الطلب</th><th>العميل</th><th>الخدمة</th><th style="width:100px">المسؤول</th><th style="width:110px">منشئ الطلب</th><th style="width:120px">تاريخ التسليم</th><th style="width:90px">الأولوية</th><th style="width:90px">المدة</th>${cu.type==='admin'?'<th style="width:40px;"></th>':''}`;
   const personOptions=hasAssignee?[...new Set(arr.map(o=>o[assigneeField]).filter(v=>v&&v!=='none'))]
     .map(u=>`<option value="${esc(u)}">${esc(USERS[u]?.name||u)}</option>`).join(''):'';
@@ -5416,9 +5455,10 @@ async function bulkAdvanceSelected(){
   let moved=0,blocked=0;
   for(const key of toMove){
     const o=orders[key];if(!o)continue;
-    // Same design-stage file-approval gate as sendToNextDept() — bulk moves
-    // must not be a bypass route around it.
-    if(o.currentDept==='design'){
+    // Same design-stage file-approval gate as sendToNextDept() — kept for
+    // receiver (files stay a soft requirement for them too), but never
+    // blocks admin, who can always override it.
+    if(o.currentDept==='design'&&cu.type!=='admin'){
       const isProofQt=o.isQuickTask&&o.printTo==='none'&&o.workshopTo==='none';
       const workshopOnly=o.printTo==='none'&&o.workshopTo!=='none';
       const fileBlocked=isProofQt
@@ -5854,8 +5894,8 @@ function buildItemWorkspacePage(){
       </div>`;
     })()}
     ${nd?`<div class="ik-sticky-footer">
-        ${canAct?(reqMet
-          ?`<button class="btn btn-brand" style="width:100%;justify-content:center;" onclick="openItemworkReviewModal()"><i class="ti ti-send"></i> إرسال إلى ${WF_DEPT_META[nd]?.label||nd}</button>`
+        ${canAct?((reqMet||cu.type==='admin')
+          ?`<button class="btn btn-brand" style="width:100%;justify-content:center;" onclick="openItemworkReviewModal()"><i class="ti ti-send"></i> إرسال إلى ${WF_DEPT_META[nd]?.label||nd}</button>${(!reqMet&&cu.type==='admin')?`<div class="ik-footer-warning" style="color:#B45309;"><i class="ti ti-alert-triangle"></i> ملفات هذه المرحلة غير مكتملة (اختياري) — يمكنك المتابعة كمدير</div>`:''}`
           :`<button class="btn btn-out" style="width:100%;justify-content:center;opacity:.5;cursor:not-allowed;" disabled><i class="ti ti-lock"></i> إرسال إلى ${WF_DEPT_META[nd]?.label||nd}</button>
              <div class="ik-footer-warning"><i class="ti ti-alert-triangle"></i> يجب رفع جميع الملفات المطلوبة قبل الانتقال للمرحلة التالية</div>`)
           :`<div style="font-size:12px;color:var(--text-3);text-align:center;">${stillMine?'':'هذا البند غير موكل إليك في هذه المرحلة'}</div>`}
@@ -7829,7 +7869,7 @@ function openOrderTimelineView(key){
     '<div style="display:flex;flex-direction:column;gap:5px;">'+stageTl.filter((s,i)=>i>0).map(s=>
       '<div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;background:var(--surface-2);border-radius:6px;padding:6px 10px;">'+
       '<span><i class="ti '+s.icon+'"></i> '+s.label+'</span>'+
-      '<span style="font-weight:800;color:#065F46;">'+fmtStageDuration(s.durHours)+'</span></div>').join('')+'</div>':'';
+      '<span style="font-weight:800;color:#065F46;">'+fmtStageDurationVerbose(s.durHours)+'</span></div>').join('')+'</div>':'';
   document.getElementById('order-modal-body').innerHTML=
     '<div class="modal-header"><div class="mh-title"><i class="ti ti-file-invoice"></i> '+(o.id||key)+'</div>'+
     '<button class="modal-close" onclick="closeModal(\'order-modal\')"><i class="ti ti-x"></i></button></div>'+
@@ -7990,54 +8030,6 @@ async function uploadDesignProofField(key,field,inputId){
     const upd={};upd[field]=url;upd[field+'Name']=el.files[0].name;
     await fbPatch(`orders/${key}`,upd);await loadData();hideSaving();toast('✓ تم الرفع');openOrderPage(key);
   }catch(e){hideSaving();toast(e&&e.message?e.message:'❌ فشل الرفع');}
-}
-async function saveDesignProofMeta(key,type){
-  const upd={};
-  if(type==='client'){
-    upd.clientApprovalDate=(document.getElementById('cap-date')||{}).value||'';
-    upd.clientApprovalBy=((document.getElementById('cap-by')||{}).value||'').trim();
-    upd.clientApprovalNotes=((document.getElementById('cap-notes')||{}).value||'').trim();
-  }else{
-    upd.workshopProofVersion=((document.getElementById('wsp-version')||{}).value||'').trim();
-    upd.workshopProofNotes=((document.getElementById('wsp-notes')||{}).value||'').trim();
-  }
-  try{await fbPatch(`orders/${key}`,upd);await loadData();toast('✓ تم الحفظ');openOrderPage(key);}catch(e){toast('❌ فشل الحفظ');}
-}
-// The actual approved-design-file/workshop-proof-file UPLOADS now happen in
-// one place — the consolidated design-stage upload box in openOrderModal
-// (a single source of truth instead of duplicate file inputs in two spots on
-// the page). This section stays as a read-only preview of whatever was
-// uploaded there, plus the extra approval metadata (date/approved-by/notes/
-// version) that has no home in that upload box.
-function buildProofApprovalSection(o,key,canAct){
-  const clientCard=`<div class="od-proof-card">
-    <h4><i class="ti ti-user-check"></i> اعتماد العميل على التصميم</h4>
-    ${o.clientApprovalImage?`<img src="${cloudinaryThumb(o.clientApprovalImage,400)}" loading="lazy" class="od-proof-preview"/>`:''}
-    <div style="display:flex;flex-wrap:wrap;gap:6px;">${fileLinkHtml(o.clientApprovalImageName,o.clientApprovalImage)}${fileLinkHtml(o.clientApprovalPdfName,o.clientApprovalPdf)}</div>
-    <div class="od-proof-meta">${o.clientApprovalDate?`<span><i class="ti ti-calendar"></i> ${formatDate(o.clientApprovalDate)}</span>`:''}${o.clientApprovalBy?`<span><i class="ti ti-user"></i> ${esc(o.clientApprovalBy)}</span>`:''}</div>
-    ${o.clientApprovalNotes?`<div style="font-size:11px;color:var(--text-2);margin-top:6px;">${esc(o.clientApprovalNotes)}</div>`:''}
-    ${canAct?`<div style="margin-top:10px;display:flex;flex-direction:column;gap:6px;">
-      <div style="display:flex;gap:6px;flex-wrap:wrap;">
-        <input type="date" id="cap-date" value="${o.clientApprovalDate||''}" style="flex:1;min-width:110px;font-size:11px;"/>
-        <input type="text" id="cap-by" placeholder="اسم من اعتمد" value="${esc(o.clientApprovalBy||'')}" style="flex:1;min-width:110px;font-size:11px;"/>
-      </div>
-      <textarea id="cap-notes" placeholder="ملاحظات..." style="font-size:11px;min-height:40px;">${esc(o.clientApprovalNotes||'')}</textarea>
-      <button class="btn btn-out btn-xs" style="align-self:flex-start;" onclick="saveDesignProofMeta('${key}','client')"><i class="ti ti-device-floppy"></i> حفظ</button>
-    </div>`:''}
-  </div>`;
-  const workshopCard=`<div class="od-proof-card">
-    <h4><i class="ti ti-tools"></i> بروفة الورشة النهائية</h4>
-    ${o.workshopProofImage?`<img src="${cloudinaryThumb(o.workshopProofImage,400)}" loading="lazy" class="od-proof-preview"/>`:''}
-    <div style="display:flex;flex-wrap:wrap;gap:6px;">${fileLinkHtml(o.workshopProofImageName,o.workshopProofImage)}${fileLinkHtml(o.workshopProofPdfName,o.workshopProofPdf)}</div>
-    <div class="od-proof-meta">${o.workshopProofVersion?`<span><i class="ti ti-git-branch"></i> نسخة ${esc(o.workshopProofVersion)}</span>`:''}</div>
-    ${o.workshopProofNotes?`<div style="font-size:11px;color:var(--text-2);margin-top:6px;">${esc(o.workshopProofNotes)}</div>`:''}
-    ${canAct?`<div style="margin-top:10px;display:flex;flex-direction:column;gap:6px;">
-      <input type="text" id="wsp-version" placeholder="رقم/اسم النسخة" value="${esc(o.workshopProofVersion||'')}" style="font-size:11px;"/>
-      <textarea id="wsp-notes" placeholder="ملاحظات..." style="font-size:11px;min-height:40px;">${esc(o.workshopProofNotes||'')}</textarea>
-      <button class="btn btn-out btn-xs" style="align-self:flex-start;" onclick="saveDesignProofMeta('${key}','workshop')"><i class="ti ti-device-floppy"></i> حفظ</button>
-    </div>`:''}
-  </div>`;
-  return `<div class="od-proof-grid">${clientCard}${workshopCard}</div>`;
 }
 function buildOrderActivityTimeline(o,key){
   const items=computeOrderStageTimeline(o);
@@ -8264,8 +8256,10 @@ function buildOrderDetailsPage(){
         <button class="btn btn-green btn-sm" style="align-self:flex-start;" onclick="resolveMaintenanceOrder('${key}')"><i class="ti ti-circle-check"></i> تسجيل الحل وإتمام الطلب</button>
       </div>`;
     }else if(nd==='done'&&o.currentDept==='workshop'){
-      nextBtn=o.finalWorkshopDoneFile
-        ?`<button class="btn btn-green btn-sm" onclick="finishOrder('${key}')"><i class="ti ti-circle-check"></i> إتمام الطلب وأرشفته</button>`
+      // Admin can finish/archive regardless of the completion photo — files
+      // stay optional for a manager overriding a normal staff gate.
+      nextBtn=(o.finalWorkshopDoneFile||cu.type==='admin')
+        ?`<button class="btn btn-green btn-sm" onclick="finishOrder('${key}')"><i class="ti ti-circle-check"></i> إتمام الطلب وأرشفته</button>${(!o.finalWorkshopDoneFile&&cu.type==='admin')?`<div style="font-size:10.5px;color:#B45309;margin-top:6px;"><i class="ti ti-alert-triangle"></i> لم يتم إرفاق صورة المنجز (اختياري) — يمكنك المتابعة كمدير</div>`:''}`
         :`<span style="font-size:11px;color:#EF4444;font-weight:700"><i class="ti ti-alert-triangle"></i> يرجى إرفاق صورة المنجز أولاً</span>`;
     }else if(nd==='done'){
       nextBtn=`<button class="btn btn-green btn-sm" onclick="finishOrder('${key}')"><i class="ti ti-circle-check"></i> إتمام وأرشفة الطلب</button>`;
@@ -8289,9 +8283,13 @@ function buildOrderDetailsPage(){
         }
       }
       const needsFile=o.currentDept==='design'&&_missingFiles.length>0;
-      nextBtn=needsFile
+      // Admin bypass: files stay optional for a manager, so the button
+      // itself must actually render (not just the underlying function
+      // permit it) — a disabled button the admin can't click would still
+      // be a hard block in practice.
+      nextBtn=(needsFile&&cu.type!=='admin')
         ?`<span style="font-size:11px;color:#EF4444;font-weight:700"><i class="ti ti-alert-triangle"></i> يجب رفع جميع الملفات المطلوبة قبل الانتقال للمرحلة التالية: ${esc(_missingFiles.join('، '))}</span>`
-        :`<button class="btn btn-brand btn-sm" onclick="sendToNextDept('${key}','${nd}')"><i class="ti ti-arrow-left"></i> ${nextLabels[o.currentDept]||'إرسال للمرحلة التالية'}</button>`;
+        :`<button class="btn btn-brand btn-sm" onclick="sendToNextDept('${key}','${nd}')"><i class="ti ti-arrow-left"></i> ${nextLabels[o.currentDept]||'إرسال للمرحلة التالية'}</button>${(needsFile&&cu.type==='admin')?`<div style="font-size:10.5px;color:#B45309;margin-top:6px;"><i class="ti ti-alert-triangle"></i> ملفات ناقصة (اختياري): ${esc(_missingFiles.join('، '))} — يمكنك المتابعة كمدير</div>`:''}`;
     }
   }
   let uploadArea='';
@@ -8439,27 +8437,6 @@ function buildOrderDetailsPage(){
   // roles, same as before — they rarely need it and it's needless exposure
   // of pricing data.
   const _finCardHtml=_myDeptKey?'':buildFinancialBreakdownCard(o,key);
-  // Manager Quick Controls (sidebar): reassignment selector (already
-  // admin-gated internally) plus two shortcuts that reveal + scroll to the
-  // real "أدوات مراحل الإنتاج" accordion rather than fabricating a new
-  // direct-mutation action.
-  // buildReassignBox's always-visible inline single-dept reassignment box is
-  // superseded by the unified "تعديل الطلب" modal (openOrderEditModal) reached
-  // from the pencil quick-action / ⋮ menu — inline editing here is locked to
-  // avoid accidental changes outside the explicit edit flow.
-  const _reassignBoxHtml='';
-  // Admin-only: designers previously saw these too whenever canAct was true
-  // for their own order (isMyOrder(o)) — these are manager-facing shortcuts,
-  // not something the assigned designer needs on their own order.
-  const _mgrQuickButtonsHtml=(cu.type==='admin'&&o.currentDept!=='done'&&(_otherDeptChipsHtml||_deptCardsHtml))?`<div class="od-mgr-quick-row">
-      <button class="btn btn-out btn-sm" onclick="omJumpToDeptTools()"><i class="ti ti-brush"></i> اعتماد بروفة</button>
-      <button class="btn btn-out btn-sm" onclick="omJumpToDeptTools()"><i class="ti ti-tools"></i> اعتماد ورشة</button>
-    </div>`:'';
-  const _mgrControlsHtml=(_reassignBoxHtml||_mgrQuickButtonsHtml)?`<div class="od-mgr-controls" id="od-reassign-${key}">
-      <div class="od-mgr-controls-title"><i class="ti ti-settings"></i> أدوات المدير السريعة</div>
-      ${_mgrQuickButtonsHtml}
-      ${_reassignBoxHtml}
-    </div>`:`<div id="od-reassign-${key}"></div>`;
   const _activityChatHtml=`<div class="od-activity-chat-panel">
     <div>
       <div class="od-dept-section-lbl">🕒 السجل الزمني للطلب</div>
@@ -8510,7 +8487,6 @@ function buildOrderDetailsPage(){
           ${renderOrderItemsCards(o,key,canAct)}
         </div>
         ${_deptToolsAcc}
-        ${(cu.type!=='designer'&&getActiveDepts(o).includes('design'))?buildProofApprovalSection(o,key,canAct):''}
         ${maintOrderRow}
         ${maintenanceRow}
         <div style="margin-bottom:16px;">
@@ -8522,7 +8498,6 @@ function buildOrderDetailsPage(){
       </div>
       <div class="od-right-col">
         ${_activityChatHtml}
-        ${_mgrControlsHtml}
         ${_finCardHtml}
       </div>
     </div>`;
@@ -8632,7 +8607,7 @@ function openTimelineModal(key){
           <div style="padding-top:4px;padding-bottom:${i<items.length-1?'14px':'0'};">
             <div style="font-size:13px;font-weight:800;color:var(--maroon);">${s.label}</div>
             <div style="font-size:11px;color:var(--text-3);margin-top:2px;">${fmt(s.at)}</div>
-            ${i>0?`<div style="font-size:10.5px;color:#065F46;margin-top:3px;"><i class="ti ti-hourglass"></i> استغرقت هذه المرحلة: ${fmtStageDuration(s.durHours)}</div>`:''}
+            ${i>0?`<div style="font-size:10.5px;color:#065F46;margin-top:3px;"><i class="ti ti-hourglass"></i> استغرقت هذه المرحلة: ${fmtStageDurationVerbose(s.durHours)}</div>`:''}
           </div>
         </div>`).join(''):'<div style="text-align:center;color:var(--text-3);padding:24px;">لا توجد بيانات مراحل بعد</div>'}
     </div>`;
@@ -8797,7 +8772,9 @@ async function sendToNextDept(key,next){
       : workshopOnly
         ? !o.approvedWorkshopFile
         : (o.printTo!=='none'&&(!o.clientApprovalImage||!o.approvedPrintFile||(o.workshopTo!=='none'&&!o.approvedWorkshopFile)));
-    if(blocked){toast('⚠️ يجب رفع جميع الملفات المطلوبة قبل الانتقال للمرحلة التالية');return;}
+    // Same admin bypass as advanceItemDept() — files stay a soft requirement
+    // for regular staff, never a hard block for a manager overriding it.
+    if(blocked&&cu.type!=='admin'){toast('⚠️ يجب رفع جميع الملفات المطلوبة قبل الانتقال للمرحلة التالية');return;}
   }
   showSaving('جاري التحويل...');
   const timeField={design:'designDoneAt',external:'externalDoneAt',print:'printDoneAt',workshop:'workshopDoneAt'};
