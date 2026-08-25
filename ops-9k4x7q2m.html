@@ -301,6 +301,11 @@ tbody tr:hover td{background:var(--surface-2);}
    wider than that column still renders past its edge unless it's told to
    clip itself. */
 .proof-pill{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:8px;font-size:10.5px;font-weight:800;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis;vertical-align:middle;}
+/* Once an item/order has moved past design into print/workshop, the proof/
+   client-approval badge is no longer the thing that needs attention — shrink
+   it so production status takes visual priority instead. */
+.proof-pill.compact,.badge.compact{padding:2px 6px;font-size:10.5px;}
+.proof-pill.compact i,.badge.compact i{font-size:9px;}
 .proof-waiting{background:#FEF3C7;color:#92400E;}
 .proof-approved{background:#D1FAE5;color:#065F46;}
 .proof-revision{background:#FFEDD5;color:#9A3412;}
@@ -3502,6 +3507,14 @@ function renderFloatingTeamChat(){
 async function nav(p,skipHistory=false){
   if(p==='export'){exportExcel();return;}
   if(p==='quote'&&_curPage!==p)window._editingQuoteKey=null;
+  // Preserve the workflow list's scroll position across a trip into an
+  // order/item and back — restored at the bottom of this function once the
+  // rebuilt 'wf' page has settled, instead of silently snapping to the top
+  // like a fresh page load.
+  if(_curPage==='wf'&&(p==='orderdetails'||p==='itemwork')){
+    window.__wfScrollPos=window.scrollY||document.documentElement.scrollTop;
+  }
+  const _navCameFromItemOrOrder=(_curPage==='orderdetails'||_curPage==='itemwork');
   if(!skipHistory&&_curPage&&_curPage!==p)_navHistory.push(_curPage);
   _curPage=p;
   if(cu&&cu._uname){try{localStorage.setItem('rawaee_last_page_'+cu._uname,p);}catch(e){}}
@@ -3524,6 +3537,10 @@ async function nav(p,skipHistory=false){
   // it runs twice per nav('wf') call and clearing on the first pass wiped the
   // filter out before the user ever saw the settled page.
   window._wfKpiFilterOnce=null;
+  if(p==='wf'&&_navCameFromItemOrOrder&&window.__wfScrollPos!=null){
+    window.scrollTo({top:window.__wfScrollPos,behavior:'instant'});
+    window.__wfScrollPos=null;
+  }
 }
 function navBack(){if(_navHistory.length===0)return;const prev=_navHistory.pop();nav(prev,true);}
 function backBtnHtml(){return`<div style="margin-bottom:16px;"><button class="btn btn-out btn-sm" onclick="navBack()"><i class="ti ti-arrow-right"></i> رجوع</button></div>`;}
@@ -4014,7 +4031,7 @@ function renderOrderItemsCards(o,key,canAct){
         </div>
         <div style="display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end;">
           ${dcol==='revision'?`<span class="revision-badge"><i class="ti ti-refresh"></i> يتطلب تعديل</span>`
-            :(dcol==='waiting'||dcol==='approved')?`<span class="badge ${statusMeta.cls}"><i class="ti ${statusMeta.icon}"></i> ${statusMeta.label}</span>`:''}
+            :(dcol==='waiting'||dcol==='approved')?`<span class="badge ${statusMeta.cls}${(dept==='print'||dept==='workshop')?' compact':''}"><i class="ti ${statusMeta.icon}"></i> ${statusMeta.label}</span>`:''}
           <span class="badge ${dept==='done'?'b-done':'b-new'}">${WF_DEPT_META[dept]?.label||dept}</span>
         </div>
       </div>
@@ -5399,7 +5416,7 @@ function renderWfListView(){
       </td>
       <td><div style="font-weight:800;font-size:12.5px;color:var(--text-1);">${esc(o.client||'—')}</div><div style="font-size:11px;color:var(--text-3);margin-top:2px;">${orderItemSummary(o)}</div></td>
       <td>${stagePillHtml(o.currentDept)}</td>
-      <td>${proof?`<span class="proof-pill proof-${proof.key}"><i class="ti ${proof.icon}"></i> ${proof.label}</span>`:'<span style="color:var(--text-3);font-size:11px;">—</span>'}</td>
+      <td>${proof?`<span class="proof-pill proof-${proof.key}${(o.currentDept==='print'||o.currentDept==='workshop')?' compact':''}"><i class="ti ${proof.icon}"></i> ${proof.label}</span>`:'<span style="color:var(--text-3);font-size:11px;">—</span>'}</td>
       <td><span class="countdown-pill cd-${countdown.cls||'none'}">${countdown.text}</span></td>
       <td style="font-size:11.5px;line-height:1.6;"><div><strong>المسؤول:</strong> ${esc(currentPersonName(o))}</div><div style="color:var(--text-3);">${esc(o.createdBy?('أنشئ: '+o.createdBy):'')}</div></td>
       <td onclick="event.stopPropagation();">${orderQuickActionsHtml(o)}</td>
@@ -8180,8 +8197,60 @@ function orderEditModalHtml(key){
       <div>
         <div style="font-size:12.5px;font-weight:800;color:var(--maroon);margin-bottom:8px;"><i class="ti ti-arrows-sort"></i> ترتيب مراحل الإنتاج</div>
         ${orderHtml||'<div style="font-size:11.5px;color:var(--text-3);">لا توجد مراحل نشطة</div>'}
+        <button class="btn btn-out btn-xs" style="margin-top:6px;" onclick="addOrderWorkflowStageUi('${key}')"><i class="ti ti-square-rounded-plus"></i> إضافة مرحلة / خط إنتاج</button>
+        <div id="oe-add-stage-wrap-${key}"></div>
       </div>
     </div>`;
+}
+// ── Add a currently-inactive department to an order's production pipeline.
+// Most useful for sending an order back to the designer once an item is
+// flagged "يتطلب تعديل" (revision required) after production has already
+// moved on to print/workshop — re-adding "design" here jumps currentDept
+// straight back to it (see confirmAddOrderWorkflowStage()) so the order
+// reappears in that designer's active queue immediately, not just at some
+// later point in the workflowOrder sequence. ──
+function addOrderWorkflowStageUi(key){
+  const o=orders[key];if(!o)return;
+  const seq=getActiveDepts(o);
+  const available=QT_STAGE_ORDER.filter(dk=>!seq.includes(dk));
+  const wrap=document.getElementById(`oe-add-stage-wrap-${key}`);if(!wrap)return;
+  if(!available.length){wrap.innerHTML='<div style="font-size:11px;color:var(--text-3);margin-top:6px;">جميع المراحل مُفعّلة بالفعل لهذا الطلب</div>';return;}
+  wrap.innerHTML=`<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:8px;padding:10px 12px;margin-top:8px;">
+    <select id="oe-add-stage-dept-${key}" onchange="_oeRenderAddStageAssignee('${key}')" style="min-width:130px;">${available.map(dk=>`<option value="${dk}">${esc(QT_STAGE_META[dk].label)}</option>`).join('')}</select>
+    <div id="oe-add-stage-assignee-${key}" style="flex:1;min-width:150px;"></div>
+    <button class="btn btn-brand btn-xs" onclick="confirmAddOrderWorkflowStage('${key}')"><i class="ti ti-check"></i> إضافة</button>
+    <button class="btn btn-out btn-xs" onclick="document.getElementById('oe-add-stage-wrap-${key}').innerHTML=''">إلغاء</button>
+  </div>`;
+  _oeRenderAddStageAssignee(key);
+}
+function _oeRenderAddStageAssignee(key){
+  const sel=document.getElementById(`oe-add-stage-dept-${key}`);
+  const target=document.getElementById(`oe-add-stage-assignee-${key}`);
+  if(!sel||!target)return;
+  const workers=getDeptWorkers(sel.value);
+  target.innerHTML=`<select id="oe-add-stage-assignee-sel-${key}">${workers.length?workers.map(w=>`<option value="${esc(w.uname)}">${esc(w.name)}</option>`).join(''):'<option value="">لا يوجد موظفون في هذا القسم</option>'}</select>`;
+}
+async function confirmAddOrderWorkflowStage(key){
+  const o=orders[key];if(!o)return;
+  if(!canEditOrderComposition()){toast('⚠️ هذا الإجراء غير متاح لك');return;}
+  const deptSel=document.getElementById(`oe-add-stage-dept-${key}`);
+  const asSel=document.getElementById(`oe-add-stage-assignee-sel-${key}`);
+  if(!deptSel||!asSel||!asSel.value){toast('⚠️ يرجى اختيار موظف لهذه المرحلة');return;}
+  const dept=deptSel.value,uname=asSel.value;
+  const seq=getActiveDepts(o);
+  const newSeq=QT_STAGE_ORDER.filter(dk=>seq.includes(dk)||dk===dept);
+  const returningToDesign=dept==='design'&&o.currentDept!=='design';
+  const upd={[`${dept}To`]:uname,workflowOrder:newSeq,lastItemUpdateAt:new Date().toISOString(),lastItemUpdateBy:cu.name};
+  if(returningToDesign){upd.currentDept='design';upd.stageStartDate=new Date().toISOString();}
+  showSaving('جاري إضافة المرحلة...');
+  try{
+    await fbPatch(`orders/${key}`,upd);
+    await loadData();hideSaving();
+    toast(returningToDesign?'✓ تم إرجاع الطلب لقسم التصميم':'✓ تم إضافة المرحلة');
+    pushNotification({type:'employee_changed',message:`تم تكليفك بالطلب ${esc(o.id||key)} — ${esc(QT_STAGE_META[dept].label)}`,orderKey:key,orderId:o.id,client:o.client,targetUname:uname});
+    openOrderEditModal(key);
+    _refreshOrderItemsViews(key);
+  }catch(e){hideSaving();toast('❌ فشل إضافة المرحلة');}
 }
 async function saveOrderEditReassign(key,dept){
   const o=orders[key];if(!o)return;
