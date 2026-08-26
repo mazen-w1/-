@@ -1315,7 +1315,7 @@ input[type="password"]{direction:rtl;text-align:right;padding-left:40px;padding-
 .od-progress-line{flex:1 1 26px;height:2px;background:var(--border);margin-top:14px;min-width:18px;}
 .od-progress-line.done{background:#10B981;}
 /* Multi-line order workspace — one card per parallel production line
-   (see buildProductionLinesSection()) instead of showing only the main
+   (see renderParallelLineSections()) instead of showing only the main
    line's progress at the top. */
 .od-prodlines-wrap{display:flex;flex-direction:column;gap:12px;margin-bottom:16px;}
 .od-prodline-card{background:var(--surface);border:1px solid var(--border-soft);border-radius:var(--radius-lg);box-shadow:var(--shadow-sm);padding:14px 16px 4px;}
@@ -8637,16 +8637,26 @@ function deptChecklistItems(o,dk){
 // (parentOrderKey-linked child orders — see the "خطوط إنتاج متوازية
 // إضافية" builder in the order-registration form) previously only showed
 // the main line's own progress timeline at the top of its workspace, with
-// no visibility into each parallel line's own department/assignee/items —
-// those children are ordinary order objects in their own right, so every
+// items rendered separately from ANY line context in the page's own
+// standalone "📦 بنود الطلب" section (using o.orderItems, i.e. always just
+// the main line's items even though that section visually sat alone,
+// disconnected from either line's own card) — no per-line item grouping
+// at all. Every child is an ordinary order object in its own right with
+// its own orderItems/currentDept/designTo etc (submitOrder() already
+// splits items between the primary line and each claimed parallel line
+// correctly at creation — see primaryLines/claimedItemIds there), so every
 // per-order render helper (buildOrderProgressTimeline, currentPersonName,
-// renderOrderItemsCards) already works on them unmodified. Falls back to
-// exactly the old single-timeline output when there are no children, so a
-// normal single-line order's workspace is visually unchanged.
-function buildProductionLinesSection(o,key,canAct){
+// renderOrderItemsCards, openAddItemModal) already works on them
+// unmodified — this just groups each line's own timeline+summary+items+
+// add-button into one self-contained card. Falls back to exactly the old
+// single-timeline output when there are no children (buildOrderDetailsPage
+// keeps rendering the standalone items section as before in that case), so
+// a normal single-line order's workspace is visually unchanged.
+function renderParallelLineSections(o,key,canAct){
   const children=Object.entries(orders).filter(([,v])=>v.parentOrderKey===key)
     .sort((a,b)=>(a[1].productionLineIndex||0)-(b[1].productionLineIndex||0));
   if(!children.length)return buildOrderProgressTimeline(o,key);
+  const deptRestricted=['designer','printer','workshop','follower'].includes(cu.type);
   const lineSummaryHtml=lineOrder=>{
     const meta=WF_DEPT_META[lineOrder.currentDept]||{label:lineOrder.currentDept||'—',color:'#475569',icon:'ti-circle'};
     return `<div class="od-prodline-summary">
@@ -8654,10 +8664,20 @@ function buildProductionLinesSection(o,key,canAct){
       <span><i class="ti ti-user"></i> ${esc(currentPersonName(lineOrder))}</span>
     </div>`;
   };
+  // Every line — main or parallel — gets its own items grid AND its own
+  // scoped "+ إضافة بند جديد" (openAddItemModal already takes whatever
+  // order key it's given, so pointing it at a child line's key adds the
+  // item to that line, never the main order).
+  const lineItemsHtml=(lineOrder,lineKey,lineCanAct)=>`<div style="margin-top:10px;">
+    <div class="od-dept-section-lbl" style="margin-bottom:8px;font-size:12px;">📦 بنود هذا الخط</div>
+    ${renderOrderItemsCards(lineOrder,lineKey,lineCanAct)}
+    ${(!deptRestricted&&lineOrder.orderItems&&lineOrder.orderItems.length)?`<button class="btn btn-out btn-xs" style="margin-top:8px;" onclick="openAddItemModal('${lineKey}')"><i class="ti ti-square-rounded-plus"></i> إضافة بند جديد</button>`:''}
+  </div>`;
   const mainCard=`<div class="od-prodline-card">
     <div class="od-prodline-head"><i class="ti ti-flag-3"></i> خط الإنتاج الرئيسي</div>
     ${buildOrderProgressTimeline(o,key)}
     ${lineSummaryHtml(o)}
+    ${lineItemsHtml(o,key,canAct)}
   </div>`;
   const childCards=children.map(([ck,cv])=>{
     const childCanAct=cu.type==='admin'||isMyOrder(cv);
@@ -8665,7 +8685,7 @@ function buildProductionLinesSection(o,key,canAct){
       <div class="od-prodline-head"><i class="ti ti-git-branch"></i> خط الإنتاج الموازي #${cv.productionLineIndex||'?'} — ${esc(cv.id||ck)}</div>
       ${buildOrderProgressTimeline(cv,ck)}
       ${lineSummaryHtml(cv)}
-      ${(cv.orderItems&&cv.orderItems.length)?renderOrderItemsCards(cv,ck,childCanAct):''}
+      ${lineItemsHtml(cv,ck,childCanAct)}
     </div>`;
   }).join('');
   return `<div class="od-prodlines-wrap">${mainCard}${childCards}</div>`;
@@ -9004,6 +9024,9 @@ function buildOrderDetailsPage(){
   const t=cu.type,isMine=isMyOrder(o),canAct=t==='admin'||isMine;
   const nd=getNextDept(o);
   const _prevDept=getPrevDept(o);
+  // When true, items render inside each line's own card (renderParallelLineSections)
+  // instead of the single standalone "📦 بنود الطلب" section below.
+  const _hasParallelLines=Object.values(orders).some(v=>v.parentOrderKey===key);
   const nextLabels={design:'اعتماد التصميم والإرسال للمرحلة التالية ➔',external:'إنهاء التوريد والنقل ➔',print:'إتمام الطباعة ➔',workshop:'اكتمال التركيب ✓'};
   let nextBtn='';
   if(canAct&&o.currentDept!=='done'){
@@ -9240,12 +9263,12 @@ function buildOrderDetailsPage(){
     ${updateBannerHtml}
     <div class="od-split">
       <div class="od-left-col">
-        ${buildProductionLinesSection(o,key,canAct)}
+        ${renderParallelLineSections(o,key,canAct)}
         ${_custInfoAcc}
-        <div style="margin-bottom:16px;">
+        ${_hasParallelLines?'':`<div style="margin-bottom:16px;">
           <div class="od-dept-section-lbl" style="margin-bottom:8px;font-size:12px;">📦 بنود الطلب</div>
           ${renderOrderItemsCards(o,key,canAct)}
-        </div>
+        </div>`}
         ${_deptToolsAcc}
         ${maintOrderRow}
         ${maintenanceRow}
