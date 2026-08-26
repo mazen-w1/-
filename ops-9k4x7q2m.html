@@ -1314,6 +1314,13 @@ input[type="password"]{direction:rtl;text-align:right;padding-left:40px;padding-
 .od-progress-node.done .od-progress-lbl,.od-progress-node.current .od-progress-lbl{color:var(--maroon);font-weight:800;}
 .od-progress-line{flex:1 1 26px;height:2px;background:var(--border);margin-top:14px;min-width:18px;}
 .od-progress-line.done{background:#10B981;}
+/* Multi-line order workspace — one card per parallel production line
+   (see buildProductionLinesSection()) instead of showing only the main
+   line's progress at the top. */
+.od-prodlines-wrap{display:flex;flex-direction:column;gap:12px;margin-bottom:16px;}
+.od-prodline-card{background:var(--surface);border:1px solid var(--border-soft);border-radius:var(--radius-lg);box-shadow:var(--shadow-sm);padding:14px 16px 4px;}
+.od-prodline-head{font-size:12.5px;font-weight:800;color:var(--maroon);display:flex;align-items:center;gap:6px;margin-bottom:4px;}
+.od-prodline-summary{display:flex;gap:10px;flex-wrap:wrap;align-items:center;font-size:11.5px;color:var(--text-2);margin:2px 0 10px;}
 
 .od-summary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:16px;}
 .od-summary-card{background:linear-gradient(150deg,rgba(255,255,255,.85),rgba(255,255,255,.5));backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,.6);border-radius:var(--radius-lg);padding:11px 14px;box-shadow:var(--shadow-sm);}
@@ -4920,15 +4927,26 @@ function renderWfKanbanView(){
     const list=buckets[c.key]||[];
     let cardsHtml;
     if(c.key==='completed'){
-      const visible=list.filter(o=>((_wfNow-new Date(o.stageStartDate||o.date).getTime())/3600000)<48);
-      const hiddenCount=list.length-visible.length;
-      const expanded=window._wfCompletedExpanded===true;
-      const shown=expanded?list:visible;
-      cardsHtml=shown.length?shown.map(cardHtml).join(''):'<div style="color:var(--text-3);padding:20px 10px;text-align:center;font-size:12px;"><i class="ti ti-inbox" style="font-size:26px;display:block;margin-bottom:6px;"></i>لا توجد أعمال</div>';
-      if(!expanded && hiddenCount>0){
-        cardsHtml+='<div onclick="toggleCompletedWfColumn()" style="cursor:pointer;text-align:center;padding:10px;font-size:12px;color:var(--maroon);font-weight:700;border-top:1px dashed var(--border);">عرض '+hiddenCount+' طلب إضافي</div>';
-      } else if(expanded && list.length>visible.length){
-        cardsHtml+='<div onclick="toggleCompletedWfColumn()" style="cursor:pointer;text-align:center;padding:10px;font-size:12px;color:var(--text-3);border-top:1px dashed var(--border);">إخفاء الطلبات القديمة</div>';
+      // Folded by default behind one clear toggle — the age-based
+      // "عرض N طلب إضافي" sub-reveal below only ever applies once this
+      // outer fold is already open.
+      const colOpen=!!window._wfCollapseState['kanban-completed'];
+      if(!colOpen){
+        cardsHtml=`<div style="padding:18px 10px;text-align:center;">
+          <button class="btn btn-out btn-sm" onclick="toggleWfCollapse('kanban-completed');renderWfKanbanView();"><i class="ti ti-chevron-down"></i> عرض الطلبات المكتملة (${list.length})</button>
+        </div>`;
+      }else{
+        const visible=list.filter(o=>((_wfNow-new Date(o.stageStartDate||o.date).getTime())/3600000)<48);
+        const hiddenCount=list.length-visible.length;
+        const expanded=window._wfCompletedExpanded===true;
+        const shown=expanded?list:visible;
+        cardsHtml=`<button class="btn btn-out btn-sm" style="width:100%;justify-content:center;margin-bottom:8px;" onclick="toggleWfCollapse('kanban-completed');renderWfKanbanView();"><i class="ti ti-chevron-up"></i> إخفاء الطلبات المكتملة</button>`;
+        cardsHtml+=shown.length?shown.map(cardHtml).join(''):'<div style="color:var(--text-3);padding:20px 10px;text-align:center;font-size:12px;"><i class="ti ti-inbox" style="font-size:26px;display:block;margin-bottom:6px;"></i>لا توجد أعمال</div>';
+        if(!expanded && hiddenCount>0){
+          cardsHtml+='<div onclick="toggleCompletedWfColumn()" style="cursor:pointer;text-align:center;padding:10px;font-size:12px;color:var(--maroon);font-weight:700;border-top:1px dashed var(--border);">عرض '+hiddenCount+' طلب إضافي</div>';
+        } else if(expanded && list.length>visible.length){
+          cardsHtml+='<div onclick="toggleCompletedWfColumn()" style="cursor:pointer;text-align:center;padding:10px;font-size:12px;color:var(--text-3);border-top:1px dashed var(--border);">إخفاء الطلبات القديمة</div>';
+        }
       }
     } else {
       cardsHtml=list.length?list.map(cardHtml).join(''):'<div style="color:var(--text-3);padding:20px 10px;text-align:center;font-size:12px;"><i class="ti ti-inbox" style="font-size:26px;display:block;margin-bottom:6px;"></i>لا توجد أعمال</div>';
@@ -5455,6 +5473,13 @@ function closeWfDayPanel(){
   document.getElementById('wf-day-panel-overlay')?.classList.remove('open');
   document.getElementById('wf-day-panel')?.classList.remove('open');
 }
+// Shared collapsed/expanded state for the "الطلبات المكتملة" sections
+// across the workflow views (Kanban column, List view, Timeline) — folded
+// by default. Toggling only re-invokes the specific view's own render
+// function directly (never nav()/a full page rebuild), so it can never
+// disturb scroll position or reload the page.
+window._wfCollapseState=window._wfCollapseState||{};
+function toggleWfCollapse(id){window._wfCollapseState[id]=!window._wfCollapseState[id];}
 function renderWfListView(){
   const bodyEl=document.getElementById('wf-view-body');if(!bodyEl)return;
   const f=window._wfFilters||{};
@@ -5483,7 +5508,7 @@ function renderWfListView(){
     <span><i class="ti ti-filter"></i> عرض مُفلتر: ${kpiLabels[kpiMode]||kpiMode} (${arr.length})</span>
     <button class="btn btn-out btn-xs" onclick="window._wfKpiFilterOnce=null;renderWfListView();">إظهار كل الطلبات</button>
   </div>`:'';
-  const rows=arr.map(o=>{
+  const rowHtml=o=>{
     const overdue=o.deadline&&o.deadline!=='—'&&o.currentDept!=='done'&&new Date(o.deadline)<new Date();
     const countdown=deliveryCountdownText(o);
     const proof=proofStatusForOrder(o);
@@ -5502,36 +5527,62 @@ function renderWfListView(){
       <td style="font-size:11.5px;line-height:1.6;"><div><strong>المسؤول:</strong> ${esc(currentPersonName(o))}</div><div style="color:var(--text-3);">${esc(o.createdBy?('أنشئ: '+o.createdBy):'')}</div></td>
       <td onclick="event.stopPropagation();">${orderQuickActionsHtml(o)}</td>
     </tr>`;
-  }).join('');
+  };
+  const theadHtml='<tr><th style="width:130px">رقم الطلب</th><th>العميل والخدمة</th><th style="width:95px">المرحلة</th><th style="width:135px">البروفة والعميل</th><th style="width:135px">موعد التسليم</th><th style="width:150px">المسؤول / المنشئ</th><th style="width:105px">إجراءات</th></tr>';
+  // Completed orders get their own collapsed-by-default section instead of
+  // sitting mixed into the active list — see toggleWfCollapse(). Toggling
+  // only re-invokes this render function directly (no nav()/full page
+  // rebuild), so it never disturbs scroll position or reloads the page.
+  const activeArr=arr.filter(o=>o.currentDept!=='done');
+  const doneArr=arr.filter(o=>o.currentDept==='done');
+  const doneOpen=!!window._wfCollapseState['list-done'];
+  const doneSectionHtml=doneArr.length?`<div class="card" style="margin-top:12px;">
+    <button class="btn btn-out btn-sm" onclick="toggleWfCollapse('list-done');renderWfListView();"><i class="ti ti-chevron-${doneOpen?'up':'down'}"></i> ${doneOpen?'إخفاء':'عرض'} الطلبات المكتملة (${doneArr.length})</button>
+    ${doneOpen?`<div class="tbl-wrap" style="margin-top:10px;"><table class="wf-dense-table"><thead>${theadHtml}</thead><tbody>${doneArr.map(rowHtml).join('')}</tbody></table></div>`:''}
+  </div>`:'';
   bodyEl.innerHTML=`
     ${kpiBanner}
     ${wfListFiltersBarHtml(f)}
     <div class="card"><div class="tbl-wrap"><table class="wf-dense-table">
-    <thead><tr><th style="width:130px">رقم الطلب</th><th>العميل والخدمة</th><th style="width:95px">المرحلة</th><th style="width:135px">البروفة والعميل</th><th style="width:135px">موعد التسليم</th><th style="width:150px">المسؤول / المنشئ</th><th style="width:105px">إجراءات</th></tr></thead>
-    <tbody>${rows||`<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text-3)">لا توجد طلبات مطابقة</td></tr>`}</tbody>
-    </table></div></div>`;
+    <thead>${theadHtml}</thead>
+    <tbody>${activeArr.map(rowHtml).join('')||`<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text-3)">لا توجد طلبات نشطة مطابقة</td></tr>`}</tbody>
+    </table></div></div>
+    ${doneSectionHtml}`;
 }
 function renderWfTimelineView(){
   const bodyEl=document.getElementById('wf-view-body');if(!bodyEl)return;
   const f=window._wfFilters||{};
   const arr=ordersArr().filter(o=>wfMatchesFilters(o,f)).slice().sort((a,b)=>new Date(a.date)-new Date(b.date));
-  const byDate={};
-  arr.forEach(o=>{const d=(o.date||'').slice(0,10)||'—';(byDate[d]=byDate[d]||[]).push(o);});
-  const dates=Object.keys(byDate).sort();
-  const html=dates.map(d=>`
-    <div class="wf-tl-day">
-      <div class="wf-tl-date">${formatDate(d)}</div>
-      <div class="wf-tl-items">${byDate[d].map(o=>{
-        const meta=WF_DEPT_META[o.currentDept]||{color:'#94A3B8'};
-        return `<div class="wf-tl-item" onclick="openOrderPage('${o._key}')">
-          <span class="wf-cal-dot" style="background:${meta.color}"></span>
-          <strong>${esc(o.client||'—')}</strong> — <span style="color:var(--text-2)">${esc(o.service||'—')}</span> ${deptBadge(o.currentDept)} ${gpbadge(o.priority,o.currentDept)}
-        </div>`;
-      }).join('')}</div>
-    </div>`).join('');
+  const groupByDateHtml=list=>{
+    const byDate={};
+    list.forEach(o=>{const d=(o.date||'').slice(0,10)||'—';(byDate[d]=byDate[d]||[]).push(o);});
+    return Object.keys(byDate).sort().map(d=>`
+      <div class="wf-tl-day">
+        <div class="wf-tl-date">${formatDate(d)}</div>
+        <div class="wf-tl-items">${byDate[d].map(o=>{
+          const meta=WF_DEPT_META[o.currentDept]||{color:'#94A3B8'};
+          return `<div class="wf-tl-item" onclick="openOrderPage('${o._key}')">
+            <span class="wf-cal-dot" style="background:${meta.color}"></span>
+            <strong>${esc(o.client||'—')}</strong> — <span style="color:var(--text-2)">${esc(o.service||'—')}</span> ${deptBadge(o.currentDept)} ${gpbadge(o.priority,o.currentDept)}
+          </div>`;
+        }).join('')}</div>
+      </div>`).join('');
+  };
+  // Completed orders get their own folded-by-default section instead of
+  // being mixed chronologically among the active ones — same
+  // toggleWfCollapse() pattern as the Kanban/List views.
+  const activeArr=arr.filter(o=>o.currentDept!=='done');
+  const doneArr=arr.filter(o=>o.currentDept==='done');
+  const html=groupByDateHtml(activeArr);
+  const doneOpen=!!window._wfCollapseState['timeline-done'];
+  const doneSectionHtml=doneArr.length?`<div class="card" style="padding:16px;margin-top:12px;">
+    <button class="btn btn-out btn-sm" onclick="toggleWfCollapse('timeline-done');renderWfTimelineView();"><i class="ti ti-chevron-${doneOpen?'up':'down'}"></i> ${doneOpen?'إخفاء':'عرض'} الطلبات المكتملة (${doneArr.length})</button>
+    ${doneOpen?`<div style="margin-top:10px;">${groupByDateHtml(doneArr)}</div>`:''}
+  </div>`:'';
   bodyEl.innerHTML=`
     <div style="margin-bottom:12px;">${wfFiltersBarHtml(f)}</div>
-    <div class="card" style="padding:16px;">${html||'<div style="text-align:center;color:var(--text-3);padding:30px;">لا توجد طلبات مطابقة</div>'}</div>`;
+    <div class="card" style="padding:16px;">${html||'<div style="text-align:center;color:var(--text-3);padding:30px;">لا توجد طلبات نشطة مطابقة</div>'}</div>
+    ${doneSectionHtml}`;
 }
 window._wfSelected=new Set();
 window._wfMultiMode=false;
@@ -8582,6 +8633,43 @@ function deptChecklistItems(o,dk){
   items.push({label:'إنهاء '+label,done:!!o[dk+'DoneAt']||state==='done'});
   return items;
 }
+// Multi-line order workspace: an order with parallel production lines
+// (parentOrderKey-linked child orders — see the "خطوط إنتاج متوازية
+// إضافية" builder in the order-registration form) previously only showed
+// the main line's own progress timeline at the top of its workspace, with
+// no visibility into each parallel line's own department/assignee/items —
+// those children are ordinary order objects in their own right, so every
+// per-order render helper (buildOrderProgressTimeline, currentPersonName,
+// renderOrderItemsCards) already works on them unmodified. Falls back to
+// exactly the old single-timeline output when there are no children, so a
+// normal single-line order's workspace is visually unchanged.
+function buildProductionLinesSection(o,key,canAct){
+  const children=Object.entries(orders).filter(([,v])=>v.parentOrderKey===key)
+    .sort((a,b)=>(a[1].productionLineIndex||0)-(b[1].productionLineIndex||0));
+  if(!children.length)return buildOrderProgressTimeline(o,key);
+  const lineSummaryHtml=lineOrder=>{
+    const meta=WF_DEPT_META[lineOrder.currentDept]||{label:lineOrder.currentDept||'—',color:'#475569',icon:'ti-circle'};
+    return `<div class="od-prodline-summary">
+      <span class="badge" style="background:${meta.color}18;color:${meta.color};"><i class="ti ${meta.icon}"></i> ${esc(meta.label)}</span>
+      <span><i class="ti ti-user"></i> ${esc(currentPersonName(lineOrder))}</span>
+    </div>`;
+  };
+  const mainCard=`<div class="od-prodline-card">
+    <div class="od-prodline-head"><i class="ti ti-flag-3"></i> خط الإنتاج الرئيسي</div>
+    ${buildOrderProgressTimeline(o,key)}
+    ${lineSummaryHtml(o)}
+  </div>`;
+  const childCards=children.map(([ck,cv])=>{
+    const childCanAct=cu.type==='admin'||isMyOrder(cv);
+    return `<div class="od-prodline-card">
+      <div class="od-prodline-head"><i class="ti ti-git-branch"></i> خط الإنتاج الموازي #${cv.productionLineIndex||'?'} — ${esc(cv.id||ck)}</div>
+      ${buildOrderProgressTimeline(cv,ck)}
+      ${lineSummaryHtml(cv)}
+      ${(cv.orderItems&&cv.orderItems.length)?renderOrderItemsCards(cv,ck,childCanAct):''}
+    </div>`;
+  }).join('');
+  return `<div class="od-prodlines-wrap">${mainCard}${childCards}</div>`;
+}
 function buildOrderProgressTimeline(o,key){
   const seq=getActiveDepts(o);
   const nodes=[{key:'received',label:'استلام الطلب'},{key:'reviewed',label:'مراجعة الطلب'},
@@ -9152,7 +9240,7 @@ function buildOrderDetailsPage(){
     ${updateBannerHtml}
     <div class="od-split">
       <div class="od-left-col">
-        ${buildOrderProgressTimeline(o,key)}
+        ${buildProductionLinesSection(o,key,canAct)}
         ${_custInfoAcc}
         <div style="margin-bottom:16px;">
           <div class="od-dept-section-lbl" style="margin-bottom:8px;font-size:12px;">📦 بنود الطلب</div>
