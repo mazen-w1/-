@@ -5732,22 +5732,19 @@ function waitForPrintImages(root){
     });
   }));
 }
-async function downloadQuotePDF(savedKey){
-  let data;
-  if(savedKey){
-    const q=standaloneQuotes[savedKey]||await fbGet(`standalone_quotes/${savedKey}`).catch(()=>null);
-    if(!q){toast('تعذر العثور على عرض السعر');return;}
-    data=q;
-  } else {
-    data=getQuoteData();
-    if(!data.client){toast('يرجى تحديد العميل');return;}
-    if(!data.lines.length){toast('يرجى إضافة بند واحد على الأقل');return;}
-  }
+// Shared A4-PDF export pipeline — renders whatever renderA4Quote(data,key)
+// produces into #print-area, captures it via html2canvas, and assembles a
+// multi-page jsPDF file. Used by both the official-quotation PDF export
+// (downloadQuotePDF) and the order-invoice PDF export
+// (downloadOrderInvoicePDF), so this pipeline — every quirk of which was
+// hard-won (see the inline comments below) — only has to be gotten right
+// once instead of drifting between two near-duplicate copies.
+async function _exportA4PdfFromPrintArea(data,key,filename){
   if(typeof html2canvas==='undefined'||!window.jspdf){toast('الأدوات اللازمة للتنزيل لم تُحمّل بعد، حاول مجدداً بعد ثوانٍ');return;}
   showSaving('جاري تجهيز ملف PDF...');
   const el=document.getElementById('print-area');
   try{
-    renderA4Quote(data,savedKey||'');
+    renderA4Quote(data,key||'');
     // The attachment page renderA4Quote() just built stays visible for the native
     // window.print() path, but here it must be hidden before capture — it's added
     // as its own clean full-page image further below, and html2canvas has no concept
@@ -5831,10 +5828,62 @@ async function downloadQuotePDF(savedKey){
         pdf.addImage(data.attachmentFile,imgFmt,ox,oy,aw,ah);
       }catch(e){console.error('attachment page failed',e);}
     }
-    pdf.save('عرض_سعر_'+(data.client||'')+'_'+(data.ref||'')+'.pdf');
+    pdf.save(filename);
   }catch(e){console.error(e);toast('حدث خطأ أثناء إنشاء ملف PDF');}
   finally{if(el){el.classList.remove('pdf-force-light');el.style.cssText='display:none;';}}
   hideSaving();
+}
+async function downloadQuotePDF(savedKey){
+  let data;
+  if(savedKey){
+    const q=standaloneQuotes[savedKey]||await fbGet(`standalone_quotes/${savedKey}`).catch(()=>null);
+    if(!q){toast('تعذر العثور على عرض السعر');return;}
+    data=q;
+  } else {
+    data=getQuoteData();
+    if(!data.client){toast('يرجى تحديد العميل');return;}
+    if(!data.lines.length){toast('يرجى إضافة بند واحد على الأقل');return;}
+  }
+  await _exportA4PdfFromPrintArea(data,savedKey||'','عرض_سعر_'+(data.client||'')+'_'+(data.ref||'')+'.pdf');
+}
+// Order-invoice PDF export — reuses the exact same official A4 template
+// (renderA4Quote) and export pipeline (_exportA4PdfFromPrintArea) as the
+// standalone-quotation PDF, so an order's invoice looks identical in
+// layout/branding to a quote. Items are aggregated across the main order
+// AND every parentOrderKey-linked parallel production line (see
+// renderParallelLineSections()/buildFinancialBreakdownCard(), which
+// already do the same aggregation for the on-screen invoice card) so the
+// exported PDF always reflects the whole job, not just whichever items
+// happen to live on the main order. The grand total intentionally comes
+// from o.totalAmount/o.paidAmount (the order's own authoritative,
+// manually-set financial fields — see the "Parallel-line orders carry no
+// amount of their own" reasoning elsewhere in this file) rather than being
+// recomputed from the aggregated item list, since that's the figure the
+// order was actually invoiced/paid against.
+async function downloadOrderInvoicePDF(key){
+  const o=orders[key];if(!o){toast('تعذر العثور على الطلب');return;}
+  const childLineOrders=Object.values(orders).filter(v=>v.parentOrderKey===key);
+  const allItems=[...(o.orderItems||[]),...childLineOrders.flatMap(cv=>cv.orderItems||[])];
+  const lines=allItems.filter(it=>it&&(Number(it.price)||Number(it.qty))).map(it=>({lbl:it.name||'—',q:Number(it.qty)||1,p:Number(it.price)||0,m:1}));
+  if(!lines.length){toast('⚠️ لا توجد بنود مسعّرة في هذا الطلب لإصدار فاتورة');return;}
+  const data={
+    ref:o.id||key,
+    date:o.date||'',
+    validity:'',
+    client:o.client||'',
+    phone:o.phone||'',
+    sales:o.createdBy||'',
+    delivery:o.deadline?deadlineDateTime(o):'',
+    paymentTerms:o.paymentMethod||o.paymentStatus||'',
+    lines,
+    calcMode:'combined',
+    showMeters:false,
+    totalWithVat:Number(o.totalAmount||0),
+    paidAmount:Number(o.paidAmount||0),
+    bank:'رقم الآيبان (IBAN): SA6880000370608010177725\nرقم الحساب: 370608010177725',
+    terms:(o.notes&&o.notes!=='—')?o.notes:'',
+  };
+  await _exportA4PdfFromPrintArea(data,o.id||key,'فاتورة_'+(o.client||'')+'_'+(o.id||key)+'.pdf');
 }
 function fmtMoney(n){n=Number(n)||0;var s=n.toFixed(2);if(s.slice(-3)===".00")return s.slice(0,-3);return s;}
 // Financial figures on the clients page are masked by default (***) and only reveal
@@ -8879,10 +8928,22 @@ function buildFinancialBreakdownCard(o,key){
   const remaining=Number(o.remainingAmount!=null?o.remainingAmount:Math.max(0,total-paid));
   const isUnpaid=remaining>0;
   const hasPendingReq=Object.values(submittedRequests).some(r=>r.orderKey===key&&(r.status==='pending'||r.status==='accountant_approved'));
-  // Structured line-item breakdown — only items that actually carry pricing
-  // (qty/price) are worth a row; an item with neither is priced as part of
-  // the order-level total rather than individually.
-  const invoiceItems=(o.orderItems||[]).filter(it=>it&&(Number(it.price)||Number(it.qty)));
+  // Structured line-item breakdown — aggregated across the main order AND
+  // every parentOrderKey-linked parallel production line, since each line
+  // is its own separate order object with its own orderItems (see
+  // renderParallelLineSections()/submitOrder()'s primaryLines/
+  // claimedItemIds split) — the invoice must reflect the whole job, not
+  // just whichever items happen to live on the main order. Only items that
+  // actually carry pricing (qty/price) are worth a row; an item with
+  // neither is priced as part of the order-level total rather than
+  // individually.
+  const _childLineOrders=Object.entries(orders).filter(([,v])=>v.parentOrderKey===key)
+    .sort((a,b)=>(a[1].productionLineIndex||0)-(b[1].productionLineIndex||0));
+  const _multiLine=_childLineOrders.length>0;
+  const invoiceItems=[
+    ...(o.orderItems||[]).map(it=>({...it,_lineLabel:'الخط الرئيسي'})),
+    ..._childLineOrders.flatMap(([ck,cv])=>(cv.orderItems||[]).map(it=>({...it,_lineLabel:`خط موازٍ #${cv.productionLineIndex||'?'}`}))),
+  ].filter(it=>it&&(Number(it.price)||Number(it.qty)));
   const invoiceItemsHtml=invoiceItems.length?`<div class="tbl-wrap" style="margin-bottom:10px;"><table style="width:100%;font-size:11.5px;border-collapse:collapse;">
     <thead><tr style="border-bottom:1.5px solid var(--border);">
       <th style="text-align:right;padding:5px 6px;color:var(--text-3);font-size:10.5px;">البند</th>
@@ -8891,7 +8952,7 @@ function buildFinancialBreakdownCard(o,key){
       <th style="width:95px;text-align:left;padding:5px 6px;color:var(--text-3);font-size:10.5px;">الإجمالي</th>
     </tr></thead>
     <tbody>${invoiceItems.map(it=>`<tr style="border-bottom:1px dashed var(--border-soft);">
-      <td style="padding:5px 6px;">${esc(it.name||'—')}</td>
+      <td style="padding:5px 6px;">${esc(it.name||'—')}${_multiLine?` <span class="badge b-new" style="font-size:9px;">${esc(it._lineLabel)}</span>`:''}</td>
       <td style="text-align:center;padding:5px 6px;">${esc(String(it.qty||1))}</td>
       <td style="text-align:center;padding:5px 6px;">${fmtMoney(Number(it.price)||0)}</td>
       <td style="text-align:left;padding:5px 6px;font-weight:800;color:var(--maroon);">${fmtMoney(orderLineTotal(it))}</td>
@@ -8909,7 +8970,7 @@ function buildFinancialBreakdownCard(o,key){
     <div class="od-fin-remaining ${isUnpaid?'unpaid':''}"><i class="ti ti-${isUnpaid?'alert-triangle':'circle-check'}"></i> المتبقي: ${fmtMoney(remaining)} ر.س</div>
     <div class="od-fin-actions">
       ${hasPendingReq?`<span style="font-size:11px;color:var(--text-3);"><i class="ti ti-hourglass"></i> يوجد سند بانتظار مراجعة المحاسب</span>`:`<button class="btn btn-brand btn-sm" style="width:100%;justify-content:center;" onclick="openAddPaymentModal('${key}')"><i class="ti ti-receipt"></i> إضافة دفعة / سند قبض</button>`}
-      <button class="btn btn-out btn-sm" style="width:100%;justify-content:center;" onclick="printOrderDetails()"><i class="ti ti-file-download"></i> تحميل عرض السعر / الفاتورة PDF</button>
+      <button class="btn btn-out btn-sm" style="width:100%;justify-content:center;" onclick="downloadOrderInvoicePDF('${key}')"><i class="ti ti-file-download"></i> تحميل عرض السعر / الفاتورة PDF</button>
       ${isUnpaid&&o.phone&&o.phone!=='—'?`<button class="btn btn-sm" style="width:100%;justify-content:center;background:#25D366;color:#fff;" onclick="sendWhatsappPaymentClaim('${key}')"><i class="ti ti-brand-whatsapp"></i> مطالبة دفع عبر واتساب</button>`:''}
     </div>
   </div>`;
