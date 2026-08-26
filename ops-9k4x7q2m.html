@@ -8629,15 +8629,6 @@ function buildDeptWorkspaceCard(o,key,dk,canAct,nextBtnHtml,uploadAreaHtml){
   </div>`;
 }
 function scrollToDeptCard(dk){const el=document.getElementById('od-dept-'+dk);if(el)el.scrollIntoView({behavior:'smooth',block:'center'});}
-async function uploadDesignProofField(key,field,inputId){
-  const el=document.getElementById(inputId);if(!el||!el.files||!el.files.length)return;
-  showSaving('جاري الرفع...');
-  try{
-    const url=await convertFileToBase64(el.files[0],{order:key});
-    const upd={};upd[field]=url;upd[field+'Name']=el.files[0].name;
-    await fbPatch(`orders/${key}`,upd);await loadData();hideSaving();toast('✓ تم الرفع');openOrderPage(key);
-  }catch(e){hideSaving();toast(e&&e.message?e.message:'❌ فشل الرفع');}
-}
 function buildOrderActivityTimeline(o,key){
   const items=computeOrderStageTimeline(o);
   if(!items.length)return'<div style="font-size:11px;color:var(--text-3);">لا توجد أحداث مسجلة بعد</div>';
@@ -8795,15 +8786,14 @@ function openAddPaymentModal(key){
     </div>`;
   openModal('add-item-modal');
 }
-async function handleApmFile(files){
+function handleApmFile(files){
   if(!files||!files.length)return;
-  showSaving('جاري رفع الملف...');
-  try{
-    window._apmFileB64=await convertFileToBase64(files[0],{});
-    window._apmFileName=files[0].name;
-    hideSaving();
-    const note=document.getElementById('apm-proof-note');if(note)note.textContent='✓ تم إرفاق '+files[0].name;
-  }catch(e){hideSaving();toast(e&&e.message?e.message:'❌ فشل رفع الملف');}
+  const file=files[0];
+  runQueuedUpload(file.name,onProgress=>convertFileToBase64(file,{},onProgress),async b64=>{
+    window._apmFileB64=b64;
+    window._apmFileName=file.name;
+    const note=document.getElementById('apm-proof-note');if(note)note.textContent='✓ تم إرفاق '+file.name;
+  });
 }
 async function submitOrderPaymentFromModal(key){
   const o=orders[key];if(!o)return;
