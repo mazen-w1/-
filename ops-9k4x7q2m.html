@@ -592,6 +592,9 @@ input[type="password"]{direction:rtl;text-align:right;padding-left:40px;padding-
 .wf-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:visible;cursor:pointer;transition:.2s;position:relative;}
 .order-update-dot{position:absolute;top:9px;right:9px;width:10px;height:10px;border-radius:50%;background:#F59E0B;box-shadow:0 0 0 2px #fff,0 0 0 3px #F59E0B55;z-index:2;animation:chatPulse 1.6s infinite;}
 @keyframes chatPulse{0%{transform:scale(1);opacity:1;}50%{transform:scale(1.3);opacity:.7;}100%{transform:scale(1);opacity:1;}}
+/* Opposite corner from .order-update-dot so an order with both an unread
+   chat message AND a field update shows two distinct dots, not one. */
+.chat-unread-dot{position:absolute;top:9px;left:9px;width:10px;height:10px;border-radius:50%;background:#2563EB;box-shadow:0 0 0 2px #fff,0 0 0 3px #2563EB55;z-index:2;animation:chatPulse 1.6s infinite;}
 .wf-card:hover{box-shadow:var(--shadow-lg);transform:translateY(-3px);border-color:var(--gold);}
 .wf-card-top{padding:10px 10px 8px;}
 .wf-card-id{font-size:9px;color:var(--text-3);margin-bottom:3px;font-weight:700;letter-spacing:.5px;}
@@ -1721,7 +1724,7 @@ input:focus,select:focus,textarea:focus{box-shadow:inset 0 1px 3px rgba(74,14,23
       <div style="display:flex;align-items:center;justify-content:center;margin-bottom:8px;">
         <div id="eu-avatar-preview" class="user-avatar-lg" style="width:72px;height:72px;font-size:22px;cursor:pointer;" onclick="document.getElementById('eu-photo-input').click()"><span id="eu-avatar-initials"></span></div>
       </div>
-      <input type="file" id="eu-photo-input" accept="image/*" style="display:none" onchange="handleEuPhoto(this)"/>
+      <input type="file" id="eu-photo-input" accept="*/*" style="display:none" onchange="handleEuPhoto(this)"/>
       <div style="text-align:center;font-size:11px;color:var(--text-3);margin-top:-8px;">اضغط على الصورة لتغييرها</div>
       <div class="fg"><label>الاسم الكامل</label><input id="eu-name"/></div>
       <div class="fg"><label>كلمة المرور الجديدة</label><input type="password" id="eu-pass" placeholder="اتركه فارغاً للإبقاء" autocomplete="new-password"/></div>
@@ -1745,7 +1748,7 @@ input:focus,select:focus,textarea:focus{box-shadow:inset 0 1px 3px rgba(74,14,23
       <div style="display:flex;align-items:center;justify-content:center;margin-bottom:8px;">
         <div id="nu-avatar-preview" class="user-avatar-lg" style="width:72px;height:72px;font-size:22px;background:var(--gold);color:var(--maroon-dark);cursor:pointer;" onclick="document.getElementById('nu-photo-input').click()"><i class="ti ti-user-plus"></i></div>
       </div>
-      <input type="file" id="nu-photo-input" accept="image/*" style="display:none" onchange="handleNuPhoto(this)"/>
+      <input type="file" id="nu-photo-input" accept="*/*" style="display:none" onchange="handleNuPhoto(this)"/>
       <div style="text-align:center;font-size:11px;color:var(--text-3);margin-top:-8px;">اضغط لإضافة صورة</div>
       <div class="fg"><label>اسم المستخدم (لتسجيل الدخول) *</label><input id="nu-uname" placeholder="بالإنجليزية بدون مسافات"/></div>
       <div class="fg"><label>الاسم الكامل *</label><input id="nu-name" placeholder="الاسم باللغة العربية"/></div>
@@ -1773,7 +1776,7 @@ input:focus,select:focus,textarea:focus{box-shadow:inset 0 1px 3px rgba(74,14,23
         <div class="dept-upload-box" onclick="document.getElementById('mv-photo-input').click()">
           <i class="ti ti-camera"></i> <span id="mv-photo-label">اضغط لإرفاق صورة</span>
         </div>
-        <input type="file" id="mv-photo-input" accept="image/*" style="display:none" onchange="handleMvPhoto(this.files)">
+        <input type="file" id="mv-photo-input" accept="*/*" style="display:none" onchange="handleMvPhoto(this.files)">
       </div>
       <button class="btn btn-primary" style="width:100%;margin-top:8px;" onclick="submitMaintVisit()">تسجيل الطلب</button>
     </div>
@@ -2003,6 +2006,9 @@ let submittedRequests={},chats={},standaloneQuotes={},warranties={},teamChat={},
 // "New" badge stays consistent across devices/browsers for the same account
 // instead of resetting the moment localStorage isn't shared.
 let orderSeenMap={};
+// Same server-backed pattern as orderSeenMap, for internal order-chat unread
+// state — see markChatSeen()/hasUnreadChat() below.
+let chatSeenMap={};
 let _lastAssignSnapshot=null,_lastNotifSnapshot=null,_audioCtx=null,_audioUnlocked=false;
 let _navHistory=[];
 let _nuPhotoB64='',_euPhotoB64='',_euSelectedColor='',_nuSelectedColor='';
@@ -2221,6 +2227,7 @@ async function enterApp(u){
   // render, so "New" badges are correct immediately rather than flashing on
   // then clearing once the 60s poll catches up.
   try{orderSeenMap=(await fbGet('orderSeen/'+u))||{};}catch(e){}
+  try{chatSeenMap=(await fbGet('chatSeen/'+u))||{};}catch(e){}
   nav(_restorePage);
   renderStarTicker();
   setInterval(async()=>{await loadData();refreshCurrentPage();renderStarTicker();},60000);
@@ -2345,7 +2352,7 @@ async function loadData(){
   // orderSeen/{uname} directly before its first render. Every subsequent
   // call (the 60s poll, explicit refreshes after mutations) has cu set and
   // keeps this in sync with what other devices/sessions have marked seen.
-  if(cu&&cu._uname)essential.push(['orderSeen/'+cu._uname,v=>orderSeenMap=v]);
+  if(cu&&cu._uname){essential.push(['orderSeen/'+cu._uname,v=>orderSeenMap=v]);essential.push(['chatSeen/'+cu._uname,v=>chatSeenMap=v]);}
   // Every fbGet() call below (essential and auxiliary alike) goes through
   // fbReq(), which already awaits window._fbAuthReady and attaches a valid
   // ID token before firing — see fbReq() and the _fbAuthReady safety-net
@@ -3550,6 +3557,11 @@ function itemworkBackBtnHtml(){return`<div style="margin-bottom:16px;"><button c
 function refreshCurrentPage(){
   const p=_curPage;
   if(p==='add'||p==='request'||p==='quote')return;
+  // A background upload (see runQueuedUpload()) keeps running through page
+  // navigation regardless, but a rebuild while one is in flight risks
+  // wiping unrelated in-progress fields on whatever page the upload was
+  // started from — hold off until the queue is empty.
+  if(window._uploadQueue&&window._uploadQueue.length)return;
   if(document.querySelector('.modal-overlay.open'))return;
   if(window._wfSelected&&window._wfSelected.size>0)return;
   // Skip while the user has an in-page dropdown/menu open, an ongoing save
@@ -3573,7 +3585,11 @@ function updateRequestsBadgeSidebar(){
 // ============================================================
 // HELPERS / BADGES
 // ============================================================
-function gpbadge(p){const m={'عاجلة':'b-urg','متوسطة':'b-proc','عادية':'b-done'};return`<span class="badge ${m[p]||'b-done'}">${p||'عادية'}</span>`;}
+// currentDept is optional — pass it (as gpbadge(o.priority,o.currentDept)) so a
+// completed order's card stops showing "عاجلة"/b-urg once it's already done and
+// urgency no longer means anything; omitted at call sites that have no order
+// context (e.g. a bare priority value with no dept to check).
+function gpbadge(p,currentDept){if(currentDept==='done')return'';const m={'عاجلة':'b-urg','متوسطة':'b-proc','عادية':'b-done'};return`<span class="badge ${m[p]||'b-done'}">${p||'عادية'}</span>`;}
 function deptBadge(d){
   const m={design:'b-design',print:'b-print',workshop:'b-workshop',external:'b-ext',done:'b-done'};
   const ml={design:'تصميم',print:'طباعة',workshop:'ورشة',external:'تنفيذ خارجي',done:'مكتمل'};
@@ -3969,7 +3985,11 @@ async function approveItemProof(key,idx){
   showSaving('جاري الاعتماد...');
   try{
     const items=[...o.orderItems];
-    items[idx]={...items[idx],clientApproved:true,clientApprovedBy:cu.name,clientApprovedAt:new Date().toISOString()};
+    // needsRevision:false so a direct approval sent while an item was still
+    // flagged "يتطلب تعديل" actually clears that flag — otherwise
+    // itemDesignColumn() would keep reading it as 'revision' (it takes
+    // priority over clientApproved) even after this approval.
+    items[idx]={...items[idx],clientApproved:true,clientApprovedBy:cu.name,clientApprovedAt:new Date().toISOString(),needsRevision:false};
     const upd={orderItems:items,lastItemUpdateAt:new Date().toISOString(),lastItemUpdateBy:cu.name};
     await fbPatch(`orders/${key}`,upd);
     await loadData();hideSaving();toast('✓ تم اعتماد التصميم من العميل');
@@ -4009,7 +4029,19 @@ function renderOrderItemsCards(o,key,canAct){
   if(!items.length){
     return `<div style="text-align:center;color:var(--text-3);padding:20px;">لا توجد بنود في هذا الطلب${deptRestricted?'':`<div style="margin-top:8px;"><button class="btn btn-out btn-xs" onclick="openAddItemModal('${key}')"><i class="ti ti-square-rounded-plus"></i> إضافة بند جديد</button></div>`}</div>`;
   }
-  const cardsHtml=items.map((it,i)=>{
+  // Newly added items (submitNewOrderItem's addedLater:true path) float to
+  // the top so whoever opens the order sees the latest addition first;
+  // original items keep their existing relative order beneath them. `i` is
+  // always each item's real index in o.orderItems (never its position in
+  // this display order), since every action on a card — openItemWorkspace,
+  // approveItemProof, etc. — addresses items by that real array index.
+  const displayOrder=items.map((it,i)=>({it,i})).sort((a,b)=>{
+    const aNew=!!a.it.addedLater,bNew=!!b.it.addedLater;
+    if(aNew!==bNew)return aNew?-1:1;
+    if(aNew&&bNew)return new Date(b.it.addedAt||0)-new Date(a.it.addedAt||0);
+    return a.i-b.i;
+  });
+  const cardsHtml=displayOrder.map(({it,i})=>{
     try{return renderOneItemGridCard(it,i);}
     catch(e){
       console.error('renderOneItemGridCard failed for item',i,e);
@@ -4036,13 +4068,14 @@ function renderOrderItemsCards(o,key,canAct){
         </div>
       </div>
       ${dims?`<div style="font-size:11px;color:var(--text-2);margin-top:6px;"><i class="ti ti-ruler-2"></i> ${dims}</div>`:''}
-      <div style="margin-top:8px;">${gpbadge(o.priority)}</div>
+      <div style="margin-top:8px;">${gpbadge(o.priority,o.currentDept)}</div>
       ${revisionNote?`<div class="revision-notes-box"><div class="rn-title"><i class="ti ti-message-2"></i> ملاحظات مراجعة العميل</div>${revisionNote.notes?`<div class="rn-text">${esc(revisionNote.notes)}</div>`:''}${(revisionNote.files&&revisionNote.files.length)?`<div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px;">${revisionNote.files.map(f=>fileLinkHtml(f.name,f.data)).join('')}</div>`:''}</div>`:''}
       <div class="oi-card-actions">
         <div style="display:flex;gap:6px;flex-wrap:wrap;">
           ${(canSeeWhatsappBtn()&&o.phone&&o.phone!=='—')?`<button class="btn btn-whatsapp btn-sm" onclick="event.stopPropagation();openWhatsapp('${encodeURIComponent(o.phone)}')" title="واتساب"><i class="ti ti-brand-whatsapp"></i></button>`:''}
           ${canSeeClientFeedback()?`<button class="btn btn-out btn-sm" onclick="event.stopPropagation();openClientFeedbackPanel('${key}',${i})"><i class="ti ti-message-2"></i> تعديل مطلوب</button>`:''}
           ${(canApproveClientProof()&&dcol==='waiting')?`<button class="btn btn-green btn-sm" onclick="event.stopPropagation();approveItemProof('${key}',${i})"><i class="ti ti-circle-check"></i> تعميد التصميم</button>`:''}
+          ${(canApproveClientProof()&&dcol==='revision')?`<button class="btn btn-green btn-sm" onclick="event.stopPropagation();approveItemProof('${key}',${i})"><i class="ti ti-circle-check"></i> تعميد التصميم مباشرة</button>`:''}
         </div>
         <button class="btn btn-brand btn-sm" style="width:100%;justify-content:center;margin-top:8px;" onclick="openItemWorkspace('${key}',${i})"><i class="ti ti-arrow-left"></i> فتح البند</button>
       </div>
@@ -4098,24 +4131,29 @@ function openClientFeedbackPanel(key,idx){
     <div class="fg"><label>ملاحظات / تعديلات مطلوبة من العميل</label><textarea id="cfb-notes" placeholder="اكتب رد العميل أو التعديلات الشفهية المطلوبة..." style="min-height:90px;"></textarea></div>
     <div class="fg"><label>إرفاق صور / لقطات شاشة / رسومات (اختياري)</label>
       <div class="dept-upload-box" onclick="document.getElementById('cfb-file-input').click()"><i class="ti ti-upload" style="font-size:20px;color:var(--gold);"></i><br>اضغط لرفع صور أو ملفات</div>
-      <input type="file" id="cfb-file-input" multiple accept="image/*,.pdf" style="display:none" onchange="handleClientFeedbackFile(this.files)"/>
+      <input type="file" id="cfb-file-input" multiple accept="*/*" style="display:none" onchange="handleClientFeedbackFile(this.files)"/>
       <div id="cfb-file-note" style="font-size:11px;color:#10B981;margin-top:4px;font-weight:700;"></div>
     </div>
     <button class="btn btn-brand" style="width:100%;justify-content:center;margin-top:6px;" onclick="saveClientFeedback()"><i class="ti ti-send"></i> حفظ وإعادة البند لقسم التصميم</button>`;
   openModal('client-feedback-modal');
 }
-async function handleClientFeedbackFile(files){
+function handleClientFeedbackFile(files){
   if(!files||!files.length)return;
-  showSaving('جاري تحميل الملفات...');
-  try{
-    for(const f of Array.from(files)){
-      const b64=await convertFileToBase64(f);
-      window._cfbFiles.push({data:b64,name:f.name});
+  const fileList=Array.from(files);
+  const label=fileList.length>1?`${fileList.length} ملفات — ملاحظات العميل`:fileList[0].name;
+  runQueuedUpload(label,async onProgress=>{
+    const results=[];
+    for(let i=0;i<fileList.length;i++){
+      const f=fileList[i];
+      const b64=await convertFileToBase64(f,undefined,pct=>onProgress(((i+pct/100)/fileList.length)*100));
+      results.push({data:b64,name:f.name});
     }
+    return results;
+  },async results=>{
+    window._cfbFiles.push(...results);
     const note=document.getElementById('cfb-file-note');
     if(note)note.textContent='✓ '+window._cfbFiles.length+' ملف مرفق';
-  }catch(e){toast(e&&e.message?e.message:'⚠️ فشل تحميل الملف');}
-  hideSaving();
+  });
 }
 async function saveClientFeedback(){
   if(!canSeeClientFeedback()){toast('⚠️ هذا الإجراء غير متاح لك');return;}
@@ -4197,7 +4235,7 @@ function preciseTimeBadge(hours){
   if(days<=3)return`<span class="time-badge time-warn"><i class="ti ti-clock"></i>${txt}</span>`;
   return`<span class="time-badge time-over"><i class="ti ti-alarm"></i>${txt}</span>`;
 }
-function deadlineBadge(deadline){if(!deadline||deadline==='—')return'';const now=new Date();const dl=new Date(deadline);const hours=Math.round((dl-now)/3600000);if(hours<0)return`<div class="deadline-warn deadline-over"><i class="ti ti-alert-triangle"></i>تجاوز موعد التسليم!</div>`;if(hours<=24)return`<div class="deadline-warn"><i class="ti ti-clock"></i>التسليم خلال ${hours} ساعة</div>`;if(hours<=72)return`<div class="deadline-warn"><i class="ti ti-clock"></i>التسليم خلال ${Math.round(hours/24)} أيام</div>`;return'';}
+function deadlineBadge(deadline,currentDept){if(currentDept==='done')return'';if(!deadline||deadline==='—')return'';const now=new Date();const dl=new Date(deadline);const hours=Math.round((dl-now)/3600000);if(hours<0)return`<div class="deadline-warn deadline-over"><i class="ti ti-alert-triangle"></i>تجاوز موعد التسليم!</div>`;if(hours<=24)return`<div class="deadline-warn"><i class="ti ti-clock"></i>التسليم خلال ${hours} ساعة</div>`;if(hours<=72)return`<div class="deadline-warn"><i class="ti ti-clock"></i>التسليم خلال ${Math.round(hours/24)} أيام</div>`;return'';}
 function formatDate(iso){if(!iso)return'—';try{return new Date(iso).toLocaleDateString('ar-SA');}catch{return iso;}}
 function fmtDateTime(iso){if(!iso)return'—';try{const d=new Date(iso);return d.toLocaleDateString('en-CA')+' · '+d.toLocaleTimeString('ar-SA',{hour:'2-digit',minute:'2-digit'});}catch{return iso;}}
 function renderDeptTrackRow(o){
@@ -4446,7 +4484,7 @@ function openQuickTask(type){
       <div class="fg"><label>ملاحظات / تفاصيل إضافية</label><textarea id="qt-notes" placeholder="وصف المهمة المطلوبة..."></textarea></div>
       <div class="fg"><label>إرفاق ملف (اختياري)</label>
         <div class="dept-upload-box" onclick="document.getElementById('qt-file').click()"><i class="ti ti-upload" style="font-size:20px;color:var(--gold);"></i><br>اضغط لرفع ملف</div>
-        <input type="file" id="qt-file" style="display:none" accept="image/*,.pdf,.doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onchange="handleQtFile(this.files)"/>
+        <input type="file" id="qt-file" style="display:none" accept="*/*" onchange="handleQtFile(this.files)"/>
         <div id="qt-file-note" style="font-size:11px;color:#10B981;margin-top:4px;font-weight:700;"></div>
       </div>
       <button class="btn btn-brand" style="width:100%;justify-content:center;" onclick="submitQuickTask('${type}')"><i class="ti ti-send"></i> إرسال وتكليف الأقسام</button>
@@ -4460,12 +4498,13 @@ function openQuickTask(type){
   openModal('quick-task-modal');
   setTimeout(fillQtOrderSelect,40);
 }
-async function handleQtFile(files){
+function handleQtFile(files){
   if(!files||!files.length)return;
-  showSaving('جاري معالجة الملف...');
-  try{window._qtFileB64=await convertFileToBase64(files[0]);window._qtFileName=files[0].name;document.getElementById('qt-file-note').textContent='✓ تم: '+files[0].name;}
-  catch(e){toast(e&&e.message?e.message:'فشل قراءة الملف');}
-  hideSaving();
+  const file=files[0];
+  runQueuedUpload(file.name,onProgress=>convertFileToBase64(file,undefined,onProgress),async b64=>{
+    window._qtFileB64=b64;window._qtFileName=file.name;
+    const note=document.getElementById('qt-file-note');if(note)note.textContent='✓ تم: '+file.name;
+  });
 }
 async function submitQuickTask(type){
   const c=document.getElementById('qt-client').value.trim();
@@ -4527,7 +4566,7 @@ function openWorkshopFeedback(key){
           <i class="ti ti-camera" style="font-size:26px;color:var(--gold);display:block;margin-bottom:6px;"></i>
           اضغط لالتقاط صورة الموقع أو رفعها
         </div>
-        <input type="file" id="fb-site-photo-inp" accept="image/*" capture="environment" style="display:none" onchange="handleWfSitePhoto(this.files)"/>
+        <input type="file" id="fb-site-photo-inp" accept="*/*" capture="environment" style="display:none" onchange="handleWfSitePhoto(this.files)"/>
         <div id="fb-photo-note" style="font-size:12px;margin-top:6px;font-weight:700;color:#EF4444;">⚠ لم يتم إرفاق صورة الموقع بعد</div>
       </div>
       <button class="btn btn-brand" style="width:100%;justify-content:center;" onclick="submitWorkshopFeedback('${key}')"><i class="ti ti-check"></i> حفظ البيانات وإرسال</button>
@@ -4551,18 +4590,17 @@ async function submitWorkshopFeedback(key){
     await loadData();hideSaving();closeModal('workshop-feedback-modal');toast('✓ تم حفظ البيانات وإرسال التقرير');
   }catch(e){hideSaving();toast('❌ فشل حفظ البيانات، حاول مرة أخرى');}
 }
-async function handleWfSitePhoto(files){
+function handleWfSitePhoto(files){
   if(!files||!files.length)return;
-  showSaving('جاري تحميل الصورة...');
-  try{
-    window._wfSitePhotoB64=await convertFileToBase64(files[0]);
-    window._wfSitePhotoName=files[0].name;
+  const file=files[0];
+  runQueuedUpload(file.name,onProgress=>convertFileToBase64(file,undefined,onProgress),async b64=>{
+    window._wfSitePhotoB64=b64;
+    window._wfSitePhotoName=file.name;
     const note=document.getElementById('fb-photo-note');
-    if(note){note.textContent='✓ تم: '+files[0].name;note.style.color='#10B981';}
+    if(note){note.textContent='✓ تم: '+file.name;note.style.color='#10B981';}
     const box=document.getElementById('fb-photo-box');
-    if(box)box.innerHTML=`<img src="${window._wfSitePhotoB64}" style="width:100%;max-height:150px;object-fit:cover;border-radius:8px;"/>`;
-  }catch(e){toast(e&&e.message?e.message:'⚠️ فشل تحميل الصورة');}
-  hideSaving();
+    if(box)box.innerHTML=`<img src="${b64}" style="width:100%;max-height:150px;object-fit:cover;border-radius:8px;"/>`;
+  });
 }
 // ============================================================
 // DASHBOARD
@@ -4801,19 +4839,19 @@ function renderWfKanbanView(){
           <button style="color:#DC2626;" onclick="deleteOrderSingle('${o._key}')"><i class="ti ti-trash"></i> حذف</button>
         </div>
       </div>`:'';
-    return `<div class="wf-card" data-dept="${o.currentDept||'design'}" data-name="${esc((o.client||'').toLowerCase())}" data-key="${o._key}" onclick="wfCardClick(event,'${o._key}')">${hasOrderUpdate(o)?'<span class="order-update-dot" title="تم تحديث بيانات الطلب"></span>':''}${cardMenu}<input type="checkbox" class="wf-check" data-key="${o._key}" onchange="toggleWfSelect('${o._key}',this.checked)"/><div class="wf-card-top">
+    return `<div class="wf-card" data-dept="${o.currentDept||'design'}" data-name="${esc((o.client||'').toLowerCase())}" data-key="${o._key}" onclick="wfCardClick(event,'${o._key}')">${hasOrderUpdate(o)?'<span class="order-update-dot" title="تم تحديث بيانات الطلب"></span>':''}${hasUnreadChat(o)?'<span class="chat-unread-dot" title="رسالة داخلية غير مقروءة"></span>':''}${cardMenu}<input type="checkbox" class="wf-check" data-key="${o._key}" onchange="toggleWfSelect('${o._key}',this.checked)"/><div class="wf-card-top">
         <div style="display:flex;justify-content:center;margin-bottom:4px;"><div style="width:22px;height:22px;border-radius:50%;background:var(--maroon);display:flex;align-items:center;justify-content:center;position:relative;flex-shrink:0;box-shadow:0 1px 3px rgba(0,0,0,.25);"><span style="font-family:'Changa',sans-serif;font-weight:800;font-size:12px;line-height:1;color:rgba(255,255,255,.92);">ر</span><span style="position:absolute;top:3px;left:5px;width:1px;height:9px;background:#D4AF37;border-radius:1px;"></span></div></div>
         <div class="wf-card-id">${o.id||o._key} · ${orderDateTime(o)}${o.isQuickTask?'<span class="urgent-tag" style="margin-right:6px;font-size:9px;"><i class="ti ti-bolt"></i>سريعة</span>':''}</div>
         <div class="wf-card-name">${esc(o.client)}</div>
         <div class="wf-card-svc">${esc(o.service)}</div>
         ${o.isQuickTask?`<div style="font-size:11px;color:var(--maroon);font-weight:700;margin-bottom:4px;"><i class="ti ti-user"></i> اسم العميل: ${esc(o.client||'—')} &nbsp; <i class="ti ti-phone"></i> رقم الجوال: ${esc(o.phone||'—')}</div>`:''}
         ${qtCardStageStripHtml(o)}
-        <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;margin-bottom:6px;">${deptBadge(o.currentDept)} ${gpbadge(o.priority)} ${orderTimerBadge(o)}</div>
+        <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;margin-bottom:6px;">${deptBadge(o.currentDept)} ${gpbadge(o.priority,o.currentDept)} ${orderTimerBadge(o)}</div>
         <div style="font-size:11px;color:var(--text-3);">المسؤول: ${esc(currentPersonName(o))}</div>
         <div style="font-size:10px;color:var(--text-3);"><i class="ti ti-user-circle"></i> أنشئ بواسطة: ${esc(o.createdBy||'—')}</div>
         <div style="font-size:10.5px;color:var(--text-3);"><i class="ti ti-calendar-time"></i> التسليم: ${deadlineDateTime(o)}</div>
         ${_canSeeCardTotal&&o.totalAmount?`<div style="font-size:11px;font-weight:800;color:var(--maroon);margin-top:3px;"><i class="ti ti-cash"></i> إجمالي المبلغ: ${fmtMoney(Number(o.totalAmount))} ر.س</div>`:''}
-        ${deadlineBadge(o.deadline)}
+        ${deadlineBadge(o.deadline,o.currentDept)}
         ${qtActions}
       </div><div class="wf-card-prog"><div class="wf-card-fill" style="width:${pct}%;background:${col}"></div></div></div>`;
   };
@@ -5162,12 +5200,12 @@ function designerItemRowHtml(o,it,idx){
   if(colKey==='todo'||colKey==='revision'){
     const inputId=uidBase+'-proof';
     actionsHtml=`<label class="designer-action-btn" for="${inputId}" onclick="event.stopPropagation();"><i class="ti ti-upload"></i> رفع بروفة</label>
-      <input type="file" multiple id="${inputId}" style="display:none" accept="image/*,.pdf,.ai,.psd" onclick="event.stopPropagation();" onchange="event.stopPropagation();saveItemKindFiles('${o._key}',${idx},'design_proof','${inputId}')"/>`;
+      <input type="file" multiple id="${inputId}" style="display:none" accept="*/*" onclick="event.stopPropagation();" onchange="event.stopPropagation();saveItemKindFiles('${o._key}',${idx},'design_proof','${inputId}')"/>`;
   }else if(colKey==='waiting'){
     const inputId=uidBase+'-approved';
     const waBtn=o.phone?`<button class="designer-action-btn" onclick="event.stopPropagation();openWhatsapp('${encodeURIComponent(o.phone)}')"><i class="ti ti-brand-whatsapp"></i> إرسال للعميل</button>`:'';
     actionsHtml=`${waBtn}<label class="designer-action-btn" for="${inputId}" onclick="event.stopPropagation();"><i class="ti ti-upload"></i> رفع الملف المعتمد</label>
-      <input type="file" multiple id="${inputId}" style="display:none" accept="image/*,.pdf,.ai,.psd" onclick="event.stopPropagation();" onchange="event.stopPropagation();saveItemKindFiles('${o._key}',${idx},'design_approved','${inputId}')"/>`;
+      <input type="file" multiple id="${inputId}" style="display:none" accept="*/*" onclick="event.stopPropagation();" onchange="event.stopPropagation();saveItemKindFiles('${o._key}',${idx},'design_approved','${inputId}')"/>`;
   }else if(colKey==='approved'){
     actionsHtml=`<button class="designer-action-btn designer-action-primary" onclick="event.stopPropagation();advanceItemDept('${o._key}',${idx})"><i class="ti ti-send-2"></i> اعتماد وإرسال للطباعة</button>`;
   }
@@ -5187,11 +5225,11 @@ function designerItemRowHtml(o,it,idx){
   </div>`;
 }
 function designerSimpleOrderCardHtml(o){
-  return`<div class="wf-card" style="${o.isQuickTask?'border:2px solid #C89A4A;background:linear-gradient(135deg,#FFFDF8,#FFF5E0);':''}" onclick="openOrderPage('${o._key}')">${hasOrderUpdate(o)?'<span class="order-update-dot" title="تم تحديث بيانات الطلب"></span>':''}<div class="wf-card-top">
+  return`<div class="wf-card" style="${o.isQuickTask?'border:2px solid #C89A4A;background:linear-gradient(135deg,#FFFDF8,#FFF5E0);':''}" onclick="openOrderPage('${o._key}')">${hasOrderUpdate(o)?'<span class="order-update-dot" title="تم تحديث بيانات الطلب"></span>':''}${hasUnreadChat(o)?'<span class="chat-unread-dot" title="رسالة داخلية غير مقروءة"></span>':''}<div class="wf-card-top">
     <div class="wf-card-id">${o.id||o._key} · ${orderDateTime(o)}${o.isQuickTask?'<span class="urgent-tag" style="margin-right:6px;font-size:9px;background:linear-gradient(135deg,#78350F,#C89A4A);"><i class="ti ti-bolt"></i>مهمة سريعة</span>':''}</div>
     <div class="wf-card-name">${esc(o.client)}</div>
     <div class="wf-card-svc">${esc(o.service)}</div>
-    <div style="display:flex;gap:5px;flex-wrap:wrap;">${gpbadge(o.priority)} ${orderTimerBadge(o)}</div>
+    <div style="display:flex;gap:5px;flex-wrap:wrap;">${gpbadge(o.priority,o.currentDept)} ${orderTimerBadge(o)}</div>
     <div style="font-size:10.5px;color:var(--text-3);"><i class="ti ti-calendar-time"></i> التسليم: ${deadlineDateTime(o)}</div>
     ${(canSeeWhatsappBtn()&&o.phone&&o.phone!=='—')?`<div style="margin-top:8px"><button class="btn btn-whatsapp btn-sm" onclick="event.stopPropagation();openWhatsapp('${encodeURIComponent(o.phone)}')"><i class="ti ti-brand-whatsapp"></i> واتساب</button></div>`:''}
   </div><div class="wf-card-prog"><div class="wf-card-fill" style="width:${orderProgress(o)}%;background:${progressColor(o)}"></div></div></div>`;
@@ -5266,7 +5304,7 @@ function wfDayJobCardHtml(o){
   return `<div class="wf-day-job-card">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px;">
       <strong style="color:var(--maroon);font-size:12.5px;">${esc(o.client||'—')}</strong>
-      ${gpbadge(o.priority)}
+      ${gpbadge(o.priority,o.currentDept)}
     </div>
     <div style="font-size:11px;color:var(--text-3);margin-bottom:4px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
       <span><i class="ti ti-hash"></i> ${esc(o.id||o._key)}</span>${deptBadge(o.currentDept)}
@@ -5444,7 +5482,7 @@ function renderWfTimelineView(){
         const meta=WF_DEPT_META[o.currentDept]||{color:'#94A3B8'};
         return `<div class="wf-tl-item" onclick="openOrderPage('${o._key}')">
           <span class="wf-cal-dot" style="background:${meta.color}"></span>
-          <strong>${esc(o.client||'—')}</strong> — <span style="color:var(--text-2)">${esc(o.service||'—')}</span> ${deptBadge(o.currentDept)} ${gpbadge(o.priority)}
+          <strong>${esc(o.client||'—')}</strong> — <span style="color:var(--text-2)">${esc(o.service||'—')}</span> ${deptBadge(o.currentDept)} ${gpbadge(o.priority,o.currentDept)}
         </div>`;
       }).join('')}</div>
     </div>`).join('');
@@ -5534,7 +5572,7 @@ function openWfInlinePanel(key,skipScroll){
           <div class="wf-detail-head-client">${esc(o.client||'—')}${o.isQuickTask?'<span class="urgent-tag" style="margin-right:8px;font-size:9px;"><i class="ti ti-bolt"></i>مهمة سريعة</span>':''}</div>
         </div>
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-          ${gpbadge(o.priority)} ${deptBadge(o.currentDept)}
+          ${gpbadge(o.priority,o.currentDept)} ${deptBadge(o.currentDept)}
           <span class="badge ${o.currentDept==='done'?'b-done':'b-new'}">${statusLabel}</span>
           <div class="wf-detail-close" onclick="closeWfInlinePanel()" title="إغلاق"><i class="ti ti-x"></i></div>
         </div>
@@ -5782,7 +5820,7 @@ function buildDeptStagePage(){
       <div class="wf-card-id">${o.id||o._key}</div>
       <div style="font-size:11.5px;color:var(--text-2);margin-top:4px;"><i class="ti ti-user"></i> ${esc(currentPersonName(o))}</div>
       <div style="font-size:10.5px;color:var(--text-3);"><i class="ti ti-calendar-time"></i> ${deadlineDateTime(o)}</div>
-      <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:6px;">${gpbadge(o.priority)} ${orderTimerBadge(o)}</div>
+      <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:6px;">${gpbadge(o.priority,o.currentDept)} ${orderTimerBadge(o)}</div>
     </div>
     <div class="wf-card-prog"><div class="wf-card-fill" style="width:${orderProgress(o)}%;background:${progressColor(o)}"></div></div>
   </div>`).join('');
@@ -5830,9 +5868,24 @@ function buildDeptStagePage(){
       </select>`:''}
     </div>
     ${isCompleted
-      ?`<div class="card"><div class="tbl-wrap"><table><thead><tr>${thead}</tr></thead>
-    <tbody>${rows||`<tr><td colspan="${6+(canDelete?1:0)}" style="text-align:center;padding:24px;color:var(--text-3)">لا توجد طلبات في هذه المرحلة حالياً</td></tr>`}</tbody></table></div></div>`
+      ?`<div class="card" style="margin-bottom:10px;cursor:pointer;" onclick="toggleDeptStageArchive()">
+      <div style="display:flex;align-items:center;justify-content:space-between;">
+        <span style="font-size:13px;font-weight:800;color:var(--maroon);"><i class="ti ti-archive"></i> سجل الطلبات المكتملة (${arr.length})</span>
+        <button class="btn btn-out btn-xs" onclick="event.stopPropagation();toggleDeptStageArchive()"><i class="ti ti-chevron-${window._deptStageArchiveOpen?'up':'down'}"></i> ${window._deptStageArchiveOpen?'إخفاء':'عرض'}</button>
+      </div>
+    </div>
+    <div id="deptstage-archive-body" style="display:${window._deptStageArchiveOpen?'block':'none'};">
+      <div class="card"><div class="tbl-wrap"><table><thead><tr>${thead}</tr></thead>
+    <tbody>${rows||`<tr><td colspan="${6+(canDelete?1:0)}" style="text-align:center;padding:24px;color:var(--text-3)">لا توجد طلبات في هذه المرحلة حالياً</td></tr>`}</tbody></table></div></div>
+    </div>`
       :(rows?`<div class="wf-grid">${rows}</div>`:'<div class="card" style="text-align:center;padding:30px;color:var(--text-3);"><i class="ti ti-inbox" style="font-size:32px;display:block;margin-bottom:8px;"></i>لا توجد طلبات في هذه المرحلة حالياً</div>')}`;
+}
+// Folded by default — the completed-orders archive can grow very large over
+// time, and most visits to this page are about the ACTIVE queue, not
+// browsing history.
+function toggleDeptStageArchive(){
+  window._deptStageArchiveOpen=!window._deptStageArchiveOpen;
+  buildDeptStagePage();
 }
 function filterDeptStageRows(){
   const q=(document.getElementById('deptstage-search')?.value||'').trim().toLowerCase();
@@ -5981,7 +6034,7 @@ function buildExternalDashboard(){
     <td onclick="openOrderPage('${o._key}')" style="cursor:pointer;font-size:12px;">${esc(o.client||'—')}</td>
     <td style="font-size:11.5px;">${esc(o.service||'—')}</td>
     <td style="font-size:11px;">${deadlineDateTime(o)}</td>
-    <td>${gpbadge(o.priority)}</td>
+    <td>${gpbadge(o.priority,o.currentDept)}</td>
   </tr>`;
   const jobsTable=(list,emptyMsg)=>`<div class="card"><div class="tbl-wrap"><table><thead><tr><th>رقم الطلب</th><th>العميل</th><th>الخدمة</th><th>التسليم</th><th>الأولوية</th></tr></thead><tbody>${list.length?list.map(jobRow).join(''):`<tr><td colspan="5" style="text-align:center;padding:18px;color:var(--text-3)">${emptyMsg}</td></tr>`}</tbody></table></div></div>`;
   document.getElementById('extdash-content').innerHTML=`
@@ -6042,11 +6095,11 @@ function buildMyWorkItemCards(){
   const rows=myAssignedItems();
   return rows.map(({o,idx,it})=>{
     const dept=itemCurrentDept(it,o);
-    return `<div class="wf-card" style="cursor:pointer;" onclick="openItemWorkspace('${o._key}',${idx})">${hasOrderUpdate(o)?'<span class="order-update-dot" title="عنصر جديد أو مُحدَّث"></span>':''}<div class="wf-card-top">
+    return `<div class="wf-card" style="cursor:pointer;" onclick="openItemWorkspace('${o._key}',${idx})">${hasOrderUpdate(o)?'<span class="order-update-dot" title="عنصر جديد أو مُحدَّث"></span>':''}${hasUnreadChat(o)?'<span class="chat-unread-dot" title="رسالة داخلية غير مقروءة"></span>':''}<div class="wf-card-top">
       <div class="wf-card-id">${esc(o.id||o._key)} <span class="badge ${dept==='done'?'b-done':'b-new'}" style="margin-right:4px;">${WF_DEPT_META[dept]?.label||dept}</span></div>
       <div class="wf-card-name">${esc(it.name||'—')}</div>
       <div class="wf-card-svc"><i class="ti ti-user"></i> ${esc(o.client||'—')}</div>
-      <div style="display:flex;gap:5px;flex-wrap:wrap;">${gpbadge(o.priority)}</div>
+      <div style="display:flex;gap:5px;flex-wrap:wrap;">${gpbadge(o.priority,o.currentDept)}</div>
       <div style="font-size:10.5px;color:var(--text-3);"><i class="ti ti-calendar-time"></i> التسليم: ${deadlineDateTime(o)}</div>
       ${(canSeeWhatsappBtn()&&o.phone&&o.phone!=='—')?`<div style="margin-top:8px"><button class="btn btn-whatsapp btn-sm" onclick="event.stopPropagation();openWhatsapp('${encodeURIComponent(o.phone)}')"><i class="ti ti-brand-whatsapp"></i> واتساب</button></div>`:''}
       <button class="btn btn-brand btn-sm" style="width:100%;justify-content:center;margin-top:8px;" onclick="event.stopPropagation();openItemWorkspace('${o._key}',${idx})"><i class="ti ti-arrow-left"></i> فتح البند</button>
@@ -6078,17 +6131,17 @@ function buildMyWork(){
   const simpleCards=myOrders.map(o=>{
       const isMnt=o.orderKind==='maintenance';
       const cardBorder=isMnt?'border:2px solid #DC2626;background:linear-gradient(135deg,#FEF2F2,#FFF5F5);':o.isQuickTask?'border:2px solid #C89A4A;background:linear-gradient(135deg,#FFFDF8,#FFF5E0);':'';
-      return`<div class="wf-card" style="${cardBorder}" onclick="openOrderPage('${o._key}')">${hasOrderUpdate(o)?'<span class="order-update-dot" title="تم تحديث بيانات الطلب"></span>':''}<div class="wf-card-top">
+      return`<div class="wf-card" style="${cardBorder}" onclick="openOrderPage('${o._key}')">${hasOrderUpdate(o)?'<span class="order-update-dot" title="تم تحديث بيانات الطلب"></span>':''}${hasUnreadChat(o)?'<span class="chat-unread-dot" title="رسالة داخلية غير مقروءة"></span>':''}<div class="wf-card-top">
       <div class="wf-card-id">${o.id||o._key} · ${orderDateTime(o)}${isMnt?'<span class="urgent-tag" style="margin-right:6px;font-size:9px;background:linear-gradient(135deg,#991B1B,#DC2626);"><i class="ti ti-tool"></i>صيانة</span>':''}${o.isQuickTask?'<span class="urgent-tag" style="margin-right:6px;font-size:9px;background:linear-gradient(135deg,#78350F,#C89A4A);"><i class="ti ti-bolt"></i>مهمة سريعة</span>':''}</div>
       <div class="wf-card-name">${esc(o.client)}</div>
       <div class="wf-card-svc">${esc(o.service)}</div>
       ${o.isQuickTask?`<div style="font-size:11px;color:var(--maroon);font-weight:700;margin-bottom:4px;"><i class="ti ti-user"></i> اسم العميل: ${esc(o.client||'—')} &nbsp; <i class="ti ti-phone"></i> رقم الجوال: ${esc(o.phone||'—')}</div>`:''}
         ${qtCardStageStripHtml(o)}
-      <div style="display:flex;gap:5px;flex-wrap:wrap;">${deptBadge(o.currentDept)} ${gpbadge(o.priority)} ${orderTimerBadge(o)}</div>
+      <div style="display:flex;gap:5px;flex-wrap:wrap;">${deptBadge(o.currentDept)} ${gpbadge(o.priority,o.currentDept)} ${orderTimerBadge(o)}</div>
       <div style="font-size:11px;color:var(--text-3);">المسؤول: ${esc(currentPersonName(o))}</div>
       <div style="font-size:10.5px;color:var(--text-3);"><i class="ti ti-calendar-time"></i> التسليم: ${deadlineDateTime(o)}</div>
       ${_canSeeCardTotal&&o.totalAmount?`<div style="font-size:11px;font-weight:800;color:var(--maroon);margin-top:3px;"><i class="ti ti-cash"></i> إجمالي المبلغ: ${fmtMoney(Number(o.totalAmount))} ر.س</div>`:''}
-      ${deadlineBadge(o.deadline)}
+      ${deadlineBadge(o.deadline,o.currentDept)}
       ${o.quickTaskLocation?`<div style="font-size:11px;color:#9A3412;margin-top:6px;"><i class="ti ti-map-pin"></i> ${esc(o.quickTaskLocation)}</div>`:''}
       ${isWorkshop&&o.isQuickTask&&!o.workshopFeedbackDone?`<div style="margin-top:8px;"><button class="btn btn-orange btn-sm" onclick="event.stopPropagation();openWorkshopFeedback('${o._key}')"><i class="ti ti-clipboard-check"></i> إدخال القياسات</button></div>`:''}
       ${o.workshopFeedbackDone?`<div style="margin-top:6px;background:#F0FDF4;border:1px solid #BBF7D0;border-radius:6px;padding:6px 10px;font-size:11px;"><i class="ti ti-check" style="color:#10B981"></i> تم رفع التقرير — بانتظار الإجراء</div>`:''}
@@ -6257,7 +6310,7 @@ function renderItemKindBox(it,key,idx,kind,dept,canAct,labelOverride){
     </div>
     ${filesHtml||'<div class="ik-empty">لا توجد ملفات بعد</div>'}
     ${canAct?`<label class="ik-dropzone" for="${inputId}"><i class="ti ti-cloud-upload"></i> ${hasFiles?'استبدال / إضافة ملف':'اضغط لرفع الملف'}</label>
-    <input type="file" multiple id="${inputId}" style="display:none" accept="image/*,.pdf,.ai,.psd,.eps,.svg,.cdr,application/postscript,application/pdf,image/vnd.adobe.photoshop,video/*,.doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onchange="saveItemKindFiles('${key}',${idx},'${kind}','${inputId}')"/>`:''}
+    <input type="file" multiple id="${inputId}" style="display:none" accept="*/*" onchange="saveItemKindFiles('${key}',${idx},'${kind}','${inputId}')"/>`:''}
   </div>`;
 }
 function buildItemWorkspacePage(){
@@ -6285,6 +6338,7 @@ function buildItemWorkspacePage(){
     ${(canSeeClientFeedback()||canApproveClientProof())?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;">
       ${canSeeClientFeedback()?`<button class="btn btn-out btn-sm" onclick="openClientFeedbackPanel('${key}',${idx})"><i class="ti ti-message-2"></i> تعديل مطلوب</button>`:''}
       ${(canApproveClientProof()&&dcol==='waiting')?`<button class="btn btn-green btn-sm" onclick="approveItemProof('${key}',${idx})"><i class="ti ti-circle-check"></i> تعميد التصميم</button>`:''}
+      ${(canApproveClientProof()&&dcol==='revision')?`<button class="btn btn-green btn-sm" onclick="approveItemProof('${key}',${idx})"><i class="ti ti-circle-check"></i> تعميد التصميم مباشرة</button>`:''}
     </div>`:''}
     ${revisionNote?`<div class="revision-notes-box" style="margin-bottom:14px;"><div class="rn-title"><i class="ti ti-message-2"></i> ملاحظات مراجعة العميل</div>${revisionNote.notes?`<div class="rn-text">${esc(revisionNote.notes)}</div>`:''}${(revisionNote.files&&revisionNote.files.length)?`<div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px;">${revisionNote.files.map(f=>fileLinkHtml(f.name,f.data)).join('')}</div>`:''}<div style="font-size:10px;color:#9A3412;margin-top:6px;opacity:.8;">${esc(revisionNote.createdBy||'—')} · ${fmtDateTime(revisionNote.createdAt)}</div></div>`:''}
     <div class="card" style="margin-bottom:14px;padding:16px 20px 8px;">${buildOrderProgressTimeline(o,key)}</div>
@@ -6419,16 +6473,15 @@ function onMaintOrderPick(prefix,label){
   hidden.value=map[label]||'';
   onMaintOrderChange(prefix);
 }
-async function handleMaintFile(prefix,files){
+function handleMaintFile(prefix,files){
   if(!files||!files.length)return;
-  showSaving('جاري تجهيز الملف...');
-  try{
-    window['_mnt'+prefix+'FileB64']=await convertFileToBase64(files[0]);
-    window['_mnt'+prefix+'FileName']=files[0].name;
+  const file=files[0];
+  runQueuedUpload(file.name,onProgress=>convertFileToBase64(file,undefined,onProgress),async b64=>{
+    window['_mnt'+prefix+'FileB64']=b64;
+    window['_mnt'+prefix+'FileName']=file.name;
     const note=document.getElementById('mnt'+prefix+'-file-note');
-    if(note)note.textContent='✓ تم إرفاق: '+files[0].name;
-  }catch(e){toast(e&&e.message?e.message:'⚠️ فشل تحميل الملف');}
-  hideSaving();
+    if(note)note.textContent='✓ تم إرفاق: '+file.name;
+  });
 }
 function buildMaintRequestPage(){
   const warrantyOrderData=maintOrderOptionsData(true);
@@ -6765,7 +6818,7 @@ function buildQuotePage(){
           <div class="fg">
             <label>إرفاق ملف اختياري <span style="font-size:10px;color:var(--text-3);font-weight:600;">(صورة — تُضاف كصفحة ثانية في ملف PDF)</span></label>
             <div class="dept-upload-box" onclick="document.getElementById('q-attachment-input').click()"><i class="ti ti-upload" style="font-size:20px;color:var(--gold);"></i><br>اضغط لإرفاق صورة</div>
-            <input type="file" id="q-attachment-input" style="display:none" accept="image/*" onchange="handleQuoteAttachment(this.files)"/>
+            <input type="file" id="q-attachment-input" style="display:none" accept="*/*" onchange="handleQuoteAttachment(this.files)"/>
             <div id="q-attachment-note" style="font-size:11px;color:#10B981;margin-top:6px;font-weight:700;">${window._quoteAttachmentName?('✓ تم: '+window._quoteAttachmentName):''}</div>
           </div>
         </div>
@@ -7100,7 +7153,7 @@ function renderQuoteLines(){
     <label title="إرفاق صورة للبند" style="cursor:pointer;display:flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:8px;border:1px dashed var(--border);background:var(--bg);flex-shrink:0;transition:.12s;" onmouseover="this.style.borderColor='var(--gold)'" onmouseout="this.style.borderColor='var(--border)'">
       ${l.img?`<img src="${cloudinaryThumb(l.img,80)}" style="width:28px;height:28px;object-fit:cover;border-radius:6px;" loading="lazy"/>`:
       `<i class="ti ti-photo" style="font-size:14px;color:var(--text-3);"></i>`}
-      <input type="file" accept="image/*" style="display:none" onchange="attachLineImage('${l.id}',this.files)"/>
+      <input type="file" accept="*/*" style="display:none" onchange="attachLineImage('${l.id}',this.files)"/>
     </label>
     <button class="btn btn-red btn-sm btn-icon" onclick="removeQuoteLine('${l.id}')"><i class="ti ti-trash"></i></button>
     ${showMeters?`<div style="grid-column:1/-1;">
@@ -7610,7 +7663,7 @@ async function convertSavedQuoteToOrder(key,preloadedData=null){
             <div style="margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
               <label style="cursor:pointer;display:flex;align-items:center;gap:6px;font-size:11px;color:var(--maroon);border:1px dashed var(--border);border-radius:8px;padding:6px 10px;">
                 <i class="ti ti-paperclip"></i> إضافة مرفق
-                <input type="file" accept="image/*,application/pdf,.doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" style="display:none" onchange="attachCoItemFile(${i},this.files,'${key}')"/>
+                <input type="file" accept="*/*" style="display:none" onchange="attachCoItemFile(${i},this.files,'${key}')"/>
               </label>
               <span id="co-item-file-${i}" style="font-size:11px;color:var(--text-2);">${l.img?'مرفق حالي: صورة الصنف':'لا يوجد مرفق'}</span>
             </div>
@@ -7692,29 +7745,25 @@ function renderCoProductionLines(){
   const btn=document.getElementById('co-add-prod-line-btn');
   if(btn)btn.style.display=lines.length>=3?'none':'';
 }
-async function handleCoProdLineWorkshopFile(id,files){
+function handleCoProdLineWorkshopFile(id,files){
   if(!files||!files.length)return;
-  const l=(window._coProdLines||[]).find(x=>x.id===id);if(!l)return;
-  showSaving('جاري تحميل الملف...');
-  try{
-    l.workshopDeptFile=await convertFileToBase64(files[0]);
-    l.workshopDeptFileName=files[0].name;
+  const file=files[0];
+  runQueuedUpload(file.name,onProgress=>convertFileToBase64(file,undefined,onProgress),async b64=>{
+    const l=(window._coProdLines||[]).find(x=>x.id===id);if(!l)return;
+    l.workshopDeptFile=b64;
+    l.workshopDeptFileName=file.name;
     renderCoProductionLines();
-  }catch(e){toast(e&&e.message?e.message:'⚠️ فشل تحميل الملف');}
-  hideSaving();
+  });
 }
-async function attachCoItemFile(idx,files,orderKey){
+function attachCoItemFile(idx,files,orderKey){
   if(!files||!files.length)return;
-  showSaving('جاري تجهيز المرفق...');
-  try{
-    const file=files[0];
-    const b64=await convertFileToBase64(file,{order:orderKey});
+  const file=files[0];
+  runQueuedUpload(file.name,onProgress=>convertFileToBase64(file,{order:orderKey},onProgress),async b64=>{
     window._coItemFiles=window._coItemFiles||{};
     window._coItemFiles[idx]={data:b64,name:file.name};
     const lbl=document.getElementById('co-item-file-'+idx);
     if(lbl)lbl.textContent='✓ تم إرفاق: '+file.name;
-  }catch(e){toast(e&&e.message?e.message:'⚠️ فشل رفع المرفق');}
-  hideSaving();
+  });
 }
 async function finalizeConvertToOrder(quoteKey){
   const phone=document.getElementById('co-phone').value.trim();
@@ -7840,7 +7889,26 @@ async function loadAndRenderChat(orderKey){
     markChatSeen(orderKey);
   }catch(e){container.innerHTML='<div style="text-align:center;color:#EF4444;font-size:11px;padding:16px;">خطأ في تحميل الرسائل</div>';}
 }
-function markChatSeen(orderKey){try{localStorage.setItem('chatSeen_'+cu._uname+'_'+orderKey,new Date().toISOString());}catch(e){}}
+// Server-backed (chatSeen/{uname}/{orderKey}), not localStorage — same
+// cross-device reasoning as markOrderUpdateSeen() below: a device-local flag
+// would keep showing an unread indicator on every OTHER device/browser even
+// after the same account already read the chat on this one.
+function markChatSeen(orderKey){
+  if(!cu)return;
+  const now=new Date().toISOString();
+  chatSeenMap[orderKey]=now;
+  fbPatch('chatSeen/'+cu._uname,{[orderKey]:now}).catch(()=>{});
+}
+// Used to show an unread-messages indicator on order cards/notification
+// lists — true when the order's chat has a message newer than this user's
+// last-seen timestamp for it, sent by someone other than this user.
+function hasUnreadChat(o){
+  if(!o||!o._key||!cu)return false;
+  const thread=chats[o._key];if(!thread)return false;
+  const msgs=Object.values(thread);if(!msgs.length)return false;
+  const lastSeen=(chatSeenMap&&chatSeenMap[o._key])||'1970-01-01T00:00:00.000Z';
+  return msgs.some(m=>m&&m.timestamp>lastSeen&&m.senderUname!==cu._uname);
+}
 // Server-backed (orderSeen/{uname}/{orderKey}), not localStorage — a
 // device/browser-local flag meant "opened it on my phone" still showed
 // "جديد" when the same account opened the same order from a desktop or an
@@ -8659,8 +8727,27 @@ function buildFinancialBreakdownCard(o,key){
   const remaining=Number(o.remainingAmount!=null?o.remainingAmount:Math.max(0,total-paid));
   const isUnpaid=remaining>0;
   const hasPendingReq=Object.values(submittedRequests).some(r=>r.orderKey===key&&(r.status==='pending'||r.status==='accountant_approved'));
+  // Structured line-item breakdown — only items that actually carry pricing
+  // (qty/price) are worth a row; an item with neither is priced as part of
+  // the order-level total rather than individually.
+  const invoiceItems=(o.orderItems||[]).filter(it=>it&&(Number(it.price)||Number(it.qty)));
+  const invoiceItemsHtml=invoiceItems.length?`<div class="tbl-wrap" style="margin-bottom:10px;"><table style="width:100%;font-size:11.5px;border-collapse:collapse;">
+    <thead><tr style="border-bottom:1.5px solid var(--border);">
+      <th style="text-align:right;padding:5px 6px;color:var(--text-3);font-size:10.5px;">البند</th>
+      <th style="width:50px;text-align:center;padding:5px 6px;color:var(--text-3);font-size:10.5px;">الكمية</th>
+      <th style="width:85px;text-align:center;padding:5px 6px;color:var(--text-3);font-size:10.5px;">سعر الوحدة</th>
+      <th style="width:95px;text-align:left;padding:5px 6px;color:var(--text-3);font-size:10.5px;">الإجمالي</th>
+    </tr></thead>
+    <tbody>${invoiceItems.map(it=>`<tr style="border-bottom:1px dashed var(--border-soft);">
+      <td style="padding:5px 6px;">${esc(it.name||'—')}</td>
+      <td style="text-align:center;padding:5px 6px;">${esc(String(it.qty||1))}</td>
+      <td style="text-align:center;padding:5px 6px;">${fmtMoney(Number(it.price)||0)}</td>
+      <td style="text-align:left;padding:5px 6px;font-weight:800;color:var(--maroon);">${fmtMoney(orderLineTotal(it))}</td>
+    </tr>`).join('')}</tbody>
+  </table></div>`:'';
   return `<div class="od-fin-card">
-    <div class="od-fin-title"><i class="ti ti-cash"></i> الملخص المالي</div>
+    <div class="od-fin-title"><i class="ti ti-cash"></i> الفاتورة التفصيلية</div>
+    ${invoiceItemsHtml}
     <div class="od-fin-row"><span>الإجمالي قبل الضريبة</span><strong>${fmtMoney(subtotal)} ر.س</strong></div>
     <div class="od-fin-row"><span>ضريبة القيمة المضافة (15%)</span><strong>${fmtMoney(vat)} ر.س</strong></div>
     <div class="od-fin-row od-fin-total"><span>إجمالي الفاتورة</span><strong>${fmtMoney(total)} ر.س</strong></div>
@@ -8701,7 +8788,7 @@ function openAddPaymentModal(key){
         <option value="حوالة">حوالة بنكية</option>
       </select></div>
       <div class="fg" id="apm-proof-fg" style="display:none;"><label>إثبات التحويل *</label>
-        <input type="file" id="apm-proof-input" accept="image/*,.pdf" onchange="handleApmFile(this.files)"/>
+        <input type="file" id="apm-proof-input" accept="*/*" onchange="handleApmFile(this.files)"/>
         <div id="apm-proof-note" style="font-size:11px;color:#10B981;margin-top:4px;font-weight:700;"></div>
       </div>
       <button class="btn btn-brand" style="width:100%;justify-content:center;" onclick="submitOrderPaymentFromModal('${key}')"><i class="ti ti-send"></i> إرسال للمحاسب</button>
@@ -8837,7 +8924,10 @@ function buildOrderDetailsPage(){
       const _isProofQt=o.isQuickTask&&o.printTo==='none'&&o.workshopTo==='none';
       const _printActive=o.printTo!=='none';
       const _workshopActive=o.workshopTo!=='none';
-      const _designFormats='image/*,.pdf,.ai,.psd,.eps,.svg,.cdr,application/postscript,application/pdf,image/vnd.adobe.photoshop';
+      // Broadened to accept every file format (audio/video/design/docs/archives),
+      // not just image/design-related MIME types — see the "universal file
+      // support" pass across all upload inputs in this file.
+      const _designFormats='*/*';
       // Fully dynamic per the active workflow — الملف المعتمد للتصميم is
       // required whenever ANYTHING is downstream of design (print and/or
       // workshop); بروفة التصميم only when printing is active; ملف الإنتاج
@@ -8883,14 +8973,14 @@ function buildOrderDetailsPage(){
     // Work) — accepting images/PDF/production docs (and video, folded into
     // the same box instead of a separate field) as multiple files at once.
     else if(o.currentDept==='workshop')uploadArea=`<div class="dept-upload-box"><div class="dept-upload-title" style="color:#9A3412"><i class="ti ti-tools"></i> الإنجاز النهائي</div>
-      <input type="file" multiple id="f-done-input" accept="image/*,video/*,.pdf,.doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onchange="uploadFileDirect('${key}','finalWorkshopDoneFile','finalWorkshopDoneFileName','f-done-input')"/>
+      <input type="file" multiple id="f-done-input" accept="*/*" onchange="uploadFileDirect('${key}','finalWorkshopDoneFile','finalWorkshopDoneFileName','f-done-input')"/>
       ${renderApprovalFileList(o,key,'finalWorkshopDoneFile',canAct)}
     </div>`;
     else if(o.currentDept==='external'){
       const _extMode=o.externalMode||'both';
       uploadArea=`<div class="dept-upload-box"><div class="dept-upload-title" style="color:#713F12"><i class="ti ti-world"></i> تحديث التنفيذ الخارجي</div>
       ${_extMode!=='files'?`<div class="fg"><label>التعليمات/الملاحظات</label><textarea id="f-ext-note-input" style="min-height:55px;font-size:12px;">${esc(o.externalNote||'')}</textarea><button class="btn btn-out btn-xs" style="margin-top:6px;" onclick="saveExternalNote('${key}')"><i class="ti ti-device-floppy"></i> حفظ الملاحظة</button></div>`:''}
-      ${_extMode!=='text'?`<div class="fg"><label>ملف التوريد</label><input type="file" id="f-ext-input" accept="image/*,.pdf,.doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onchange="uploadFileDirect('${key}','externalFile','externalFileName','f-ext-input')"/></div>`:''}
+      ${_extMode!=='text'?`<div class="fg"><label>ملف التوريد</label><input type="file" id="f-ext-input" accept="*/*" onchange="uploadFileDirect('${key}','externalFile','externalFileName','f-ext-input')"/></div>`:''}
       </div>`;
     }
   }
@@ -8992,10 +9082,10 @@ function buildOrderDetailsPage(){
           <span>الخدمة: <strong>${esc(o.service)}</strong></span>
           <span>الحالة: ${deptBadge(o.currentDept)}</span>
           ${(()=>{const proof=proofStatusForOrder(o);return proof?`<span><i class="ti ${proof.icon}"></i> <strong class="proof-pill proof-${proof.key}">${proof.label}</strong></span>`:'';})()}
-          <span>الأولوية: ${gpbadge(o.priority)}</span>
+          <span>الأولوية: ${gpbadge(o.priority,o.currentDept)}</span>
           <span>المسؤول: <strong>${esc(currentPersonName(o))}</strong></span>
           <span>أنشئ بواسطة: <strong>${esc(o.createdBy||'—')}</strong></span>
-          <span>التسليم: <strong>${deadlineDateTime(o)}</strong> ${deadlineBadge(o.deadline)}</span>
+          <span>التسليم: <strong>${deadlineDateTime(o)}</strong> ${deadlineBadge(o.deadline,o.currentDept)}</span>
           ${o.lastItemUpdateAt?`<span>آخر تحديث: <strong>${(o.lastItemUpdateAt||'').split('T')[0]||'—'}</strong></span>`:''}
         </div>
         <div class="od-header-progress"><span style="font-size:10.5px;color:rgba(255,255,255,.85);">التقدم الإجمالي</span><div class="od-header-progress-track"><div class="od-header-progress-fill" style="width:${orderProgress(o)}%;"></div></div><strong style="font-size:11px;color:#fff;">${orderProgress(o)}%</strong></div>
@@ -9066,26 +9156,31 @@ function openAddItemModal(key,editIdx){
       <div class="fg"><label>التفاصيل والمواصفات (المقاسات/الأبعاد)</label><textarea id="new-item-details" placeholder="المقاسات، المواد..." style="min-height:60px;">${esc(detailsVal)}</textarea></div>
       <div class="fg"><label>إرفاق ملف (اختياري)</label>
         <div class="dept-upload-box" onclick="document.getElementById('new-item-file-input').click()"><i class="ti ti-upload" style="font-size:20px;color:var(--gold);"></i><br>اضغط لإرفاق ملف أو أكثر</div>
-        <input type="file" id="new-item-file-input" style="display:none" accept="image/*,.pdf,.doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" multiple onchange="handleNewItemFiles(this.files,'${key}')"/>
+        <input type="file" id="new-item-file-input" style="display:none" accept="*/*" multiple onchange="handleNewItemFiles(this.files,'${key}')"/>
         <div id="new-item-file-note" style="font-size:11px;color:#10B981;margin-top:4px;font-weight:700;">${window._newItemFiles.length?'✓ '+window._newItemFiles.length+' ملف مرفق':''}</div>
       </div>
       <button class="btn btn-brand" style="width:100%;justify-content:center;" onclick="submitNewOrderItem('${key}')"><i class="ti ti-${isEdit?'device-floppy':'plus'}"></i> ${isEdit?'حفظ التعديلات':'إضافة البند للطلب'}</button>
     </div>`;
   openModal('add-item-modal');
 }
-async function handleNewItemFiles(files,orderKey){
+function handleNewItemFiles(files,orderKey){
   if(!files||!files.length)return;
-  showSaving('جاري تحميل الملفات...');
-  try{
-    if(!window._newItemFiles)window._newItemFiles=[];
-    for(const f of Array.from(files)){
-      const b64=await convertFileToBase64(f,{order:orderKey});
-      window._newItemFiles.push({data:b64,name:f.name});
+  const fileList=Array.from(files);
+  const label=fileList.length>1?`${fileList.length} ملفات — بند جديد`:fileList[0].name;
+  runQueuedUpload(label,async onProgress=>{
+    const results=[];
+    for(let i=0;i<fileList.length;i++){
+      const f=fileList[i];
+      const b64=await convertFileToBase64(f,{order:orderKey},pct=>onProgress(((i+pct/100)/fileList.length)*100));
+      results.push({data:b64,name:f.name});
     }
+    return results;
+  },async results=>{
+    if(!window._newItemFiles)window._newItemFiles=[];
+    window._newItemFiles.push(...results);
     const note=document.getElementById('new-item-file-note');
     if(note)note.textContent='✓ تم إرفاق '+window._newItemFiles.length+' ملف';
-  }catch(e){toast(e&&e.message?e.message:'⚠️ فشل تحميل الملف');}
-  hideSaving();
+  });
 }
 async function submitNewOrderItem(key){
   const o=orders[key];if(!o)return;
@@ -9361,17 +9456,14 @@ function openMaintVisitModal(key){
   document.getElementById('mv-photo-label').textContent='اضغط لإرفاق صورة';
   openModal('maint-visit-modal');
 }
-async function handleMvPhoto(files){
+function handleMvPhoto(files){
   if(!files||!files[0])return;
   const file=files[0];
-  document.getElementById('mv-photo-label').textContent='جاري رفع الصورة...';
-  try{
-    const url=await convertFileToBase64(file,{order:window.__mvKey});
+  const mvKey=window.__mvKey;
+  runQueuedUpload(file.name,onProgress=>convertFileToBase64(file,{order:mvKey},onProgress),async url=>{
     window.__mvPhotoUrl=url;
-    document.getElementById('mv-photo-label').textContent=file.name;
-  }catch(e){
-    document.getElementById('mv-photo-label').textContent='فشل رفع الصورة';
-  }
+    const lbl=document.getElementById('mv-photo-label');if(lbl)lbl.textContent=file.name;
+  });
 }
 async function submitMaintVisit(){
   const key=window.__mvKey;const o=orders[key];if(!o)return;
@@ -9711,7 +9803,7 @@ function _wfStageBodyHtml(stageKey){
   if(stageKey==='print')return `<select id="fw-print"><option value="none">❌ لا يتطلب</option>${mkOpts(w.pw)}</select>`;
   if(stageKey==='workshop')return `<select id="fw-workshop"><option value="none">❌ لا يتطلب</option>${mkOpts(w.ww)}</select>
     <div class="prod-line-file-btn" onclick="document.getElementById('fw-workshop-file').click()"><i class="ti ti-paperclip"></i> <span id="fw-workshop-file-note">${window._workshopDeptFileName?('✓ '+esc(window._workshopDeptFileName)):'إرفاق ملف (اختياري)'}</span></div>
-    <input type="file" id="fw-workshop-file" style="display:none" accept="image/*,.pdf,.doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onchange="handleWorkshopDeptFile(this.files)"/>`;
+    <input type="file" id="fw-workshop-file" style="display:none" accept="*/*" onchange="handleWorkshopDeptFile(this.files)"/>`;
   return'';
 }
 function _snapshotStageValues(){
@@ -9845,32 +9937,41 @@ function renderPrimaryLineItems(){
     <input type="checkbox" value="${x.id}" ${ids.includes(x.id)?'checked':''} onchange="togglePrimaryLineItem('${x.id}',this.checked)" style="width:13px;height:13px;accent-color:var(--gold);"/> ${esc(x.name)}
   </label>`).join('');
 }
-async function handleProdLineWorkshopFile(id,files){
+function handleProdLineWorkshopFile(id,files){
   if(!files||!files.length)return;
-  const l=(window._prodLines||[]).find(x=>x.id===id);if(!l)return;
-  showSaving('جاري تحميل الملف...');
-  try{
-    l.workshopDeptFile=await convertFileToBase64(files[0]);
-    l.workshopDeptFileName=files[0].name;
+  const file=files[0];
+  runQueuedUpload(file.name,onProgress=>convertFileToBase64(file,undefined,onProgress),async b64=>{
+    // Re-find fresh — window._prodLines can be rebuilt (draft restore, page
+    // reopen) while this runs in the background queue.
+    const l=(window._prodLines||[]).find(x=>x.id===id);if(!l)return;
+    l.workshopDeptFile=b64;
+    l.workshopDeptFileName=file.name;
     renderProductionLines();
     saveOrderDraft();
-  }catch(e){toast(e&&e.message?e.message:'⚠️ فشل تحميل الملف');}
-  hideSaving();
+  });
 }
-async function handleWorkshopDeptFile(files){
+function handleWorkshopDeptFile(files){
   if(!files||!files.length)return;
-  showSaving('جاري تحميل الملف...');
-  try{
-    window._workshopDeptFileB64=await convertFileToBase64(files[0]);
-    window._workshopDeptFileName=files[0].name;
+  const file=files[0];
+  runQueuedUpload(file.name,onProgress=>convertFileToBase64(file,undefined,onProgress),async b64=>{
+    window._workshopDeptFileB64=b64;
+    window._workshopDeptFileName=file.name;
     const note=document.getElementById('fw-workshop-file-note');
-    if(note)note.textContent='✓ تم إرفاق: '+files[0].name;
+    if(note)note.textContent='✓ تم إرفاق: '+file.name;
     saveOrderDraft();
-  }catch(e){toast(e&&e.message?e.message:'⚠️ فشل تحميل الملف');}
-  hideSaving();
+  });
 }
-async function handleMainFiles(files){
-  for(const f of files){showSaving('جاري التحميل...');try{const b64=await convertFileToBase64(f);window.globalAttachedFiles.push({name:f.name,data:b64});const prev=document.getElementById('file-preview');const chip=document.createElement('div');chip.style.cssText='background:#EFF6FF;border:1px solid #BFDBFE;border-radius:6px;padding:4px 10px;font-size:11px;display:flex;align-items:center;gap:5px;font-weight:600;';chip.innerHTML=`<i class="ti ti-file"></i>${esc(f.name)}`;prev.appendChild(chip);}catch(e){toast('⚠️ فشل قراءة الملف');}hideSaving();}
+function handleMainFiles(files){
+  Array.from(files||[]).forEach(f=>{
+    runQueuedUpload(f.name,onProgress=>convertFileToBase64(f,undefined,onProgress),async b64=>{
+      window.globalAttachedFiles.push({name:f.name,data:b64});
+      const prev=document.getElementById('file-preview');if(!prev)return;
+      const chip=document.createElement('div');
+      chip.style.cssText='background:#EFF6FF;border:1px solid #BFDBFE;border-radius:6px;padding:4px 10px;font-size:11px;display:flex;align-items:center;gap:5px;font-weight:600;';
+      chip.innerHTML=`<i class="ti ti-file"></i>${esc(f.name)}`;
+      prev.appendChild(chip);
+    });
+  });
 }
 function onClientInput(val){
   if(!val)return;
@@ -10059,7 +10160,7 @@ function renderOrderLines(){
         <div class="fg"><label>مرفقات البند (يمكن إرفاق أكثر من ملف)</label>
           <label style="cursor:pointer;border:1.5px dashed var(--border);border-radius:8px;padding:7px 14px;font-size:11px;display:inline-flex;align-items:center;gap:6px;">
             <i class="ti ti-plus" style="color:var(--gold)"></i> إضافة ملف
-            <input type="file" accept="image/*,.pdf,.doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" multiple style="display:none" onchange="attachOrderLineFile('${l.id}',this.files)"/>
+            <input type="file" accept="*/*" multiple style="display:none" onchange="attachOrderLineFile('${l.id}',this.files)"/>
           </label>
           ${(l.files&&l.files.length)?`<div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px;">${l.files.map((f,fi)=>`<span style="display:inline-flex;align-items:center;gap:4px;background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:3px 8px;font-size:10px;"><a href="${f.data}" download="${esc(f.name)}" target="_blank" rel="noopener noreferrer" style="color:var(--maroon);text-decoration:none;"><i class="ti ti-download"></i> ${esc(f.name)}</a><button type="button" onclick="removeOrderLineFile('${l.id}',${fi})" style="background:none;border:none;color:#EF4444;cursor:pointer;padding:0 0 0 2px;font-size:11px;line-height:1;">×</button></span>`).join('')}</div>`:'<div style="font-size:10px;color:var(--text-3);margin-top:4px;">لا توجد مرفقات</div>'}
         </div>
@@ -10483,7 +10584,16 @@ function openEditUser(unameEncoded){
   buildColorPicker('eu-color-row',u.color||'#10B981','selectEuColor');
   openModal('edit-user-modal');
 }
-async function handleEuPhoto(input){if(!input.files||!input.files.length)return;showSaving('جاري رفع الصورة...');try{_euPhotoB64=await convertFileToBase64(input.files[0]);const prev=document.getElementById('eu-avatar-preview');prev.innerHTML=`<img src="${_euPhotoB64}" alt=""/>`;prev.style.background='transparent';}catch(e){toast(e&&e.message?e.message:'⚠️ فشل رفع الصورة');}hideSaving();}
+function handleEuPhoto(input){
+  if(!input.files||!input.files.length)return;
+  const file=input.files[0];
+  runQueuedUpload(file.name,onProgress=>convertFileToBase64(file,undefined,onProgress),async b64=>{
+    _euPhotoB64=b64;
+    const prev=document.getElementById('eu-avatar-preview');if(!prev)return;
+    prev.innerHTML=`<img src="${b64}" alt=""/>`;
+    prev.style.background='transparent';
+  });
+}
 async function saveEditUser(){
   if(cu.type!=='admin'){toast('⚠️ إدارة الموظفين متاحة للمدير فقط');return;}
   const uname=document.getElementById('eu-uname').value;const name=document.getElementById('eu-name').value.trim();const pass=document.getElementById('eu-pass').value;const role=document.getElementById('eu-role').value;
@@ -10510,7 +10620,16 @@ function openAddUser(){
   const prev=document.getElementById('nu-avatar-preview');prev.innerHTML='<i class="ti ti-user-plus"></i>';prev.style.background='var(--gold)';
   buildColorPicker('nu-color-row',PRESET_COLORS[0],'selectNuColor');openModal('add-user-modal');
 }
-async function handleNuPhoto(input){if(!input.files||!input.files.length)return;showSaving('جاري تجهيز الصورة...');try{_nuPhotoB64=await convertFileToBase64(input.files[0]);const prev=document.getElementById('nu-avatar-preview');prev.innerHTML=`<img src="${_nuPhotoB64}" alt=""/>`;prev.style.background='transparent';}catch(e){toast(e&&e.message?e.message:'⚠️ فشل قراءة الصورة');}hideSaving();}
+function handleNuPhoto(input){
+  if(!input.files||!input.files.length)return;
+  const file=input.files[0];
+  runQueuedUpload(file.name,onProgress=>convertFileToBase64(file,undefined,onProgress),async b64=>{
+    _nuPhotoB64=b64;
+    const prev=document.getElementById('nu-avatar-preview');if(!prev)return;
+    prev.innerHTML=`<img src="${b64}" alt=""/>`;
+    prev.style.background='transparent';
+  });
+}
 async function saveNewUser(){
   if(cu.type!=='admin'){toast('⚠️ إدارة الموظفين متاحة للمدير فقط');return;}
   const uname=document.getElementById('nu-uname').value.trim().toLowerCase().replace(/\s/g,'').replace(/[.#$\[\]/<>"'&]/g,'');const name=document.getElementById('nu-name').value.trim();const pass=document.getElementById('nu-pass').value;const role=document.getElementById('nu-role').value;
@@ -10685,7 +10804,14 @@ function onReqPayChannelInput(el){
   }
   recalcReqPaidChannels();
 }
-async function handleReqFile(files){if(!files||!files.length)return;showSaving('جاري تجهيز الملف...');try{window.reqFileB64=await convertFileToBase64(files[0]);window.reqFileName=files[0].name;document.getElementById('req-file-note').textContent='✓ تم: '+files[0].name;}catch(e){toast(e&&e.message?e.message:'⚠️ فشل');}hideSaving();}
+function handleReqFile(files){
+  if(!files||!files.length)return;
+  const file=files[0];
+  runQueuedUpload(file.name,onProgress=>convertFileToBase64(file,undefined,onProgress),async b64=>{
+    window.reqFileB64=b64;window.reqFileName=file.name;
+    const note=document.getElementById('req-file-note');if(note)note.textContent='✓ تم: '+file.name;
+  });
+}
 async function submitRequest(){
   const orderKey=document.getElementById('req-order')?.value,priority='عادية';
   const payMethods=[...document.querySelectorAll('.req-pay-method-cb:checked')].map(cb=>cb.value);
@@ -11168,11 +11294,11 @@ function buildIncompletePage(){
   if(arr.length===0){
     cards='<div style="text-align:center;color:var(--text-3);padding:48px 20px;"><i class="ti ti-user-check" style="font-size:52px;display:block;margin-bottom:12px;color:#10B981;"></i><div style="font-size:16px;font-weight:700;">لا توجد مهام غير مكتملة</div><div style="font-size:13px;margin-top:6px;">المهام السريعة التي لم يرغب العميل بإكمالها ستظهر هنا</div></div>';
   }else{
-    cards=`<div class="wf-grid">${arr.map(o=>`<div class="wf-card" style="border:2px solid #FECACA;background:linear-gradient(135deg,#FFF8F8,#FEF2F2);" onclick="openOrderPage('${o._key}')">${hasOrderUpdate(o)?'<span class="order-update-dot" title="تم تحديث بيانات الطلب"></span>':''}<div class="wf-card-top">
+    cards=`<div class="wf-grid">${arr.map(o=>`<div class="wf-card" style="border:2px solid #FECACA;background:linear-gradient(135deg,#FFF8F8,#FEF2F2);" onclick="openOrderPage('${o._key}')">${hasOrderUpdate(o)?'<span class="order-update-dot" title="تم تحديث بيانات الطلب"></span>':''}${hasUnreadChat(o)?'<span class="chat-unread-dot" title="رسالة داخلية غير مقروءة"></span>':''}<div class="wf-card-top">
       <div class="wf-card-id">${o.id||o._key} · ${orderDateTime(o)}<span class="urgent-tag" style="margin-right:6px;font-size:9px;background:#991B1B;"><i class="ti ti-user-off"></i>غير مكتمل</span></div>
       <div class="wf-card-name">${esc(o.client)}</div>
       <div class="wf-card-svc">${esc(o.service)}</div>
-      <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;margin-bottom:4px;">${gpbadge(o.priority)} ${orderTimerBadge(o)}</div>
+      <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;margin-bottom:4px;">${gpbadge(o.priority,o.currentDept)} ${orderTimerBadge(o)}</div>
       <div style="font-size:11px;color:#991B1B;margin-top:4px;font-weight:700;"><i class="ti ti-user-off"></i> العميل لم يرغب بالاستمرار ${o.incompleteAt?'· '+new Date(o.incompleteAt).toLocaleDateString('ar-SA'):''}</div>
     </div><div class="wf-card-prog"><div class="wf-card-fill" style="width:100%;background:#FECACA"></div></div></div>`).join('')}</div>`;
   }
