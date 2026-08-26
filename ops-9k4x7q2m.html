@@ -2538,6 +2538,20 @@ async function pushNotification(n){
     await fbPush('eventNotifs',{type:n.type,message:n.message,orderKey:n.orderKey||'',orderId:n.orderId||'',client:n.client||'',targetUname:n.targetUname||'all-admin',createdAt:new Date().toISOString()});
   }catch(e){console.warn('notification push failed (non-fatal)',e);}
 }
+// ============================================================
+// ACTIVITY LOG — fine-grained, per-order audit trail. Stored as a
+// Firebase-push-keyed child (orders/{key}/activityLog/{id}) so it comes
+// back automatically as part of the order object on every orders fetch —
+// no separate read path needed. Fire-and-forget, same reasoning as
+// pushNotification() above: a logging failure must never block or fail
+// the actual mutation it's describing. Rendered by
+// buildOrderActivityTimeline(), merged chronologically with the existing
+// stage-transition timestamps from computeOrderStageTimeline().
+// ============================================================
+function logOrderActivity(key,icon,text){
+  if(!key||!text)return;
+  fbPush(`orders/${key}/activityLog`,{at:new Date().toISOString(),actor:(cu&&cu.name)||'—',icon,text}).catch(()=>{});
+}
 function isEventNotifForMe(n){
   if(!n)return false;
   if(n.targetUname===cu._uname)return true;
@@ -3514,40 +3528,43 @@ function renderFloatingTeamChat(){
 async function nav(p,skipHistory=false){
   if(p==='export'){exportExcel();return;}
   if(p==='quote'&&_curPage!==p)window._editingQuoteKey=null;
-  // Preserve the workflow list's scroll position across a trip into an
-  // order/item and back — restored at the bottom of this function once the
-  // rebuilt 'wf' page has settled, instead of silently snapping to the top
-  // like a fresh page load.
-  if(_curPage==='wf'&&(p==='orderdetails'||p==='itemwork')){
-    window.__wfScrollPos=window.scrollY||document.documentElement.scrollTop;
+  // Generalized scroll memory (any page -> orderdetails/itemwork -> back to
+  // that same page), not just 'wf' — saved here, restored via double
+  // requestAnimationFrame (so it runs after the browser has actually
+  // painted the rebuilt page; a single rAF can still fire before layout
+  // settles on a big innerHTML swap) at both render passes below, instead
+  // of silently snapping to (0,0) like a fresh page load.
+  window._scrollMemory=window._scrollMemory||{};
+  const _leavingPage=_curPage;
+  if(_curPage&&(p==='orderdetails'||p==='itemwork')){
+    window._scrollMemory[_curPage]=window.scrollY||document.documentElement.scrollTop;
   }
-  const _navCameFromItemOrOrder=(_curPage==='orderdetails'||_curPage==='itemwork');
+  const _restoreScrollTo=(_leavingPage==='orderdetails'||_leavingPage==='itemwork')?window._scrollMemory[p]:null;
+  if(_restoreScrollTo!=null)delete window._scrollMemory[p];
+  const _applyScrollRestore=()=>{
+    if(_restoreScrollTo==null)return;
+    requestAnimationFrame(()=>requestAnimationFrame(()=>window.scrollTo({top:_restoreScrollTo,behavior:'instant'})));
+  };
   if(!skipHistory&&_curPage&&_curPage!==p)_navHistory.push(_curPage);
   _curPage=p;
   if(cu&&cu._uname){try{localStorage.setItem('rawaee_last_page_'+cu._uname,p);}catch(e){}}
-  // ── luxury exit animation ──
-  const prev=document.querySelector('.page.active');
-  if(prev&&!prev.classList.contains('page-out')){
-    prev.classList.add('page-out');
-    await new Promise(r=>setTimeout(r,230));
-    prev.classList.remove('active','page-out');
-  }
+  // Instant page swap — no artificial transition delay before it (the CSS
+  // .page.active entrance animation is still purely visual/non-blocking;
+  // only the awaited JS exit-animation timeout that used to gate this swap
+  // has been removed).
   document.querySelectorAll('.page').forEach(x=>x.classList.remove('active','page-out'));
   document.querySelectorAll('.ni').forEach(x=>x.classList.remove('active'));
   const pg=document.getElementById('page-'+p);const nb=document.getElementById('n-'+p);
   if(pg)pg.classList.add('active');if(nb)nb.classList.add('active');
   _buildPage(p);
-  if(!_navBusy){_navBusy=true;try{await loadData();}catch(e){}if(p!=='add'&&p!=='request'&&p!=='quote')_buildPage(p);_navBusy=false;}
+  _applyScrollRestore();
+  if(!_navBusy){_navBusy=true;try{await loadData();}catch(e){}if(p!=='add'&&p!=='request'&&p!=='quote'){_buildPage(p);_applyScrollRestore();}_navBusy=false;}
   // Clear the one-shot KPI-card filter (see renderWfListView) once this ENTIRE
   // navigation — including the post-loadData re-render above — has finished,
   // not on first read; renderWfListView() itself no longer clears it, since
   // it runs twice per nav('wf') call and clearing on the first pass wiped the
   // filter out before the user ever saw the settled page.
   window._wfKpiFilterOnce=null;
-  if(p==='wf'&&_navCameFromItemOrOrder&&window.__wfScrollPos!=null){
-    window.scrollTo({top:window.__wfScrollPos,behavior:'instant'});
-    window.__wfScrollPos=null;
-  }
 }
 function navBack(){if(_navHistory.length===0)return;const prev=_navHistory.pop();nav(prev,true);}
 function backBtnHtml(){return`<div style="margin-bottom:16px;"><button class="btn btn-out btn-sm" onclick="navBack()"><i class="ti ti-arrow-right"></i> رجوع</button></div>`;}
@@ -3663,7 +3680,9 @@ async function revertOrderToPrevDept(key){
   const upd={currentDept:prev,stageStartDate:new Date().toISOString(),status:'قيد المتابعة'};
   if(o.currentDept==='done'){upd.archivedAt=null;upd.workshopFeedbackDone=null;}
   try{
-    await fbPatch(`orders/${key}`,upd);await loadData();hideSaving();closeModal('order-modal');
+    await fbPatch(`orders/${key}`,upd);
+    logOrderActivity(key,'ti-arrow-back-up',`تم إرجاع الطلب لمرحلة: ${deptLbl[prev]||prev}`);
+    await loadData();hideSaving();closeModal('order-modal');
     const prevAssignee=o[prev+'To'];
     pushNotification({type:'workflow_update',message:`تم إرجاع الطلب ${esc(o.id||key)} إليك — ${esc(deptLbl[prev]||prev)}`,orderKey:key,orderId:o.id,client:o.client,targetUname:(prevAssignee&&prevAssignee!=='none')?prevAssignee:'all-admin'});
     toast('✓ تم إرجاع الطلب للمرحلة السابقة');refreshCurrentPage();
@@ -3794,6 +3813,7 @@ async function advanceItemDept(key,idx){
     const newOrderDept=computeOrderDeptFromItems(o,items);
     if(newOrderDept&&newOrderDept!==o.currentDept){upd.currentDept=newOrderDept;upd.stageStartDate=new Date().toISOString();}
     await fbPatch(`orders/${key}`,upd);
+    logOrderActivity(key,'ti-arrow-forward-up',`تم نقل البند "${it.name||'بند'}" إلى مرحلة: ${(WF_DEPT_META[nd]||{label:nd}).label}`);
     await loadData();hideSaving();toast('✓ تم تحديث تقدّم البند');
     _refreshOrderItemsViews(key);
   }catch(e){hideSaving();toast('❌ فشل تحديث البند');}
@@ -3887,6 +3907,7 @@ async function saveNewItemVersion(key,idx){
     const priorVersions=priorVersionsForWrite(items[idx]);
     items[idx]={...items[idx],versions:[...priorVersions,newVersion]};
     await fbPatch(`orders/${key}`,{orderItems:items});
+    logOrderActivity(key,'ti-upload',`📤 تم رفع نسخة تصميم جديدة — البند "${it.name||'بند'}"${files.length?` (${files.length} ملف)`:''}`);
     await loadData();hideSaving();toast('✓ تم إضافة نسخة تصميم جديدة');
     if(window._newVerFiles)window._newVerFiles[idx]=[];
     _refreshOrderItemsViews(key);
@@ -3959,6 +3980,7 @@ function saveItemKindFiles(key,idx,kind,inputId){
       }
     }
     await fbPatch(`orders/${key}`,upd);
+    logOrderActivity(key,'ti-upload',`📤 تم رفع ${ITEM_KIND_LABELS[kind]||kind}: ${uploaded.map(u=>u.name).join('، ')} — البند "${items[idx].name||'بند'}"`);
     await loadData();
     toast(autoAdvanced?'✓ تم الاعتماد — تم نقل البند تلقائياً للمرحلة التالية':'✓ تم رفع الملف');
     // This upload box is used from three different surfaces (the standalone
@@ -3992,6 +4014,7 @@ async function approveItemProof(key,idx){
     items[idx]={...items[idx],clientApproved:true,clientApprovedBy:cu.name,clientApprovedAt:new Date().toISOString(),needsRevision:false};
     const upd={orderItems:items,lastItemUpdateAt:new Date().toISOString(),lastItemUpdateBy:cu.name};
     await fbPatch(`orders/${key}`,upd);
+    logOrderActivity(key,'ti-circle-check',`✅ تم اعتماد البروفة — البند "${it.name||'بند'}"`);
     await loadData();hideSaving();toast('✓ تم اعتماد التصميم من العميل');
     const dTo=orders[key]&&orders[key].designTo;
     if(dTo&&dTo!=='none')pushNotification({type:'client_approved',message:`✅ تم الاعتماد من العميل — الطلب ${esc(o.id||key)} · البند "${esc(it.name||'بند')}"`,orderKey:key,orderId:o.id,client:o.client,targetUname:dTo==='all'?'all-admin':dTo});
@@ -4178,6 +4201,7 @@ async function saveClientFeedback(){
     const newOrderDept=computeOrderDeptFromItems(o,items);
     if(newOrderDept&&newOrderDept!==o.currentDept){upd.currentDept=newOrderDept;upd.stageStartDate=new Date().toISOString();}
     await fbPatch(`orders/${key}`,upd);
+    logOrderActivity(key,'ti-refresh',`🔄 طلب تعديل من العميل — البند "${it.name||'بند'}"${notes?`: ${notes}`:''}`);
     await loadData();hideSaving();closeModal('client-feedback-modal');
     toast('✓ تم حفظ ملاحظات العميل وإعادة البند لقسم التصميم');
     const dTo=orders[key]&&orders[key].designTo;
@@ -4544,6 +4568,7 @@ async function submitQuickTask(type){
     const res=await fbPush('orders',ord);
     const newId='QT-'+String(Date.now()).slice(-4);
     await fbPatch(`orders/${res.name}`,{id:newId});
+    logOrderActivity(res.name,'ti-bolt','تم إنشاء مهمة سريعة');
     await loadData();hideSaving();closeModal('quick-task-modal');
     toast('✓ تم إرسال المهمة');refreshCurrentPage();
   }catch(e){hideSaving();toast('❌ فشل إرسال المهمة، حاول مرة أخرى');}
@@ -4587,6 +4612,7 @@ async function submitWorkshopFeedback(key){
       workshopSitePhotoName:window._wfSitePhotoName||'',
       workshopFeedbackDone:true
     });
+    logOrderActivity(key,'ti-ruler-2',`📐 تم تسجيل قياسات ميدانية: ${dims||'—'} — ${siteStatus}`);
     await loadData();hideSaving();closeModal('workshop-feedback-modal');toast('✓ تم حفظ البيانات وإرسال التقرير');
   }catch(e){hideSaving();toast('❌ فشل حفظ البيانات، حاول مرة أخرى');}
 }
@@ -4821,8 +4847,23 @@ function setWfStatFilter(key){
   window._wfStatFilter=(key==='all'||window._wfStatFilter===key)?null:key;
   renderWfKanbanView();
 }
+// Parallel production-line children (o.parentOrderKey set) are folded into
+// their parent's single card/row wherever this is used — see
+// productionLinesBadgeHtml() — rather than cluttering the admin oversight
+// views with a redundant row per line. The detailed per-line breakdown still
+// renders in full inside the order workspace via stageBar(), and each
+// department's OWN restricted queue (buildDeptStagePage/production queue)
+// deliberately keeps showing children separately, since whoever is actually
+// assigned to a parallel line's department needs to see that line's own
+// task in their queue.
+function productionLinesBadgeHtml(o){
+  if(!o||!o._key)return'';
+  const count=Object.values(orders).filter(v=>v.parentOrderKey===o._key).length;
+  if(!count)return'';
+  return `<span class="badge b-new" title="هذا الطلب يشمل خطوط إنتاج موازية إضافية"><i class="ti ti-git-branch"></i> ${count+1} خطوط إنتاج</span>`;
+}
 function renderWfKanbanView(){
-  const arr=ordersArr();
+  const arr=ordersArr().filter(o=>!o.parentOrderKey);
   const _activeStatKey=window._wfStatFilter||'all';
   const _canSeeCardTotal=['admin','follower','receiver','accountant'].includes(cu.type);
   const cardHtml=o=>{
@@ -4846,7 +4887,7 @@ function renderWfKanbanView(){
         <div class="wf-card-svc">${esc(o.service)}</div>
         ${o.isQuickTask?`<div style="font-size:11px;color:var(--maroon);font-weight:700;margin-bottom:4px;"><i class="ti ti-user"></i> اسم العميل: ${esc(o.client||'—')} &nbsp; <i class="ti ti-phone"></i> رقم الجوال: ${esc(o.phone||'—')}</div>`:''}
         ${qtCardStageStripHtml(o)}
-        <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;margin-bottom:6px;">${deptBadge(o.currentDept)} ${gpbadge(o.priority,o.currentDept)} ${orderTimerBadge(o)}</div>
+        <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;margin-bottom:6px;">${deptBadge(o.currentDept)} ${gpbadge(o.priority,o.currentDept)} ${orderTimerBadge(o)} ${productionLinesBadgeHtml(o)}</div>
         <div style="font-size:11px;color:var(--text-3);">المسؤول: ${esc(currentPersonName(o))}</div>
         <div style="font-size:10px;color:var(--text-3);"><i class="ti ti-user-circle"></i> أنشئ بواسطة: ${esc(o.createdBy||'—')}</div>
         <div style="font-size:10.5px;color:var(--text-3);"><i class="ti ti-calendar-time"></i> التسليم: ${deadlineDateTime(o)}</div>
@@ -5032,6 +5073,8 @@ function orderRowBadges(o){
   if(o.priority==='عاجلة')badges.push('<span class="row-pill urgent-pill"><i class="ti ti-bolt"></i> عاجل</span>');
   const overdue=o.deadline&&o.deadline!=='—'&&o.currentDept!=='done'&&new Date(o.deadline)<new Date();
   if(overdue)badges.push('<span class="row-pill overdue-pill"><i class="ti ti-alert-triangle"></i> متأخر</span>');
+  const lineCount=Object.values(orders).filter(v=>v.parentOrderKey===o._key).length;
+  if(lineCount)badges.push(`<span class="row-pill" style="background:#475569;" title="هذا الطلب يشمل خطوط إنتاج موازية إضافية"><i class="ti ti-git-branch"></i> ${lineCount+1} خطوط إنتاج</span>`);
   return badges.join('');
 }
 // ── Column 3: stage pill using the spec's exact stage colors ──
@@ -5419,7 +5462,7 @@ function renderWfListView(){
   // here by date-desc unconditionally silently overrode "الأقدم أولاً" and
   // every other sort mode whenever the List view was open. filter() preserves
   // the incoming order, so simply dropping the extra .sort() fixes it.
-  let arr=ordersArr().filter(o=>wfMatchesFilters(o,f));
+  let arr=ordersArr().filter(o=>!o.parentOrderKey&&wfMatchesFilters(o,f));
   // KPI-card filter from dashGoto(). NOTE: this is deliberately NOT cleared
   // here anymore — nav('wf') calls _buildPage('wf') (which reaches this
   // function) TWICE per visit: once immediately, then again after its
@@ -6582,6 +6625,7 @@ async function _createMaintenanceOrder(prefix,warrantyRequested){
     const res=await fbPush('orders',ord);
     const newId='ORD-'+String(Object.keys(orders).length+1).padStart(3,'0');
     await fbPatch(`orders/${res.name}`,{id:newId});
+    logOrderActivity(res.name,'ti-flag','تم إنشاء الطلب');
     await loadData();hideSaving();toast('✓ تم تسجيل الطلب: '+newId);
     buildMaintRequestPage();
   }catch(e){hideSaving();toast('❌ فشل تسجيل الطلب');}
@@ -7815,6 +7859,7 @@ async function finalizeConvertToOrder(quoteKey){
   const res=await fbPush('orders',ord);
   const newId='ORD-'+String(Object.keys(orders).length+1).padStart(3,'0');
   await fbPatch(`orders/${res.name}`,{id:newId});
+  logOrderActivity(res.name,'ti-flag','تم إنشاء الطلب من عرض سعر');
   await fbPatch(`standalone_quotes/${quoteKey}`,{convertedToOrder:newId,convertedAt:new Date().toISOString()});
   // Extra parallel production lines: same linked-child-order mechanism as the
   // main order registration form, so a converted quote can also run several
@@ -7949,6 +7994,7 @@ async function sendChatMsg(orderKey){
   }
   try{
     await fbPush(`chats/${orderKey}`,msg);
+    logOrderActivity(orderKey,'ti-message-2',`💬 رسالة داخلية: ${txt.length>60?txt.slice(0,60)+'…':txt}`);
     // Refresh to confirm from server
     setTimeout(()=>loadAndRenderChat(orderKey),500);
   }catch(e){toast('❌ فشل إرسال الرسالة');}
@@ -8630,13 +8676,20 @@ function buildDeptWorkspaceCard(o,key,dk,canAct,nextBtnHtml,uploadAreaHtml){
 }
 function scrollToDeptCard(dk){const el=document.getElementById('od-dept-'+dk);if(el)el.scrollIntoView({behavior:'smooth',block:'center'});}
 function buildOrderActivityTimeline(o,key){
-  const items=computeOrderStageTimeline(o);
+  // Merges two sources chronologically: the coarse stage-transition
+  // milestones (computeOrderStageTimeline — always available, derived from
+  // timestamps every order already has) with the fine-grained discrete
+  // events logged via logOrderActivity() (proof uploads, feedback, item
+  // add/edit, approvals, payments, messages, etc. — see its call sites).
+  const stageItems=computeOrderStageTimeline(o).map(s=>({at:s.at,icon:s.icon,text:s.label,actor:s.key==='date'?o.createdBy:null}));
+  const logItems=Object.values(o.activityLog||{}).map(e=>({at:e.at,icon:e.icon||'ti-activity',text:e.text||'',actor:e.actor||null}));
+  const items=[...stageItems,...logItems].filter(s=>s.at).sort((a,b)=>new Date(a.at)-new Date(b.at));
   if(!items.length)return'<div style="font-size:11px;color:var(--text-3);">لا توجد أحداث مسجلة بعد</div>';
   const fmt=d=>{try{return new Date(d).toLocaleString('ar-SA',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});}catch(e){return d;}};
   return `<div class="od-timeline-list">${items.map(s=>`
     <div class="od-timeline-row">
       <div class="od-timeline-dot"><i class="ti ${s.icon}"></i></div>
-      <div class="od-timeline-body"><strong>${esc(s.label)}</strong> — ${fmt(s.at)}${s.key==='date'&&o.createdBy?` <span style="color:var(--text-3);">(بواسطة ${esc(o.createdBy)})</span>`:''}</div>
+      <div class="od-timeline-body"><strong>${esc(s.text)}</strong> — ${fmt(s.at)}${s.actor?` <span style="color:var(--text-3);">(بواسطة ${esc(s.actor)})</span>`:''}</div>
     </div>`).join('')}</div>`;
 }
 function buildOrderFileManager(o,key){
@@ -9208,6 +9261,7 @@ async function submitNewOrderItem(key){
       else if(o.paymentStatus==='عند التسليم'){upd.remainingAmount=newTotal;}
     }
     await fbPatch(`orders/${key}`,upd);
+    logOrderActivity(key,isEdit?'ti-edit':'ti-square-rounded-plus',isEdit?`تم تعديل البند: ${name}`:`تمت إضافة بند جديد: ${name}`);
     await loadData();
     hideSaving();closeModal('add-item-modal');
     toast(isEdit?'✓ تم حفظ التعديلات — تم تحديث الطلب':'✓ تم إضافة البند الجديد — تم تحديث الطلب');
@@ -9313,6 +9367,7 @@ function uploadFileDirect(key,ff,fn2,inputId){
     if(_uo){
       const _isProof=ff==='approvedPrintFile'&&_uo.currentDept==='design';
       pushNotification({type:'upload',message:_isProof?`تم رفع بروفة تصميم على الطلب ${esc(_uo.id||key)}`:`تم رفع ملف على الطلب ${esc(_uo.id||key)} — ${esc(uploaded[0].name)}`,orderKey:key,orderId:_uo.id,client:_uo.client});
+      logOrderActivity(key,'ti-upload',`📤 تم رفع ${_isProof?'بروفة تصميم':'ملف'}: ${uploaded.map(u=>u.name).join('، ')}`);
     }
     _refreshOrderItemsViews(key);
   });
@@ -9410,7 +9465,9 @@ async function sendToNextDept(key,next){
   if(timeField[curDept])upd[timeField[curDept]]=new Date().toISOString();
   if(startField[next])upd[startField[next]]=new Date().toISOString();
   try{
-    await fbPatch(`orders/${key}`,upd);await loadData();hideSaving();closeModal('order-modal');
+    await fbPatch(`orders/${key}`,upd);
+    logOrderActivity(key,'ti-arrow-forward-up',`تم نقل الطلب إلى مرحلة: ${(WF_DEPT_META[next]||{label:next}).label}`);
+    await loadData();hideSaving();closeModal('order-modal');
     if(next==='done'){
       dispatchAutoWhatsapp(orders[key],'ready_for_delivery');
       pushNotification({type:'completed',message:`اكتمل الطلب ${esc(o.id||key)} — ${esc(o.client)}`,orderKey:key,orderId:o.id,client:o.client});
@@ -9487,6 +9544,7 @@ async function finishOrder(key){
   showSaving('جاري الإغلاق...');
   try{
     await fbPatch(`orders/${key}`,{currentDept:'done',status:'مكتمل',workshopDoneAt:new Date().toISOString()});
+    logOrderActivity(key,'ti-circle-check','✅ تم إغلاق الطلب — اكتمل التسليم');
     await createWarrantyIfNeeded(key,o);
     dispatchAutoWhatsapp(o,'ready_for_delivery');
     pushNotification({type:'completed',message:`اكتمل الطلب ${esc(o.id||key)} — ${esc(o.client)}`,orderKey:key,orderId:o.id,client:o.client});
@@ -9506,6 +9564,7 @@ async function archiveOrder(key){
   showSaving('جاري الأرشفة...');
   try{
     await fbPatch(`orders/${key}`,{currentDept:'done',status:'مؤرشف',archivedAt:new Date().toISOString(),archivedBy:cu.name});
+    logOrderActivity(key,'ti-archive','📦 تم إنهاء الطلب وأرشفته');
     await createWarrantyIfNeeded(key,o);
     if(o?.phone&&o.phone!=='—')await sendSmsNotification(o.phone,`مرحباً ${esc(o.client)}، طلبكم ${o.id||key} تم إغلاقه. روائع الأفكار الإعلانية.`);
     pushNotification({type:'completed',message:`تم إنهاء وأرشفة الطلب ${esc(o.id||key)} — ${esc(o.client)}`,orderKey:key,orderId:o.id,client:o.client});
@@ -10277,6 +10336,7 @@ async function submitOrder(isUrgentQuick=false){
     const res=await fbPush('orders',ord);await loadData();
     const newId='ORD-'+String(ordersArr().length).padStart(3,'0');
     await fbPatch(`orders/${res.name}`,{id:newId});await loadData();
+    logOrderActivity(res.name,'ti-flag','تم إنشاء الطلب');
     {
       const _startAssignee={design:dU,external:extU,print:pU,workshop:wU}[startDept];
       pushNotification({type:'new_order',message:`طلب جديد ${esc(newId)} — ${esc(c)}`,orderKey:res.name,orderId:newId,client:c,targetUname:(_startAssignee&&_startAssignee!=='none')?_startAssignee:'all-admin'});
@@ -10992,6 +11052,7 @@ async function managerApproveRequest(key){
         patch.remainingAmount=0;
       }
       await fbPatch('orders/'+reqData.orderKey,patch);
+      logOrderActivity(reqData.orderKey,'ti-cash',`💳 تم تحديث حالة الدفع: ${chosenStatus}`);
     }
     await loadData();hideSaving();
     if(reqData&&reqData.orderKey)resyncOrderToSheet(reqData.orderKey);
