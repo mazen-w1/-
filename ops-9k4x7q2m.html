@@ -7016,6 +7016,7 @@ function buildQuotePage(){
           <button class="btn btn-green btn-sm" onclick="saveQuoteToDb()"><i class="ti ti-device-floppy"></i> حفظ التعديلات</button>
           <button class="btn btn-out btn-sm" onclick="saveAndPreviewQuote()"><i class="ti ti-eye"></i> معاينة وطباعة A4</button>
           <button class="btn btn-out btn-sm" onclick="cancelEditQuote()"><i class="ti ti-x"></i> إلغاء التعديل</button>
+          <button class="btn btn-green" onclick="convertSelectedQuoteItemsToOrder()"><i class="ti ti-file-certificate"></i> تحويل البنود المحددة فقط إلى أمر عمل</button>
         </div>`:`
         <div style="display:flex;gap:10px;margin-top:16px;">
           <button class="btn btn-brand btn-sm" onclick="saveQuoteToDb()"><i class="ti ti-device-floppy"></i> حفظ العرض</button>
@@ -7093,7 +7094,14 @@ function buildQuoteArchiveRows(){
   if(!arr.length)return'<tr><td colspan="5" style="text-align:center;color:var(--text-3);padding:24px">لا يوجد عروض أسعار محفوظة</td></tr>';
   return arr.map(q=>{
     const conv=q.convertedToOrder;
+    const isPartial=conv&&q.partiallyConverted;
     const firstImg=(q.lines||[]).find(l=>l.img);
+    // convertedItemIndices only exists on quotes converted after this feature
+    // shipped — older fully-converted quotes have no per-item breakdown to show,
+    // which is fine since a non-partial conversion means every item converted.
+    const convIdxs=q.convertedItemIndices?new Set(q.convertedItemIndices.map(String)):null;
+    const convertedNames=convIdxs?(q.lines||[]).filter((l,i)=>convIdxs.has(String(i))).map(l=>l.lbl).filter(Boolean):[];
+    const retainedNames=convIdxs?(q.lines||[]).filter((l,i)=>!convIdxs.has(String(i))).map(l=>l.lbl).filter(Boolean):[];
     return `<tr data-key="${q._key}" data-date="${q.date||''}" data-converted="${conv?'1':'0'}" style="${conv?'background:#F0FDF4;':''}">
     <td><div style="display:flex;align-items:center;gap:8px;">
       ${firstImg?`<img src="${cloudinaryThumb(firstImg.img,80)}" title="يحتوي على صور مرفقة" style="width:26px;height:26px;object-fit:cover;border-radius:6px;border:1px solid var(--border);flex-shrink:0;" loading="lazy"/>`:''}
@@ -7103,7 +7111,7 @@ function buildQuoteArchiveRows(){
     <td><span class="badge b-proc" style="font-size:12px;">${fmtMoney(Number(q.totalWithVat||q.total||0))} ر.س</span></td>
     <td style="font-size:11px">${q.date}</td>
     <td><div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
-      ${conv?`<span class=\"badge\" style=\"background:#DCFCE7;color:#166534;font-weight:800;\"><i class=\"ti ti-circle-check\"></i> محوّل لأمر ${conv}</span>`:`<button class=\"btn btn-purple btn-xs\" onclick=\"convertSavedQuoteToOrder('${q._key}')\"><i class=\"ti ti-transfer\"></i> أمر</button>`}
+      ${conv?`<span class=\"badge\" style=\"background:${isPartial?'#FEF3C7':'#DCFCE7'};color:${isPartial?'#92400E':'#166534'};font-weight:800;\"><i class=\"ti ti-circle-check\"></i> ${isPartial?'محوّل جزئياً لأمر':'محوّل بالكامل لأمر'} ${conv}</span>${convIdxs?`<span title="${esc('محوّلة لأمر التشغيل: '+(convertedNames.join('، ')||'—')+' | مستبعدة/محتفظ بها في العرض: '+(retainedNames.join('، ')||'—'))}" style="cursor:help;font-size:14px;color:var(--text-3);"><i class=\"ti ti-info-circle\"></i></span>`:''}${isPartial?`<button class=\"btn btn-purple btn-xs\" onclick=\"convertSavedQuoteToOrder('${q._key}')\"><i class=\"ti ti-transfer\"></i> تحويل المتبقي</button>`:''}`:`<button class=\"btn btn-purple btn-xs\" onclick=\"convertSavedQuoteToOrder('${q._key}')\"><i class=\"ti ti-transfer\"></i> أمر</button>`}
       <div class="row-menu-wrap">
         <button class="btn btn-out btn-xs" onclick="toggleRowMenu('qarm-${q._key}')"><i class="ti ti-dots-vertical"></i> الإجراءات</button>
         <div class="row-menu" id="qarm-${q._key}" style="display:none;">
@@ -7285,8 +7293,10 @@ function quoteLineDimsBoxHtml(l){
 function renderQuoteLines(){
   const wrap=document.getElementById('quote-lines-wrap');if(!wrap)return;
   const showMeters=window._quoteShowMeters;
-  wrap.innerHTML=window._quoteLines.map(l=>{
+  const isEditing=!!window._editingQuoteKey;
+  wrap.innerHTML=window._quoteLines.map((l,i)=>{
     const hasDims=l.dims&&l.dims.length;
+    const convSel=l._convertSel!==false;
     return`<div class="quote-line" style="grid-template-columns:${quoteGridCols()} auto auto;gap:6px;">
     <input placeholder="وصف البند" value="${esc(l.lbl)}" oninput="updateQuoteLine('${l.id}','lbl',this.value)"/>
     ${showMeters?`<input type="text" inputmode="decimal" id="q-line-m-${l.id}" placeholder="الامتار" value="${hasDims?Number(l.m??0).toFixed(2):(l.m??1)}" oninput="updateQuoteLine('${l.id}','m',this.value)" min="0" onfocus="this.select()" ${hasDims?`readonly title="محسوبة تلقائياً من المقاسات أدناه" class="quote-readonly-input"`:''}/>`:''}
@@ -7304,9 +7314,26 @@ function renderQuoteLines(){
       <button class="btn btn-out btn-xs" type="button" onclick="addQuoteLineDimension('${l.id}')"><i class="ti ti-ruler-2"></i> + إضافة مقاس / بُعد</button>
     </div>
     ${quoteLineDimsBoxHtml(l)}`:''}
+    ${isEditing?`<div style="grid-column:1/-1;display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:2px;">
+      <label style="display:flex;align-items:center;gap:5px;font-size:11px;font-weight:700;color:var(--text-2);cursor:pointer;">
+        <input type="checkbox" class="quote-item-convert-check" value="${i}" ${convSel?'checked':''} onchange="toggleQuoteLineConvertSel('${l.id}',this.checked)"/>
+        تضمين هذا البند عند التحويل لأمر عمل
+      </label>
+      <span id="q-line-convtag-${l.id}" style="font-size:9.5px;font-weight:800;padding:2px 7px;border-radius:5px;${convSel?'background:#DCFCE7;color:#166534;':'background:#FEE2E2;color:#991B1B;'}">${convSel?'[معتمد / سيتم تحويله]':'[ملغي / مستبعد من أمر العمل]'}</span>
+    </div>`:''}
   </div>`;
   }).join('');
   renderQuoteTotals();
+}
+function toggleQuoteLineConvertSel(id,checked){
+  const l=(window._quoteLines||[]).find(x=>x.id===id);if(!l)return;
+  l._convertSel=checked;
+  const tag=document.getElementById('q-line-convtag-'+id);
+  if(tag){
+    tag.textContent=checked?'[معتمد / سيتم تحويله]':'[ملغي / مستبعد من أمر العمل]';
+    tag.style.background=checked?'#DCFCE7':'#FEE2E2';
+    tag.style.color=checked?'#166534':'#991B1B';
+  }
 }
 function addQuoteLineDimension(lineId){
   const l=window._quoteLines.find(x=>x.id===lineId);if(!l)return;
@@ -7440,6 +7467,9 @@ function getQuoteData(){
 }
 async function saveQuoteToDb(){
   const data=getQuoteData();
+  // _convertSel is a transient per-line UI flag (selective quote→order conversion
+  // checkboxes) — it must never leak into the persisted quote record.
+  data.lines=data.lines.map(({_convertSel,...rest})=>rest);
   if(!data.client){toast('يرجى تحديد العميل');return;}
   if(!data.phone||!isValidSaudiPhone(data.phone)){toast('⚠️ يرجى إدخال رقم الجوال ويجب أن يكون رقم سعودي صحيح (05XXXXXXXX)');return;}
   if(!data.lines.length){toast('يرجى إضافة بند واحد على الأقل');return;}
@@ -7475,6 +7505,24 @@ async function saveQuoteToDb(){
     await loadData();hideSaving();toast('✓ تم حفظ عرض السعر');
     await editQuote(window._editingQuoteKey);
   }
+}
+// Selective quote→order conversion: builds the checked-item index list from the
+// quote page's own checkboxes, then saves the quote first (so the indices — which
+// exclude any still-blank lines, same as getQuoteData()'s own filter — line up
+// exactly with the persisted `standalone_quotes/{key}.lines` array that
+// finalizeConvertToOrder() re-reads). The original quote record itself is never
+// trimmed or altered beyond this normal save; every line (selected or not) stays
+// in it untouched.
+async function convertSelectedQuoteItemsToOrder(){
+  if(!window._editingQuoteKey){toast('⚠️ يرجى فتح عرض سعر محفوظ أولاً');return;}
+  const preData=getQuoteData();
+  if(!preData.client){toast('⚠️ يرجى تحديد العميل');return;}
+  if(!preData.phone||!isValidSaudiPhone(preData.phone)){toast('⚠️ يرجى إدخال رقم جوال سعودي صحيح (05XXXXXXXX)');return;}
+  if(!preData.lines.length){toast('⚠️ لا توجد بنود صالحة في العرض');return;}
+  const selIdxs=preData.lines.map((l,i)=>l._convertSel!==false?i:null).filter(i=>i!==null);
+  if(!selIdxs.length){toast('⚠️ يرجى تحديد بند واحد على الأقل للتحويل');return;}
+  await saveQuoteToDb();
+  convertSavedQuoteToOrder(window._editingQuoteKey,null,selIdxs);
 }
 async function deleteQuoteFromForm(){
   if(!window._editingQuoteKey)return;
@@ -7777,7 +7825,7 @@ async function convertQuoteToOrder(){
     await convertSavedQuoteToOrder(res.name,data);
   }catch(e){hideSaving();toast('❌ فشل الحفظ، حاول مرة أخرى');}
 }
-async function convertSavedQuoteToOrder(key,preloadedData=null){
+async function convertSavedQuoteToOrder(key,preloadedData=null,selectedIdxs=null){
   showSaving('جاري التحضير...');
   const data=preloadedData||(standaloneQuotes[key]||await fbGet(`standalone_quotes/${key}`).catch(()=>null));
   if(!data){hideSaving();toast('خطأ: لم يتم العثور على العرض');return;}
@@ -7785,6 +7833,12 @@ async function convertSavedQuoteToOrder(key,preloadedData=null){
   window._coItemFiles={};
   window._coProdLines=[];
   window._coQuoteLines=data.lines||[];
+  window._coQuoteData=data;
+  // null = every item included by default (matches the pre-existing "convert whole
+  // quote" behavior when opened straight from the archive row); a non-empty list
+  // (from convertSelectedQuoteItemsToOrder on the quote page) narrows it up front,
+  // still freely adjustable here via the same quote-item-convert-check checkboxes.
+  window._coSelectedIdxs=(selectedIdxs&&selectedIdxs.length)?new Set(selectedIdxs.map(String)):null;
   (data.lines||[]).forEach((l,i)=>{if(l.img)window._coItemFiles[i]={data:l.img,name:(l.lbl||'بند')+'.jpg'};});
   hideSaving();
   document.getElementById('order-modal-body').innerHTML=`
@@ -7792,17 +7846,26 @@ async function convertSavedQuoteToOrder(key,preloadedData=null){
     <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-md);padding:14px;margin-bottom:16px;">
       <div style="font-size:14px;font-weight:700;color:var(--maroon);">${esc(data.client)}</div>
       <div style="font-size:12px;color:var(--text-2);margin-top:3px;">الإجمالي: <strong>${fmtMoney(Number(data.totalWithVat||0))} ر.س</strong></div>
+      <div id="co-selected-total" style="font-size:11px;color:var(--maroon);font-weight:800;margin-top:4px;"></div>
     </div>
     <div style="display:flex;flex-direction:column;gap:12px;">
       <div class="fg"><label>رقم الجوال *</label><input id="co-phone" inputmode="tel" value="${esc(data.phone||'')}" placeholder="05XXXXXXXX"/></div>
       <div class="fg">
-        <label>البنود (بدون أسعار للقسم الموكل)</label>
+        <label>البنود (حدد البنود المراد تحويلها فقط لأمر التشغيل)</label>
         <div id="co-items-wrap" style="display:flex;flex-direction:column;gap:10px;">
-          ${(data.lines||[]).map((l,i)=>`
-          <div style="border:1px solid var(--border);border-radius:var(--radius-md);padding:10px 12px;background:var(--surface-2);">
+          ${(data.lines||[]).map((l,i)=>{
+            const sel=!window._coSelectedIdxs||window._coSelectedIdxs.has(String(i));
+            return`
+          <div style="border:1px solid var(--border);border-radius:var(--radius-md);padding:10px 12px;background:${sel?'var(--surface-2)':'#FEF2F2'};">
             <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
-              <strong style="font-size:13px;color:var(--maroon);">${esc(l.lbl||'بند '+(i+1))}</strong>
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+                <input type="checkbox" class="quote-item-convert-check" value="${i}" ${sel?'checked':''} onchange="toggleCoItemConvertSel(${i},this.checked)"/>
+                <strong style="font-size:13px;color:var(--maroon);">${esc(l.lbl||'بند '+(i+1))}</strong>
+              </label>
               <span style="font-size:11px;color:var(--text-3);">الكمية: ${l.q||1}</span>
+            </div>
+            <div style="margin-top:6px;">
+              <span id="co-item-tag-${i}" style="font-size:9.5px;font-weight:800;padding:2px 7px;border-radius:5px;${sel?'background:#DCFCE7;color:#166534;':'background:#FEE2E2;color:#991B1B;'}">${sel?'[معتمد / سيتم تحويله]':'[ملغي / مستبعد من أمر العمل]'}</span>
             </div>
             <div style="margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
               <label style="cursor:pointer;display:flex;align-items:center;gap:6px;font-size:11px;color:var(--maroon);border:1px dashed var(--border);border-radius:8px;padding:6px 10px;">
@@ -7811,7 +7874,7 @@ async function convertSavedQuoteToOrder(key,preloadedData=null){
               </label>
               <span id="co-item-file-${i}" style="font-size:11px;color:var(--text-2);">${l.img?'مرفق حالي: صورة الصنف':'لا يوجد مرفق'}</span>
             </div>
-          </div>`).join('')||'<div style="font-size:12px;color:var(--text-3);">لا توجد بنود في هذا العرض</div>'}
+          </div>`;}).join('')||'<div style="font-size:12px;color:var(--text-3);">لا توجد بنود في هذا العرض</div>'}
         </div>
       </div>
       <div class="fg"><label>الأولوية</label><select id="co-priority"><option>عادية</option><option>متوسطة</option><option>عاجلة</option></select></div>
@@ -7830,6 +7893,35 @@ async function convertSavedQuoteToOrder(key,preloadedData=null){
       <button class="btn btn-brand" style="width:100%;justify-content:center;" onclick="finalizeConvertToOrder('${key}')"><i class="ti ti-rocket"></i> إطلاق أمر التشغيل</button>
     </div>`;
   openModal('order-modal');
+  updateCoSelectedTotalDisplay();
+}
+function toggleCoItemConvertSel(idx,checked){
+  if(!window._coSelectedIdxs){
+    // Lazily materialize the implicit "all included" default into an explicit
+    // set only once the user actually excludes something for the first time.
+    window._coSelectedIdxs=new Set((window._coQuoteLines||[]).map((_,i)=>String(i)));
+  }
+  const k=String(idx);
+  if(checked)window._coSelectedIdxs.add(k);else window._coSelectedIdxs.delete(k);
+  const tag=document.getElementById('co-item-tag-'+idx);
+  if(tag){
+    tag.textContent=checked?'[معتمد / سيتم تحويله]':'[ملغي / مستبعد من أمر العمل]';
+    tag.style.background=checked?'#DCFCE7':'#FEE2E2';
+    tag.style.color=checked?'#166534':'#991B1B';
+  }
+  updateCoSelectedTotalDisplay();
+  renderCoProductionLines();
+}
+function updateCoSelectedTotalDisplay(){
+  const el=document.getElementById('co-selected-total');if(!el)return;
+  const data=window._coQuoteData;const lines=window._coQuoteLines||[];
+  if(!data||!lines.length){el.textContent='';return;}
+  const sel=window._coSelectedIdxs;
+  const included=lines.filter((l,i)=>!sel||sel.has(String(i)));
+  if(included.length===lines.length){el.textContent='';return;}
+  const showMeters=!!data.showMeters;
+  const subtotal=included.reduce((s,l)=>s+((showMeters?(l.m??1):1)*(Number(l.q)||0)*(Number(l.p)||0)),0);
+  el.textContent=`إجمالي البنود المحددة فقط (${included.length} من ${lines.length}): ${fmtMoney(subtotal*1.15)} ر.س`;
 }
 function addCoProductionLine(){
   if(!window._coProdLines)window._coProdLines=[];
@@ -7853,8 +7945,11 @@ function renderCoProductionLines(){
   const dOpts=mkOpts(dw,'❌ بدون تصميم'),eOpts=mkOpts(ew,'❌ لا يوجد'),pOpts=mkOpts(pw,'❌ لا يتطلب'),wOpts=mkOpts(ww,'❌ لا يتطلب');
   const quoteLines=window._coQuoteLines||[];
   const itemCheckboxes=(l)=>{
-    const avail=quoteLines.map((x,idx)=>({x,idx})).filter(({x})=>(x.lbl||'').trim());
-    if(!avail.length)return'<div style="font-size:10px;color:var(--text-3);">لا توجد بنود في هذا العرض</div>';
+    // An item excluded via the selective-conversion checkboxes is not offered to
+    // parallel lines either — an explicit uncheck overrides any claim attempt.
+    const sel=window._coSelectedIdxs;
+    const avail=quoteLines.map((x,idx)=>({x,idx})).filter(({x,idx})=>(x.lbl||'').trim()&&(!sel||sel.has(String(idx))));
+    if(!avail.length)return'<div style="font-size:10px;color:var(--text-3);">لا توجد بنود متاحة (تحقق من البنود المحددة للتحويل)</div>';
     return avail.map(({x,idx})=>`<label style="display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:700;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:4px 8px;margin:0 4px 4px 0;cursor:pointer;">
       <input type="checkbox" value="${idx}" ${((l.itemIdxs)||[]).includes(idx)?'checked':''} onchange="toggleCoProductionLineItem('${l.id}',${idx},this.checked)" style="width:13px;height:13px;accent-color:var(--gold);"/> ${esc(x.lbl)}
     </label>`).join('');
@@ -7921,31 +8016,51 @@ async function finalizeConvertToOrder(quoteKey){
   if(!phone){toast('⚠️ يرجى إدخال رقم الجوال');return;}
   if(!isValidSaudiPhone(phone)){toast('⚠️ رقم الجوال يجب أن يكون رقم سعودي صحيح (05XXXXXXXX)');return;}
   if(dU==='none'&&eU==='none'&&pU==='none'&&wU==='none'){toast('⚠️ يجب اختيار قسم واحد على الأقل');return;}
+  const q=standaloneQuotes[quoteKey]||await fbGet(`standalone_quotes/${quoteKey}`).catch(()=>null);
+  if(!q){toast('⚠️ تعذر العثور على عرض السعر');return;}
+  // Items unchecked via the quote-item-convert-check checkboxes (selective
+  // conversion) are excluded from EVERY order created here — main or parallel —
+  // even if a parallel line had already claimed one. null means "all included"
+  // (the original, pre-selective-conversion default).
+  const includedIdxs=window._coSelectedIdxs||new Set((q.lines||[]).map((_,i)=>String(i)));
   // Parallel lines each freely take over one, two, or more quote line-items (open
   // multi-select); those items must be identified up front so they can be excluded
   // from the primary order's items (no duplication) and used as the parallel line's
-  // own items.
-  const _extraLines=(window._coProdLines||[]).filter(l=>l.design!=='none'||l.external!=='none'||l.print!=='none'||l.workshop!=='none');
-  if(_extraLines.some(l=>!l.itemIdxs||!l.itemIdxs.length)){toast('⚠️ يرجى تحديد بند واحد على الأقل لكل خط إنتاج موازٍ');return;}
+  // own items. An explicit exclusion overrides a claim, so a line's claimed indices
+  // are first narrowed down to only the still-included ones.
+  const _extraLines=(window._coProdLines||[]).filter(l=>l.design!=='none'||l.external!=='none'||l.print!=='none'||l.workshop!=='none')
+    .map(l=>({...l,itemIdxs:(l.itemIdxs||[]).filter(idx=>includedIdxs.has(String(idx)))}));
+  if(_extraLines.some(l=>!l.itemIdxs.length)){toast('⚠️ يرجى تحديد بند واحد على الأقل (من البنود المحددة للتحويل) لكل خط إنتاج موازٍ');return;}
   const claimedIdxs=new Set(_extraLines.flatMap(l=>l.itemIdxs).map(String));
-  const q=standaloneQuotes[quoteKey]||await fbGet(`standalone_quotes/${quoteKey}`).catch(()=>null);
-  if(!q){toast('⚠️ تعذر العثور على عرض السعر');return;}
-  const primaryQLines=(q.lines||[]).filter((l,i)=>!claimedIdxs.has(String(i)));
+  const primaryQLines=(q.lines||[]).filter((l,i)=>includedIdxs.has(String(i))&&!claimedIdxs.has(String(i)));
   const service=primaryQLines.map(l=>l.lbl).filter(Boolean).join(' + ')||(q.lines||[]).map(l=>l.lbl).filter(Boolean).join(' + ')||'—';
   let startDept='design';
   if(dU==='none'){if(eU!=='none')startDept='external';else if(pU!=='none')startDept='print';else startDept='workshop';}
   const today=new Date().toISOString().split('T')[0];
   const itemFiles=window._coItemFiles||{};
+  // Financial totals are computed ONLY from the included (checked) quote lines —
+  // a fully-excluded quote (all items unchecked would have failed validation on
+  // the quote page already) never carries the whole quote's total onto a partial
+  // order. This also fixes a pre-existing gap where a fully-converted order never
+  // got its own totalAmount set on the Firebase record at all (only the external
+  // spreadsheet sync received a total), which silently excluded every
+  // quote-converted order from every revenue/remaining-balance report in the app.
+  const includedQLines=(q.lines||[]).filter((l,i)=>includedIdxs.has(String(i)));
+  const _showMeters=!!q.showMeters;
+  const subtotal=includedQLines.reduce((s,l)=>s+((_showMeters?(l.m??1):1)*(Number(l.q)||0)*(Number(l.p)||0)),0);
+  const vat=subtotal*0.15;const totalWithVat=subtotal+vat;
+  const isPartial=includedIdxs.size<(q.lines||[]).length;
   const ord={
     client:q.client,service,date:today,createdAt:new Date().toISOString(),stageStartDate:new Date().toISOString(),
-    priority,phone:normalizeSaudiPhone(phone),paymentStatus:'عند التسليم',paidAmount:0,deadline,
-    notes:`تحويل من عرض السعر: ${q.ref||quoteKey}`,files:[],
+    priority,phone:normalizeSaudiPhone(phone),paymentStatus:'عند التسليم',paidAmount:0,
+    totalAmount:totalWithVat,remainingAmount:totalWithVat,deadline,
+    notes:`تحويل من عرض السعر: ${q.ref||quoteKey}${isPartial?' (تحويل جزئي)':''}`,files:[],
     orderItems:(q.lines||[]).map((l,i)=>({
       name:l.lbl||'بند',
       details:quoteLineDimsSummary(l)||`الكمية: ${l.q||1}`,
       files:itemFiles[i]?[itemFiles[i]]:[],
       _idx:i
-    })).filter(x=>!claimedIdxs.has(String(x._idx))).map(({_idx,...rest})=>rest),
+    })).filter(x=>includedIdxs.has(String(x._idx))&&!claimedIdxs.has(String(x._idx))).map(({_idx,...rest})=>rest),
     createdBy:cu.name,createdByUname:cu._uname,fromQuoteKey:quoteKey,fromQuoteRef:q.ref||quoteKey,
     designTo:dU,designName:dU==='none'?'❌ معفى':(USERS[dU]?.name||dU),
     externalTo:eU,externalName:eU==='none'?'❌ معفى':(USERS[eU]?.name||eU),externalNote:'',
@@ -7959,8 +8074,15 @@ async function finalizeConvertToOrder(quoteKey){
   const res=await fbPush('orders',ord);
   const newId='ORD-'+String(Object.keys(orders).length+1).padStart(3,'0');
   await fbPatch(`orders/${res.name}`,{id:newId});
-  logOrderActivity(res.name,'ti-flag','تم إنشاء الطلب من عرض سعر');
-  await fbPatch(`standalone_quotes/${quoteKey}`,{convertedToOrder:newId,convertedAt:new Date().toISOString()});
+  logOrderActivity(res.name,'ti-flag','تم إنشاء الطلب من عرض سعر'+(isPartial?' (تحويل جزئي)':''));
+  // The original quote record's own `lines` array is left completely untouched —
+  // this only adds tracking fields alongside it so the archive can show which
+  // items were converted vs. cancelled/retained, without ever losing them.
+  await fbPatch(`standalone_quotes/${quoteKey}`,{
+    convertedToOrder:newId,convertedAt:new Date().toISOString(),
+    linkedOrderId:newId,partiallyConverted:isPartial,
+    convertedItemIndices:Array.from(includedIdxs).map(Number).sort((a,b)=>a-b)
+  });
   // Extra parallel production lines: same linked-child-order mechanism as the
   // main order registration form, so a converted quote can also run several
   // concurrent jobs across departments. Each line owns whichever quote line-item(s)
@@ -7991,9 +8113,9 @@ async function finalizeConvertToOrder(quoteKey){
     const lineRes=await fbPush('orders',lineOrd);
     await fbPatch(`orders/${lineRes.name}`,{id:newId+'-L'+(i+2)});
   }
-  syncOrderToSheet(newId,q.client,phone,'عند التسليم',service,{totalAmount:Number(q.totalWithVat||0),paidAmount:0,remainingAmount:Number(q.totalWithVat||0),date:today,deadline,createdBy:cu.name});
+  syncOrderToSheet(newId,q.client,phone,'عند التسليم',service,{totalAmount:Number(totalWithVat||0),paidAmount:0,remainingAmount:Number(totalWithVat||0),date:today,deadline,createdBy:cu.name});
   if(phone&&phone!=='—')await sendSmsNotification(phone,`مرحباً ${esc(q.client)}، تم استلام طلبكم رقم ${newId} وهو قيد التنفيذ. روائع الأفكار الإعلانية.`);
-  window._coItemFiles={};window._coProdLines=[];
+  window._coItemFiles={};window._coProdLines=[];window._coSelectedIdxs=null;window._coQuoteData=null;
   await loadData();hideSaving();closeModal('order-modal');
   toast('✓ تم إنشاء أمر التشغيل: '+newId);nav('wf');
   }catch(e){hideSaving();toast('❌ فشل إنشاء أمر التشغيل، حاول مرة أخرى');}
@@ -8870,9 +8992,37 @@ function buildOrderFileManager(o,key){
   ].filter(c=>c.files.length);
   if(!cats.length)return'<div style="font-size:11px;color:var(--text-3);">لا توجد ملفات مرفوعة على هذا الطلب بعد</div>';
   return cats.map(c=>`<div class="od-file-category">
-    <div class="od-file-category-title"><i class="ti ${c.icon}"></i> ${c.title} (${c.files.length})</div>
+    <div class="od-file-category-title" style="${c.title==='ملفات التصميم'?'justify-content:space-between;flex-wrap:wrap;':''}">
+      <span style="display:flex;align-items:center;gap:6px;"><i class="ti ${c.icon}"></i> ${c.title} (${c.files.length})</span>
+      ${c.title==='ملفات التصميم'?`<button class="btn btn-out btn-xs" onclick="downloadAllDesignFiles('${key}')"><i class="ti ti-download"></i> تنزيل الكل</button>`:''}
+    </div>
     <div class="od-file-grid">${c.files.map(f=>fileLinkHtml(f.name,f.url,f.label)).join('')}</div>
   </div>`).join('');
+}
+// Bulk-downloads every design-related file on the order: the order-level
+// approved/proof design files (clientApprovalImage/Pdf) plus every design-
+// stage version attachment across all line items (same source list
+// deptFilesForStage(o,'design') already feeds into the "ملفات التصميم"
+// category above). Triggers each <a download> in sequence with a 300ms
+// stagger — firing them all in the same tick makes most browsers treat it
+// as a popup flood and silently block everything past the first file.
+function downloadAllDesignFiles(key){
+  const o=orders[key];if(!o){toast('⚠️ تعذر العثور على الطلب');return;}
+  const files=[];
+  if(o.clientApprovalImage)files.push({name:o.clientApprovalImageName||'صورة الاعتماد',url:o.clientApprovalImage});
+  if(o.clientApprovalPdf)files.push({name:o.clientApprovalPdfName||'PDF الاعتماد',url:o.clientApprovalPdf});
+  files.push(...deptFilesForStage(o,'design'));
+  const valid=files.filter(f=>f&&f.url);
+  if(!valid.length){toast('⚠️ لا توجد ملفات تصميم لتنزيلها');return;}
+  toast(`جاري تنزيل ${valid.length} ملف...`);
+  valid.forEach((f,i)=>{
+    setTimeout(()=>{
+      const a=document.createElement('a');
+      a.href=f.url;a.download=f.name||('ملف-'+(i+1));
+      a.target='_blank';a.rel='noopener noreferrer';
+      document.body.appendChild(a);a.click();a.remove();
+    },i*300);
+  });
 }
 // ============================================================
 // MODULE 5 — ORDER DETAIL MODAL (split-column layout helpers)
