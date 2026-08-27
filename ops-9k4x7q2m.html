@@ -2265,7 +2265,21 @@ async function enterApp(u){
   try{chatSeenMap=(await fbGet('chatSeen/'+u))||{};}catch(e){}
   nav(_restorePage);
   renderStarTicker();
-  setInterval(async()=>{await loadData();refreshCurrentPage();renderStarTicker();},60000);
+  // The 60s background poll used to also call refreshCurrentPage(), which
+  // — however carefully guarded (see its own input-focus/modal/dropdown/
+  // upload-queue checks) — still meant a full _buildPage() DOM rebuild could
+  // fire under the user at any moment a guard didn't happen to cover (e.g.
+  // it had no idea about a voice note mid-playback). loadData() itself
+  // already only ever touches in-memory state (orders/clients/etc.) plus a
+  // handful of reactive badge counters (updateNotifBell, unread dots,
+  // checkForNewEventNotifsAndAlert's banners) — never the active page's own
+  // DOM — so simply dropping the refreshCurrentPage() call here removes the
+  // last automatic full-page re-render in the app. The currently-open page
+  // now only ever rebuilds when the user actually navigates or takes an
+  // action that calls refreshCurrentPage() themselves (advancing a stage,
+  // closing an order, changing sort mode, etc.) — never from a silent
+  // background sync.
+  setInterval(async()=>{await loadData();renderStarTicker();},60000);
 }
 function logout(){localStorage.removeItem(SESSION_KEY);sessionStorage.removeItem(SESSION_KEY);location.reload();}
 // ============================================================
