@@ -1734,6 +1734,15 @@ input:focus,select:focus,textarea:focus{box-shadow:inset 0 1px 3px rgba(74,14,23
 <div class="modal-overlay" id="itemwork-review-modal"><div class="modal-box" dir="rtl" id="itemwork-review-modal-body" style="max-width:520px;"></div></div>
 <div class="modal-overlay" id="client-feedback-modal"><div class="modal-box" dir="rtl" id="client-feedback-modal-body" style="max-width:520px;"></div></div>
 <div class="modal-overlay" id="order-edit-modal"><div class="modal-box" dir="rtl" id="order-edit-modal-body" style="max-width:640px;"></div></div>
+<div class="modal-overlay" id="invoice-preview-modal"><div class="modal-box" dir="rtl" style="max-width:900px;">
+  <div class="modal-header"><span class="modal-title"><i class="ti ti-file-invoice"></i> معاينة الفاتورة قبل التحميل</span><button class="btn-close" onclick="closeModal('invoice-preview-modal')">×</button></div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
+    <button class="btn btn-out btn-sm" onclick="printInvoiceFromPreview()"><i class="ti ti-printer"></i> طباعة</button>
+    <button class="btn btn-brand btn-sm" onclick="downloadInvoiceFromPreview()"><i class="ti ti-file-download"></i> تنزيل PDF</button>
+    <button class="btn btn-out btn-sm" onclick="closeModal('invoice-preview-modal')"><i class="ti ti-x"></i> إغلاق</button>
+  </div>
+  <div id="invoice-preview-body" style="max-height:70vh;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--surface-2);padding:10px;"></div>
+</div></div>
 <div class="modal-overlay" id="notif-modal">
   <div class="modal-box" dir="rtl" style="max-width:480px;">
     <div class="modal-header"><span class="modal-title"><i class="ti ti-bell"></i> التنبيهات</span><button class="btn-close" onclick="closeModal('notif-modal')">×</button></div>
@@ -3865,13 +3874,15 @@ function itemStageRequirementMet(it,o){
 async function advanceItemDept(key,idx){
   const o=orders[key];if(!o)return;
   const it=o.orderItems[idx];if(!it)return;
-  if(cu.type!=='admin'&&!isMyItem(o,it)){toast('⚠️ هذا الإجراء غير متاح لك');return;}
+  // Receiver gets the exact same full stage-advancement permission as admin.
+  const _isManager=cu.type==='admin'||cu.type==='receiver';
+  if(!_isManager&&!isMyItem(o,it)){toast('⚠️ هذا الإجراء غير متاح لك');return;}
   const nd=itemNextDept(it,o);if(!nd)return;
   // Files are a soft requirement for regular staff advancing their own
-  // work, but never a hard block for admin — a manager needs to be able to
-  // push an order/item forward regardless of upload state (a client
+  // work, but never a hard block for admin/receiver — a manager needs to be
+  // able to push an order/item forward regardless of upload state (a client
   // approved verbally, a file got lost, a workaround is needed, etc.).
-  if(cu.type!=='admin'&&!itemStageRequirementMet(it,o)){toast('⚠️ يجب رفع جميع الملفات المطلوبة لهذه المرحلة أولاً');return;}
+  if(!_isManager&&!itemStageRequirementMet(it,o)){toast('⚠️ يجب رفع جميع الملفات المطلوبة لهذه المرحلة أولاً');return;}
   showSaving('جاري تحديث حالة البند...');
   try{
     const items=[...o.orderItems];items[idx]={...items[idx],currentDept:nd};
@@ -3891,6 +3902,14 @@ function toggleOrderItemCard(idx){
   const opening=body.style.display==='none';
   body.style.display=opening?'block':'none';
   if(chev)chev.style.transform=opening?'rotate(180deg)':'';
+}
+// Order Completion Guardrail toggle — see renderOneItemGridCard(). Only ever
+// rendered for admin/receiver on a done item's card.
+function toggleDoneItemEditMode(id,btn){
+  const el=document.getElementById(id);if(!el)return;
+  const showing=el.style.display!=='none';
+  el.style.display=showing?'none':'block';
+  if(btn)btn.innerHTML=showing?'<i class="ti ti-lock-open"></i> تعديل الطلب':'<i class="ti ti-lock"></i> إخفاء إجراءات التعديل';
 }
 function toggleBulkSendPanel(){
   const p=document.getElementById('oi-bulk-panel');if(!p)return;
@@ -4159,15 +4178,27 @@ function renderOrderItemsCards(o,key,canAct){
       ${it.notes?`<div style="font-size:11px;color:var(--text-2);margin-top:6px;"><i class="ti ti-note"></i> ${esc(it.notes)}</div>`:''}
       <div style="margin-top:8px;">${gpbadge(o.priority,o.currentDept)}</div>
       ${clientFeedbackHistoryBoxHtml(it)}
-      <div class="oi-card-actions">
-        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+      ${(()=>{
+        // Order Completion Guardrail: once an order is done, its item cards
+        // default to a single read-only "فتح البند" action — the WhatsApp/
+        // client-feedback/approval buttons (all of which mutate a supposedly-
+        // finished order) stay hidden behind an explicit "تعديل الطلب" toggle
+        // that only admin/receiver even see, instead of sitting exposed by
+        // default on a card for a job that's already been delivered.
+        const isDone=dept==='done';
+        const canToggleEdit=cu.type==='admin'||cu.type==='receiver';
+        const actionsId='oi-actions-'+key+'-'+i;
+        const actionsRowHtml=`<div style="display:flex;gap:6px;flex-wrap:wrap;">
           ${(canSeeWhatsappBtn()&&o.phone&&o.phone!=='—')?`<button class="btn btn-whatsapp btn-sm" onclick="event.stopPropagation();openWhatsapp('${encodeURIComponent(o.phone)}')" title="واتساب"><i class="ti ti-brand-whatsapp"></i></button>`:''}
           ${canSeeClientFeedback()?`<button class="btn btn-out btn-sm" onclick="event.stopPropagation();openClientFeedbackPanel('${key}',${i})"><i class="ti ti-message-2"></i> تعديل مطلوب</button>`:''}
           ${(canApproveClientProof()&&dcol==='waiting')?`<button class="btn btn-green btn-sm" onclick="event.stopPropagation();approveItemProof('${key}',${i})"><i class="ti ti-circle-check"></i> تعميد التصميم</button>`:''}
           ${(canApproveClientProof()&&dcol==='revision')?`<button class="btn btn-green btn-sm" onclick="event.stopPropagation();approveItemProof('${key}',${i})"><i class="ti ti-circle-check"></i> تعميد التصميم مباشرة</button>`:''}
-        </div>
+        </div>`;
+        return `<div class="oi-card-actions">
+        ${isDone?(canToggleEdit?`<button class="btn btn-out btn-xs" style="width:100%;justify-content:center;" onclick="event.stopPropagation();toggleDoneItemEditMode('${actionsId}',this)"><i class="ti ti-lock-open"></i> تعديل الطلب</button>`:'')+`<div id="${actionsId}" style="display:none;margin-top:6px;">${actionsRowHtml}</div>`:actionsRowHtml}
         <button class="btn btn-brand btn-sm" style="width:100%;justify-content:center;margin-top:8px;" onclick="openItemWorkspace('${key}',${i})"><i class="ti ti-arrow-left"></i> فتح البند</button>
-      </div>
+      </div>`;
+      })()}
     </div>`;
   }
   // With many items the grid gets long and hard to scan — a quick name
@@ -5742,7 +5773,7 @@ function openWfInlinePanel(key,skipScroll){
   if(!skipScroll&&window._wfInlinePanelKey===key){closeWfInlinePanel();return;}
   window._wfInlinePanelKey=key;
   document.querySelectorAll('.wf-card').forEach(c=>c.classList.toggle('wf-card-active',c.getAttribute('data-key')===key));
-  const t=cu.type,isMine=isMyOrder(o),canAct=t==='admin'||isMine;
+  const t=cu.type,isMine=isMyOrder(o),canAct=t==='admin'||t==='receiver'||isMine;
   const nd=getNextDept(o);
   const _prevDept=getPrevDept(o);
   const nextLabels={design:'اعتماد التصميم والإرسال للمرحلة التالية ➔',external:'إنهاء التوريد والنقل ➔',print:'إتمام الطباعة ➔',workshop:'اكتمال التركيب ✓'};
@@ -5971,13 +6002,12 @@ async function downloadQuotePDF(savedKey){
 // amount of their own" reasoning elsewhere in this file) rather than being
 // recomputed from the aggregated item list, since that's the figure the
 // order was actually invoiced/paid against.
-async function downloadOrderInvoicePDF(key){
-  const o=orders[key];if(!o){toast('تعذر العثور على الطلب');return;}
+function buildOrderInvoiceData(o,key){
   const childLineOrders=Object.values(orders).filter(v=>v.parentOrderKey===key);
   const allItems=[...(o.orderItems||[]),...childLineOrders.flatMap(cv=>cv.orderItems||[])];
   const lines=allItems.filter(it=>it&&(Number(it.price)||Number(it.qty))).map(it=>({lbl:it.name||'—',q:Number(it.qty)||1,p:Number(it.price)||0,m:1}));
-  if(!lines.length){toast('⚠️ لا توجد بنود مسعّرة في هذا الطلب لإصدار فاتورة');return;}
-  const data={
+  if(!lines.length)return null;
+  return{
     ref:o.id||key,
     date:o.date||'',
     validity:'',
@@ -5994,7 +6024,40 @@ async function downloadOrderInvoicePDF(key){
     bank:'رقم الآيبان (IBAN): SA6880000370608010177725\nرقم الحساب: 370608010177725',
     terms:(o.notes&&o.notes!=='—')?o.notes:'',
   };
-  await _exportA4PdfFromPrintArea(data,o.id||key,'فاتورة_'+(o.client||'')+'_'+(o.id||key)+'.pdf');
+}
+// Preview-before-download modal ("معاينة الفاتورة قبل التحميل"): renders the
+// exact same A4 template into the real #print-area (so the QR code/fonts/
+// layout all resolve normally, same as the print/PDF paths) and mirrors that
+// rendered markup into an on-screen modal so the user can actually see the
+// invoice before committing to a PDF export — the old flow jumped straight
+// into an off-screen html2canvas capture with nothing shown on screen first,
+// so a capture/timing hiccup produced a mystery blank PDF with no way for
+// the user to notice before it landed in their downloads.
+async function previewOrderInvoicePDF(key){
+  const o=orders[key];if(!o){toast('تعذر العثور على الطلب');return;}
+  const data=buildOrderInvoiceData(o,key);
+  if(!data){toast('⚠️ لا توجد بنود مسعّرة في هذا الطلب لإصدار فاتورة');return;}
+  const invKey=o.id||key;
+  window._invoicePreview={data,key:invKey,filename:'فاتورة_'+(o.client||'')+'_'+invKey+'.pdf'};
+  showSaving('جاري تجهيز المعاينة...');
+  renderA4Quote(data,invKey);
+  await waitForPrintImages(document.getElementById('print-area'));
+  hideSaving();
+  const body=document.getElementById('invoice-preview-body');
+  if(body)body.innerHTML=document.getElementById('print-area').innerHTML;
+  openModal('invoice-preview-modal');
+}
+function printInvoiceFromPreview(){
+  const p=window._invoicePreview;if(!p)return;
+  const origTitle=document.title;
+  document.title=p.filename.replace(/\.pdf$/i,'');
+  renderA4Quote(p.data,p.key);
+  window.print();
+  setTimeout(()=>document.title=origTitle,2000);
+}
+async function downloadInvoiceFromPreview(){
+  const p=window._invoicePreview;if(!p)return;
+  await _exportA4PdfFromPrintArea(p.data,p.key,p.filename);
 }
 function fmtMoney(n){n=Number(n)||0;var s=n.toFixed(2);if(s.slice(-3)===".00")return s.slice(0,-3);return s;}
 // Financial figures on the clients page are masked by default (***) and only reveal
@@ -6574,7 +6637,7 @@ function buildItemWorkspacePage(){
   if(!o||!it){el.innerHTML=`<div class="ik-page-wrap">${itemworkBackBtnHtml()}<div style="text-align:center;color:var(--text-3);padding:40px;"><i class="ti ti-mood-sad" style="font-size:32px;display:block;margin-bottom:8px;"></i>تعذر العثور على هذا البند</div></div>`;return;}
   const dept=itemCurrentDept(it,o);
   const stillMine=isMyItem(o,it);
-  const canAct=stillMine||cu.type==='admin';
+  const canAct=stillMine||cu.type==='admin'||cu.type==='receiver';
   const allVersions=itemVersions(it);
   const legacyVersions=allVersions.filter(v=>v._legacy);
   const stageVersions=allVersions.filter(v=>!v._legacy&&(v.stage||'design')===dept);
@@ -7330,6 +7393,19 @@ function recomputeLineFromDims(l){
   l.q=l.dims.reduce((s,d)=>s+(Number(d.q)||0),0);
   l.m=Math.round(l.dims.reduce((s,d)=>s+(Number(d.w)||0)*(Number(d.h)||0)*(Number(d.q)||0),0)*100)/100;
 }
+// A dimension-calculated line's l.q is the SUM of piece-counts across every
+// w×h×qty dimension row, and l.m is already the TOTAL area across all of
+// those pieces (recomputeLineFromDims sums w*h*q per row) — the piece count
+// is baked into the area already. Multiplying the line's price by q on top
+// of that double-counts quantity, silently inflating the total by however
+// many pieces the item has (e.g. 2 pieces of 1×1m at 100 ر.س/م² should total
+// 2×100=200, not 2m²×2pieces×100=400). A line with no dims sub-rows has no
+// such overlap — its q is a plain, independent multiplier — so only
+// dimension-calculated lines drop it here.
+function quoteLineQtyFactor(l){return(l.dims&&l.dims.length)?1:(l.q||0);}
+function quoteLinePreVatTotal(l,showMeters){
+  return(showMeters?(l.m??1):1)*quoteLineQtyFactor(l)*(l.p||0);
+}
 // A bare "4" in the printed Quantity column is ambiguous once an item is
 // priced by area (Meters shown) — it reads like a stray number rather than
 // the panel/piece count it represents. Returns just the unit word so callers
@@ -7405,16 +7481,23 @@ function renderQuoteLines(){
   const wrap=document.getElementById('quote-lines-wrap');if(!wrap)return;
   const showMeters=window._quoteShowMeters;
   const isEditing=!!window._editingQuoteKey;
+  // A line already converted into a work order (startQuoteToOrderConversion)
+  // must not be offered for conversion again — re-checking it would create a
+  // second, duplicate order for the same item — so it gets a plain "[مترحل]"
+  // status badge instead of the selectable checkbox.
+  const _editingQ=isEditing?standaloneQuotes[window._editingQuoteKey]:null;
+  const migratedIdxs=new Set((_editingQ&&_editingQ.convertedItemIndices||[]).map(String));
   wrap.innerHTML=window._quoteLines.map((l,i)=>{
     const hasDims=l.dims&&l.dims.length;
     const convSel=l._convertSel!==false;
-    return`<div class="quote-line" style="grid-template-columns:${quoteGridCols()} auto auto;gap:6px;">
+    const isMigrated=migratedIdxs.has(String(i));
+    return`<div class="quote-line" style="grid-template-columns:${quoteGridCols()} auto auto;gap:6px;${isMigrated?'opacity:.7;':''}">
     <input placeholder="وصف البند" value="${esc(l.lbl)}" oninput="updateQuoteLine('${l.id}','lbl',this.value)"/>
     ${showMeters?`<input type="text" inputmode="decimal" id="q-line-m-${l.id}" placeholder="الامتار" value="${hasDims?Number(l.m??0).toFixed(2):(l.m??1)}" oninput="updateQuoteLine('${l.id}','m',this.value)" min="0" onfocus="this.select()" ${hasDims?`readonly title="محسوبة تلقائياً من المقاسات أدناه" class="quote-readonly-input"`:''}/>`:''}
     <input type="text" inputmode="decimal" id="q-line-qty-${l.id}" placeholder="الكمية" value="${l.q}" oninput="updateQuoteLine('${l.id}','q',this.value)" min="1" onfocus="this.select()" ${hasDims?`readonly title="محسوبة تلقائياً من المقاسات أدناه" class="quote-readonly-input"`:''}/>
     <input type="text" inputmode="decimal" id="q-line-notax-${l.id}" placeholder="السعر غير شامل الضريبة" value="${l.p}" oninput="updateQuoteLine('${l.id}','p',this.value)" min="0" onfocus="this.select()"/>
     <input type="text" inputmode="decimal" id="q-line-wtax-${l.id}" placeholder="السعر شامل الضريبة" value="${fmtMoney((l.p*1.15))}" oninput="updateQuoteLineFromTax('${l.id}',this.value)" min="0" onfocus="this.select()"/>
-    <div id="q-line-total-${l.id}" style="display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:var(--maroon);background:var(--surface-2);border:1.5px solid var(--border);border-radius:8px;padding:8px 6px;text-align:center;">${fmtMoney((showMeters?(l.m??1):1)*(l.q||0)*(l.p||0)*1.15)}</div>
+    <div id="q-line-total-${l.id}" style="display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:var(--maroon);background:var(--surface-2);border:1.5px solid var(--border);border-radius:8px;padding:8px 6px;text-align:center;">${fmtMoney(quoteLinePreVatTotal(l,showMeters)*1.15)}</div>
     <label title="إرفاق صورة للبند" style="cursor:pointer;display:flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:8px;border:1px dashed var(--border);background:var(--bg);flex-shrink:0;transition:.12s;" onmouseover="this.style.borderColor='var(--gold)'" onmouseout="this.style.borderColor='var(--border)'">
       ${l.img?`<img src="${cloudinaryThumb(l.img,80)}" style="width:28px;height:28px;object-fit:cover;border-radius:6px;" loading="lazy"/>`:
       `<i class="ti ti-photo" style="font-size:14px;color:var(--text-3);"></i>`}
@@ -7425,13 +7508,15 @@ function renderQuoteLines(){
       <button class="btn btn-out btn-xs" type="button" onclick="addQuoteLineDimension('${l.id}')"><i class="ti ti-ruler-2"></i> + إضافة مقاس / بُعد</button>
     </div>
     ${quoteLineDimsBoxHtml(l)}`:''}
-    ${isEditing?`<div style="grid-column:1/-1;display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:2px;">
+    ${isEditing?(isMigrated?`<div style="grid-column:1/-1;display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:2px;">
+      <span style="font-size:9.5px;font-weight:800;padding:2px 7px;border-radius:5px;background:#E5E7EB;color:#374151;"><i class="ti ti-transfer-in"></i> [مترحل] تم تحويله لأمر تشغيل ${esc(_editingQ.linkedOrderId||_editingQ.convertedToOrder||'')}</span>
+    </div>`:`<div style="grid-column:1/-1;display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:2px;">
       <label style="display:flex;align-items:center;gap:5px;font-size:11px;font-weight:700;color:var(--text-2);cursor:pointer;">
         <input type="checkbox" class="quote-item-convert-check" value="${i}" ${convSel?'checked':''} onchange="toggleQuoteLineConvertSel('${l.id}',this.checked)"/>
         تضمين هذا البند عند التحويل لأمر عمل
       </label>
       <span id="q-line-convtag-${l.id}" style="font-size:9.5px;font-weight:800;padding:2px 7px;border-radius:5px;${convSel?'background:#DCFCE7;color:#166534;':'background:#FEE2E2;color:#991B1B;'}">${convSel?'[معتمد / سيتم تحويله]':'[ملغي / مستبعد من أمر العمل]'}</span>
-    </div>`:''}
+    </div>`):''}
   </div>`;
   }).join('');
   renderQuoteTotals();
@@ -7526,12 +7611,11 @@ function renderQuoteTotals(){
     const mEl=document.getElementById('q-line-m-'+l.id);
     const q=qEl?(parseFloat(qEl.value)||0):(l.q||0);
     const m=mEl?(parseFloat(mEl.value)||0):(l.m??1);
-    const p=l.p||0;
     l.q=q;l.m=m;
-    const effectiveM=showMeters?m:1;
-    subtotal+=effectiveM*q*p;
+    const lineTotal=quoteLinePreVatTotal(l,showMeters);
+    subtotal+=lineTotal;
     const totEl=document.getElementById('q-line-total-'+l.id);
-    if(totEl)totEl.textContent=fmt(effectiveM*q*p*1.15);
+    if(totEl)totEl.textContent=fmt(lineTotal*1.15);
   });
   const vat=subtotal*0.15;const total=subtotal+vat;
   const g=document.getElementById('q-grand-total');
@@ -7568,7 +7652,7 @@ function getQuoteData(){
   const bank=document.getElementById('q-bank')?.value||'';
   const showMeters=!!window._quoteShowMeters;
   const lines=window._quoteLines.filter(l=>l.lbl.trim()!=='').map(l=>({...l}));
-  const subtotal=lines.reduce((s,l)=>s+((showMeters?(l.m??1):1)*l.q*l.p),0);
+  const subtotal=lines.reduce((s,l)=>s+quoteLinePreVatTotal(l,showMeters),0);
   const vat=subtotal*0.15;const totalWithVat=subtotal+vat;
   const paidAmount=parseFloat(document.getElementById('q-paid-amount')?.value)||0;
   const remainingAmount=Math.max(0,totalWithVat-paidAmount);
@@ -7630,8 +7714,13 @@ async function convertSelectedQuoteItemsToOrder(){
   if(!preData.client){toast('⚠️ يرجى تحديد العميل');return;}
   if(!preData.phone||!isValidSaudiPhone(preData.phone)){toast('⚠️ يرجى إدخال رقم جوال سعودي صحيح (05XXXXXXXX)');return;}
   if(!preData.lines.length){toast('⚠️ لا توجد بنود صالحة في العرض');return;}
-  const selIdxs=preData.lines.map((l,i)=>l._convertSel!==false?i:null).filter(i=>i!==null);
-  if(!selIdxs.length){toast('⚠️ يرجى تحديد بند واحد على الأقل للتحويل');return;}
+  // Already-migrated lines render no checkbox at all (see renderQuoteLines'
+  // "[مترحل]" badge) so there's nothing for the user to have unchecked —
+  // they must be excluded here explicitly, or they'd default back in as
+  // "selected" and get converted into a second, duplicate order.
+  const migratedIdxs=new Set((standaloneQuotes[window._editingQuoteKey]?.convertedItemIndices||[]).map(String));
+  const selIdxs=preData.lines.map((l,i)=>(l._convertSel!==false&&!migratedIdxs.has(String(i)))?i:null).filter(i=>i!==null);
+  if(!selIdxs.length){toast('⚠️ يرجى تحديد بند واحد على الأقل للتحويل (لم يتم ترحيله مسبقاً)');return;}
   await saveQuoteToDb();
   startQuoteToOrderConversion(window._editingQuoteKey,selIdxs);
 }
@@ -7675,7 +7764,7 @@ function renderA4Quote(data,key=''){
   const expiryDate=data.validity||'';
   const lines=(data.lines||[]);
   const showMeters=data.showMeters!==undefined?!!data.showMeters:lines.some(l=>l.m!==undefined&&l.m!==1);
-  const subtotal=lines.reduce((s,l)=>s+((showMeters?Number(l.m??1):1)*Number(l.q||0)*Number(l.p||0)),0);
+  const subtotal=lines.reduce((s,l)=>s+quoteLinePreVatTotal(l,showMeters),0);
   const vat=subtotal*0.15;
   const totalWithVat=Number(data.totalWithVat||0)||(subtotal+vat);
   const paidAmt=Number(data.paidAmount||0);
@@ -7687,7 +7776,7 @@ function renderA4Quote(data,key=''){
   const linesHtml=lines.map((l,i)=>{
     const meters=Number(l.m??1),qty=Number(l.q||0),price=Number(l.p||0);
     const priceAfterTax=price*1.15;
-    const lineTotal=(showMeters?meters:1)*qty*price*1.15;
+    const lineTotal=quoteLinePreVatTotal(l,showMeters)*1.15;
     const imgCell=hasAnyImg?(l.img
       ?`<td style="padding:8px;text-align:center;"><img src="${l.img}" style="width:44px;height:44px;object-fit:cover;border-radius:8px;border:1px solid #EDE3D0;"/></td>`
       :`<td style="padding:8px;text-align:center;"><div style="width:44px;height:44px;border-radius:8px;background:#F3EEE4;display:inline-flex;align-items:center;justify-content:center;"><i class="ti ti-photo" style="color:#C9A227;font-size:16px;"></i></div></td>`):'';
@@ -7944,13 +8033,24 @@ async function startQuoteToOrderConversion(key,selectedIdxs=null){
   if(!includedLines.length){toast('⚠️ لا توجد بنود لتحويلها');return;}
   window._prefillClient=q.client||'';
   window._prefillPhone=q.phone||'';
-  window._prefillItems=includedLines.map(({l})=>({
-    name:l.lbl||'بند',
-    details:quoteLineDimsSummary(l)||`الكمية: ${l.q||1}`,
-    qty:l.q||1,
-    price:l.p||0,
-    files:l.img?[{data:l.img,name:(l.lbl||'بند')+'.jpg'}]:[]
-  }));
+  window._prefillItems=includedLines.map(({l})=>{
+    const qty=l.q||1;
+    // Order-registration lines only ever price as price×qty — there's no
+    // area/meters concept there. For a dimension-calculated line (whose
+    // quote total is price×totalM², independent of qty — see
+    // quoteLinePreVatTotal), fold the total m² into a derived per-piece
+    // price so price×qty on the order line reconstructs that exact same
+    // total instead of silently dropping the area factor.
+    const hasDims=!!(l.dims&&l.dims.length);
+    const price=(hasDims&&q.showMeters)?(quoteLinePreVatTotal(l,true)/qty):(l.p||0);
+    return{
+      name:l.lbl||'بند',
+      details:quoteLineDimsSummary(l)||`الكمية: ${qty}`,
+      qty,
+      price,
+      files:l.img?[{data:l.img,name:(l.lbl||'بند')+'.jpg'}]:[]
+    };
+  });
   // Consumed by submitOrder() on success: patches (never deletes) the source
   // quote record with the same convertedToOrder/linkedOrderId/
   // partiallyConverted/convertedItemIndices tracking the old modal-based flow
@@ -8572,9 +8672,9 @@ function openOrderEditModal(key){
 function orderEditModalHtml(key){
   const o=orders[key];if(!o)return'';
   const items=o.orderItems||[];
-  const itemsHtml=items.length?items.map((it,i)=>`<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:8px;padding:8px 12px;margin-bottom:6px;">
-    <div style="min-width:0;"><strong style="font-size:12px;color:var(--maroon);">بند #${i+1} — ${esc(it.name||'—')}</strong>${it.qty?`<span style="font-size:11px;color:var(--text-3);"> ×${esc(String(it.qty))}</span>`:''}${it.details?`<div style="font-size:11px;color:var(--text-2);margin-top:2px;">${esc(it.details)}</div>`:''}${it.notes?`<div style="font-size:11px;color:var(--text-2);margin-top:2px;"><i class="ti ti-note"></i> ${esc(it.notes)}</div>`:''}</div>
-    <button class="btn btn-out btn-xs" onclick="closeModal('order-edit-modal');openAddItemModal('${key}',${i})"><i class="ti ti-pencil"></i> تعديل</button>
+  const itemsHtml=items.length?items.map((it,i)=>`<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:8px;padding:8px 12px;margin-bottom:6px;">
+    <div style="min-width:0;flex:1;"><strong style="font-size:12px;color:var(--maroon);">بند #${i+1} — ${esc(it.name||'—')}</strong>${it.qty?`<span style="font-size:11px;color:var(--text-3);"> ×${esc(String(it.qty))}</span>`:''}${it.details?`<div style="font-size:11px;color:var(--text-2);margin-top:2px;">${esc(it.details)}</div>`:''}${it.notes?`<div style="font-size:11px;color:var(--text-2);margin-top:2px;"><i class="ti ti-note"></i> ${esc(it.notes)}</div>`:''}${chatAttachmentsHtml(itemVersions(it).flatMap(v=>v.files||[]))}</div>
+    <button class="btn btn-out btn-xs" style="flex-shrink:0;" onclick="closeModal('order-edit-modal');openAddItemModal('${key}',${i})"><i class="ti ti-pencil"></i> تعديل</button>
   </div>`).join(''):'<div style="font-size:11.5px;color:var(--text-3);">لا توجد بنود بعد</div>';
   const seq=getActiveDepts(o);
   const reassignHtml=seq.map(dk=>{
@@ -8981,10 +9081,10 @@ function deptFilesForStage(o,dk){
 function saveDeptNote(key,dk){
   const o=orders[key];if(!o)return;
   // The note textarea is only rendered inside a canAct-gated dept card
-  // (cu.type==='admin'||isMyOrder(o)) — this function had no check of its
+  // (admin/receiver/isMyOrder(o)) — this function had no check of its
   // own, so calling it directly overwrote another department's internal
   // notes on any order.
-  if(!guardWrite(cu.type==='admin'||isMyOrder(o),'⚠️ لا تملك صلاحية حفظ هذه الملاحظة'))return;
+  if(!guardWrite(cu.type==='admin'||cu.type==='receiver'||isMyOrder(o),'⚠️ لا تملك صلاحية حفظ هذه الملاحظة'))return;
   const el=document.getElementById('od-note-'+dk);if(!el)return;
   const noteVal=el.value.trim();
   const upd={};upd['deptNotes_'+dk]=noteVal;
@@ -9203,7 +9303,7 @@ function buildFinancialBreakdownCard(o,key){
     <div class="od-fin-remaining ${isUnpaid?'unpaid':''}"><i class="ti ti-${isUnpaid?'alert-triangle':'circle-check'}"></i> المتبقي: ${fmtMoney(remaining)} ر.س</div>
     <div class="od-fin-actions">
       ${hasPendingReq?`<span style="font-size:11px;color:var(--text-3);"><i class="ti ti-hourglass"></i> يوجد سند بانتظار مراجعة المحاسب</span>`:`<button class="btn btn-brand btn-sm" style="width:100%;justify-content:center;" onclick="openAddPaymentModal('${key}')"><i class="ti ti-receipt"></i> إضافة دفعة / سند قبض</button>`}
-      <button class="btn btn-out btn-sm" style="width:100%;justify-content:center;" onclick="downloadOrderInvoicePDF('${key}')"><i class="ti ti-file-download"></i> تحميل عرض السعر / الفاتورة PDF</button>
+      <button class="btn btn-out btn-sm" style="width:100%;justify-content:center;" onclick="previewOrderInvoicePDF('${key}')"><i class="ti ti-file-download"></i> تحميل عرض السعر / الفاتورة PDF</button>
       ${isUnpaid&&o.phone&&o.phone!=='—'?`<button class="btn btn-sm" style="width:100%;justify-content:center;background:#25D366;color:#fff;" onclick="sendWhatsappPaymentClaim('${key}')"><i class="ti ti-brand-whatsapp"></i> مطالبة دفع عبر واتساب</button>`:''}
     </div>
   </div>`;
@@ -9315,7 +9415,7 @@ function buildOrderDetailsPage(){
   const el=document.getElementById('orderdetails-content');if(!el)return;
   const o=orders[key];
   if(!o){el.innerHTML=`${backBtnHtml()}<div style="text-align:center;color:var(--text-3);padding:40px;"><i class="ti ti-mood-sad" style="font-size:32px;display:block;margin-bottom:8px;"></i>تعذر العثور على هذا الطلب</div>`;return;}
-  const t=cu.type,isMine=isMyOrder(o),canAct=t==='admin'||isMine;
+  const t=cu.type,isMine=isMyOrder(o),canAct=t==='admin'||t==='receiver'||isMine;
   const nd=getNextDept(o);
   const _prevDept=getPrevDept(o);
   // When true, items render inside each line's own card (renderParallelLineSections)
@@ -9608,7 +9708,18 @@ function openAddItemModal(key,editIdx){
         <div class="dept-upload-box" onclick="document.getElementById('new-item-file-input').click()"><i class="ti ti-upload" style="font-size:20px;color:var(--gold);"></i><br>اضغط لإرفاق ملف أو أكثر</div>
         <input type="file" id="new-item-file-input" style="display:none" accept="*/*" multiple onchange="handleNewItemFiles(this.files,'${key}')"/>
         <div id="new-item-file-note" style="font-size:11px;color:#10B981;margin-top:4px;font-weight:700;">${window._newItemFiles.length?'✓ '+window._newItemFiles.length+' ملف مرفق':''}</div>
+        <div id="new-item-files-preview">${chatAttachmentsHtml(window._newItemFiles)}</div>
       </div>
+      ${(isEdit&&itemVersions(existing).length)?`<div class="fg">
+        <label>كل الملفات والإصدارات والبروفات السابقة على هذا البند</label>
+        <div style="display:flex;flex-direction:column;gap:6px;max-height:220px;overflow-y:auto;">
+          ${itemVersions(existing).slice().reverse().map(v=>`<div style="background:var(--surface-2);border:1px solid var(--border-soft);border-radius:8px;padding:8px 10px;">
+            <div style="font-size:10.5px;color:var(--text-3);margin-bottom:3px;">${esc(v.label||'نسخة')} · ${esc(v.createdBy||'—')} · ${fmtDateTime(v.createdAt)}</div>
+            ${v.notes?`<div style="font-size:11.5px;color:var(--text-2);">${esc(v.notes)}</div>`:''}
+            ${chatAttachmentsHtml(v.files)}
+          </div>`).join('')}
+        </div>
+      </div>`:''}
       <button class="btn btn-brand" style="width:100%;justify-content:center;" onclick="submitNewOrderItem('${key}')"><i class="ti ti-${isEdit?'device-floppy':'plus'}"></i> ${isEdit?'حفظ التعديلات':'إضافة البند للطلب'}</button>
     </div>`;
   openModal('add-item-modal');
@@ -9630,6 +9741,8 @@ function handleNewItemFiles(files,orderKey){
     window._newItemFiles.push(...results);
     const note=document.getElementById('new-item-file-note');
     if(note)note.textContent='✓ تم إرفاق '+window._newItemFiles.length+' ملف';
+    const preview=document.getElementById('new-item-files-preview');
+    if(preview)preview.innerHTML=chatAttachmentsHtml(window._newItemFiles);
   });
 }
 async function submitNewOrderItem(key){
@@ -9742,11 +9855,11 @@ function uploadFileDirect(key,ff,fn2,inputId){
   const el=document.getElementById(inputId);if(!el||!el.files||!el.files.length)return;
   const files=Array.from(el.files);
   const o=orders[key];if(!o)return;
-  // The upload input itself only exists inside an `if(isMine||t==='admin')`
-  // block at render time — this function had no matching check, so calling
-  // it directly overwrote approved design/print/workshop files on any order
-  // regardless of assignment.
-  if(!guardWrite(cu.type==='admin'||isMyOrder(o),'⚠️ لا تملك صلاحية رفع هذا الملف'))return;
+  // The upload input itself only exists inside the page's canAct-gated block
+  // at render time (admin/receiver/isMine) — this function had no matching
+  // check, so calling it directly overwrote approved design/print/workshop
+  // files on any order regardless of assignment.
+  if(!guardWrite(cu.type==='admin'||cu.type==='receiver'||isMyOrder(o),'⚠️ لا تملك صلاحية رفع هذا الملف'))return;
   el.value='';
   const label=(files.length>1?`${files.length} ملفات — `:'')+(o.id||key);
   runQueuedUpload(label,async onProgress=>{
@@ -9788,10 +9901,10 @@ function uploadFileDirect(key,ff,fn2,inputId){
 async function deleteApprovalFile(key,ff,slot){
   const o=orders[key];if(!o)return;
   // Render sites only show this button under the same canAct
-  // (cu.type==='admin'||isMyOrder(o)) gate used for uploads — this function
+  // (admin/receiver/isMyOrder(o)) gate used for uploads — this function
   // had no check of its own, so calling it directly deleted approved
   // design/print/workshop files on any order regardless of assignment.
-  if(!guardWrite(cu.type==='admin'||isMyOrder(o),'⚠️ لا تملك صلاحية حذف هذا الملف'))return;
+  if(!guardWrite(cu.type==='admin'||cu.type==='receiver'||isMyOrder(o),'⚠️ لا تملك صلاحية حذف هذا الملف'))return;
   if(!confirm('حذف هذا الملف؟'))return;
   const fn2=ff+'Name';
   const extra=Array.isArray(o[ff+'Extra'])?[...o[ff+'Extra']]:[];
@@ -9842,10 +9955,11 @@ async function saveExternalNote(key){
 async function sendToNextDept(key,next){
   const o=orders[key];if(!o)return;
   // The "نقل للمرحلة التالية" button is only rendered under canAct
-  // (cu.type==='admin'||isMyOrder(o)) — this function had no check of its
-  // own, so calling it directly moved any order to any department
-  // regardless of ownership/role.
-  if(!guardWrite(cu.type==='admin'||isMyOrder(o),'⚠️ لا تملك صلاحية نقل هذا الطلب'))return;
+  // (admin/receiver/isMyOrder(o)) — this function had no check of its own,
+  // so calling it directly moved any order to any department regardless of
+  // ownership/role. Receiver gets the same full stage-advancement
+  // permission as admin here.
+  if(!guardWrite(cu.type==='admin'||cu.type==='receiver'||isMyOrder(o),'⚠️ لا تملك صلاحية نقل هذا الطلب'))return;
   const curDept=o.currentDept;
   // Mandatory proof/spec linkage: an order cannot leave the design stage for
   // print or workshop until the corresponding approved proof file has been
@@ -9859,9 +9973,10 @@ async function sendToNextDept(key,next){
       : workshopOnly
         ? !o.approvedWorkshopFile
         : (o.printTo!=='none'&&(!o.clientApprovalImage||!o.approvedPrintFile||(o.workshopTo!=='none'&&!o.approvedWorkshopFile)));
-    // Same admin bypass as advanceItemDept() — files stay a soft requirement
-    // for regular staff, never a hard block for a manager overriding it.
-    if(blocked&&cu.type!=='admin'){toast('⚠️ يجب رفع جميع الملفات المطلوبة قبل الانتقال للمرحلة التالية');return;}
+    // Same admin/receiver bypass as advanceItemDept() — files stay a soft
+    // requirement for regular staff, never a hard block for a manager
+    // overriding it.
+    if(blocked&&cu.type!=='admin'&&cu.type!=='receiver'){toast('⚠️ يجب رفع جميع الملفات المطلوبة قبل الانتقال للمرحلة التالية');return;}
   }
   showSaving('جاري التحويل...');
   const timeField={design:'designDoneAt',external:'externalDoneAt',print:'printDoneAt',workshop:'workshopDoneAt'};
@@ -9948,7 +10063,7 @@ async function finishOrder(key){
   // Same canAct gate as sendToNextDept() — this function had no check of
   // its own, so calling it directly archived/marked-done any order
   // regardless of ownership/role.
-  if(!guardWrite(cu.type==='admin'||isMyOrder(o),'⚠️ لا تملك صلاحية إغلاق هذا الطلب'))return;
+  if(!guardWrite(cu.type==='admin'||cu.type==='receiver'||isMyOrder(o),'⚠️ لا تملك صلاحية إغلاق هذا الطلب'))return;
   showSaving('جاري الإغلاق...');
   try{
     await fbPatch(`orders/${key}`,{currentDept:'done',status:'مكتمل',workshopDoneAt:new Date().toISOString()});
@@ -10824,12 +10939,19 @@ async function submitOrder(isUrgentQuick=false){
       const{quoteKey,includedIdxs}=window._pendingQuoteConversion;
       const qRec=standaloneQuotes[quoteKey];
       if(qRec){
-        const isPartial=includedIdxs.length<(qRec.lines||[]).length;
+        // Union with whatever was already migrated by an earlier partial
+        // conversion of this same quote — overwriting instead of merging
+        // would erase the record of those earlier items the moment
+        // "تحويل المتبقي" converts the rest, making the archive/badge wrongly
+        // show only the latest batch as migrated.
+        const priorIdxs=(qRec.convertedItemIndices||[]).map(Number);
+        const mergedIdxs=Array.from(new Set([...priorIdxs,...includedIdxs])).sort((a,b)=>a-b);
+        const isPartial=mergedIdxs.length<(qRec.lines||[]).length;
         try{
           await fbPatch(`standalone_quotes/${quoteKey}`,{
             convertedToOrder:newId,convertedAt:new Date().toISOString(),
             linkedOrderId:newId,partiallyConverted:isPartial,
-            convertedItemIndices:[...includedIdxs].sort((a,b)=>a-b)
+            convertedItemIndices:mergedIdxs
           });
         }catch(e2){}
       }
