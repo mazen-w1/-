@@ -674,6 +674,34 @@ input[type="password"]{direction:rtl;text-align:right;padding-left:40px;padding-
 .chat-input-row{display:flex;gap:8px;padding:10px 12px;border-top:1px solid var(--border-soft);background:var(--surface);flex-shrink:0;}
 .chat-input-row input{flex:1;border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:8px 12px;font-size:12px;font-family:inherit;}
 .chat-input-row input:focus{outline:none;border-color:var(--gold);}
+/* ── Rich chat: voice notes, attachments, lightbox (shared by order chat, item client-feedback, team chat) ── */
+.chat-voice-btn.recording,#voice-rec-btn.recording{background:#EF4444!important;color:#fff!important;border-color:#EF4444!important;animation:voicePulse 1.1s infinite;}
+.chat-rec-timer{display:none;align-items:center;gap:5px;font-size:11px;font-weight:800;color:#EF4444;padding:0 4px;white-space:nowrap;}
+.chat-rec-dot{width:8px;height:8px;border-radius:50%;background:#EF4444;display:inline-block;animation:voicePulse 1.1s infinite;}
+.chat-voice-msg{display:flex;align-items:center;gap:8px;min-width:190px;padding:2px 0;}
+.chat-audio-play-btn{width:30px;height:30px;border-radius:50%;border:none;background:var(--gold,#D4AF37);color:#3a2a00;display:flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer;font-size:14px;}
+.chat-msg.mine .chat-audio-play-btn{background:#fff;color:var(--maroon);}
+.chat-audio-seek{flex:1;accent-color:var(--gold,#D4AF37);height:4px;cursor:pointer;}
+.chat-audio-dur{font-size:10px;font-weight:700;opacity:.85;white-space:nowrap;min-width:34px;text-align:left;direction:ltr;}
+.chat-attach-grid{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;}
+.chat-attach-thumb{width:84px;height:84px;border-radius:8px;overflow:hidden;cursor:zoom-in;border:1px solid rgba(255,255,255,.25);flex-shrink:0;}
+.chat-msg.other .chat-attach-thumb{border-color:var(--border);}
+.chat-attach-thumb img{width:100%;height:100%;object-fit:cover;display:block;}
+.chat-lightbox-overlay{position:fixed;inset:0;background:rgba(0,0,0,.85);display:none;align-items:center;justify-content:center;flex-direction:column;z-index:99999;padding:30px;}
+.chat-lightbox-overlay.open{display:flex;}
+.chat-lightbox-overlay img{max-width:90vw;max-height:80vh;border-radius:10px;box-shadow:0 8px 40px rgba(0,0,0,.5);}
+.chat-lightbox-close{position:absolute;top:16px;left:16px;width:38px;height:38px;border-radius:50%;border:none;background:rgba(255,255,255,.15);color:#fff;font-size:22px;cursor:pointer;line-height:1;}
+.chat-lightbox-download{margin-top:14px;background:var(--gold,#D4AF37);color:#3a2a00;border-radius:var(--radius-sm);padding:8px 18px;font-size:12px;font-weight:800;text-decoration:none;display:inline-flex;align-items:center;gap:6px;}
+/* ── Rich, clickable "new event" banners — stacked top-corner cards, distinct from the plain bottom toast() bar ── */
+.event-notif-stack{position:fixed;top:16px;left:16px;z-index:99998;display:flex;flex-direction:column;gap:8px;max-width:340px;}
+.event-notif-banner{background:var(--surface);border:1px solid var(--border);border-inline-start:4px solid var(--notif-color,var(--maroon));border-radius:var(--radius-md);box-shadow:0 6px 24px rgba(0,0,0,.16);padding:11px 14px;display:flex;gap:10px;align-items:flex-start;cursor:pointer;animation:notifBannerIn .25s ease-out;}
+.event-notif-banner:hover{box-shadow:0 8px 30px rgba(0,0,0,.22);}
+.event-notif-banner .enb-icon{width:30px;height:30px;border-radius:50%;background:var(--notif-color,var(--maroon));color:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px;}
+.event-notif-banner .enb-body{flex:1;min-width:0;}
+.event-notif-banner .enb-title{font-size:11.5px;font-weight:800;color:var(--text-1);margin-bottom:2px;}
+.event-notif-banner .enb-msg{font-size:11.5px;color:var(--text-2);line-height:1.5;}
+.event-notif-banner .enb-close{background:none;border:none;color:var(--text-3);font-size:16px;cursor:pointer;line-height:1;padding:0 2px;flex-shrink:0;}
+@keyframes notifBannerIn{from{opacity:0;transform:translateY(-10px);}to{opacity:1;transform:translateY(0);}}
 /* ============================================================ QR */
 .qr-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);padding:12px;text-align:center;display:inline-block;}
 .qr-box p{font-size:9px;color:var(--text-3);margin-top:5px;font-weight:700;}
@@ -2394,6 +2422,7 @@ async function loadData(){
   }));
   try{
     updateNotifBell();updateRequestsBadgeSidebar();updateTeamChatBadge();updatePrepBadgeSidebar();
+    checkForNewEventNotifsAndAlert();
     checkNewAssignments();
     checkNewEventNotifs();
     cleanExpiredWarranties();
@@ -4167,8 +4196,9 @@ function openClientFeedbackPanel(key,idx){
   const priorFeedback=itemVersions(it).filter(v=>!v._legacy&&v.kind==='client_feedback').sort((a,b)=>new Date(b.createdAt||0)-new Date(a.createdAt||0));
   const historyHtml=priorFeedback.length?`<div style="margin-bottom:14px;display:flex;flex-direction:column;gap:8px;max-height:180px;overflow-y:auto;">${priorFeedback.map(v=>`<div style="background:var(--surface-2);border:1px solid var(--border-soft);border-radius:8px;padding:8px 10px;">
     <div style="font-size:10.5px;color:var(--text-3);margin-bottom:3px;">${esc(v.createdBy||'—')} · ${fmtDateTime(v.createdAt)}</div>
+    ${v.audioUrl?chatAudioPlayerHtml('cfb-'+v.id,v.audioUrl,v.audioDuration):''}
     ${v.notes?`<div style="font-size:12px;color:var(--text-1);line-height:1.6;">${esc(v.notes)}</div>`:''}
-    ${(v.files&&v.files.length)?`<div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:5px;">${v.files.map(f=>fileLinkHtml(f.name,f.data)).join('')}</div>`:''}
+    ${chatAttachmentsHtml((v.files||[]).map(f=>({data:f.data,name:f.name})))}
   </div>`).join('')}</div>`:'';
   document.getElementById('client-feedback-modal-body').innerHTML=`
     <div class="modal-header"><div class="modal-title"><i class="ti ti-message-2"></i> ردود وملاحظات العميل</div><button class="btn-close" onclick="closeModal('client-feedback-modal')">×</button></div>
@@ -4180,7 +4210,11 @@ function openClientFeedbackPanel(key,idx){
       <input type="file" id="cfb-file-input" multiple accept="*/*" style="display:none" onchange="handleClientFeedbackFile(this.files)"/>
       <div id="cfb-file-note" style="font-size:11px;color:#10B981;margin-top:4px;font-weight:700;"></div>
     </div>
-    <button class="btn btn-brand" style="width:100%;justify-content:center;margin-top:6px;" onclick="saveClientFeedback()"><i class="ti ti-send"></i> حفظ وإعادة البند لقسم التصميم</button>`;
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+      <span class="chat-rec-timer" id="chat-rec-timer-item-${key}-${idx}"></span>
+      <button type="button" class="btn btn-out btn-sm chat-voice-btn" id="chat-voice-btn-item-${key}-${idx}" onclick="toggleChatVoiceRecording({kind:'item',orderKey:'${key}',idx:${idx}})" title="تسجيل ملاحظة صوتية"><i class="ti ti-microphone"></i> ملاحظة صوتية</button>
+    </div>
+    <button class="btn btn-brand" style="width:100%;justify-content:center;" onclick="saveClientFeedback()"><i class="ti ti-send"></i> حفظ وإعادة البند لقسم التصميم</button>`;
   openModal('client-feedback-modal');
 }
 function handleClientFeedbackFile(files){
@@ -4201,36 +4235,63 @@ function handleClientFeedbackFile(files){
     if(note)note.textContent='✓ '+window._cfbFiles.length+' ملف مرفق';
   });
 }
+// Shared core for every "طلب تعديل / رد العميل" entry — a typed note with an
+// optional attachment (saveClientFeedback), or a quick voice note recorded
+// straight from the panel (pushItemFeedbackExtra) — appends its own
+// client_feedback version (never overwriting prior ones, so the full
+// chronological history keeps accumulating) and reverts the item to design
+// for rework.
+async function applyClientFeedbackVersion(orderKey,idx,extra){
+  const o=orders[orderKey];if(!o)return false;
+  const it=o.orderItems&&o.orderItems[idx];if(!it)return false;
+  const newVersion={id:'v'+Date.now(),label:'رد العميل',status:'قيد التنفيذ',stage:'design',kind:'client_feedback',files:[],notes:'',createdBy:cu.name,createdAt:new Date().toISOString(),...extra};
+  const items=[...o.orderItems];
+  const priorVersions=priorVersionsForWrite(items[idx]);
+  // needsRevision forces itemDesignColumn() back to "قيد التصميم" even
+  // though older design_proof/design_approved versions still exist in
+  // history — otherwise a stale prior proof would make the item look like
+  // it's already "بانتظار رد العميل" again instead of needing fresh work.
+  items[idx]={...items[idx],versions:[...priorVersions,newVersion],needsRevision:true,clientApproved:false,currentDept:'design'};
+  const upd={orderItems:items,lastItemUpdateAt:new Date().toISOString(),lastItemUpdateBy:cu.name};
+  const newOrderDept=computeOrderDeptFromItems(o,items);
+  if(newOrderDept&&newOrderDept!==o.currentDept){upd.currentDept=newOrderDept;upd.stageStartDate=new Date().toISOString();}
+  await fbPatch(`orders/${orderKey}`,upd);
+  const kind=newVersion.audioUrl?'🎤 ملاحظة صوتية':'🔄 طلب تعديل';
+  logOrderActivity(orderKey,newVersion.audioUrl?'ti-microphone':'ti-refresh',`${kind} من العميل — البند "${it.name||'بند'}"${newVersion.notes?`: ${newVersion.notes}`:''}`);
+  const dTo=orders[orderKey]&&orders[orderKey].designTo;
+  if(dTo&&dTo!=='none')pushNotification({type:'client_feedback',message:`🔄 يتطلب تعديل — الطلب ${esc(o.id||orderKey)} · البند "${esc(it.name||'بند')}"`,orderKey,orderId:o.id,client:o.client,targetUname:dTo==='all'?'all-admin':dTo});
+  return true;
+}
 async function saveClientFeedback(){
   if(!canSeeClientFeedback()){toast('⚠️ هذا الإجراء غير متاح لك');return;}
   const key=window._cfbKey,idx=window._cfbIdx;
-  const o=orders[key];if(!o)return;
-  const it=o.orderItems&&o.orderItems[idx];if(!it)return;
   const notesEl=document.getElementById('cfb-notes');
   const notes=notesEl?notesEl.value.trim():'';
   const files=window._cfbFiles||[];
   if(!notes&&!files.length){toast('⚠️ يرجى كتابة ملاحظة أو إرفاق ملف');return;}
   showSaving('جاري الحفظ...');
   try{
-    const newVersion={id:'v'+Date.now(),label:'رد العميل',status:'قيد التنفيذ',stage:'design',kind:'client_feedback',files,notes,createdBy:cu.name,createdAt:new Date().toISOString()};
-    const items=[...o.orderItems];
-    const priorVersions=priorVersionsForWrite(items[idx]);
-    // needsRevision forces itemDesignColumn() back to "قيد التصميم" even
-    // though older design_proof/design_approved versions still exist in
-    // history — otherwise a stale prior proof would make the item look like
-    // it's already "بانتظار رد العميل" again instead of needing fresh work.
-    items[idx]={...items[idx],versions:[...priorVersions,newVersion],needsRevision:true,clientApproved:false,currentDept:'design'};
-    const upd={orderItems:items,lastItemUpdateAt:new Date().toISOString(),lastItemUpdateBy:cu.name};
-    const newOrderDept=computeOrderDeptFromItems(o,items);
-    if(newOrderDept&&newOrderDept!==o.currentDept){upd.currentDept=newOrderDept;upd.stageStartDate=new Date().toISOString();}
-    await fbPatch(`orders/${key}`,upd);
-    logOrderActivity(key,'ti-refresh',`🔄 طلب تعديل من العميل — البند "${it.name||'بند'}"${notes?`: ${notes}`:''}`);
+    const ok=await applyClientFeedbackVersion(key,idx,{files,notes});
+    if(!ok)throw new Error('order/item not found');
     await loadData();hideSaving();closeModal('client-feedback-modal');
     toast('✓ تم حفظ ملاحظات العميل وإعادة البند لقسم التصميم');
-    const dTo=orders[key]&&orders[key].designTo;
-    if(dTo&&dTo!=='none')pushNotification({type:'client_feedback',message:`🔄 يتطلب تعديل — الطلب ${esc(o.id||key)} · البند "${esc(it.name||'بند')}"`,orderKey:key,orderId:o.id,client:o.client,targetUname:dTo==='all'?'all-admin':dTo});
     _refreshOrderItemsViews(key);
   }catch(e){hideSaving();toast('❌ فشل الحفظ');}
+}
+// Voice-note path from the panel's own mic button — skips showSaving()
+// entirely (the recording's upload already shows progress in the floating
+// queue), matching the "no blocking overlay on uploads" rule the rest of
+// the app follows.
+async function pushItemFeedbackExtra(orderKey,idx,extra){
+  try{
+    const ok=await applyClientFeedbackVersion(orderKey,idx,extra);
+    if(!ok)return;
+    await loadData();
+    toast(extra.audioUrl?'✓ تم إرسال الملاحظة الصوتية وإعادة البند لقسم التصميم':'✓ تم إرسال المرفق وإعادة البند لقسم التصميم');
+    _refreshOrderItemsViews(orderKey);
+    // Keep the panel's own history list live if it's still open for this item.
+    if(window._cfbKey===orderKey&&window._cfbIdx===idx)openClientFeedbackPanel(orderKey,idx);
+  }catch(e){toast('❌ فشل إرسال الملاحظة');}
 }
 function progressColor(o){const m={new:'#CBD5E1',design:'#6B21A8',external:'#B45309',print:'#3730A3',workshop:'#9A3412',done:'#10B981'};return m[o.currentDept||'new']||'#475569';}
 function currentPersonName(o){if(!o.currentDept||o.currentDept==='design')return o.designName||'—';if(o.currentDept==='external')return o.externalName||o.externalNote||'تنفيذ خارجي';if(o.currentDept==='print')return o.printName||'—';if(o.currentDept==='workshop')return o.workshopName||'—';if(o.currentDept==='done')return'✓ مكتمل';return'—';}
@@ -5202,8 +5263,9 @@ function clientFeedbackHistoryBoxHtml(it){
     <div class="rn-title"><i class="ti ti-message-2"></i> ملاحظات مراجعة العميل${notes.length>1?` (${notes.length})`:''}</div>
     <div style="display:flex;flex-direction:column;gap:8px;">
       ${notes.map((v,i)=>`<div${i>0?' style="border-top:1px dashed rgba(0,0,0,.12);padding-top:8px;"':''}>
+        ${v.audioUrl?chatAudioPlayerHtml('rn-'+v.id,v.audioUrl,v.audioDuration):''}
         ${v.notes?`<div class="rn-text">${esc(v.notes)}</div>`:''}
-        ${(v.files&&v.files.length)?`<div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px;">${v.files.map(f=>fileLinkHtml(f.name,f.data)).join('')}</div>`:''}
+        ${chatAttachmentsHtml((v.files||[]).map(f=>({data:f.data,name:f.name})))}
         <div style="font-size:10px;color:#9A3412;margin-top:6px;opacity:.8;">${esc(v.createdBy||'—')} · ${fmtDateTime(v.createdAt)}</div>
       </div>`).join('')}
     </div>
@@ -7888,6 +7950,249 @@ async function startQuoteToOrderConversion(key,selectedIdxs=null){
   nav('add');
 }
 // ============================================================
+// RICH CHAT — voice notes, attachments, lightbox, notification banners.
+// Shared by all three chat surfaces: order internal chat (chats/{orderKey}),
+// the item client-feedback panel (orderItems[i].versions, kind:client_feedback),
+// and Teem Rawaee team chat (team_chat). A "ctx" object tells the shared
+// engine which of those three it's currently recording/attaching for:
+//   {kind:'order', orderKey}
+//   {kind:'item', orderKey, idx}
+//   {kind:'team'}
+// ============================================================
+function fmtRecDuration(sec){
+  sec=Math.max(0,Math.floor(sec||0));
+  const m=Math.floor(sec/60),s=sec%60;
+  return String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
+}
+// A short two-note chime synthesized with the Web Audio API — no external
+// audio asset to host/fetch, and it can't go stale or 404.
+function playNotifChime(){
+  try{
+    const Ctx=window.AudioContext||window.webkitAudioContext;if(!Ctx)return;
+    const ctx=new Ctx();const now=ctx.currentTime;
+    [880,660].forEach((freq,i)=>{
+      const osc=ctx.createOscillator(),gain=ctx.createGain();
+      osc.type='sine';osc.frequency.value=freq;
+      gain.gain.setValueAtTime(0,now+i*0.14);
+      gain.gain.linearRampToValueAtTime(0.16,now+i*0.14+0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001,now+i*0.14+0.24);
+      osc.connect(gain);gain.connect(ctx.destination);
+      osc.start(now+i*0.14);osc.stop(now+i*0.14+0.26);
+    });
+    setTimeout(()=>ctx.close().catch(()=>{}),700);
+  }catch(e){/* Web Audio unavailable — silently skip the chime */}
+}
+// ---------- Voice recording ----------
+window._chatRec={recorder:null,chunks:[],stream:null,startedAt:0,timerId:null,ctx:null};
+function chatVoiceSupported(){return!!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia&&window.MediaRecorder);}
+function chatVoiceDomIds(ctx){
+  if(ctx.kind==='order')return{btnId:'chat-voice-btn-order-'+ctx.orderKey,timerId:'chat-rec-timer-order-'+ctx.orderKey};
+  if(ctx.kind==='item')return{btnId:'chat-voice-btn-item-'+ctx.orderKey+'-'+ctx.idx,timerId:'chat-rec-timer-item-'+ctx.orderKey+'-'+ctx.idx};
+  return{btnId:'voice-rec-btn',timerId:'chat-rec-timer-team'};
+}
+function setChatVoiceUiRecording(ctx,isRecording){
+  const{btnId,timerId}=chatVoiceDomIds(ctx);
+  const btn=document.getElementById(btnId);
+  if(btn){
+    btn.classList.toggle('recording',isRecording);
+    const icon=btn.querySelector('i')||btn;
+    icon.className=isRecording?'ti ti-player-stop':'ti ti-microphone';
+  }
+  const timerEl=document.getElementById(timerId);
+  if(timerEl){timerEl.style.display=isRecording?'inline-flex':'none';if(!isRecording)timerEl.innerHTML='';}
+}
+function updateChatVoiceTimerUi(ctx){
+  const{timerId}=chatVoiceDomIds(ctx);
+  const el=document.getElementById(timerId);if(!el)return;
+  const sec=Math.floor((Date.now()-window._chatRec.startedAt)/1000);
+  el.innerHTML='<span class="chat-rec-dot"></span> '+fmtRecDuration(sec);
+}
+// Single canonical entry point, called with an explicit ctx object by every
+// mic button ({kind:'order',orderKey} / {kind:'item',orderKey,idx} /
+// {kind:'team'}) — one global function name is shared across three
+// simultaneously-mountable chat surfaces that can't each own a literal
+// duplicate DOM id, so the caller always states which one it means.
+function toggleChatVoiceRecording(ctx){
+  ctx=ctx&&ctx.kind?ctx:{kind:'team'};
+  const rec=window._chatRec;
+  if(rec.recorder&&rec.recorder.state==='recording'){rec.recorder.stop();return;}
+  if(!chatVoiceSupported()){toast('⚠️ التسجيل الصوتي غير مدعوم في هذا المتصفح');return;}
+  navigator.mediaDevices.getUserMedia({audio:true}).then(stream=>{
+    rec.ctx=ctx;rec.stream=stream;rec.chunks=[];rec.startedAt=Date.now();
+    const mimeType=['audio/webm','audio/mp4','audio/ogg'].find(t=>window.MediaRecorder.isTypeSupported&&window.MediaRecorder.isTypeSupported(t))||'';
+    rec.recorder=mimeType?new MediaRecorder(stream,{mimeType}):new MediaRecorder(stream);
+    rec.recorder.ondataavailable=e=>{if(e.data.size>0)rec.chunks.push(e.data);};
+    rec.recorder.onstop=async function(){
+      rec.stream.getTracks().forEach(t=>t.stop());
+      clearInterval(rec.timerId);rec.timerId=null;
+      setChatVoiceUiRecording(ctx,false);
+      const durationSec=Math.round((Date.now()-rec.startedAt)/1000);
+      const chunks=rec.chunks;rec.chunks=[];
+      if(!chunks.length)return;
+      const blob=new Blob(chunks,{type:rec.recorder.mimeType||'audio/webm'});
+      if(blob.size<800)return; // accidental tap — nothing worth uploading
+      await sendChatVoiceMessage(ctx,blob,durationSec);
+    };
+    rec.recorder.start();
+    setChatVoiceUiRecording(ctx,true);
+    rec.timerId=setInterval(()=>updateChatVoiceTimerUi(ctx),250);
+  }).catch(()=>toast('⚠️ تعذر الوصول للميكروفون — تحقق من أذونات المتصفح'));
+}
+async function sendChatVoiceMessage(ctx,blob,durationSec){
+  const mime=blob.type||'audio/webm';
+  const ext=mime.includes('mp4')?'m4a':mime.includes('ogg')?'ogg':'webm';
+  const file=new File([blob],'voice-note-'+Date.now()+'.'+ext,{type:mime});
+  runQueuedUpload('تسجيل صوتي ('+fmtRecDuration(durationSec)+')',onProgress=>convertFileToBase64(file,undefined,onProgress),async audioUrl=>{
+    if(ctx.kind==='order')await pushOrderChatMessage(ctx.orderKey,{audioUrl,audioDuration:durationSec});
+    else if(ctx.kind==='item')await pushItemFeedbackExtra(ctx.orderKey,ctx.idx,{audioUrl,audioDuration:durationSec});
+    else await pushTeamChatMessage({audioUrl,audioDuration:durationSec});
+  });
+}
+// ---------- File/image attachments ----------
+function triggerChatAttachment(ctx){
+  ctx=ctx&&ctx.kind?ctx:{kind:'team'};
+  window._chatAttachCtx=ctx;
+  const inputId=ctx.kind==='order'?'chat-file-input-order-'+ctx.orderKey:ctx.kind==='item'?'chat-file-input-item-'+ctx.orderKey+'-'+ctx.idx:'chat-file-input-team';
+  const input=document.getElementById(inputId);if(input)input.click();
+}
+function handleChatAttachmentSelected(files){
+  if(!files||!files.length)return;
+  const ctx=window._chatAttachCtx;if(!ctx)return;
+  const fileList=Array.from(files);
+  const label=fileList.length>1?`${fileList.length} مرفقات`:fileList[0].name;
+  runQueuedUpload(label,async onProgress=>{
+    const results=[];
+    for(let i=0;i<fileList.length;i++){
+      const f=fileList[i];
+      const data=await convertFileToBase64(f,undefined,pct=>onProgress(((i+pct/100)/fileList.length)*100));
+      results.push({data,name:f.name});
+    }
+    return results;
+  },async attachments=>{
+    if(ctx.kind==='order')await pushOrderChatMessage(ctx.orderKey,{attachments});
+    else if(ctx.kind==='item')await pushItemFeedbackExtra(ctx.orderKey,ctx.idx,{attachments});
+    else await pushTeamChatMessage({attachments});
+  });
+}
+// ---------- Rendering: custom compact audio player + attachment thumbnails ----------
+function chatIsImageFile(f){
+  if(!f)return false;
+  if(/^data:image\//i.test(f.data||''))return true;
+  return/\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(f.name||'');
+}
+function chatAttachmentsHtml(attachments){
+  if(!attachments||!attachments.length)return'';
+  return`<div class="chat-attach-grid">${attachments.map(f=>{
+    if(!f||!f.data)return'';
+    if(chatIsImageFile(f))return`<div class="chat-attach-thumb" onclick="openChatImageLightbox('${f.data}','${encodeURIComponent(f.name||'صورة')}')" title="${esc(f.name||'')}"><img src="${cloudinaryThumb(f.data,160)}" loading="lazy"/></div>`;
+    return fileLinkHtml(f.name,f.data);
+  }).join('')}</div>`;
+}
+// WhatsApp-style compact player: a round play/pause button + a draggable
+// progress slider (standing in for a waveform) + a duration label, wired to
+// a hidden native <audio> element that does the actual decoding/playback.
+function chatAudioPlayerHtml(aid,url,durationSec){
+  if(!url)return'';
+  return`<div class="chat-voice-msg" data-audio-id="${aid}">
+    <button type="button" class="chat-audio-play-btn" onclick="toggleChatAudioPlay('${aid}')"><i class="ti ti-player-play"></i></button>
+    <input type="range" class="chat-audio-seek" id="seek-${aid}" min="0" max="100" value="0" oninput="seekChatAudio('${aid}',this.value)"/>
+    <span class="chat-audio-dur" id="dur-${aid}">${fmtRecDuration(durationSec)}</span>
+    <audio id="audio-${aid}" src="${url}" preload="metadata" style="display:none" onended="onChatAudioEnded('${aid}')" ontimeupdate="onChatAudioTimeUpdate('${aid}')" onloadedmetadata="onChatAudioLoaded('${aid}')"></audio>
+  </div>`;
+}
+function toggleChatAudioPlay(aid){
+  const audio=document.getElementById('audio-'+aid);if(!audio)return;
+  document.querySelectorAll('.chat-voice-msg audio').forEach(a=>{
+    if(a!==audio&&!a.paused){
+      a.pause();
+      const oIcon=document.querySelector(`.chat-voice-msg[data-audio-id="${a.id.replace(/^audio-/,'')}"] .chat-audio-play-btn i`);
+      if(oIcon)oIcon.className='ti ti-player-play';
+    }
+  });
+  const icon=document.querySelector(`.chat-voice-msg[data-audio-id="${aid}"] .chat-audio-play-btn i`);
+  if(audio.paused){audio.play().catch(()=>{});if(icon)icon.className='ti ti-player-pause';}
+  else{audio.pause();if(icon)icon.className='ti ti-player-play';}
+}
+function onChatAudioTimeUpdate(aid){
+  const audio=document.getElementById('audio-'+aid);const seek=document.getElementById('seek-'+aid);
+  if(audio&&seek&&audio.duration)seek.value=String((audio.currentTime/audio.duration)*100);
+  const durEl=document.getElementById('dur-'+aid);
+  if(durEl&&audio&&audio.duration)durEl.textContent=fmtRecDuration(audio.currentTime)+' / '+fmtRecDuration(audio.duration);
+}
+function onChatAudioLoaded(aid){
+  const audio=document.getElementById('audio-'+aid);const durEl=document.getElementById('dur-'+aid);
+  if(durEl&&audio&&audio.duration&&isFinite(audio.duration))durEl.textContent=fmtRecDuration(audio.duration);
+}
+function onChatAudioEnded(aid){
+  const icon=document.querySelector(`.chat-voice-msg[data-audio-id="${aid}"] .chat-audio-play-btn i`);if(icon)icon.className='ti ti-player-play';
+  const seek=document.getElementById('seek-'+aid);if(seek)seek.value='0';
+}
+function seekChatAudio(aid,val){
+  const audio=document.getElementById('audio-'+aid);if(!audio||!audio.duration)return;
+  audio.currentTime=(val/100)*audio.duration;
+}
+// ---------- Lightbox ----------
+function openChatImageLightbox(url,nameEncoded){
+  let ov=document.getElementById('chat-lightbox-overlay');
+  if(!ov){
+    ov=document.createElement('div');ov.id='chat-lightbox-overlay';ov.className='chat-lightbox-overlay';
+    ov.addEventListener('click',e=>{if(e.target===ov)closeChatImageLightbox();});
+    document.body.appendChild(ov);
+  }
+  const name=safeDecodeURIComponent(nameEncoded||'')||'صورة';
+  ov.innerHTML=`<button type="button" class="chat-lightbox-close" onclick="closeChatImageLightbox()">×</button><img src="${url}" alt="${esc(name)}"/><a href="${url}" download="${esc(name)}" class="chat-lightbox-download" onclick="event.stopPropagation();"><i class="ti ti-download"></i> تنزيل</a>`;
+  ov.classList.add('open');
+  document.addEventListener('keydown',_chatLightboxEscHandler);
+}
+function closeChatImageLightbox(){
+  const ov=document.getElementById('chat-lightbox-overlay');if(ov)ov.classList.remove('open');
+  document.removeEventListener('keydown',_chatLightboxEscHandler);
+}
+function _chatLightboxEscHandler(e){if(e.key==='Escape')closeChatImageLightbox();}
+// ---------- Rich, clickable "new event" notification banners ----------
+// Rides the existing eventNotifs poll (loadData() runs every 60s — see the
+// setInterval near startClock()); there is no realtime (onValue) listener
+// anywhere in this app to hook into instead. window._seenEventNotifIds is
+// session-only (never persisted) so a fresh page load never replays a
+// banner for old history — only truly NEW entries since the last poll ring.
+window._seenEventNotifIds=null;
+function checkForNewEventNotifsAndAlert(){
+  const all=Object.entries(eventNotifs||{});
+  if(!window._seenEventNotifIds){
+    // First run this session: mark everything that already exists as seen
+    // instead of banner-spamming the user's entire notification history.
+    window._seenEventNotifIds=new Set(all.map(([k])=>k));
+    return;
+  }
+  const fresh=all.filter(([k,v])=>!window._seenEventNotifIds.has(k)&&isEventNotifForMe(v));
+  fresh.forEach(([k])=>window._seenEventNotifIds.add(k));
+  if(!fresh.length)return;
+  playNotifChime();
+  // Cap how many stack at once — a burst of many events (bulk stage advance,
+  // etc.) should still chime once but not flood the corner with a dozen cards.
+  fresh.slice(-3).forEach(([k,v])=>showEventNotifBanner({...v,_key:k}));
+}
+function showEventNotifBanner(n){
+  let stack=document.getElementById('event-notif-stack');
+  if(!stack){
+    stack=document.createElement('div');stack.id='event-notif-stack';stack.className='event-notif-stack';
+    document.body.appendChild(stack);
+  }
+  const meta=NOTIF_TYPE_META[n.type]||{label:'إشعار',icon:'ti-bell',color:'var(--maroon)'};
+  const el=document.createElement('div');
+  el.className='event-notif-banner';el.style.setProperty('--notif-color',meta.color);
+  el.innerHTML=`<div class="enb-icon"><i class="ti ${meta.icon}"></i></div><div class="enb-body"><div class="enb-title">${esc(meta.label)}</div><div class="enb-msg">${esc(n.message||'')}</div></div><button type="button" class="enb-close" onclick="event.stopPropagation();this.closest('.event-notif-banner').remove();">×</button>`;
+  el.onclick=()=>handleEventNotifBannerClick(n,el);
+  stack.appendChild(el);
+  setTimeout(()=>{if(el.parentNode)el.remove();},9000);
+}
+function handleEventNotifBannerClick(n,el){
+  if(el&&el.parentNode)el.remove();
+  markEventNotifsRead();updateNotifBell();
+  if(n.type==='message'&&!n.orderKey){nav('teamchat');return;}
+  if(n.orderKey)openOrderPage(n.orderKey);
+}
+// ============================================================
 // INTERNAL CHAT
 // ============================================================
 async function loadOrderChat(orderKey){
@@ -7902,7 +8207,11 @@ function renderChatSection(orderKey,orderDone=false){
     <div class="chat-header"><i class="ti ti-message-circle"></i> المحادثة الداخلية</div>
     <div class="chat-messages" id="chat-msgs-${orderKey}"><div style="text-align:center;color:var(--text-3);font-size:11px;padding:16px;">جاري التحميل...</div></div>
     <div class="chat-input-row">
+      <span class="chat-rec-timer" id="chat-rec-timer-order-${orderKey}"></span>
       <input id="chat-input-${orderKey}" placeholder="اكتب رسالتك..." onkeydown="if(event.key==='Enter')sendChatMsg('${orderKey}')"/>
+      <input type="file" id="chat-file-input-order-${orderKey}" accept="*/*" multiple style="display:none" onchange="handleChatAttachmentSelected(this.files)"/>
+      <button type="button" class="btn btn-out btn-xs" onclick="triggerChatAttachment({kind:'order',orderKey:'${orderKey}'})" title="إرفاق ملف/صورة"><i class="ti ti-paperclip"></i></button>
+      <button type="button" class="btn btn-out btn-xs chat-voice-btn" id="chat-voice-btn-order-${orderKey}" onclick="toggleChatVoiceRecording({kind:'order',orderKey:'${orderKey}'})" title="تسجيل صوتي"><i class="ti ti-microphone"></i></button>
       <button class="btn btn-brand btn-sm" onclick="sendChatMsg('${orderKey}')"><i class="ti ti-send"></i></button>
     </div>
   </div>`;
@@ -7917,7 +8226,8 @@ async function loadAndRenderChat(orderKey){
     if(freshData)chats[orderKey]=freshData;
     if(!msgs.length){container.innerHTML='<div style="text-align:center;color:var(--text-3);font-size:11px;padding:20px;"><i class="ti ti-message-off" style="font-size:24px;display:block;margin-bottom:6px;color:var(--border)"></i>لا توجد رسائل بعد</div>';return;}
     container.innerHTML=msgs.map(m=>{const isMine=m.senderUname===cu._uname;
-      return`<div class="chat-msg ${isMine?'mine':'other'}"><div class="chat-meta">${esc(m.senderName)} · ${new Date(m.timestamp).toLocaleTimeString('ar-SA',{hour:'2-digit',minute:'2-digit'})}</div><div>${esc(m.text)}</div></div>`;
+      const body=m.audioUrl?chatAudioPlayerHtml(m._key,m.audioUrl,m.audioDuration):(m.text?`<div>${esc(m.text)}</div>`:'');
+      return`<div class="chat-msg ${isMine?'mine':'other'}"><div class="chat-meta">${esc(m.senderName)} · ${new Date(m.timestamp).toLocaleTimeString('ar-SA',{hour:'2-digit',minute:'2-digit'})}</div>${body}${chatAttachmentsHtml(m.attachments)}</div>`;
     }).join('');
     container.scrollTop=container.scrollHeight;
     markChatSeen(orderKey);
@@ -7984,9 +8294,33 @@ async function sendChatMsg(orderKey){
   try{
     await fbPush(`chats/${orderKey}`,msg);
     logOrderActivity(orderKey,'ti-message-2',`💬 رسالة داخلية: ${txt.length>60?txt.slice(0,60)+'…':txt}`);
+    notifyOrderChatMessage(orderKey,txt.length>60?txt.slice(0,60)+'…':txt);
     // Refresh to confirm from server
     setTimeout(()=>loadAndRenderChat(orderKey),500);
   }catch(e){toast('❌ فشل إرسال الرسالة');}
+}
+// Voice-note/attachment messages skip sendChatMsg()'s optimistic-bubble path
+// (their upload already shows progress in the floating queue) but still need
+// the exact same push+log+notify+refresh sequence once the upload resolves.
+async function pushOrderChatMessage(orderKey,extra){
+  const msg={senderName:cu.name,senderUname:cu._uname,senderRole:cu.role,text:'',timestamp:new Date().toISOString(),...extra};
+  try{
+    await fbPush(`chats/${orderKey}`,msg);
+    logOrderActivity(orderKey,extra.audioUrl?'ti-microphone':'ti-paperclip',extra.audioUrl?'🎤 رسالة صوتية في المحادثة':'📎 مرفق في المحادثة');
+    notifyOrderChatMessage(orderKey,extra.audioUrl?'🎤 رسالة صوتية':'📎 مرفق');
+    loadAndRenderChat(orderKey);
+  }catch(e){toast('❌ فشل الإرسال');}
+}
+// Notifies whichever "other side" of the conversation isn't the sender —
+// the currently-assigned department worker when an admin/receiver writes,
+// or all-admin when staff writes — same targeting convention as every other
+// pushNotification() call in this file (transfer/upload/client_feedback).
+function notifyOrderChatMessage(orderKey,previewText){
+  const o=orders[orderKey];if(!o)return;
+  const isStaff=['designer','printer','workshop','external'].includes(cu.type);
+  const assignee=o[o.currentDept+'To'];
+  const target=isStaff?'all-admin':((assignee&&assignee!=='none'&&assignee!=='all')?assignee:'all-admin');
+  pushNotification({type:'message',message:`💬 ${esc(cu.name)}: ${esc(previewText)}`,orderKey,orderId:o.id,client:o.client,targetUname:target});
 }
 // ============================================================
 // TEEM RAWAEE — global cross-department chat (not tied to an order)
@@ -8000,9 +8334,12 @@ function buildTeamChatPage(){
       <div class="chat-messages" id="team-chat-msgs" style="max-height:60vh;min-height:320px;"><div style="text-align:center;color:var(--text-3);font-size:11px;padding:16px;">جاري التحميل...</div></div>
       <div class="chat-input-row">
         <div id="mention-dropdown" class="mention-dropdown" style="display:none;"></div>
+        <span class="chat-rec-timer" id="chat-rec-timer-team"></span>
         <input id="team-chat-input" placeholder="اكتب رسالتك للفريق..." oninput="handleChatMentionInput()" onkeydown="handleChatInputKeydown(event)"/>
+        <input type="file" id="chat-file-input-team" accept="*/*" multiple style="display:none" onchange="handleChatAttachmentSelected(this.files)"/>
+        <button type="button" class="btn btn-out btn-xs" onclick="triggerChatAttachment({kind:'team'})" title="إرفاق ملف/صورة"><i class="ti ti-paperclip"></i></button>
         <button class="btn btn-brand btn-sm" onclick="sendTeamChatMsg()"><i class="ti ti-send"></i></button>
-        <button id="voice-rec-btn" class="btn btn-sm" onclick="toggleVoiceRecording()" title="تسجيل صوتي"><i class="ti ti-microphone" id="voice-rec-icon"></i></button>
+        <button id="voice-rec-btn" class="btn btn-sm chat-voice-btn" onclick="toggleChatVoiceRecording({kind:'team'})" title="تسجيل صوتي"><i class="ti ti-microphone"></i></button>
       </div>
     </div>`;
   loadAndRenderTeamChat();
@@ -8015,7 +8352,8 @@ async function loadAndRenderTeamChat(){
     teamChat=freshData||{};
     if(!msgs.length){container.innerHTML='<div style="text-align:center;color:var(--text-3);font-size:12px;padding:30px;"><i class="ti ti-messages" style="font-size:28px;display:block;margin-bottom:8px;color:var(--border)"></i>لا توجد رسائل بعد — كن أول من يشارك إنجازاً!</div>';return;}
     container.innerHTML=msgs.map(m=>{const isMine=m.senderUname===cu._uname;
-      return`<div class="chat-msg ${isMine?'mine':'other'}"><div class="chat-meta">${esc(m.senderName)} · ${esc(m.senderRole||'')} · ${new Date(m.timestamp).toLocaleString('ar-SA',{hour:'2-digit',minute:'2-digit',day:'2-digit',month:'2-digit'})}</div>${m.audioUrl?`<audio controls src="${esc(m.audioUrl)}" style="max-width:220px;height:32px;"></audio>`:`<div>${highlightMentions(m.text)}</div>`}</div>`;
+      const body=m.audioUrl?chatAudioPlayerHtml(m._key,m.audioUrl,m.audioDuration):(m.text?`<div>${highlightMentions(m.text)}</div>`:'');
+      return`<div class="chat-msg ${isMine?'mine':'other'}"><div class="chat-meta">${esc(m.senderName)} · ${esc(m.senderRole||'')} · ${new Date(m.timestamp).toLocaleString('ar-SA',{hour:'2-digit',minute:'2-digit',day:'2-digit',month:'2-digit'})}</div>${body}${chatAttachmentsHtml(m.attachments)}</div>`;
     }).join('');
     container.scrollTop=container.scrollHeight;
     markTeamChatSeen();
@@ -8133,57 +8471,18 @@ async function sendTeamChatMsg(){
     setTimeout(()=>loadAndRenderTeamChat(),500);
   }catch(e){toast('❌ فشل إرسال الرسالة');}
 }
-let __voiceRecorder=null;
-let __voiceChunks=[];
-let __voiceStream=null;
-async function toggleVoiceRecording(){
-  const btn=document.getElementById('voice-rec-btn');
-  const icon=document.getElementById('voice-rec-icon');
-  if(__voiceRecorder&&__voiceRecorder.state==='recording'){
-    __voiceRecorder.stop();
-    return;
-  }
-  let stream;
+// Team chat's voice/attachment recording now runs through the shared engine
+// (toggleChatVoiceRecording/triggerChatAttachment with {kind:'team'}) — see
+// the RICH CHAT section above — instead of its own separate MediaRecorder
+// wiring, so upload progress shows in the same non-blocking floating queue
+// every other upload in the app uses (it previously called uploadToCloudinary
+// directly with an inline "⏳ جاري الرفع" placeholder bubble).
+async function pushTeamChatMessage(extra){
+  const msg={senderName:cu.name,senderUname:cu._uname,senderRole:cu.role,text:'',timestamp:new Date().toISOString(),...extra};
   try{
-    stream=await navigator.mediaDevices.getUserMedia({audio:true});
-  }catch(e){
-    alert('⚠️ تعذر الوصول للميكروفون، تحقق من الأذونات.');
-    return;
-  }
-  __voiceStream=stream;
-  __voiceChunks=[];
-  __voiceRecorder=new MediaRecorder(stream);
-  __voiceRecorder.ondataavailable=function(e){if(e.data.size>0)__voiceChunks.push(e.data);};
-  __voiceRecorder.onstop=async function(){
-    __voiceStream.getTracks().forEach(function(t){t.stop();});
-    if(icon)icon.className='ti ti-microphone';
-    if(btn)btn.classList.remove('recording');
-    if(!__voiceChunks.length)return;
-    const blob=new Blob(__voiceChunks,{type:'audio/webm'});
-    if(blob.size<800)return;
-    await sendTeamChatVoice(blob);
-  };
-  __voiceRecorder.start();
-  if(icon)icon.className='ti ti-player-stop';
-  if(btn)btn.classList.add('recording');
-}
-async function sendTeamChatVoice(blob){
-  const container=document.getElementById('team-chat-msgs');
-  let tempDiv=null;
-  if(container){
-    tempDiv=document.createElement('div');
-    tempDiv.className='chat-msg mine';
-    tempDiv.innerHTML='<div class="chat-meta">'+cu.name+' · الآن</div><div style="color:var(--text-3);font-size:11px;">⏳ جاري رفع التسجيل الصوتي...</div>';
-    container.appendChild(tempDiv);container.scrollTop=container.scrollHeight;
-  }
-  try{
-    const audioUrl=await uploadToCloudinary(blob);
-    const msg={senderName:cu.name,senderUname:cu._uname,senderRole:cu.role,text:'',audioUrl:audioUrl,timestamp:new Date().toISOString()};
     await fbPush('team_chat',msg);
-  }catch(e){
-    if(tempDiv)tempDiv.innerHTML='<div class="chat-meta">'+cu.name+'</div><div style="color:#EF4444;font-size:11px;">⚠️ فشل رفع التسجيل الصوتي</div>';
-  }
-  setTimeout(function(){loadAndRenderTeamChat();},600);
+    loadAndRenderTeamChat();
+  }catch(e){toast('❌ فشل إرسال الرسالة');}
 }
 
 function markTeamChatSeen(){try{localStorage.setItem('teamChatSeen_'+cu._uname,new Date().toISOString());}catch(e){}}
