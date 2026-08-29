@@ -2596,7 +2596,9 @@ function getNotifications(){
   const notifs=[];const arr=ordersArr();const now=new Date();
   arr.filter(o=>o.currentDept!=='done'&&notifRelevantToMe(o)).forEach(o=>{
     if(o.priority==='عاجلة')notifs.push({type:'urgent',msg:`طلب عاجل: ${o.id||o._key} — ${esc(o.client)}`,key:o._key,color:'#EF4444'});
-    if(o.deadline&&o.deadline!=='—'){
+    // On hold: the client/an external party is the reason for the delay, not
+    // the assigned staff — deadline-approaching/overdue alerts pause too.
+    if(!o.onHold&&o.deadline&&o.deadline!=='—'){
       const dl=new Date(o.deadline);const hoursLeft=Math.round((dl-now)/3600000);
       if(hoursLeft>=0&&hoursLeft<=24)notifs.push({type:'deadline',msg:`تسليم قريب (${hoursLeft} ساعة): ${o.id||o._key}`,key:o._key,color:'#F59E0B'});
       else if(hoursLeft<0)notifs.push({type:'overdue',msg:`تجاوز موعد التسليم: ${o.id||o._key} — ${esc(o.client)}`,key:o._key,color:'#DC2626'});
@@ -3713,6 +3715,23 @@ function updateRequestsBadgeSidebar(){
 // urgency no longer means anything; omitted at call sites that have no order
 // context (e.g. a bare priority value with no dept to check).
 function gpbadge(p,currentDept){if(currentDept==='done')return'';const m={'عاجلة':'b-urg','متوسطة':'b-proc','عادية':'b-done'};return`<span class="badge ${m[p]||'b-done'}">${p||'عادية'}</span>`;}
+// Single source of truth for "is this order actually overdue right now" —
+// every deadline-based countdown/warning/sort/filter in the app should read
+// this instead of re-deriving the same `deadline < now` check inline, so
+// putting an order on hold (see toggleOrderHold()) reliably silences every
+// one of them at once instead of only whichever spots remembered to add
+// their own `!o.onHold` guard.
+function isOrderOverdue(o){
+  return!!(o&&!o.onHold&&o.deadline&&o.deadline!=='—'&&o.currentDept!=='done'&&new Date(o.deadline).getTime()<Date.now());
+}
+// "متوقف مؤقتاً / بانتظار العميل" status pill — shown in workflow lists/
+// tables and the order-details header whenever an order is on hold, so the
+// pause is always visible right alongside wherever a deadline/overdue badge
+// would otherwise have appeared.
+function onHoldBadge(o){
+  if(!o||!o.onHold)return'';
+  return`<span class="badge" style="background:#FEF3C7;color:#92400E;" title="${esc(o.onHoldReason?('السبب: '+o.onHoldReason):'')}"><i class="ti ti-clock-pause"></i> متوقف / بانتظار العميل</span>`;
+}
 function deptBadge(d){
   const m={design:'b-design',print:'b-print',workshop:'b-workshop',external:'b-ext',done:'b-done'};
   const ml={design:'تصميم',print:'طباعة',workshop:'ورشة',external:'تنفيذ خارجي',done:'مكتمل'};
@@ -3736,11 +3755,7 @@ function paymentBadge(p){
 // most recently leads — completing/delivering an order re-sorts it
 // straight to the top of that section the next time the table renders.
 function operationsTableSort(list){
-  const now=Date.now();
-  const isCritical=o=>{
-    const overdue=o.deadline&&o.deadline!=='—'&&new Date(o.deadline).getTime()<now;
-    return overdue||o.priority==='عاجلة';
-  };
+  const isCritical=o=>isOrderOverdue(o)||o.priority==='عاجلة';
   const completionTs=o=>o.archivedAt||o.workshopDoneAt||o.externalDoneAt||o.printDoneAt||o.stageStartDate||o.date||'';
   return list.sort((a,b)=>{
     const aDone=a.currentDept==='done',bDone=b.currentDept==='done';
@@ -4419,7 +4434,7 @@ function preciseTimeBadge(hours){
   if(days<=3)return`<span class="time-badge time-warn"><i class="ti ti-clock"></i>${txt}</span>`;
   return`<span class="time-badge time-over"><i class="ti ti-alarm"></i>${txt}</span>`;
 }
-function deadlineBadge(deadline,currentDept){if(currentDept==='done')return'';if(!deadline||deadline==='—')return'';const now=new Date();const dl=new Date(deadline);const hours=Math.round((dl-now)/3600000);if(hours<0)return`<div class="deadline-warn deadline-over"><i class="ti ti-alert-triangle"></i>تجاوز موعد التسليم!</div>`;if(hours<=24)return`<div class="deadline-warn"><i class="ti ti-clock"></i>التسليم خلال ${hours} ساعة</div>`;if(hours<=72)return`<div class="deadline-warn"><i class="ti ti-clock"></i>التسليم خلال ${Math.round(hours/24)} أيام</div>`;return'';}
+function deadlineBadge(deadline,currentDept,onHold){if(currentDept==='done')return'';if(onHold)return'';if(!deadline||deadline==='—')return'';const now=new Date();const dl=new Date(deadline);const hours=Math.round((dl-now)/3600000);if(hours<0)return`<div class="deadline-warn deadline-over"><i class="ti ti-alert-triangle"></i>تجاوز موعد التسليم!</div>`;if(hours<=24)return`<div class="deadline-warn"><i class="ti ti-clock"></i>التسليم خلال ${hours} ساعة</div>`;if(hours<=72)return`<div class="deadline-warn"><i class="ti ti-clock"></i>التسليم خلال ${Math.round(hours/24)} أيام</div>`;return'';}
 function formatDate(iso){if(!iso)return'—';try{return new Date(iso).toLocaleDateString('ar-SA');}catch{return iso;}}
 function fmtDateTime(iso){if(!iso)return'—';try{const d=new Date(iso);return d.toLocaleDateString('en-CA')+' · '+d.toLocaleTimeString('ar-SA',{hour:'2-digit',minute:'2-digit'});}catch{return iso;}}
 function renderDeptTrackRow(o){
@@ -4846,7 +4861,7 @@ function buildDash(){
   const now=new Date();
   const todayStr=now.toISOString().slice(0,10);
   const total=running.length;
-  const ovr=running.filter(o=>o.deadline&&o.deadline!=='—'&&new Date(o.deadline)<now).length;
+  const ovr=running.filter(isOrderOverdue).length;
   // Today's completions: orders whose workshop/finish timestamp falls on today's calendar date.
   const doneToday=arr.filter(o=>o.currentDept==='done'&&o.workshopDoneAt&&String(o.workshopDoneAt).slice(0,10)===todayStr).length;
   // Today's Sales & Collections: no per-payment timestamp exists in the data model (only a
@@ -5051,12 +5066,12 @@ function renderWfKanbanView(){
         <div class="wf-card-svc">${esc(o.service)}</div>
         ${o.isQuickTask?`<div style="font-size:11px;color:var(--maroon);font-weight:700;margin-bottom:4px;"><i class="ti ti-user"></i> اسم العميل: ${esc(o.client||'—')} &nbsp; <i class="ti ti-phone"></i> رقم الجوال: ${esc(o.phone||'—')}</div>`:''}
         ${qtCardStageStripHtml(o)}
-        <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;margin-bottom:6px;">${deptBadge(o.currentDept)} ${gpbadge(o.priority,o.currentDept)} ${orderTimerBadge(o)} ${productionLinesBadgeHtml(o)}</div>
+        <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;margin-bottom:6px;">${deptBadge(o.currentDept)} ${gpbadge(o.priority,o.currentDept)} ${orderTimerBadge(o)} ${productionLinesBadgeHtml(o)} ${onHoldBadge(o)}</div>
         <div style="font-size:11px;color:var(--text-3);">المسؤول: ${esc(currentPersonName(o))}</div>
         <div style="font-size:10px;color:var(--text-3);"><i class="ti ti-user-circle"></i> أنشئ بواسطة: ${esc(o.createdBy||'—')}</div>
         <div style="font-size:10.5px;color:var(--text-3);"><i class="ti ti-calendar-time"></i> التسليم: ${deadlineDateTime(o)}</div>
         ${_canSeeCardTotal&&o.totalAmount?`<div style="font-size:11px;font-weight:800;color:var(--maroon);margin-top:3px;"><i class="ti ti-cash"></i> إجمالي المبلغ: ${fmtMoney(Number(o.totalAmount))} ر.س</div>`:''}
-        ${deadlineBadge(o.deadline,o.currentDept)}
+        ${deadlineBadge(o.deadline,o.currentDept,o.onHold)}
         ${qtActions}
       </div><div class="wf-card-prog"><div class="wf-card-fill" style="width:${pct}%;background:${col}"></div></div></div>`;
   };
@@ -5178,7 +5193,7 @@ function wfMatchesFilters(o,f){
   // Instant toggle: ⚠️ عاجل/متأخر فقط — matches either an urgent priority or a
   // passed deadline on a still-open order (the two conditions the badge column shows).
   if(f.urgentOverdueOnly){
-    const overdue=o.deadline&&o.deadline!=='—'&&o.currentDept!=='done'&&new Date(o.deadline)<new Date();
+    const overdue=isOrderOverdue(o);
     if(!(o.priority==='عاجلة'||overdue))return false;
   }
   // Instant toggle: 💬 ردود بروفة جديدة — orders with a design/print/workshop
@@ -5246,8 +5261,9 @@ function orderRowBadges(o){
   const badges=[];
   if(typeof hasOrderUpdate==='function'&&hasOrderUpdate(o))badges.push('<span class="row-pill new-pill">جديد</span>');
   if(o.priority==='عاجلة')badges.push('<span class="row-pill urgent-pill"><i class="ti ti-bolt"></i> عاجل</span>');
-  const overdue=o.deadline&&o.deadline!=='—'&&o.currentDept!=='done'&&new Date(o.deadline)<new Date();
+  const overdue=isOrderOverdue(o);
   if(overdue)badges.push('<span class="row-pill overdue-pill"><i class="ti ti-alert-triangle"></i> متأخر</span>');
+  if(o.onHold)badges.push('<span class="row-pill" style="background:#F59E0B;" title="'+esc(o.onHoldReason?('السبب: '+o.onHoldReason):'')+'"><i class="ti ti-clock-pause"></i> متوقف</span>');
   const lineCount=Object.values(orders).filter(v=>v.parentOrderKey===o._key).length;
   if(lineCount)badges.push(`<span class="row-pill" style="background:#475569;" title="هذا الطلب يشمل خطوط إنتاج موازية إضافية"><i class="ti ti-git-branch"></i> ${lineCount+1} خطوط إنتاج</span>`);
   return badges.join('');
@@ -5678,7 +5694,7 @@ function renderWfListView(){
   // unrelated visit to this page.
   const kpiMode=window._wfKpiFilterOnce;
   if(kpiMode==='active')arr=arr.filter(o=>o.currentDept!=='done');
-  else if(kpiMode==='overdue')arr=arr.filter(o=>o.deadline&&o.deadline!=='—'&&o.currentDept!=='done'&&new Date(o.deadline)<new Date());
+  else if(kpiMode==='overdue')arr=arr.filter(o=>isOrderOverdue(o));
   else if(kpiMode==='urgent')arr=arr.filter(o=>o.priority==='عاجلة'&&o.currentDept!=='done');
   const kpiLabels={active:'الطلبات الجارية فقط',overdue:'الطلبات المتأخرة / الحرجة فقط',urgent:'الطلبات العاجلة فقط'};
   const kpiBanner=kpiMode?`<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--gold-soft);border:1px solid var(--gold);border-radius:10px;padding:8px 14px;margin-bottom:10px;font-size:12px;font-weight:700;color:#8a6d1f;">
@@ -5686,7 +5702,7 @@ function renderWfListView(){
     <button class="btn btn-out btn-xs" onclick="window._wfKpiFilterOnce=null;renderWfListView();">إظهار كل الطلبات</button>
   </div>`:'';
   const rowHtml=o=>{
-    const overdue=o.deadline&&o.deadline!=='—'&&o.currentDept!=='done'&&new Date(o.deadline)<new Date();
+    const overdue=isOrderOverdue(o);
     const countdown=deliveryCountdownText(o);
     const proof=proofStatusForOrder(o);
     const searchHay=esc(`${o.id||o._key} ${o.client||''} ${o.phone||''}`.toLowerCase());
@@ -6183,8 +6199,8 @@ function buildDeptStagePage(){
     .map(u=>`<option value="${esc(u)}">${esc(USERS[u]?.name||u)}</option>`).join(''):'';
   const externalControlPanel=(deptKey==='external'&&!isCompleted)?(()=>{
     const now=new Date();
-    const overdueCount=arr.filter(o=>o.deadline&&new Date(o.deadline)<now).length;
-    const soonCount=arr.filter(o=>o.deadline&&new Date(o.deadline)>=now&&(new Date(o.deadline)-now)/3600000<=48).length;
+    const overdueCount=arr.filter(isOrderOverdue).length;
+    const soonCount=arr.filter(o=>!o.onHold&&o.deadline&&new Date(o.deadline)>=now&&(new Date(o.deadline)-now)/3600000<=48).length;
     const unassignedCount=arr.filter(o=>!o[assigneeField]||o[assigneeField]==='none').length;
     const byAssignee={};
     arr.forEach(o=>{const a=o[assigneeField]&&o[assigneeField]!=='none'?o[assigneeField]:null;if(a)byAssignee[a]=(byAssignee[a]||0)+1;});
@@ -6493,7 +6509,7 @@ function buildMyWork(){
       <div style="font-size:11px;color:var(--text-3);">المسؤول: ${esc(currentPersonName(o))}</div>
       <div style="font-size:10.5px;color:var(--text-3);"><i class="ti ti-calendar-time"></i> التسليم: ${deadlineDateTime(o)}</div>
       ${_canSeeCardTotal&&o.totalAmount?`<div style="font-size:11px;font-weight:800;color:var(--maroon);margin-top:3px;"><i class="ti ti-cash"></i> إجمالي المبلغ: ${fmtMoney(Number(o.totalAmount))} ر.س</div>`:''}
-      ${deadlineBadge(o.deadline,o.currentDept)}
+      ${deadlineBadge(o.deadline,o.currentDept,o.onHold)}
       ${o.quickTaskLocation?`<div style="font-size:11px;color:#9A3412;margin-top:6px;"><i class="ti ti-map-pin"></i> ${esc(o.quickTaskLocation)}</div>`:''}
       ${isWorkshop&&o.isQuickTask&&!o.workshopFeedbackDone?`<div style="margin-top:8px;"><button class="btn btn-orange btn-sm" onclick="event.stopPropagation();openWorkshopFeedback('${o._key}')"><i class="ti ti-clipboard-check"></i> إدخال القياسات</button></div>`:''}
       ${o.workshopFeedbackDone?`<div style="margin-top:6px;background:#F0FDF4;border:1px solid #BBF7D0;border-radius:6px;padding:6px 10px;font-size:11px;"><i class="ti ti-check" style="color:#10B981"></i> تم رفع التقرير — بانتظار الإجراء</div>`:''}
@@ -8738,6 +8754,14 @@ function orderEditModalHtml(key){
     <div class="modal-header"><span class="modal-title"><i class="ti ti-settings"></i> تعديل الطلب — ${esc(o.id||key)}</span><button class="btn-close" onclick="closeModal('order-edit-modal')">×</button></div>
     <div style="display:flex;flex-direction:column;gap:16px;">
       <div>
+        <div style="font-size:12.5px;font-weight:800;color:var(--maroon);margin-bottom:8px;"><i class="ti ti-calendar-time"></i> تواريخ الطلب</div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;">
+          <div class="fg" style="flex:1;min-width:160px;margin-bottom:0;"><label>تاريخ الطلب</label><input type="date" id="oe-date-${key}" value="${esc(o.date||'')}"/></div>
+          <div class="fg" style="flex:1;min-width:200px;margin-bottom:0;"><label>الموعد النهائي للتسليم</label><input type="datetime-local" id="oe-deadline-${key}" value="${esc((o.deadline&&o.deadline!=='—')?o.deadline:'')}"/></div>
+        </div>
+        <button class="btn btn-brand btn-xs" style="margin-top:8px;" onclick="saveOrderEditDates('${key}')"><i class="ti ti-device-floppy"></i> حفظ التواريخ</button>
+      </div>
+      <div>
         <div style="font-size:12.5px;font-weight:800;color:var(--maroon);margin-bottom:8px;"><i class="ti ti-package"></i> بنود الطلب</div>
         ${itemsHtml}
         <button class="btn btn-out btn-xs" style="margin-top:6px;" onclick="closeModal('order-edit-modal');openAddItemModal('${key}')"><i class="ti ti-square-rounded-plus"></i> إضافة بند جديد</button>
@@ -8803,6 +8827,32 @@ async function confirmAddOrderWorkflowStage(key){
     openOrderEditModal(key);
     _refreshOrderItemsViews(key);
   }catch(e){hideSaving();toast('❌ فشل إضافة المرحلة');}
+}
+// Order date/deadline editing — persists straight to Firebase and, since
+// every countdown/overdue badge across the dashboard and workflow tables
+// (isOrderOverdue(), deadlineBadge(), orderTimerBadge(), etc.) always reads
+// o.deadline/o.date live off the just-reloaded `orders` object rather than
+// a cached copy, they recalculate immediately on the very next render —
+// no separate "recompute" step is needed beyond the normal loadData()+
+// re-render this already does.
+async function saveOrderEditDates(key){
+  const o=orders[key];if(!o)return;
+  if(!canEditOrderComposition()){toast('⚠️ هذا الإجراء غير متاح لك');return;}
+  const newDate=document.getElementById(`oe-date-${key}`)?.value||'';
+  const newDeadline=document.getElementById(`oe-deadline-${key}`)?.value||'';
+  if(!newDate){toast('⚠️ يرجى تحديد تاريخ الطلب');return;}
+  if(!newDeadline){toast('⚠️ يرجى تحديد الموعد النهائي للتسليم');return;}
+  const changed=newDate!==(o.date||'')||newDeadline!==(o.deadline||'');
+  if(!changed){toast('لم يتم تغيير أي تاريخ');return;}
+  const upd={date:newDate,deadline:newDeadline,lastItemUpdateAt:new Date().toISOString(),lastItemUpdateBy:cu.name};
+  showSaving('جاري تحديث التواريخ...');
+  try{
+    await fbPatch(`orders/${key}`,upd);
+    logOrderActivity(key,'ti-calendar-time',`📅 ${cu.name} عدّل تواريخ الطلب — تاريخ الطلب: ${newDate} | التسليم: ${fmtDateTime(newDeadline)}`);
+    await loadData();hideSaving();toast('✓ تم تحديث تواريخ الطلب');
+    openOrderEditModal(key);
+    _refreshOrderItemsViews(key);
+  }catch(e){hideSaving();toast('❌ فشل تحديث التواريخ');}
 }
 // Lights up the mandatory reason field only once the select actually moves
 // away from the current assignee — a no-op re-save (picking the same
@@ -9689,7 +9739,7 @@ function buildOrderDetailsPage(){
     ${backBtnHtml()}
     <div class="od-header">
       <div class="od-header-main">
-        <div class="od-header-title"><i class="ti ti-file-text"></i> ${o.id||key} — ${esc(o.client)}${o.orderKind==='maintenance'?'<span class="urgent-tag" style="font-size:9px;background:linear-gradient(135deg,#991B1B,#DC2626);"><i class="ti ti-tool"></i>صيانة</span>':''}${o.isQuickTask?'<span class="urgent-tag" style="font-size:9px;"><i class="ti ti-bolt"></i>مهمة سريعة</span>':''}${o.staffReassigned?`<span class="urgent-tag" style="font-size:9px;background:linear-gradient(135deg,#7C3AED,#6D28D9);" title="${esc('آخر سبب: '+(o.lastReassignReason||'—'))}"><i class="ti ti-user-cog"></i>تمت إعادة تكليف الموظف</span>`:''}</div>
+        <div class="od-header-title"><i class="ti ti-file-text"></i> ${o.id||key} — ${esc(o.client)}${o.orderKind==='maintenance'?'<span class="urgent-tag" style="font-size:9px;background:linear-gradient(135deg,#991B1B,#DC2626);"><i class="ti ti-tool"></i>صيانة</span>':''}${o.isQuickTask?'<span class="urgent-tag" style="font-size:9px;"><i class="ti ti-bolt"></i>مهمة سريعة</span>':''}${o.staffReassigned?`<span class="urgent-tag" style="font-size:9px;background:linear-gradient(135deg,#7C3AED,#6D28D9);" title="${esc('آخر سبب: '+(o.lastReassignReason||'—'))}"><i class="ti ti-user-cog"></i>تمت إعادة تكليف الموظف</span>`:''}${o.onHold?`<span class="urgent-tag" style="font-size:9px;background:linear-gradient(135deg,#D97706,#B45309);" title="${esc(o.onHoldReason?('السبب: '+o.onHoldReason):'')}"><i class="ti ti-clock-pause"></i>متوقف / بانتظار العميل</span>`:''}</div>
         <div class="od-header-meta">
           <span>الخدمة: <strong>${esc(o.service)}</strong></span>
           <span>الحالة: ${deptBadge(o.currentDept)}</span>
@@ -9697,7 +9747,7 @@ function buildOrderDetailsPage(){
           <span>الأولوية: ${gpbadge(o.priority,o.currentDept)}</span>
           <span>المسؤول: <strong>${esc(currentPersonName(o))}</strong></span>
           <span>أنشئ بواسطة: <strong>${esc(o.createdBy||'—')}</strong></span>
-          <span>التسليم: <strong>${deadlineDateTime(o)}</strong> ${deadlineBadge(o.deadline,o.currentDept)}</span>
+          <span>التسليم: <strong>${deadlineDateTime(o)}</strong> ${deadlineBadge(o.deadline,o.currentDept,o.onHold)}</span>
           ${o.lastItemUpdateAt?`<span>آخر تحديث: <strong>${(o.lastItemUpdateAt||'').split('T')[0]||'—'}</strong></span>`:''}
         </div>
         <div class="od-header-progress"><span style="font-size:10.5px;color:rgba(255,255,255,.85);">التقدم الإجمالي</span><div class="od-header-progress-track"><div class="od-header-progress-fill" style="width:${orderProgress(o)}%;"></div></div><strong style="font-size:11px;color:#fff;">${orderProgress(o)}%</strong></div>
@@ -9711,6 +9761,7 @@ function buildOrderDetailsPage(){
           <div class="row-menu" id="od-more-${key}" style="display:none;">
             ${canEditOrderComposition()?`<button onclick="closeAllRowMenus();openOrderEditModal('${key}')"><i class="ti ti-settings"></i> تعديل الطلب</button>`:''}
             <button onclick="closeAllRowMenus();openTimelineModal('${key}')"><i class="ti ti-clock"></i> مراحل الطلب بالتفصيل</button>
+            ${(canEditOrderComposition()||isMine)?(o.onHold?`<button onclick="closeAllRowMenus();resumeOrderFromHold('${key}')" style="color:#059669;"><i class="ti ti-player-play"></i> استئناف العمل</button>`:`<button onclick="closeAllRowMenus();openHoldOrderModal('${key}')" style="color:#B45309;"><i class="ti ti-clock-pause"></i> إيقاف مؤقت / بانتظار العميل</button>`):''}
             ${_canRevert?`<button onclick="closeAllRowMenus();revertOrderToPrevDept('${key}')"><i class="ti ti-arrow-back-up"></i> إرجاع للمرحلة السابقة</button>`:''}
             ${_canArchive?`<button onclick="closeAllRowMenus();archiveOrder('${key}')" style="color:#DC2626;"><i class="ti ti-archive"></i> إنهاء الطلب وأرشفته</button>`:''}
           </div>
@@ -10165,6 +10216,45 @@ async function archiveOrder(key){
     resyncOrderToSheet(key);
     toast('✓ تم إنهاء الطلب وأرشفته');refreshCurrentPage();
   }catch(e){hideSaving();toast('❌ فشل إنهاء الطلب، حاول مرة أخرى');}
+}
+// ============================================================
+// "متوقف مؤقتاً / بانتظار العميل" — pauses every deadline-based overdue
+// countdown/warning (see isOrderOverdue()) for delays caused by the client
+// or an external hold, so the assigned department/employee isn't penalized
+// for time that was never actually theirs to control.
+// ============================================================
+function openHoldOrderModal(key){
+  const o=orders[key];if(!o)return;
+  if(!guardWrite(cu.type==='admin'||cu.type==='receiver'||isMyOrder(o),'⚠️ لا تملك صلاحية تعديل حالة هذا الطلب'))return;
+  document.getElementById('task-modal-body').innerHTML=`
+    <div class="modal-header"><span class="modal-title"><i class="ti ti-clock-pause"></i> إيقاف الطلب مؤقتاً</span><button class="btn-close" onclick="closeModal('task-modal')">×</button></div>
+    <div style="font-size:12px;color:var(--text-3);margin-bottom:10px;">سيتوقف احتساب تأخر التسليم لهذا الطلب حتى يتم استئناف العمل يدوياً.</div>
+    <div class="fg"><label>سبب الإيقاف (اختياري)</label><textarea id="hold-reason-input" placeholder="مثال: بانتظار رد العميل على التصميم..." style="min-height:80px;"></textarea></div>
+    <button class="btn btn-brand" style="width:100%;justify-content:center;" onclick="confirmPutOrderOnHold('${key}')"><i class="ti ti-clock-pause"></i> تأكيد الإيقاف المؤقت</button>`;
+  openModal('task-modal');
+}
+async function confirmPutOrderOnHold(key){
+  const o=orders[key];if(!o)return;
+  if(!guardWrite(cu.type==='admin'||cu.type==='receiver'||isMyOrder(o),'⚠️ لا تملك صلاحية تعديل حالة هذا الطلب'))return;
+  const reason=(document.getElementById('hold-reason-input')?.value||'').trim();
+  showSaving('جاري التحديث...');
+  try{
+    await fbPatch(`orders/${key}`,{onHold:true,onHoldReason:reason,onHoldAt:new Date().toISOString(),onHoldBy:cu.name});
+    logOrderActivity(key,'ti-clock-pause',`⏸️ ${cu.name} أوقف الطلب مؤقتاً (بانتظار العميل)${reason?': '+reason:''}`);
+    await loadData();hideSaving();closeModal('task-modal');toast('✓ تم إيقاف الطلب مؤقتاً');
+    refreshCurrentPage();
+  }catch(e){hideSaving();toast('❌ فشل التحديث');}
+}
+async function resumeOrderFromHold(key){
+  const o=orders[key];if(!o)return;
+  if(!guardWrite(cu.type==='admin'||cu.type==='receiver'||isMyOrder(o),'⚠️ لا تملك صلاحية تعديل حالة هذا الطلب'))return;
+  showSaving('جاري الاستئناف...');
+  try{
+    await fbPatch(`orders/${key}`,{onHold:false,onHoldReason:''});
+    logOrderActivity(key,'ti-player-play','▶️ '+cu.name+' استأنف العمل على الطلب (تم رفع الإيقاف المؤقت)');
+    await loadData();hideSaving();toast('✓ تم استئناف العمل على الطلب');
+    refreshCurrentPage();
+  }catch(e){hideSaving();toast('❌ فشل التحديث');}
 }
 async function markAsIncomplete(key){
   const o=orders[key];if(!o)return;
@@ -11812,7 +11902,7 @@ function buildEmpPage(){
         const active=eOrds.filter(o=>o.currentDept!=='done');
         const done=eOrds.filter(o=>o.currentDept==='done');
         const urgent=active.filter(o=>o.priority==='عاجلة').length;
-        const ovr=active.filter(o=>o.deadline&&o.deadline!=='—'&&new Date(o.deadline)<now).length;
+        const ovr=active.filter(isOrderOverdue).length;
         const pct=eOrds.length?Math.round(done.length/eOrds.length*100):0;
         const avgH=getAvgH(eOrds,e.type);
         const barCol=pct>=70?'#10B981':pct>=40?'#F59E0B':'#EF4444';
