@@ -757,17 +757,29 @@ input[type="password"]{direction:rtl;text-align:right;padding-left:40px;padding-
 .quick-action-btn:hover{border-color:var(--gold);box-shadow:var(--shadow-md);transform:translateY(-1px);}
 .quick-action-btn .qa-icon{width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;}
 /* ============================================================ EXECUTIVE DASHBOARD v2 — KPI row / quick-action strip / dept workload */
-.kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:16px;}
+.kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;}
 @media(max-width:900px){.kpi-row{grid-template-columns:repeat(2,1fr);}}
-@media(max-width:520px){.kpi-row{grid-template-columns:1fr;}}
-.kpi-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px 18px;cursor:pointer;transition:.18s;box-shadow:var(--shadow-sm);position:relative;overflow:hidden;}
+@media(max-width:520px){.kpi-row{grid-template-columns:1fr;gap:10px;}}
+/* Sharp-cornered enterprise-SaaS card: a flat 12px radius (not the app-wide
+   --radius-lg 18px "soft" card look) plus a thin color-matched top accent
+   bar, so the 4 KPI tiles read as a distinct, denser stat-tile row rather
+   than looking like every other rounded .card on the page. */
+.kpi-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:15px 16px;cursor:pointer;transition:.18s;box-shadow:var(--shadow-sm);position:relative;overflow:hidden;}
+.kpi-card::before{content:'';position:absolute;top:0;right:0;left:0;height:3px;background:var(--kpi-accent,var(--gold));}
 .kpi-card:hover{transform:translateY(-2px);box-shadow:var(--shadow-md);border-color:var(--gold);}
-.kpi-top{display:flex;align-items:center;gap:8px;margin-bottom:10px;}
-.kpi-icon{width:30px;height:30px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:15px;color:#fff;flex-shrink:0;}
+.kpi-top{display:flex;align-items:center;gap:10px;margin-bottom:12px;}
+/* Sleeker icon container: a rounded-square (not pill/circle) with real depth
+   via an inset highlight + drop shadow, and a larger glyph so it reads as a
+   deliberate icon tile instead of a small flat swatch. */
+.kpi-icon{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:17px;color:#fff;flex-shrink:0;box-shadow:0 3px 8px rgba(0,0,0,.18),inset 0 1px 0 rgba(255,255,255,.25);}
 .kpi-icon.kc-gold{background:linear-gradient(145deg,var(--gold),#9B7011);}
+.kpi-card:has(.kc-gold){--kpi-accent:var(--gold);}
 .kpi-icon.kc-red{background:linear-gradient(145deg,#E53E3E,#9B2C2C);}
+.kpi-card:has(.kc-red){--kpi-accent:#E53E3E;}
 .kpi-icon.kc-green{background:linear-gradient(145deg,#38A169,#22543D);}
+.kpi-card:has(.kc-green){--kpi-accent:#38A169;}
 .kpi-icon.kc-blue{background:linear-gradient(145deg,#4299E1,#2B6CB0);}
+.kpi-card:has(.kc-blue){--kpi-accent:#4299E1;}
 .kpi-label{font-size:11.5px;font-weight:700;color:var(--text-3);}
 .kpi-value{font-size:26px;font-weight:900;color:var(--text-1);line-height:1;}
 .kpi-alert-badge{margin-top:8px;font-size:10.5px;font-weight:800;color:#C53030;background:#FFF5F5;border:1px solid #FED7D7;border-radius:8px;padding:3px 9px;display:inline-flex;align-items:center;gap:4px;}
@@ -781,17 +793,23 @@ input[type="password"]{direction:rtl;text-align:right;padding-left:40px;padding-
 .qa-strip-btn-out{background:transparent;color:var(--maroon);border:1.5px solid var(--border);box-shadow:none;}
 .qa-strip-btn-out:hover{border-color:var(--gold);background:var(--gold-soft);}
 /* Department workload horizontal bars */
-.dept-load-list{display:flex;flex-direction:column;gap:14px;}
-.dept-load-row{cursor:pointer;padding:4px 2px;border-radius:var(--radius-sm);transition:.15s;}
+/* Compact variant of .card for the dashboard workload widget specifically —
+   sharp 12px corners (matching the KPI tiles above it) and tighter padding,
+   without touching the base .card used everywhere else in the app. */
+.dash-workload-card{border-radius:12px;}
+.dash-workload-card .card-header{padding:11px 16px;}
+.dash-workload-card .dept-load-list{padding:10px 16px 12px;}
+.dept-load-list{display:flex;flex-direction:column;gap:9px;}
+.dept-load-row{cursor:pointer;padding:3px 2px;border-radius:8px;transition:.15s;}
 .dept-load-row:hover{background:var(--surface-2);}
-.dept-load-head{display:flex;align-items:center;gap:10px;margin-bottom:6px;}
-.dept-load-icon{width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:14px;flex-shrink:0;}
-.dept-load-label{font-size:12.5px;font-weight:800;color:var(--text-1);}
-.dept-load-count{font-size:12px;font-weight:800;color:var(--text-2);margin-right:auto;}
+.dept-load-head{display:flex;align-items:center;gap:9px;margin-bottom:5px;}
+.dept-load-icon{width:24px;height:24px;border-radius:7px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px;flex-shrink:0;}
+.dept-load-label{font-size:12px;font-weight:800;color:var(--text-1);}
+.dept-load-count{font-size:11.5px;font-weight:800;color:var(--text-2);margin-right:auto;}
 .dept-load-count span{font-weight:600;color:var(--text-3);}
-.dept-load-team{font-size:10.5px;color:var(--text-3);font-weight:700;}
-.dept-load-track{height:8px;border-radius:6px;background:var(--surface-2);border:1px solid var(--border-soft);overflow:hidden;}
-.dept-load-fill{height:100%;border-radius:6px;transition:width .3s;}
+.dept-load-team{font-size:10px;color:var(--text-3);font-weight:700;}
+.dept-load-track{height:6px;border-radius:5px;background:var(--surface-2);border:1px solid var(--border-soft);overflow:hidden;}
+.dept-load-fill{height:100%;border-radius:5px;transition:width .3s;}
 /* ============================================================ DASHBOARD GRID */
 .dash-main-grid{display:grid;grid-template-columns:1fr 340px;gap:16px;margin-bottom:16px;}
 @media(max-width:1100px){.dash-main-grid{grid-template-columns:1fr;}}
@@ -1033,6 +1051,22 @@ input[type="password"]{direction:rtl;text-align:right;padding-left:40px;padding-
   .menu-toggle{display:block;}
   .stats-row{grid-template-columns:1fr 1fr;}
   .partial-fields{grid-template-columns:1fr;}
+  /* Chat input row (order chat / item feedback / team chat): text input +
+     attach + mic + send used to sit rigidly in one row with no wrap — on a
+     narrow phone that's 4+ controls fighting for ~340px, forcing the text
+     input down to an unusably narrow sliver. Wrapping lets the input claim
+     a full line of its own with the action buttons on the next. */
+  .chat-input-row{flex-wrap:wrap;}
+  .chat-input-row input{min-width:0;flex-basis:100%;order:-1;}
+  .chat-voice-msg{min-width:0;width:100%;}
+  /* Dashboard "add task" row: 4 rigid grid columns (2fr/1fr/1fr/auto) is a
+     desktop-only layout — on mobile it must stack instead of compressing
+     the title/date/priority fields to the point of overflowing. */
+  .dash-tasks-card>div[style*="grid-template-columns:2fr 1fr 1fr auto"]{grid-template-columns:1fr!important;}
+  /* Event-notification banner stack: a fixed 340px card next to a fixed
+     16px inset overflows the viewport width on any phone narrower than
+     ~372px — clamp it to the actual available width instead. */
+  .event-notif-stack{max-width:calc(100vw - 32px);}
 }
 /* ══ LUXURY PAGE TRANSITIONS ══════════════════════════════════════ */
 .page.active{animation:lxIn .52s cubic-bezier(.22,1,.36,1) both;}
@@ -1716,7 +1750,6 @@ input:focus,select:focus,textarea:focus{box-shadow:inset 0 1px 3px rgba(74,14,23
         <div class="page" id="page-govcat"><div id="govcat-content"></div></div>
         <div class="page" id="page-maintreq"><div id="maintreq-content"></div></div>
         <div class="page" id="page-urgent"><div id="urgent-content"></div></div>
-        <div class="page" id="page-tasks"><div id="tasks-content"></div></div>
         <div class="page" id="page-itemwork"><div id="itemwork-content"></div></div>
         <div class="page" id="page-orderdetails"><div id="orderdetails-content"></div></div>
       </div>
@@ -3503,7 +3536,6 @@ function buildSidebar(){
       ni('warranty','ti-shield-check','ضمان اللوحات'),
       ni('urgent','ti-bolt','طلب عاجل'),
       ni('request','ti-send','رفع طلب'),
-      ni('tasks','ti-list-check','مهام'),
     ]);
   }else if(t==='external'){
     h+=navGroup('أعمالي',[ni('production','ti-progress-check','قائمة الإنتاج'),ni('my','ti-user-check','أعمالي الحالية'),ni('extdash','ti-world','لوحة التنفيذ الخارجي')]);
@@ -3545,7 +3577,6 @@ function buildSidebar(){
       ni('extdash','ti-world','لوحة التنفيذ الخارجي'),
       ni('warranty','ti-shield-check','ضمان اللوحات'),
       ni('govobligations','ti-building-bank','الالتزامات الحكومية والتشغيلية'),
-      ni('tasks','ti-list-check','مهام'),
       ni('export','ti-table-export','تصدير Excel'),
       ni('users','ti-users','الموظفين'),
     ]);
@@ -4803,7 +4834,7 @@ function buildDeptWorkloadHtml(){
       <div class="dept-load-track"><div class="dept-load-fill" style="width:${pct}%;background:${overLimit?'#C53030':d.color};"></div></div>
     </div>`;
   }).join('');
-  return`<div class="card" style="margin-bottom:16px;">
+  return`<div class="card dash-workload-card" style="margin-bottom:16px;">
     <div class="card-header"><span class="card-title"><i class="ti ti-chart-bar"></i> أعباء العمل وخط الإنتاج بالأقسام</span></div>
     <div class="dept-load-list">${rowsHtml}</div>
   </div>`;
@@ -4871,12 +4902,16 @@ function buildDash(){
     <button class="qa-strip-btn qa-strip-btn-out" onclick="nav('wf')"><i class="ti ti-list-details"></i> سجل العمليات الكامل</button>
   </div>`:'';
   const deptWorkload=['admin','follower','receiver'].includes(t)?buildDeptWorkloadHtml():'';
+  // Tasks management is centralized here instead of its own sidebar-linked
+  // page — same admin/receiver audience the old "مهام" nav link was scoped to.
+  const tasksWidget=(t==='admin'||t==='receiver')?dashboardTasksWidgetHtml():'';
   document.getElementById('page-dash').innerHTML=`
     <div class="page-header"><div><div class="ptitle"><i class="ti ti-layout-dashboard"></i> لوحة التحكم التنفيذية</div><div class="breadcrumb">مرحباً، ${esc(cu.name)}</div></div></div>
     ${roNote}
     ${kpiRow}
     ${qaStrip}
-    ${deptWorkload}`;
+    ${deptWorkload}
+    ${tasksWidget}`;
 }
 async function dashGoto(mode){
   if(mode==='done'){
@@ -8684,7 +8719,8 @@ function orderEditModalHtml(key){
     const options=`<option value="none">❌ بدون تكليف</option>`+workers.map(w=>`<option value="${esc(w.uname)}" ${w.uname===curTo?'selected':''}>${esc(w.name)}</option>`).join('');
     return`<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
       <span style="font-size:11.5px;font-weight:800;color:var(--text-2);min-width:70px;">${esc(meta.label)}</span>
-      <select id="oe-reassign-${dk}-${key}" style="flex:1;min-width:150px;">${options}</select>
+      <select id="oe-reassign-${dk}-${key}" style="flex:1;min-width:150px;" onchange="onOeReassignChange('${key}','${dk}')">${options}</select>
+      <input type="text" id="oe-reassign-reason-${dk}-${key}" placeholder="سبب تغيير الموظف (إلزامي عند التغيير)..." style="flex:1;min-width:180px;font-size:11px;padding:6px 9px;border:1.5px solid var(--border);border-radius:6px;font-family:inherit;" disabled/>
       <button class="btn btn-brand btn-xs" onclick="saveOrderEditReassign('${key}','${dk}')"><i class="ti ti-check"></i> حفظ</button>
     </div>`;
   }).join('');
@@ -8768,16 +8804,44 @@ async function confirmAddOrderWorkflowStage(key){
     _refreshOrderItemsViews(key);
   }catch(e){hideSaving();toast('❌ فشل إضافة المرحلة');}
 }
+// Lights up the mandatory reason field only once the select actually moves
+// away from the current assignee — a no-op re-save (picking the same
+// person) needs no justification and shouldn't be blocked on one.
+function onOeReassignChange(key,dept){
+  const o=orders[key];if(!o)return;
+  const sel=document.getElementById(`oe-reassign-${dept}-${key}`);
+  const reasonEl=document.getElementById(`oe-reassign-reason-${dept}-${key}`);
+  if(!sel||!reasonEl)return;
+  const changed=sel.value!==(o[`${dept}To`]||'none');
+  reasonEl.disabled=!changed;
+  reasonEl.style.background=changed?'':'var(--surface-2)';
+  if(!changed)reasonEl.value='';
+}
 async function saveOrderEditReassign(key,dept){
   const o=orders[key];if(!o)return;
   if(!canEditOrderComposition()){toast('⚠️ هذا الإجراء غير متاح لك');return;}
   const sel=document.getElementById(`oe-reassign-${dept}-${key}`);if(!sel)return;
   const uname=sel.value;
   const name=uname==='none'?'❌ معفى':(USERS[uname]?.name||uname);
+  const oldUname=o[`${dept}To`]||'none';
+  const oldName=o[`${dept}Name`]||(oldUname==='none'?'❌ معفى':oldUname);
+  const isActualChange=uname!==oldUname;
+  let reason='';
+  if(isActualChange){
+    const reasonEl=document.getElementById(`oe-reassign-reason-${dept}-${key}`);
+    reason=reasonEl?reasonEl.value.trim():'';
+    if(!reason){toast('⚠️ يرجى كتابة سبب تغيير الموظف المسؤول');return;}
+  }
   const upd={[`${dept}To`]:uname,[`${dept}Name`]:name,lastItemUpdateAt:new Date().toISOString(),lastItemUpdateBy:cu.name};
+  // Smart indicator (see the "تمت إعادة تكليف الموظف" tag in the order-details
+  // header) + the reason, kept for reference on the order record itself.
+  if(isActualChange){upd.staffReassigned=true;upd.lastReassignAt=new Date().toISOString();upd.lastReassignReason=reason;}
   showSaving('جاري تحديث المسؤول...');
   try{
     await fbPatch(`orders/${key}`,upd);await loadData();hideSaving();toast('✓ تم تغيير الموظف المسؤول');
+    if(isActualChange){
+      logOrderActivity(key,'ti-user-cog',`👤 ${cu.name} قام بتغيير مسؤول ${WF_DEPT_META[dept]?.label||dept} من ${oldName} إلى ${name} — السبب: ${reason}`);
+    }
     if(uname!=='none')pushNotification({type:'employee_changed',message:`تم تكليفك بالطلب ${esc(o.id||key)} — ${esc(WF_DEPT_META[dept]?.label||dept)}`,orderKey:key,orderId:o.id,client:o.client,targetUname:uname});
     openOrderEditModal(key);
     _refreshOrderItemsViews(key);
@@ -9625,7 +9689,7 @@ function buildOrderDetailsPage(){
     ${backBtnHtml()}
     <div class="od-header">
       <div class="od-header-main">
-        <div class="od-header-title"><i class="ti ti-file-text"></i> ${o.id||key} — ${esc(o.client)}${o.orderKind==='maintenance'?'<span class="urgent-tag" style="font-size:9px;background:linear-gradient(135deg,#991B1B,#DC2626);"><i class="ti ti-tool"></i>صيانة</span>':''}${o.isQuickTask?'<span class="urgent-tag" style="font-size:9px;"><i class="ti ti-bolt"></i>مهمة سريعة</span>':''}</div>
+        <div class="od-header-title"><i class="ti ti-file-text"></i> ${o.id||key} — ${esc(o.client)}${o.orderKind==='maintenance'?'<span class="urgent-tag" style="font-size:9px;background:linear-gradient(135deg,#991B1B,#DC2626);"><i class="ti ti-tool"></i>صيانة</span>':''}${o.isQuickTask?'<span class="urgent-tag" style="font-size:9px;"><i class="ti ti-bolt"></i>مهمة سريعة</span>':''}${o.staffReassigned?`<span class="urgent-tag" style="font-size:9px;background:linear-gradient(135deg,#7C3AED,#6D28D9);" title="${esc('آخر سبب: '+(o.lastReassignReason||'—'))}"><i class="ti ti-user-cog"></i>تمت إعادة تكليف الموظف</span>`:''}</div>
         <div class="od-header-meta">
           <span>الخدمة: <strong>${esc(o.service)}</strong></span>
           <span>الحالة: ${deptBadge(o.currentDept)}</span>
@@ -9772,8 +9836,14 @@ async function submitNewOrderItem(key){
     }else{
       items.push({name,qty,details,notes,price,files:window._newItemFiles||[],addedLater:true,addedAt:new Date().toISOString(),addedBy:cu.name});
     }
-    // Keep order-level totals in sync with item prices whenever the order already tracks payment.
-    const newTotal=items.reduce((s,it)=>s+(parseFloat(it.price)||0),0);
+    // Keep order-level totals in sync with item prices whenever the order already
+    // tracks payment. Must match orderLineTotal()'s own price×qty formula (the
+    // same one the invoice's per-row table already uses) — summing price alone
+    // silently dropped the quantity multiplier, so an order with a 2-piece item
+    // priced at 551.50 (=1103 total) recomputed its whole-order total as if that
+    // item were worth only 551.50, corrupting totalAmount/remainingAmount and
+    // desyncing them from what the invoice table's own rows displayed.
+    const newTotal=items.reduce((s,it)=>s+orderLineTotal(it),0);
     const upd={orderItems:items,lastItemUpdateAt:new Date().toISOString(),lastItemUpdateBy:cu.name,lastItemUpdateType:isEdit?'edit':'add'};
     if(o.paymentStatus){
       upd.totalAmount=newTotal;
@@ -12554,38 +12624,41 @@ function taskCardHtml(t){
     </div>
   </div>`;
 }
-function buildTasksPage(){
+// Task management now lives directly on the Dashboard (buildDash()) as a
+// primary widget instead of its own sidebar-linked page — dashboardTasksWidgetHtml()
+// returns the widget's markup for buildDash() to embed, and every task mutation
+// below refreshes by rebuilding the dashboard itself (the only page this widget
+// is ever mounted on).
+function dashboardTasksWidgetHtml(){
   const arr=Object.entries(tasksData).map(([k,v])=>({...v,_key:k}));
   const w={'عاجلة':3,'مهمة':2,'عادية':1};
   const pending=arr.filter(t=>!t.done).sort((a,b)=>(w[b.priority]||0)-(w[a.priority]||0)||new Date(b.createdAt||0)-new Date(a.createdAt||0));
   const completed=arr.filter(t=>t.done).sort((a,b)=>new Date(b.completedAt||b.createdAt||0)-new Date(a.completedAt||a.createdAt||0));
-  document.getElementById('tasks-content').innerHTML=`
-    <div class="page-header"><div class="ptitle"><i class="ti ti-list-check"></i> مهام وتذكيرات</div></div>
-    <div class="card" style="padding:16px;margin-bottom:18px;">
-      <div style="font-size:12.5px;font-weight:800;color:var(--maroon);margin-bottom:10px;"><i class="ti ti-plus"></i> إضافة تذكير جديد</div>
-      <div style="display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:8px;align-items:end;">
-        <div class="fg" style="margin-bottom:0;"><label>عنوان التذكير / المهمة *</label><input id="task-text-input" placeholder="مثال: التواصل مع العميل غداً" onkeydown="if(event.key==='Enter')addTask()"/></div>
-        <div class="fg" style="margin-bottom:0;"><label>تاريخ ووقت التذكير (اختياري)</label><input type="datetime-local" id="task-due-input"/></div>
-        <div class="fg" style="margin-bottom:0;"><label>الأولوية</label>
-          <select id="task-priority-input">
-            <option value="عادية">عادية</option>
-            <option value="مهمة">مهمة</option>
-            <option value="عاجلة">عاجلة</option>
-          </select>
-        </div>
-        <button class="btn btn-brand btn-sm" onclick="addTask()" style="height:38px;"><i class="ti ti-plus"></i> إضافة</button>
+  return `<div class="card dash-tasks-card" style="padding:16px;margin-top:16px;">
+    <div class="od-fin-title" style="margin-bottom:12px;"><i class="ti ti-list-check"></i> مهام وتذكيرات</div>
+    <div style="display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:8px;align-items:end;margin-bottom:14px;">
+      <div class="fg" style="margin-bottom:0;"><label>عنوان التذكير / المهمة *</label><input id="task-text-input" placeholder="مثال: التواصل مع العميل غداً" onkeydown="if(event.key==='Enter')addTask()"/></div>
+      <div class="fg" style="margin-bottom:0;"><label>تاريخ ووقت التذكير (اختياري)</label><input type="datetime-local" id="task-due-input"/></div>
+      <div class="fg" style="margin-bottom:0;"><label>الأولوية</label>
+        <select id="task-priority-input">
+          <option value="عادية">عادية</option>
+          <option value="مهمة">مهمة</option>
+          <option value="عاجلة">عاجلة</option>
+        </select>
       </div>
+      <button class="btn btn-brand btn-sm" onclick="addTask()" style="height:38px;"><i class="ti ti-plus"></i> إضافة</button>
     </div>
     <div class="tab-bar" style="margin-bottom:14px;">
       <button class="tab-btn active" id="task-tab-pending" onclick="showTaskTab('pending')"><i class="ti ti-hourglass"></i> قيد الانتظار (${pending.length})</button>
       <button class="tab-btn" id="task-tab-done" onclick="showTaskTab('done')"><i class="ti ti-circle-check"></i> المكتملة (${completed.length})</button>
     </div>
     <div id="task-pane-pending">
-      ${pending.length?pending.map(taskCardHtml).join(''):'<div class="card" style="text-align:center;padding:30px;color:var(--text-3);"><i class="ti ti-list-check" style="font-size:32px;display:block;margin-bottom:8px;"></i>لا توجد مهام قيد الانتظار</div>'}
+      ${pending.length?pending.map(taskCardHtml).join(''):'<div style="text-align:center;padding:24px;color:var(--text-3);"><i class="ti ti-list-check" style="font-size:28px;display:block;margin-bottom:6px;"></i>لا توجد مهام قيد الانتظار</div>'}
     </div>
     <div id="task-pane-done" style="display:none;">
-      ${completed.length?completed.map(taskCardHtml).join(''):'<div class="card" style="text-align:center;padding:30px;color:var(--text-3);">لا توجد مهام مكتملة</div>'}
-    </div>`;
+      ${completed.length?completed.map(taskCardHtml).join(''):'<div style="text-align:center;padding:24px;color:var(--text-3);">لا توجد مهام مكتملة</div>'}
+    </div>
+  </div>`;
 }
 function showTaskTab(tab){
   const pp=document.getElementById('task-pane-pending'),pd=document.getElementById('task-pane-done');
@@ -12605,7 +12678,7 @@ async function addTask(){
   try{
     await fbPush('tasks',{text,dueDate:due,priority,done:false,createdBy:cu.name,createdByUname:cu._uname,createdAt:new Date().toISOString()});
     await loadData();hideSaving();toast('✓ تم إضافة التذكير');
-    buildTasksPage();
+    buildDash();
   }catch(e){hideSaving();toast('❌ فشل الإضافة');}
 }
 async function toggleTaskDone(key){
@@ -12613,7 +12686,7 @@ async function toggleTaskDone(key){
   const nowDone=!t.done;
   try{
     await fbPatch('tasks/'+key,{done:nowDone,completedAt:nowDone?new Date().toISOString():null});
-    await loadData();buildTasksPage();
+    await loadData();buildDash();
   }catch(e){toast('❌ فشل التحديث');}
 }
 async function deleteTask(key){
@@ -12622,7 +12695,7 @@ async function deleteTask(key){
   try{
     await fbDelete('tasks/'+key);
     await loadData();hideSaving();toast('✓ تم الحذف');
-    buildTasksPage();
+    buildDash();
   }catch(e){hideSaving();toast('❌ فشل الحذف');}
 }
 function openEditTaskModal(key){
@@ -12652,7 +12725,7 @@ async function saveEditTask(key){
   try{
     await fbPatch('tasks/'+key,{text,dueDate:due,priority});
     await loadData();hideSaving();closeModal('task-modal');toast('✓ تم حفظ التعديلات');
-    buildTasksPage();
+    buildDash();
   }catch(e){hideSaving();toast('❌ فشل الحفظ');}
 }
 function _buildPage(p){
@@ -12679,7 +12752,6 @@ function _buildPage(p){
   else if(p==='govcat') buildGovCategoryPage();
   else if(p==='urgent') buildUrgentPage();
   else if(p==='prep') buildPrepPhasePage();
-  else if(p==='tasks') buildTasksPage();
   else if(p==='extdash') buildExternalDashboard();
   else if(p==='itemwork') buildItemWorkspacePage();
   else if(p==='orderdetails') buildOrderDetailsPage();
