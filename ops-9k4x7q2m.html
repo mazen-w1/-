@@ -983,31 +983,29 @@ input[type="password"]{direction:rtl;text-align:right;padding-left:40px;padding-
 .uq-bar-track{height:5px;border-radius:3px;background:var(--surface-2);overflow:hidden;}
 .uq-bar-fill{height:100%;background:linear-gradient(90deg,var(--maroon),var(--gold));border-radius:3px;transition:width .15s linear;}
 .uq-item-error-msg{font-size:10.5px;color:#DC2626;margin-top:5px;line-height:1.4;}
-/* ============================================================ WEEKLY STAR RECOGNITION TICKER
-   Floating bottom bar, centered so it stays clear of the upload-queue
-   widget (bottom-left) and the floating team-chat FAB (bottom-right). */
-.star-ticker{position:fixed;left:50%;bottom:88px;transform:translateX(-50%);width:600px;max-width:calc(100vw - 32px);z-index:9995;display:flex;align-items:stretch;background:linear-gradient(135deg,#1E0408,#4A0E17);border:1.5px solid #D4AF37;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.35);overflow:hidden;}
-.star-ticker-video-wrap{position:relative;width:96px;flex-shrink:0;overflow:hidden;background:#1E0408;}
-.star-ticker-video{width:100%;height:100%;object-fit:cover;display:block;}
-.star-ticker-video-fallback-icon{display:none;position:absolute;inset:0;align-items:center;justify-content:center;font-size:28px;color:#D4AF37;background:radial-gradient(circle,rgba(212,175,55,.22),transparent 70%);}
-.star-ticker-video-wrap.star-ticker-video-fallback .star-ticker-video{display:none;}
-.star-ticker-video-wrap.star-ticker-video-fallback .star-ticker-video-fallback-icon{display:flex;}
-.star-ticker-body{flex:1;min-width:0;display:flex;align-items:center;gap:14px;padding:14px 40px 14px 14px;}
-.star-ticker-badge{display:flex;align-items:center;gap:8px;flex-shrink:0;padding-left:14px;border-left:1px solid rgba(212,175,55,.25);}
-.star-ticker-badge i{color:#D4AF37;font-size:20px;}
-.star-ticker-badge .stb-title{font-size:9.5px;font-weight:800;color:rgba(255,255,255,.65);letter-spacing:.3px;}
-.star-ticker-badge .stb-name{font-size:12.5px;font-weight:900;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px;}
-/* Dynamic text announcements — see TICKER_ANNOUNCEMENTS below. */
-.ticker-stream-wrap{flex:1;min-width:0;overflow:hidden;}
-.ticker-stream{display:flex;align-items:center;gap:14px;width:max-content;animation:tickerStreamScroll 26s linear infinite;}
-.star-ticker:hover .ticker-stream{animation-play-state:paused;}
+/* ============================================================ GLOBAL BOTTOM MARQUEE TICKER
+   A true site-wide fixed bottom bar (edge-to-edge, height 36px) — lives in
+   the persistent app shell alongside #toast/.upload-queue-widget, so it's
+   never inside any single .page and stays mounted across every navigation.
+   z-index sits just under .modal-overlay (200) so an open modal's own
+   full-viewport backdrop naturally covers it instead of the ticker
+   rendering on top of a modal's bottom edge. */
+.global-ticker{position:fixed;left:0;right:0;bottom:0;width:100%;height:36px;z-index:190;display:flex;align-items:center;background:linear-gradient(90deg,#1E0408,#4A0E17);border-top:1.5px solid #D4AF37;box-shadow:0 -6px 20px rgba(0,0,0,.3);overflow:hidden;padding:0 38px;}
+.ticker-stream-wrap{flex:1;min-width:0;overflow:hidden;height:100%;display:flex;align-items:center;}
+.ticker-stream{display:flex;align-items:center;gap:16px;width:max-content;animation:tickerStreamScroll 32s linear infinite;}
+.global-ticker:hover .ticker-stream{animation-play-state:paused;}
 @keyframes tickerStreamScroll{from{transform:translateX(0);}to{transform:translateX(-50%);}}
 .ticker-item{display:flex;align-items:center;gap:6px;white-space:nowrap;font-size:12px;color:#fff;font-weight:600;}
 .ticker-item i{color:#D4AF37;font-size:13px;}
 .ticker-sep{color:rgba(212,175,55,.5);font-size:11px;}
-.star-ticker-close{position:absolute;top:6px;left:8px;width:22px;height:22px;border-radius:50%;border:none;background:rgba(255,255,255,.12);color:#fff;font-size:14px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:.15s;}
-.star-ticker-close:hover{background:rgba(255,255,255,.25);}
-@media(max-width:560px){.star-ticker{bottom:80px;width:calc(100vw - 24px);}.star-ticker-video-wrap{display:none;}.star-ticker-badge{display:none;}.star-ticker-body{padding:9px 34px 9px 12px;}}
+.global-ticker-close{position:absolute;left:8px;top:50%;transform:translateY(-50%);width:22px;height:22px;border-radius:50%;border:none;background:rgba(255,255,255,.15);color:#fff;font-size:14px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:.15s;z-index:1;}
+.global-ticker-close:hover{background:rgba(255,255,255,.28);}
+/* Reserve room at the bottom of the page and shift the other fixed
+   bottom-anchored widgets up so nothing sits under/behind the ticker bar. */
+body.has-ticker .main{padding-bottom:48px;}
+body.has-ticker .floating-teamchat{bottom:48px;}
+body.has-ticker .upload-queue-widget{bottom:48px;}
+@media(max-width:560px){.global-ticker{height:32px;padding:0 30px;}body.has-ticker .main{padding-bottom:44px;}body.has-ticker .floating-teamchat{bottom:44px;}body.has-ticker .upload-queue-widget{bottom:44px;}}
 /* ============================================================ MOBILE */
 @media(max-width:768px){
   :root{--sidebar-w:220px;}
@@ -1042,6 +1040,11 @@ input[type="password"]{direction:rtl;text-align:right;padding-left:40px;padding-
 @media(max-width:520px){
   .sidebar{position:fixed;right:-260px;top:var(--header-h);height:calc(100vh - var(--header-h));z-index:90;transition:right .25s;box-shadow:var(--shadow-lg);}
   .sidebar.open{right:0;}
+  /* The full-width fixed global-ticker bar (z-index 190, above the sidebar's
+     90) would otherwise sit on top of the mobile sidebar's bottom-most nav
+     item while it's open — shorten the sidebar's own height to stop just
+     above the ticker instead. */
+  body.has-ticker .sidebar{height:calc(100vh - var(--header-h) - 36px);}
   .main{padding:14px;}
   .header{padding:0 14px;}
   .brand-text .brand-ar{font-size:13px;}
@@ -1879,18 +1882,9 @@ input:focus,select:focus,textarea:focus{box-shadow:inset 0 1px 3px rgba(74,14,23
 </div>
 <div class="toast-el" id="toast"></div>
 <div class="upload-queue-widget" id="upload-queue-widget" style="display:none;"></div>
-<div class="star-ticker" id="star-ticker" style="display:none;">
-  <button class="star-ticker-close" id="star-ticker-close" onclick="closeStarTicker()" title="إغلاق" aria-label="إغلاق">×</button>
-  <div class="star-ticker-video-wrap" id="star-ticker-video-wrap">
-    <video class="star-ticker-video" autoplay loop muted playsinline onerror="document.getElementById('star-ticker-video-wrap').classList.add('star-ticker-video-fallback')">
-      <source src="/assets/weekly-stars.mp4" type="video/mp4"/>
-    </video>
-    <div class="star-ticker-video-fallback-icon"><i class="ti ti-trophy"></i></div>
-  </div>
-  <div class="star-ticker-body">
-    <div class="star-ticker-badge" id="star-ticker-badge" style="display:none;"></div>
-    <div class="ticker-stream-wrap"><div class="ticker-stream" id="ticker-stream"></div></div>
-  </div>
+<div class="global-ticker" id="star-ticker" style="display:none;">
+  <button class="global-ticker-close" id="star-ticker-close" onclick="closeStarTicker()" title="إغلاق" aria-label="إغلاق">×</button>
+  <div class="ticker-stream-wrap"><div class="ticker-stream" id="ticker-stream"></div></div>
 </div>
 <script>
 // ============================================================
@@ -2073,8 +2067,13 @@ const INITIAL_USERS={
   workshop1:{pass:'1234',name:'أويس',role:'ورشة',color:'#9A3412',type:'workshop',photo:''},
   external1:{pass:'1234',name:'منفذ خارجي',role:'تنفيذ خارجي',color:'#713F12',type:'external',photo:''},
 };
-let cu=null,orders={},clients={},USERS={},currentSortMode='urgent-auto';
-let submittedRequests={},chats={},standaloneQuotes={},warranties={},teamChat={},govRecords={},urgentRequests={},tasksData={},eventNotifs={};
+// Default sort across every workflow board/Kanban/dense table (all of them
+// pull from the shared ordersArr()) is newest-first by creation date — the
+// operational "urgent-auto" ordering (overdue/urgent floated to the top) is
+// still available from the sort dropdown for whoever wants it, just no
+// longer the default view.
+let cu=null,orders={},clients={},USERS={},currentSortMode='date-desc';
+let submittedRequests={},chats={},standaloneQuotes={},warranties={},teamChat={},govRecords={},urgentRequests={},tasksData={},eventNotifs={},tickerAnnouncementsData={};
 // Per-user order-seen map (orderKey -> ISO timestamp), backed by Firebase at
 // orderSeen/{uname} instead of localStorage — see markOrderUpdateSeen()/
 // hasOrderUpdate() below. Loaded once at login (enterApp) and refreshed on
@@ -2182,9 +2181,13 @@ function computeWeeklyStarPerformers(){
     workshop:{doneKey:'workshopDoneAt',assigneeKey:'workshopTo',metricLabel:'تركيب في الموعد',roleLabel:'أفضل تركيب',icon:'ti-tool'},
   };
   const all=Object.values(orders||{});
+  // Ranked strictly by average completion speed (turnaround from o.date to
+  // the department's own doneKey timestamp) — not by how many jobs someone
+  // finished, so an employee who quietly turns work around fastest wins the
+  // spot over one who simply had the most volume.
   const topFor=(type,onlyThisWeek)=>{
     const cfg=DEPTS_CFG[type];
-    const counts={};
+    const stats={};
     all.forEach(o=>{
       const at=o[cfg.doneKey];
       if(!at)return;
@@ -2192,12 +2195,17 @@ function computeWeeklyStarPerformers(){
       if(type==='workshop'&&!isOnTime(o))return;
       const uname=o[cfg.assigneeKey];
       if(!uname||uname==='none'||uname==='all')return;
-      counts[uname]=(counts[uname]||0)+1;
+      const h=o.date?Math.max(0,(new Date(at)-new Date(o.date))/3600000):0;
+      if(!stats[uname])stats[uname]={count:0,totalH:0};
+      stats[uname].count++;stats[uname].totalH+=h;
     });
-    let bestUname=null,bestCount=0;
-    Object.entries(counts).forEach(([uname,c])=>{if(c>bestCount){bestUname=uname;bestCount=c;}});
+    let bestUname=null,bestAvg=Infinity,bestCount=0;
+    Object.entries(stats).forEach(([uname,s])=>{
+      const avg=s.totalH/s.count;
+      if(avg<bestAvg){bestAvg=avg;bestUname=uname;bestCount=s.count;}
+    });
     if(!bestUname)return null;
-    return{...cfg,uname:bestUname,name:(USERS[bestUname]&&USERS[bestUname].name)||bestUname,count:bestCount};
+    return{...cfg,uname:bestUname,name:(USERS[bestUname]&&USERS[bestUname].name)||bestUname,count:bestCount,avgH:Math.round(bestAvg)};
   };
   // Fallback: if nobody in a department finished a job in the last 7 days,
   // fall back gracefully to that department's all-time top performer rather
@@ -2227,37 +2235,46 @@ const TICKER_ANNOUNCEMENTS=[
 function renderTickerStream(){
   const track=document.getElementById('ticker-stream');
   if(!track)return;
-  if(!TICKER_ANNOUNCEMENTS.length){track.innerHTML='';return;}
+  // Weekly top performer folded in as a plain-text item (no trophy/star
+  // icon) alongside the static + manager-broadcast announcements below —
+  // one single scrolling stream instead of a separate badge box.
+  const perfItems=[];
+  try{
+    const stats=computeWeeklyStarPerformers();
+    const items=[stats.designer,stats.printer,stats.workshop].filter(Boolean);
+    if(items.length){
+      const top=items.reduce((best,cur)=>cur.count>best.count?cur:best);
+      perfItems.push(`موظف الأسبوع: ${top.name} (${top.roleLabel})`);
+    }
+  }catch(e){/* no order data yet — skip the performer chip, announcements still show */}
+  // Manager-broadcast announcements (tickerAnnouncements/ in Firebase, see
+  // postTickerAnnouncement() on the dashboard) are shown newest-first, ahead
+  // of the static defaults below.
+  const dynamic=Object.entries(tickerAnnouncementsData||{})
+    .sort((a,b)=>new Date(b[1].createdAt||0)-new Date(a[1].createdAt||0))
+    .map(([,v])=>v.text).filter(Boolean);
+  const allItems=[...perfItems,...dynamic,...TICKER_ANNOUNCEMENTS];
+  if(!allItems.length){track.innerHTML='';return;}
   const chip=(txt,i)=>`<span class="ticker-item"><i class="ti ${i%2===0?'ti-bell-ringing':'ti-sparkles'}"></i>${esc(txt)}</span>`;
   const sep='<span class="ticker-sep">✦</span>';
-  const one=TICKER_ANNOUNCEMENTS.map(chip).join(sep);
+  const one=allItems.map(chip).join(sep);
   // Duplicated (with a separator bridging the two copies) so the CSS marquee
   // (translateX to -50% of the track's own width) loops seamlessly.
   track.innerHTML=one+sep+one+sep;
 }
-function renderStarTickerBadge(){
-  const el=document.getElementById('star-ticker-badge');if(!el)return false;
-  let stats;
-  try{stats=computeWeeklyStarPerformers();}catch(e){el.style.display='none';return false;}
-  const items=[stats.designer,stats.printer,stats.workshop].filter(Boolean);
-  if(!items.length){el.style.display='none';return false;}
-  const top=items.reduce((best,cur)=>cur.count>best.count?cur:best);
-  el.innerHTML=`<i class="ti ti-trophy"></i><div><div class="stb-title">موظف الأسبوع</div><div class="stb-name">${esc(top.name)}</div></div>`;
-  el.style.display='flex';
-  return true;
-}
 function renderStarTicker(){
   const wrap=document.getElementById('star-ticker');
   if(!wrap||!cu||_starTickerClosed)return;
-  const hasBadge=renderStarTickerBadge();
   renderTickerStream();
-  if(!hasBadge&&!TICKER_ANNOUNCEMENTS.length){wrap.style.display='none';return;}
-  wrap.style.display='flex';
+  const hasContent=!!document.getElementById('ticker-stream')?.innerHTML;
+  wrap.style.display=hasContent?'flex':'none';
+  document.body.classList.toggle('has-ticker',hasContent);
 }
 function closeStarTicker(){
   _starTickerClosed=true;
   const wrap=document.getElementById('star-ticker');
   if(wrap)wrap.style.display='none';
+  document.body.classList.remove('has-ticker');
 }
 async function enterApp(u){
   _navHistory=[];
@@ -2471,6 +2488,7 @@ async function loadData(){
     ['requests',v=>submittedRequests=v],
     ['chats',v=>chats=v],
     ['standalone_quotes',v=>standaloneQuotes=v],
+    ['tickerAnnouncements',v=>tickerAnnouncementsData=v],
   ];
   await Promise.all(aux.map(async([path,assign])=>{
     try{assign((await fbGet(path))||{});}
@@ -3906,16 +3924,17 @@ function itemStageRequirementMet(it,o){
   const hasKind=k=>vers.some(v=>v.kind===k&&v.files&&v.files.length>0);
   if(dept==='design'){
     const seq=itemDeptSeq(o);
-    const printActive=seq.includes('print'),workshopActive=seq.includes('workshop');
-    if(!printActive&&!workshopActive)return true; // truly nothing downstream — no production files required
+    const printActive=seq.includes('print'),workshopActive=seq.includes('workshop'),externalActive=seq.includes('external');
+    if(!printActive&&!workshopActive&&!externalActive)return true; // truly nothing downstream — no production files required
     if(!printActive&&workshopActive)return hasKind('workshop_production'); // workshop-only: just one approved proof, no separate "approved design" file
+    if(!printActive&&!workshopActive&&externalActive)return hasKind('design_proof'); // external-only: a proof is required, the fully-approved design file stays optional
     if(!hasKind('design_approved'))return false;
     if(!hasKind('design_proof'))return false;
     if(workshopActive&&!hasKind('workshop_production'))return false;
     return true;
   }
   if(dept==='workshop')return vers.some(v=>(!v.kind||v.kind==='final_work')&&v.files&&v.files.length>0);
-  return vers.some(v=>v.files&&v.files.length>0);
+  return vers.some(v=>v.files&&v.files.length>0); // external (and any other stage) — mandatory attachment gate: any uploaded file satisfies it
 }
 async function advanceItemDept(key,idx){
   const o=orders[key];if(!o)return;
@@ -4234,7 +4253,18 @@ function renderOrderItemsCards(o,key,canAct){
         const isDone=dept==='done';
         const canToggleEdit=cu.type==='admin'||cu.type==='receiver';
         const actionsId='oi-actions-'+key+'-'+i;
+        // Mirrors the designer board's quick-list "رفع بروفة" button
+        // (designerItemRowHtml) so uploading a proof isn't only reachable
+        // from that card — staff opening the order's own details/workspace
+        // view can attach it here too, on the same item card.
+        const canUploadProofHere=dept==='design'&&(dcol==='todo'||dcol==='revision')&&(cu.type==='admin'||isMyItem(o,it)||canEditDesignFiles(o,it));
+        const proofUploadBtnHtml=canUploadProofHere?(()=>{
+          const inputId=`oi-proof-${key}-${i}`;
+          return `<label class="btn btn-brand btn-sm" for="${inputId}" onclick="event.stopPropagation();"><i class="ti ti-upload"></i> رفع بروفة</label>
+          <input type="file" multiple id="${inputId}" style="display:none" accept="*/*" onclick="event.stopPropagation();" onchange="event.stopPropagation();saveItemKindFiles('${key}',${i},'design_proof','${inputId}')"/>`;
+        })():'';
         const actionsRowHtml=`<div style="display:flex;gap:6px;flex-wrap:wrap;">
+          ${proofUploadBtnHtml}
           ${(canSeeWhatsappBtn()&&o.phone&&o.phone!=='—')?`<button class="btn btn-whatsapp btn-sm" onclick="event.stopPropagation();openWhatsapp('${encodeURIComponent(o.phone)}')" title="واتساب"><i class="ti ti-brand-whatsapp"></i></button>`:''}
           ${canSeeClientFeedback()?`<button class="btn btn-out btn-sm" onclick="event.stopPropagation();openClientFeedbackPanel('${key}',${i})"><i class="ti ti-message-2"></i> تعديل مطلوب</button>`:''}
           ${(canApproveClientProof()&&dcol==='waiting')?`<button class="btn btn-green btn-sm" onclick="event.stopPropagation();approveItemProof('${key}',${i})"><i class="ti ti-circle-check"></i> تعميد التصميم</button>`:''}
@@ -4920,12 +4950,14 @@ function buildDash(){
   // Tasks management is centralized here instead of its own sidebar-linked
   // page — same admin/receiver audience the old "مهام" nav link was scoped to.
   const tasksWidget=(t==='admin'||t==='receiver')?dashboardTasksWidgetHtml():'';
+  const announceWidget=(t==='admin'||t==='receiver')?dashboardAnnouncementWidgetHtml():'';
   document.getElementById('page-dash').innerHTML=`
     <div class="page-header"><div><div class="ptitle"><i class="ti ti-layout-dashboard"></i> لوحة التحكم التنفيذية</div><div class="breadcrumb">مرحباً، ${esc(cu.name)}</div></div></div>
     ${roNote}
     ${kpiRow}
     ${qaStrip}
     ${deptWorkload}
+    ${announceWidget}
     ${tasksWidget}`;
 }
 async function dashGoto(mode){
@@ -9560,8 +9592,15 @@ function buildOrderDetailsPage(){
       const _missingFiles=[];
       if(o.currentDept==='design'){
         const _isProofQt=o.isQuickTask&&o.printTo==='none'&&o.workshopTo==='none';
+        // Routing straight to external execution (no print/workshop in the
+        // sequence at all): a design proof is still required, but the fully
+        // client-approved design file stays optional here — external
+        // dispatch shouldn't be blocked by an approval step it may not need.
+        const _externalOnly=!_isProofQt&&o.printTo==='none'&&o.workshopTo==='none'&&o.externalTo&&o.externalTo!=='none';
         if(_isProofQt){
           if(!o.approvedPrintFile)_missingFiles.push('ملف البروفة');
+        }else if(_externalOnly){
+          if(!o.approvedPrintFile)_missingFiles.push('بروفة التصميم');
         }else if(o.printTo==='none'&&o.workshopTo!=='none'){
           if(!o.approvedWorkshopFile)_missingFiles.push('بروفة تصميم معتمدة');
         }else if(o.printTo!=='none'){
@@ -9569,8 +9608,13 @@ function buildOrderDetailsPage(){
           if(!o.approvedPrintFile)_missingFiles.push('بروفة التصميم');
           if(o.workshopTo!=='none'&&!o.approvedWorkshopFile)_missingFiles.push('ملف الإنتاج للورشة');
         }
+      }else if(o.currentDept==='external'&&(o.externalMode||'both')!=='text'){
+        // Mandatory attachment gate for External Execution — same enforcement
+        // style as Design's gate above (soft-blocks staff, admin can bypass).
+        // Text-only external mode has no file field to fill, so it's exempt.
+        if(!o.externalFile)_missingFiles.push('ملف التوريد الخارجي');
       }
-      const needsFile=o.currentDept==='design'&&_missingFiles.length>0;
+      const needsFile=(o.currentDept==='design'||o.currentDept==='external')&&_missingFiles.length>0;
       // Admin bypass: files stay optional for a manager, so the button
       // itself must actually render (not just the underlying function
       // permit it) — a disabled button the admin can't click would still
@@ -10089,15 +10133,24 @@ async function sendToNextDept(key,next){
   if(curDept==='design'){
     const isProofQt=o.isQuickTask&&o.printTo==='none'&&o.workshopTo==='none';
     const workshopOnly=o.printTo==='none'&&o.workshopTo!=='none';
+    const externalOnly=!isProofQt&&!workshopOnly&&o.printTo==='none'&&o.externalTo&&o.externalTo!=='none';
     const blocked=isProofQt
       ? !o.approvedPrintFile
       : workshopOnly
         ? !o.approvedWorkshopFile
-        : (o.printTo!=='none'&&(!o.clientApprovalImage||!o.approvedPrintFile||(o.workshopTo!=='none'&&!o.approvedWorkshopFile)));
+        : externalOnly
+          ? !o.approvedPrintFile
+          : (o.printTo!=='none'&&(!o.clientApprovalImage||!o.approvedPrintFile||(o.workshopTo!=='none'&&!o.approvedWorkshopFile)));
     // Same admin/receiver bypass as advanceItemDept() — files stay a soft
     // requirement for regular staff, never a hard block for a manager
     // overriding it.
     if(blocked&&cu.type!=='admin'&&cu.type!=='receiver'){toast('⚠️ يجب رفع جميع الملفات المطلوبة قبل الانتقال للمرحلة التالية');return;}
+  }else if(curDept==='external'&&(o.externalMode||'both')!=='text'){
+    // Mandatory attachment gate for External Execution — enforced here too
+    // (not just in the UI) so it can't be bypassed by calling this function
+    // directly, matching Design's own gate above. Text-only external mode
+    // has no file field to fill, so it's exempt.
+    if(!o.externalFile&&cu.type!=='admin'&&cu.type!=='receiver'){toast('⚠️ يجب إرفاق ملف التوريد الخارجي قبل الانتقال للمرحلة التالية');return;}
   }
   showSaving('جاري التحويل...');
   const timeField={design:'designDoneAt',external:'externalDoneAt',print:'printDoneAt',workshop:'workshopDoneAt'};
@@ -11839,7 +11892,14 @@ function buildEmpPage(){
     const doneAll=getEmpOrdersAll(e.uname,e.type).filter(o=>o[k]&&o[k].slice(0,7)===_monthKey);
     const avgHMonth=doneAll.length?Math.round(doneAll.reduce((s,o)=>{const h=(new Date(o[k])-new Date(o.date))/3600000;return s+(h>0?h:0);},0)/doneAll.length):0;
     return{...e,doneThisMonth:doneAll.length,avgHMonth};
-  }).sort((a,b)=>b.doneThisMonth-a.doneThisMonth||a.avgHMonth-b.avgHMonth);
+  }).sort((a,b)=>{
+    // Speed-first ranking: fastest average turnaround this month wins —
+    // completion count only breaks a tie between two employees with the
+    // exact same average speed. Anyone with zero completions this month
+    // sinks to Infinity instead of falsely ranking as "0 hours = fastest".
+    const rank=e=>e.doneThisMonth>0?e.avgHMonth:Infinity;
+    return rank(a)-rank(b)||b.doneThisMonth-a.doneThisMonth;
+  });
   const empOfMonth=(empMonthStats[0]&&empMonthStats[0].doneThisMonth>0)?empMonthStats[0]:null;
   const monthLabel=now.toLocaleDateString('ar-SA',{month:'long',year:'numeric'});
   document.getElementById('emp-content').innerHTML=`
@@ -12006,16 +12066,21 @@ function openEmpDetail(uname){
     }
     return'';
   };
-  const renderRow=o=>`<div onclick="closeModal('order-modal');setTimeout(()=>${o.currentDept==='done'?'openOrderTimelineView':'openOrderStageView'}('${o._key}'),50)" style="display:flex;align-items:center;justify-content:space-between;padding:9px 14px;border-radius:8px;cursor:pointer;margin-bottom:4px;border:1px solid var(--border-soft);" onmouseover="this.style.background='var(--gold-soft)'" onmouseout="this.style.background=''">
+  const renderRow=o=>{
+    const doneAt=stageDoneAtKey?o[stageDoneAtKey]:null;
+    return`<div onclick="closeModal('order-modal');setTimeout(()=>${o.currentDept==='done'?'openOrderTimelineView':'openOrderStageView'}('${o._key}'),50)" style="display:flex;align-items:center;justify-content:space-between;padding:9px 14px;border-radius:8px;cursor:pointer;margin-bottom:4px;border:1px solid var(--border-soft);" onmouseover="this.style.background='var(--gold-soft)'" onmouseout="this.style.background=''">
     <div style="flex:1;min-width:0;">
       <span style="font-size:12px;font-weight:800;color:var(--maroon)">${o.id||o._key}</span>
       <span style="font-size:11px;color:var(--text-2);margin-right:8px;">${esc(o.client)}</span>
-      <span style="font-size:10px;color:var(--text-3);margin-right:8px;"><i class="ti ti-calendar" style="font-size:10px;"></i> ${o.date||'—'}</span>
       <div style="font-size:10px;color:var(--text-3);margin-top:2px;">${esc(o.service)}</div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:4px;">
+        <span style="font-size:9.5px;color:var(--text-3);"><i class="ti ti-calendar-event" style="font-size:10px;"></i> الاستلام: ${o.date||'—'}</span>
+        <span style="font-size:9.5px;color:${doneAt?'#059669':'var(--text-3)'};"><i class="ti ti-calendar-check" style="font-size:10px;"></i> التسليم: ${doneAt?fmtDateTime(doneAt):'—'}</span>
+      </div>
       <div style="margin-top:3px;">${empStageDurationChip(o)}</div>
     </div>
     <div style="display:flex;gap:6px;align-items:center;flex-shrink:0;">${deptBadge(o.currentDept)}&nbsp;${orderTimerBadge(o)}</div>
-  </div>`;
+  </div>`;};
   document.getElementById('order-modal-body').innerHTML=`
     <div class="modal-header">
       <div>
@@ -12713,6 +12778,46 @@ function taskCardHtml(t){
       </div>
     </div>
   </div>`;
+}
+// Manager announcement control panel — lets admin/receiver broadcast free-text
+// straight onto the global bottom marquee ticker (see renderTickerStream()),
+// stored in Firebase (tickerAnnouncements/) so every signed-in user picks it
+// up on their next data refresh, not just this session.
+function dashboardAnnouncementWidgetHtml(){
+  const list=Object.entries(tickerAnnouncementsData||{}).sort((a,b)=>new Date(b[1].createdAt||0)-new Date(a[1].createdAt||0));
+  return `<div class="card" style="padding:16px;margin-top:16px;">
+    <div class="od-fin-title" style="margin-bottom:12px;"><i class="ti ti-speakerphone"></i> إعلان عام على الشريط السفلي</div>
+    <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px;">
+      <div class="fg" style="flex:1;min-width:220px;margin-bottom:0;"><label>نص الإعلان</label><input id="ticker-announce-input" placeholder="مثال: نذكّر الجميع بأهمية الالتزام بمواعيد التسليم..." onkeydown="if(event.key==='Enter')postTickerAnnouncement()"/></div>
+      <button class="btn btn-brand btn-sm" onclick="postTickerAnnouncement()" style="height:38px;"><i class="ti ti-send"></i> نشر على الشريط</button>
+    </div>
+    ${list.length?`<div style="display:flex;flex-direction:column;gap:6px;max-height:160px;overflow-y:auto;">${list.map(([k,v])=>`<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:8px;padding:7px 10px;">
+      <div style="font-size:11.5px;color:var(--text-1);min-width:0;"><strong>${esc(v.text)}</strong><div style="font-size:10px;color:var(--text-3);margin-top:2px;">${esc(v.createdBy||'—')} · ${fmtDateTime(v.createdAt)}</div></div>
+      <button class="btn btn-red btn-xs btn-icon" onclick="deleteTickerAnnouncement('${k}')" title="حذف"><i class="ti ti-trash"></i></button>
+    </div>`).join('')}</div>`:'<div style="font-size:11.5px;color:var(--text-3);">لا توجد إعلانات مخصصة حالياً — يظهر الشريط الافتراضي فقط</div>'}
+  </div>`;
+}
+async function postTickerAnnouncement(){
+  const input=document.getElementById('ticker-announce-input');
+  const text=(input?.value||'').trim();
+  if(!text){toast('⚠️ يرجى كتابة نص الإعلان');return;}
+  showSaving('جاري النشر...');
+  try{
+    await fbPush('tickerAnnouncements',{text,createdBy:cu.name,createdAt:new Date().toISOString()});
+    await loadData();hideSaving();toast('✓ تم نشر الإعلان على الشريط السفلي');
+    renderStarTicker();
+    buildDash();
+  }catch(e){hideSaving();toast('❌ فشل نشر الإعلان');}
+}
+async function deleteTickerAnnouncement(key){
+  if(!confirm('حذف هذا الإعلان من الشريط؟'))return;
+  showSaving('جاري الحذف...');
+  try{
+    await fbDelete('tickerAnnouncements/'+key);
+    await loadData();hideSaving();toast('✓ تم الحذف');
+    renderStarTicker();
+    buildDash();
+  }catch(e){hideSaving();toast('❌ فشل الحذف');}
 }
 // Task management now lives directly on the Dashboard (buildDash()) as a
 // primary widget instead of its own sidebar-linked page — dashboardTasksWidgetHtml()
