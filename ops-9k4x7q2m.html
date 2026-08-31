@@ -2206,9 +2206,9 @@ function computeWeeklyStarPerformers(){
   const inWindow=d=>{if(!d)return false;const t=new Date(d);return !isNaN(t)&&t>=weekStart&&t<=now;};
   const isOnTime=o=>{if(!o.deadline||o.deadline==='—')return true;const dl=new Date(o.deadline);return isNaN(dl)||new Date(o.workshopDoneAt)<=dl;};
   const DEPTS_CFG={
-    designer:{doneKey:'designDoneAt',assigneeKey:'designTo',metricLabel:'بروفة/تصميم معتمد',roleLabel:'أفضل مصمم',icon:'ti-brush'},
-    printer:{doneKey:'printDoneAt',assigneeKey:'printTo',metricLabel:'مهمة طباعة مكتملة',roleLabel:'أفضل طباعة',icon:'ti-printer'},
-    workshop:{doneKey:'workshopDoneAt',assigneeKey:'workshopTo',metricLabel:'تركيب في الموعد',roleLabel:'أفضل تركيب',icon:'ti-tool'},
+    designer:{doneKey:'designDoneAt',assigneeKey:'designTo',deptKey:'design',metricLabel:'بروفة/تصميم معتمد',roleLabel:'أفضل مصمم',icon:'ti-brush'},
+    printer:{doneKey:'printDoneAt',assigneeKey:'printTo',deptKey:'print',metricLabel:'مهمة طباعة مكتملة',roleLabel:'أفضل طباعة',icon:'ti-printer'},
+    workshop:{doneKey:'workshopDoneAt',assigneeKey:'workshopTo',deptKey:'workshop',metricLabel:'تركيب في الموعد',roleLabel:'أفضل تركيب',icon:'ti-tool'},
   };
   const all=Object.values(orders||{});
   // Ranked strictly by average completion speed (turnaround from o.date to
@@ -2221,6 +2221,10 @@ function computeWeeklyStarPerformers(){
     all.forEach(o=>{
       const at=o[cfg.doneKey];
       if(!at)return;
+      // Manager Stage Advance Override (see sendToNextDept) — a manager
+      // pushed this stage forward on the employee's behalf, so it shouldn't
+      // count toward their speed ranking.
+      if(o[cfg.deptKey+'ManagerAdvanced'])return;
       if(onlyThisWeek&&!inWindow(at))return;
       if(type==='workshop'&&!isOnTime(o))return;
       const uname=o[cfg.assigneeKey];
@@ -5584,7 +5588,12 @@ function designerOrderCardHtml(o,itemEntries){
   // any item row) already tells a designer/manager whether this order needs
   // attention (a revision request) without opening it.
   const proof=proofStatusForOrder(o);
-  const proofTag=proof?`<span class="proof-pill proof-${proof.key}"><i class="ti ${proof.icon}"></i> ${proof.label}</span>`:'';
+  // Once the order has moved past the design stage this pill's "client
+  // approved/proof sent" status is old news at a glance and belongs inside
+  // the order/item details view instead (buildOrderDetailsPage's header
+  // strip still always shows it) — surfacing it again on this summary card
+  // after the item has already transferred elsewhere is just noise/clutter.
+  const proofTag=(proof&&o.currentDept==='design')?`<span class="proof-pill proof-${proof.key}"><i class="ti ${proof.icon}"></i> ${proof.label}</span>`:'';
   const itemsHtml=itemEntries.map(({it,idx})=>designerItemRowHtml(o,it,idx)).join('');
   const manyItems=itemEntries.length>5;
   return `<div class="designer-order-card" style="grid-column:1/-1;">
@@ -5642,6 +5651,62 @@ function designerSimpleOrderCardHtml(o){
   </div><div class="wf-card-prog"><div class="wf-card-fill" style="width:${orderProgress(o)}%;background:${progressColor(o)}"></div></div></div>`;
 }
 // ============================================================
+// PRINT BOARD — mirrors the Design board's card layout (buildDesignerBoard/
+// designerOrderCardHtml) instead of the dense production-queue table, so a
+// printer sees each item's Approved Design + Proof files directly on the
+// card and never has to open an item just to check what design uploaded.
+// ============================================================
+function buildPrinterBoard(){
+  const groups={};
+  myAssignedItems().forEach(({o,idx,it})=>{
+    groups[o._key]=groups[o._key]||{o,items:[]};
+    groups[o._key].items.push({it,idx});
+  });
+  const orderCardsHtml=Object.values(groups).map(g=>printerOrderCardHtml(g.o,g.items)).join('');
+  const simpleOrders=ordersArr().filter(o=>isMyOrder(o)&&(!o.orderItems||!o.orderItems.length));
+  const simpleCardsHtml=simpleOrders.map(o=>designerSimpleOrderCardHtml(o)).join('');
+  const cardsHtml=orderCardsHtml+simpleCardsHtml;
+  const el=document.getElementById('production-body');if(!el)return;
+  el.innerHTML=cardsHtml?`<div class="wf-grid">${cardsHtml}</div>`:'<div class="card" style="text-align:center;padding:40px;color:var(--text-3);"><i class="ti ti-inbox" style="font-size:30px;display:block;margin-bottom:8px;"></i>لا توجد طلبات في قائمة الإنتاج حالياً</div>';
+}
+function printerOrderCardHtml(o,itemEntries){
+  const urgentTag=o.priority==='عاجلة'?'<span class="row-pill urgent-pill"><i class="ti ti-bolt"></i> عاجل</span>':'';
+  const newTag=hasOrderUpdate(o)?'<span class="row-pill" style="background:#DCFCE7;color:#15803D;">🟢 جديد</span>':'';
+  const itemsHtml=itemEntries.map(({it,idx})=>printerItemRowHtml(o,it,idx)).join('');
+  const manyItems=itemEntries.length>5;
+  return `<div class="designer-order-card" style="grid-column:1/-1;">
+    <div class="designer-order-head" onclick="openOrderPage('${o._key}')">
+      <div style="display:flex;align-items:center;gap:8px;min-width:0;">
+        <button class="designer-order-toggle" onclick="event.stopPropagation();toggleDesignerOrderCard('${o._key}')" title="فتح/إغلاق قائمة البنود"><i class="ti ti-chevron-down" id="dsb-chev-${o._key}"></i></button>
+        <div style="min-width:0;"><strong>${esc(o.id||o._key)}</strong> <span style="color:var(--text-3);font-weight:600;">• ${esc(o.client||'—')}</span></div>
+      </div>
+      <div style="font-size:10.5px;color:var(--text-3);display:flex;align-items:center;gap:6px;flex-wrap:wrap;">${itemEntries.length} بند ${urgentTag}${newTag}</div>
+    </div>
+    <div class="designer-order-items" id="dsb-body-${o._key}" style="display:none;${manyItems?'max-height:420px;overflow-y:auto;scroll-behavior:smooth;':''}">${itemsHtml}</div>
+  </div>`;
+}
+// Printers only ever RECEIVE design's approved-design/proof files
+// (canEditDesignFiles is always false for this role) — so both boxes render
+// read-only here, same as the "الملفات المستلمة من التصميم" card on the
+// order-details page and Item Workspace. itemStageRequirementMet() always
+// returns true for dept==='print' (receive-only, nothing to gate), so the
+// advance button is never blocked — matches the existing production-queue
+// table's behavior for this role.
+function printerItemRowHtml(o,it,idx){
+  const specs=it.specs?` <span style="color:var(--text-3);">(${esc(it.specs)})</span>`:'';
+  const canEditDesign=canEditDesignFiles(o,it);
+  const filesHtml=`${renderItemKindBox(it,o._key,idx,'design_approved','design',canEditDesign)}${renderItemKindBox(it,o._key,idx,'design_proof','design',canEditDesign)}`;
+  const nd=itemNextDept(it,o);
+  const advanceBtn=nd?`<button class="designer-action-btn designer-action-primary" onclick="event.stopPropagation();advanceItemDept('${o._key}',${idx})"><i class="ti ti-send-2"></i> إرسال إلى ${WF_DEPT_META[nd]?.label||nd}</button>`:'';
+  return `<div class="designer-item-row" style="cursor:default;">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
+      <div class="designer-item-name">${esc(it.name||'بند')}${specs}</div>
+    </div>
+    <div class="ik-kind-grid" style="margin-top:8px;" onclick="event.stopPropagation();">${filesHtml}</div>
+    <div class="designer-item-actions" style="margin-top:8px;">${advanceBtn}</div>
+  </div>`;
+}
+// ============================================================
 // PRODUCTION PIPELINE QUEUE (printer / workshop / external landing page)
 // ============================================================
 // Reuses module 3's row helpers (badges/summary/countdown/quick-actions) so
@@ -5652,7 +5717,13 @@ function buildProductionQueue(){
   document.getElementById('page-production').innerHTML=`
     <div class="page-header"><div><div class="ptitle"><i class="ti ti-progress-check"></i> قائمة الإنتاج</div><div class="breadcrumb">${esc(cu.name)} — طلبات قيد التنفيذ في قسمك</div></div></div>
     <div id="production-body"></div>`;
-  renderProductionQueueBody(deptForType);
+  // Print gets the same clean per-order/per-item card board as Design (see
+  // buildDesignerBoard) — showing Approved Design/Proof directly on each
+  // item row instead of the dense table, since printers only ever need to
+  // glance at those two files and advance, never open each item separately.
+  // Workshop/External keep the dense table, unaffected by this change.
+  if(cu.type==='printer')buildPrinterBoard();
+  else renderProductionQueueBody(deptForType);
 }
 function renderProductionQueueBody(deptForType){
   const arr=ordersArr().filter(o=>o.currentDept===deptForType&&(cu.type==='admin'||isMyOrder(o)));
@@ -5868,7 +5939,7 @@ function renderWfListView(){
       </td>
       <td><div style="font-weight:800;font-size:12.5px;color:var(--text-1);">${esc(o.client||'—')}</div><div style="font-size:11px;color:var(--text-3);margin-top:2px;">${orderItemSummary(o)}</div></td>
       <td>${stagePillHtml(o.currentDept)}</td>
-      <td>${proof?`<span class="proof-pill proof-${proof.key}${(o.currentDept==='print'||o.currentDept==='workshop')?' compact':''}"><i class="ti ${proof.icon}"></i> ${proof.label}</span>`:'<span style="color:var(--text-3);font-size:11px;">—</span>'}</td>
+      <td>${(proof&&o.currentDept==='design')?`<span class="proof-pill proof-${proof.key}"><i class="ti ${proof.icon}"></i> ${proof.label}</span>`:'<span style="color:var(--text-3);font-size:11px;">—</span>'}</td>
       <td><span class="countdown-pill cd-${countdown.cls||'none'}">${countdown.text}</span></td>
       <td style="font-size:11.5px;line-height:1.6;"><div><strong>المسؤول:</strong> ${esc(currentPersonName(o))}</div><div style="color:var(--text-3);">${esc(o.createdBy?('أنشئ: '+o.createdBy):'')}</div></td>
       <td onclick="event.stopPropagation();">${orderQuickActionsHtml(o)}</td>
@@ -10305,12 +10376,28 @@ async function sendToNextDept(key,next){
   showSaving('جاري التحويل...');
   const timeField={design:'designDoneAt',external:'externalDoneAt',print:'printDoneAt',workshop:'workshopDoneAt'};
   const startField={design:'designStartAt',external:'externalStartAt',print:'printStartAt',workshop:'workshopStartAt'};
+  const assigneeField={design:'designTo',external:'externalTo',print:'printTo',workshop:'workshopTo'};
   const upd={currentDept:next,stageStartDate:new Date().toISOString()};
   // Same "جديد" signal as reassignment — an order landing in the next
   // department is effectively newly assigned to whoever's responsible there.
   upd.lastItemUpdateAt=new Date().toISOString();upd.lastItemUpdateBy=cu.name;
   if(timeField[curDept])upd[timeField[curDept]]=new Date().toISOString();
   if(startField[next])upd[startField[next]]=new Date().toISOString();
+  // Manager Stage Advance Override: an admin/receiver pushing a stage
+  // forward on someone else's behalf still moves the order for everyone —
+  // but the assigned employee didn't actually do the work of clicking that
+  // advance themselves, so this completion must not be credited toward
+  // their speed/performance metrics (computeWeeklyStarPerformers, the
+  // employee analytics avg-turnaround stats). Tag it here, right where the
+  // doneAt timestamp is written, so every consumer of that timestamp can
+  // just check this flag instead of re-deriving "was this a manager
+  // override" itself. Not flagged when admin/receiver happens to BE the
+  // assigned employee for that stage — that's their own real work.
+  if(curDept&&assigneeField[curDept]){
+    const assignee=o[assigneeField[curDept]];
+    const isManagerOverride=(cu.type==='admin'||cu.type==='receiver')&&assignee&&assignee!=='none'&&assignee!==cu._uname;
+    if(isManagerOverride)upd[curDept+'ManagerAdvanced']=true;
+  }
   try{
     await fbPatch(`orders/${key}`,upd);
     logOrderActivity(key,'ti-arrow-forward-up',`تم نقل الطلب إلى مرحلة: ${(WF_DEPT_META[next]||{label:next}).label}`);
@@ -11112,7 +11199,7 @@ function renderOrderLines(){
       ${l.collapsed?'':`
       <div style="display:flex;flex-direction:column;gap:10px;">
         <div class="fg"><label>اسم البند *</label><input placeholder="مثال: لوحة إعلانية" value="${l.name.replace(/"/g,'&quot;')}" oninput="updateOrderLine('${l.id}','name',this.value)"/></div>
-        <div class="fg" style="max-width:180px;"><label>الكمية</label><input type="text" inputmode="decimal" placeholder="1" min="1" value="${(l.qty??1).toString().replace(/"/g,'&quot;')}" oninput="updateOrderLineQty(this,'${l.id}')" onfocus="this.select()"/></div>
+        <div class="fg"><label style="font-size:13px;font-weight:800;color:var(--maroon);">الكمية / الإعدادات *</label><input type="text" inputmode="decimal" placeholder="1" min="1" value="${(l.qty??1).toString().replace(/"/g,'&quot;')}" oninput="updateOrderLineQty(this,'${l.id}')" onfocus="this.select()" style="max-width:260px;font-size:20px;font-weight:800;text-align:center;padding:12px;border:2px solid var(--gold);border-radius:10px;background:var(--gold-soft);"/></div>
         ${buildItemTemplateFieldsHtml(l)}
         <div class="fg"><label>مرفقات البند (يمكن إرفاق أكثر من ملف)</label>
           <label style="cursor:pointer;border:1.5px dashed var(--border);border-radius:8px;padding:7px 14px;font-size:11px;display:inline-flex;align-items:center;gap:6px;">
@@ -12017,6 +12104,10 @@ function buildEmpPage(){
     if(h<72)return`<span class="tc tc-med"><i class="ti ti-clock"></i>${Math.round(h/24)}ي</span>`;
     return`<span class="tc tc-slow"><i class="ti ti-alert-circle"></i>${Math.round(h/24)}ي</span>`;};
   const doneKey={designer:'designDoneAt',printer:'printDoneAt',workshop:'workshopDoneAt',external:'externalDoneAt'};
+  // Maps each employee role to the sendToNextDept() curDept string its own
+  // ManagerAdvanced override flag is stored under (see sendToNextDept) —
+  // used to exclude manager-forced advances from speed/performance stats.
+  const deptKeyFor={designer:'design',printer:'print',workshop:'workshop',external:'external'};
   const getEmpOrders=(uname,type)=>{
     if(type==='designer')return arr.filter(o=>o.designTo===uname||o.designTo==='all');
     if(type==='printer') return arr.filter(o=>o.printTo===uname);
@@ -12024,7 +12115,8 @@ function buildEmpPage(){
     if(type==='external')return arr.filter(o=>o.externalTo===uname);
     return arr.filter(o=>o.createdByUname===uname);};
   const getAvgH=(orders,type)=>{const k=doneKey[type];if(!k)return 0;
-    const c=orders.filter(o=>o[k]&&o.date);if(!c.length)return 0;
+    const dk=deptKeyFor[type];
+    const c=orders.filter(o=>o[k]&&o.date&&!(dk&&o[dk+'ManagerAdvanced']));if(!c.length)return 0;
     return Math.round(c.reduce((s,o)=>{const h=(new Date(o[k])-new Date(o.date))/3600000;return s+(h>0?h:0);},0)/c.length);};
   const empList=Object.entries(USERS).map(([uname,u])=>({uname,...u}));
   // ── Employee of the Month: ranked by completed tasks this calendar month ──
@@ -12039,7 +12131,8 @@ function buildEmpPage(){
   const _monthKey=now.toISOString().slice(0,7);
   const empMonthStats=empList.filter(e=>doneKey[e.type]).map(e=>{
     const k=doneKey[e.type];
-    const doneAll=getEmpOrdersAll(e.uname,e.type).filter(o=>o[k]&&o[k].slice(0,7)===_monthKey);
+    const dk=deptKeyFor[e.type];
+    const doneAll=getEmpOrdersAll(e.uname,e.type).filter(o=>o[k]&&o[k].slice(0,7)===_monthKey&&!(dk&&o[dk+'ManagerAdvanced']));
     const avgHMonth=doneAll.length?Math.round(doneAll.reduce((s,o)=>{const h=(new Date(o[k])-new Date(o.date))/3600000;return s+(h>0?h:0);},0)/doneAll.length):0;
     return{...e,doneThisMonth:doneAll.length,avgHMonth};
   }).sort((a,b)=>{
