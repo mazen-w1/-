@@ -1921,13 +1921,43 @@ function fileSizeLabel(dataUrl){
   return(bytes/(1024*1024)).toFixed(1)+' MB';
 }
 function notifyFileAccess(nameEncoded){toast('📂 '+safeDecodeURIComponent(nameEncoded));}
+// Plain-text/code files (Cloudinary/Drive-hosted, i.e. cross-origin) ignore
+// the anchor's `download` attribute — browsers only honor `download` for
+// same-origin resources, so clicking one of these just navigates to and
+// displays the raw text inline (reads as broken/raw source code to whoever
+// clicked it) instead of downloading. Images/PDFs don't have this problem
+// (rendered as a proper preview) and other binary types are downloaded by
+// the browser natively regardless — only this text-like set needs the
+// forced-blob-download workaround below.
+const TEXT_LIKE_EXTS=new Set(['txt','csv','json','log','md','xml','html','htm','js','css','ts','tsx','jsx','py','sql','yaml','yml','ini','conf','sh','bat']);
+function isTextLikeFile(name){return TEXT_LIKE_EXTS.has(fileExt(name));}
+// Fetching the file as a blob and downloading THAT (a same-origin blob: URL)
+// works regardless of the original file's origin — that's what actually
+// forces a save instead of an inline navigation. Falls back to the plain
+// link behavior if the fetch itself fails (offline, an untrusted host with
+// no CORS headers, etc.) so the click never just silently does nothing.
+async function forceDownloadFile(url,filename){
+  try{
+    const res=await fetch(url);
+    if(!res.ok)throw new Error('HTTP '+res.status);
+    const blob=await res.blob();
+    const blobUrl=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=blobUrl;a.download=filename||'file';
+    document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(blobUrl),4000);
+  }catch(e){
+    window.open(url,'_blank','noopener,noreferrer');
+  }
+}
 function fileLinkHtml(name,url,label){
   if(!url)return'';
   const nm=name||'ملف';
   const icon=fileIconForName(nm);
   const size=fileSizeLabel(url);
   const ext=fileExt(nm).toUpperCase();
-  return `<a href="${url}" download="${esc(nm)}" target="_blank" rel="noopener noreferrer" class="file-download-link" title="${esc(nm)}" onclick="event.stopPropagation();notifyFileAccess('${encodeURIComponent(nm)}')">
+  const textClick=isTextLikeFile(nm)?"event.preventDefault();forceDownloadFile(this.href,this.getAttribute('download'));":'';
+  return `<a href="${url}" download="${esc(nm)}" target="_blank" rel="noopener noreferrer" class="file-download-link" title="${esc(nm)}" onclick="event.stopPropagation();${textClick}notifyFileAccess('${encodeURIComponent(nm)}')">
     <i class="ti ${icon}"></i>
     <span class="file-link-name">${label?esc(label)+' — ':''}${esc(nm)}</span>
     ${ext?`<span class="file-link-ext">${ext}</span>`:''}
@@ -2072,7 +2102,7 @@ const INITIAL_USERS={
 // operational "urgent-auto" ordering (overdue/urgent floated to the top) is
 // still available from the sort dropdown for whoever wants it, just no
 // longer the default view.
-let cu=null,orders={},clients={},USERS={},currentSortMode='date-desc';
+let cu=null,orders={},clients={},USERS={},currentSortMode='id-desc';
 let submittedRequests={},chats={},standaloneQuotes={},warranties={},teamChat={},govRecords={},urgentRequests={},tasksData={},eventNotifs={},tickerAnnouncementsData={};
 // Per-user order-seen map (orderKey -> ISO timestamp), backed by Firebase at
 // orderSeen/{uname} instead of localStorage — see markOrderUpdateSeen()/
@@ -3788,12 +3818,25 @@ function operationsTableSort(list){
     return new Date(completionTs(b))-new Date(completionTs(a));
   });
 }
+// Extracts the numeric portion of an order's ID (e.g. "ORD-056" -> 56,
+// ignoring the non-numeric "ORD-" prefix) so orders sort by their true
+// sequential order number instead of by creation date, which ties whenever
+// several orders share the same day and doesn't reflect creation order as
+// precisely as the sequential ID does. Orders with no numeric ID at all
+// (legacy/malformed records) sort to the very bottom of a descending sort
+// rather than being mistaken for order #0.
+function orderIdNumeric(o){
+  const digits=String((o&&o.id)||'').replace(/\D/g,'');
+  return digits?parseInt(digits,10):-Infinity;
+}
 function ordersArr(){
   let list=Object.entries(orders).map(([k,v])=>({...v,_key:k}));
   if(currentSortMode==='priority-desc'){const w={'عاجلة':3,'متوسطة':2,'عادية':1};return list.sort((a,b)=>(w[b.priority]||0)-(w[a.priority]||0));}
   if(currentSortMode==='priority-asc'){const w={'عاجلة':3,'متوسطة':2,'عادية':1};return list.sort((a,b)=>(w[a.priority]||0)-(w[b.priority]||0));}
   if(currentSortMode==='date-asc')return list.sort((a,b)=>new Date(a.date)-new Date(b.date));
   if(currentSortMode==='date-desc')return list.sort((a,b)=>new Date(b.date)-new Date(a.date));
+  if(currentSortMode==='id-asc')return list.sort((a,b)=>orderIdNumeric(a)-orderIdNumeric(b));
+  if(currentSortMode==='id-desc')return list.sort((a,b)=>orderIdNumeric(b)-orderIdNumeric(a));
   return operationsTableSort(list);
 }
 function getActiveDepts(o){
@@ -4509,9 +4552,11 @@ function controlsRow(showSearch=false,searchId='',searchPlaceholder='بحث...')
       <i class="ti ti-arrows-sort" style="color:var(--gold);font-size:15px;"></i>
       <label>ترتيب:</label>
       <select onchange="changeSortMode(this.value)">
+        <option value="id-desc" ${currentSortMode==='id-desc'?'selected':''}>الأحدث أولاً (رقم الطلب تنازلياً)</option>
+        <option value="id-asc" ${currentSortMode==='id-asc'?'selected':''}>الأقدم أولاً (رقم الطلب تصاعدياً)</option>
         <option value="urgent-auto" ${currentSortMode==='urgent-auto'?'selected':''}>ترتيب العمليات (النشطة أولاً، ثم المكتملة)</option>
-        <option value="date-desc" ${currentSortMode==='date-desc'?'selected':''}>الأحدث أولاً</option>
-        <option value="date-asc" ${currentSortMode==='date-asc'?'selected':''}>الأقدم أولاً</option>
+        <option value="date-desc" ${currentSortMode==='date-desc'?'selected':''}>الأحدث حسب التاريخ</option>
+        <option value="date-asc" ${currentSortMode==='date-asc'?'selected':''}>الأقدم حسب التاريخ</option>
         <option value="priority-desc" ${currentSortMode==='priority-desc'?'selected':''}>الأولوية الأعلى</option>
         <option value="priority-asc" ${currentSortMode==='priority-asc'?'selected':''}>الأولوية الأدنى</option>
       </select>
@@ -5044,7 +5089,7 @@ function renderWfFilesView(){
         <td style="font-size:12px;"><i class="ti ${r.icon}"></i> ${esc(r.label)} <span style="color:var(--text-3);">(${esc(r.fileName)})</span></td>
         <td style="font-size:11.5px;">${esc(r.uploadedBy)}</td>
         <td style="font-size:11px;">${formatDate(r.uploadedAt)}</td>
-        <td><a href="${r.fileData}" download="${esc(r.fileName)}" target="_blank" rel="noopener noreferrer" class="btn btn-out btn-xs"><i class="ti ti-download"></i></a></td>
+        <td><a href="${r.fileData}" download="${esc(r.fileName)}" target="_blank" rel="noopener noreferrer" class="btn btn-out btn-xs" ${isTextLikeFile(r.fileName)?`onclick="event.preventDefault();forceDownloadFile(this.href,this.getAttribute('download'));"`:''}><i class="ti ti-download"></i></a></td>
       </tr>`).join(''):'<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text-3)">لا توجد ملفات مرفوعة بعد</td></tr>'}</tbody></table></div></div>`;
 }
 function filterWfFilesRows(){
@@ -6102,6 +6147,7 @@ function buildOrderInvoiceData(o,key){
     lines,
     calcMode:'combined',
     showMeters:false,
+    authoritativeTotal:true,
     totalWithVat:Number(o.totalAmount||0),
     paidAmount:Number(o.paidAmount||0),
     bank:'رقم الآيبان (IBAN): SA6880000370608010177725\nرقم الحساب: 370608010177725',
@@ -6187,9 +6233,11 @@ function buildDeptStagePage(){
     </div>`;
     return;
   }
+  // ordersArr() already returns orders in currentSortMode order (strict
+  // descending numeric order-ID by default) — re-sorting by date here would
+  // silently override that, the same bug already fixed on the List view.
   const arr=ordersArr().filter(o=>(o.currentDept||'design')===deptKey)
-    .filter(o=>isDeptRestricted?isMyOrder(o):true)
-    .sort((a,b)=>new Date(b.date)-new Date(a.date));
+    .filter(o=>isDeptRestricted?isMyOrder(o):true);
   window._deptStageSelected=new Set();
   const searchBlob=o=>esc([o.id,o._key,o.client,o.service].filter(Boolean).join(' ').toLowerCase());
   const rows=arr.map(o=>isCompleted?`<tr data-search="${searchBlob(o)}" onclick="openOrderPage('${o._key}')" style="cursor:pointer;">
@@ -7847,9 +7895,28 @@ function renderA4Quote(data,key=''){
   const expiryDate=data.validity||'';
   const lines=(data.lines||[]);
   const showMeters=data.showMeters!==undefined?!!data.showMeters:lines.some(l=>l.m!==undefined&&l.m!==1);
-  const subtotal=lines.reduce((s,l)=>s+quoteLinePreVatTotal(l,showMeters),0);
-  const vat=subtotal*0.15;
-  const totalWithVat=Number(data.totalWithVat||0)||(subtotal+vat);
+  // Order invoices (buildOrderInvoiceData) mark authoritativeTotal:true and
+  // pass o.totalAmount as totalWithVat — that figure is VAT-inclusive and
+  // set independently of any per-item pricing (matches buildFinancialBreakdownCard's
+  // own subtotal=total/1.15 convention for the same order). Re-summing the
+  // item rows for the subtotal here produced a subtotal (and VAT line) that
+  // didn't reconcile with the grand total whenever per-item prices were
+  // partial/missing or the order total had been adjusted manually — the
+  // printed subtotal could even exceed the grand total. Deriving subtotal/VAT
+  // from the authoritative total instead keeps every figure on the invoice
+  // consistent; the item rows below remain their own informational
+  // per-item breakdown either way. Standalone quotes (no authoritativeTotal)
+  // keep summing the lines, since there the lines ARE the source of truth.
+  let subtotal,vat,totalWithVat;
+  if(data.authoritativeTotal&&Number(data.totalWithVat)>0){
+    totalWithVat=Number(data.totalWithVat);
+    subtotal=totalWithVat/1.15;
+    vat=totalWithVat-subtotal;
+  }else{
+    subtotal=lines.reduce((s,l)=>s+quoteLinePreVatTotal(l,showMeters),0);
+    vat=subtotal*0.15;
+    totalWithVat=Number(data.totalWithVat||0)||(subtotal+vat);
+  }
   const paidAmt=Number(data.paidAmount||0);
   const remainingAmt=Math.max(0,totalWithVat-paidAmt);
   const trackingUrl=`${location.origin}${location.pathname.replace(/[^/]*$/,'tracking.html')}?id=${key||data.ref}`;
@@ -10969,7 +11036,7 @@ function renderOrderLines(){
             <i class="ti ti-plus" style="color:var(--gold)"></i> إضافة ملف
             <input type="file" accept="*/*" multiple style="display:none" onchange="attachOrderLineFile('${l.id}',this.files)"/>
           </label>
-          ${(l.files&&l.files.length)?`<div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px;">${l.files.map((f,fi)=>`<span style="display:inline-flex;align-items:center;gap:4px;background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:3px 8px;font-size:10px;"><a href="${f.data}" download="${esc(f.name)}" target="_blank" rel="noopener noreferrer" style="color:var(--maroon);text-decoration:none;"><i class="ti ti-download"></i> ${esc(f.name)}</a><button type="button" onclick="removeOrderLineFile('${l.id}',${fi})" style="background:none;border:none;color:#EF4444;cursor:pointer;padding:0 0 0 2px;font-size:11px;line-height:1;">×</button></span>`).join('')}</div>`:'<div style="font-size:10px;color:var(--text-3);margin-top:4px;">لا توجد مرفقات</div>'}
+          ${(l.files&&l.files.length)?`<div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px;">${l.files.map((f,fi)=>`<span style="display:inline-flex;align-items:center;gap:4px;background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:3px 8px;font-size:10px;"><a href="${f.data}" download="${esc(f.name)}" target="_blank" rel="noopener noreferrer" style="color:var(--maroon);text-decoration:none;" ${isTextLikeFile(f.name)?`onclick="event.preventDefault();forceDownloadFile(this.href,this.getAttribute('download'));"`:''}><i class="ti ti-download"></i> ${esc(f.name)}</a><button type="button" onclick="removeOrderLineFile('${l.id}',${fi})" style="background:none;border:none;color:#EF4444;cursor:pointer;padding:0 0 0 2px;font-size:11px;line-height:1;">×</button></span>`).join('')}</div>`:'<div style="font-size:10px;color:var(--text-3);margin-top:4px;">لا توجد مرفقات</div>'}
         </div>
         <div class="oi-grid-2">
           <div class="fg"><label>سعر الحبة (ر.س)</label><input type="text" inputmode="decimal" placeholder="0" min="0" value="${(l.price||'').toString().replace(/"/g,'&quot;')}" oninput="updateOrderLinePrice(this,'${l.id}')" onfocus="this.select()"/></div>
