@@ -3558,6 +3558,22 @@ function transferQuickTaskToOrder(key){
   closeModal('order-modal');
   nav('add');
 }
+// Generic "تنزيل الكل" for any file container, site-wide: every single file
+// link in this app already renders through fileLinkHtml() as an
+// <a class="file-download-link" href="..." download="...">, whatever the
+// section (design/print/workshop/external file boxes, item workspace,
+// client-feedback attachments, etc.) — so instead of re-deriving each
+// section's own file array (data vs url, versions vs legacy files, ...) this
+// just scans the DOM subtree for those anchors and feeds them straight into
+// the existing staggered downloadAllFiles(), passing containerId (an
+// element's id) or the element itself.
+function downloadAllFilesFromContainer(containerOrId,baseName){
+  const container=typeof containerOrId==='string'?document.getElementById(containerOrId):containerOrId;
+  if(!container){toast('⚠️ تعذر العثور على الملفات');return;}
+  const links=Array.from(container.querySelectorAll('a.file-download-link'));
+  const files=links.map(a=>({data:a.getAttribute('href'),name:a.getAttribute('download')||'ملف'})).filter(f=>f.data);
+  downloadAllFiles(files,baseName||'ملفات');
+}
 function downloadAllItemFiles(key,idx){
   const o=orders[key];if(!o)return;
   const it=(o.orderItems||[])[idx];if(!it)return;
@@ -4285,7 +4301,7 @@ function renderOrderItemsCards(o,key,canAct){
       ${dims?`<div style="font-size:11px;color:var(--text-2);margin-top:6px;"><i class="ti ti-ruler-2"></i> ${dims}</div>`:''}
       ${it.notes?`<div style="font-size:11px;color:var(--text-2);margin-top:6px;"><i class="ti ti-note"></i> ${esc(it.notes)}</div>`:''}
       <div style="margin-top:8px;">${gpbadge(o.priority,o.currentDept)}</div>
-      ${clientFeedbackHistoryBoxHtml(it)}
+      ${clientFeedbackHistoryBoxHtml(it,key,i)}
       ${(()=>{
         // Order Completion Guardrail: once an order is done, its item cards
         // default to a single read-only "فتح البند" action — the WhatsApp/
@@ -4359,10 +4375,15 @@ function openClientFeedbackPanel(key,idx){
   window._cfbKey=key;window._cfbIdx=idx;window._cfbFiles=[];
   const priorFeedback=itemVersions(it).filter(v=>!v._legacy&&v.kind==='client_feedback').sort((a,b)=>new Date(b.createdAt||0)-new Date(a.createdAt||0));
   const historyHtml=priorFeedback.length?`<div style="margin-bottom:14px;display:flex;flex-direction:column;gap:8px;max-height:180px;overflow-y:auto;">${priorFeedback.map(v=>`<div style="background:var(--surface-2);border:1px solid var(--border-soft);border-radius:8px;padding:8px 10px;">
-    <div style="font-size:10.5px;color:var(--text-3);margin-bottom:3px;">${esc(v.createdBy||'—')} · ${fmtDateTime(v.createdAt)}</div>
-    ${v.audioUrl?chatAudioPlayerHtml('cfb-'+v.id,v.audioUrl,v.audioDuration):''}
-    ${v.notes?`<div style="font-size:12px;color:var(--text-1);line-height:1.6;">${esc(v.notes)}</div>`:''}
-    ${chatAttachmentsHtml((v.files||[]).map(f=>({data:f.data,name:f.name})))}
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:6px;">
+      <div style="font-size:10.5px;color:var(--text-3);margin-bottom:3px;">${esc(v.createdBy||'—')} · ${fmtDateTime(v.createdAt)}${v.editedAt?' · <span style="font-style:italic;">(معدّلة)</span>':''}</div>
+      <button class="qbtn" onclick="enableEditClientFeedback('${key}',${idx},'${v.id}')" title="تعديل الملاحظة"><i class="ti ti-edit"></i></button>
+    </div>
+    <div class="cfv-body-${v.id}">
+      ${v.audioUrl?chatAudioPlayerHtml('cfb-'+v.id,v.audioUrl,v.audioDuration):''}
+      ${v.notes?`<div style="font-size:12px;color:var(--text-1);line-height:1.6;">${esc(v.notes)}</div>`:''}
+      ${chatAttachmentsHtml((v.files||[]).map(f=>({data:f.data,name:f.name})))}
+    </div>
   </div>`).join('')}</div>`:'';
   document.getElementById('client-feedback-modal-body').innerHTML=`
     <div class="modal-header"><div class="modal-title"><i class="ti ti-message-2"></i> ردود وملاحظات العميل</div><button class="btn-close" onclick="closeModal('client-feedback-modal')">×</button></div>
@@ -4441,6 +4462,51 @@ async function saveClientFeedback(){
     toast('✓ تم حفظ ملاحظات العميل وإعادة البند لقسم التصميم');
     _refreshOrderItemsViews(key);
   }catch(e){hideSaving();toast('❌ فشل الحفظ');}
+}
+// Inline edit for a single historical client-feedback entry's note text.
+// Every submission is its own immutable client_feedback version (see
+// applyClientFeedbackVersion) — this doesn't create a new entry, it patches
+// that one version's `notes` string in place, for fixing a typo or wrong
+// wording without deleting/duplicating the whole history entry. Swaps just
+// that entry's body (shared class .cfv-body-<versionId>, present in every
+// place this history renders — the "ردود وملاحظات العميل" panel, the item
+// grid card's revision box, and the Item Workspace page's revision box) into
+// a small textarea + Save/Cancel, rather than opening a whole new modal.
+function enableEditClientFeedback(key,idx,versionId){
+  if(!canSeeClientFeedback()){toast('⚠️ هذا الإجراء غير متاح لك');return;}
+  const o=orders[key];const it=o&&o.orderItems&&o.orderItems[idx];
+  const v=it&&itemVersions(it).find(x=>x.id===versionId);
+  if(!v)return;
+  document.querySelectorAll('.cfv-body-'+versionId).forEach(wrap=>{
+    wrap.innerHTML=`<textarea class="cfv-edit-input" data-vid="${versionId}" style="min-height:64px;font-size:12px;width:100%;">${esc(v.notes||'')}</textarea>
+      <div style="display:flex;gap:6px;margin-top:6px;">
+        <button class="btn btn-brand btn-xs" onclick="saveEditedClientFeedback('${key}',${idx},'${versionId}')"><i class="ti ti-check"></i> حفظ</button>
+        <button class="btn btn-out btn-xs" onclick="cancelEditClientFeedback('${key}',${idx})"><i class="ti ti-x"></i> إلغاء</button>
+      </div>`;
+    wrap.querySelector('.cfv-edit-input')?.focus();
+  });
+}
+function cancelEditClientFeedback(key,idx){
+  _refreshOrderItemsViews(key);
+  if(window._cfbKey===key&&window._cfbIdx===idx&&document.getElementById('client-feedback-modal-body')?.innerHTML)openClientFeedbackPanel(key,idx);
+}
+async function saveEditedClientFeedback(key,idx,versionId){
+  if(!canSeeClientFeedback()){toast('⚠️ هذا الإجراء غير متاح لك');return;}
+  const o=orders[key];if(!o)return;
+  const it=o.orderItems&&o.orderItems[idx];if(!it)return;
+  const input=document.querySelector(`.cfv-edit-input[data-vid="${versionId}"]`);
+  const newNotes=input?input.value.trim():'';
+  showSaving('جاري الحفظ...');
+  try{
+    const items=[...o.orderItems];
+    const versions=priorVersionsForWrite(items[idx]).map(v=>v.id===versionId?{...v,notes:newNotes,editedBy:cu.name,editedAt:new Date().toISOString()}:v);
+    items[idx]={...items[idx],versions};
+    await fbPatch(`orders/${key}`,{orderItems:items});
+    logOrderActivity(key,'ti-edit',`تم تعديل نص ملاحظة العميل — البند "${it.name||'بند'}"`);
+    await loadData();hideSaving();toast('✓ تم تحديث الملاحظة');
+    _refreshOrderItemsViews(key);
+    if(window._cfbKey===key&&window._cfbIdx===idx&&document.getElementById('client-feedback-modal-body')?.innerHTML)openClientFeedbackPanel(key,idx);
+  }catch(e){hideSaving();toast('❌ فشل تحديث الملاحظة');}
 }
 // Voice-note path from the panel's own mic button — skips showSaving()
 // entirely (the recording's upload already shows progress in the floating
@@ -5428,18 +5494,28 @@ function allClientFeedbackNotes(it){
 // note — every submission is pushed as its own client_feedback version — so
 // this renders the FULL history (newest first), not just the latest entry,
 // matching the same history list already shown inside openClientFeedbackPanel().
-function clientFeedbackHistoryBoxHtml(it){
+function clientFeedbackHistoryBoxHtml(it,key,idx){
   if(!it.needsRevision)return'';
   const notes=allClientFeedbackNotes(it);
   if(!notes.length)return'';
+  // Edit button only renders when a key/idx were passed in AND the viewer is
+  // allowed to manage client feedback in the first place (same gate as the
+  // "تعديل مطلوب" action) — enableEditClientFeedback() re-derives everything
+  // else (the order/item/version) from those two IDs at click time.
+  const canEdit=canSeeClientFeedback()&&key!=null&&idx!=null;
   return `<div class="revision-notes-box">
     <div class="rn-title"><i class="ti ti-message-2"></i> ملاحظات مراجعة العميل${notes.length>1?` (${notes.length})`:''}</div>
     <div style="display:flex;flex-direction:column;gap:8px;">
       ${notes.map((v,i)=>`<div${i>0?' style="border-top:1px dashed rgba(0,0,0,.12);padding-top:8px;"':''}>
-        ${v.audioUrl?chatAudioPlayerHtml('rn-'+v.id,v.audioUrl,v.audioDuration):''}
-        ${v.notes?`<div class="rn-text">${esc(v.notes)}</div>`:''}
-        ${chatAttachmentsHtml((v.files||[]).map(f=>({data:f.data,name:f.name})))}
-        <div style="font-size:10px;color:#9A3412;margin-top:6px;opacity:.8;">${esc(v.createdBy||'—')} · ${fmtDateTime(v.createdAt)}</div>
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:6px;">
+          <div class="cfv-body-${v.id}" style="flex:1;min-width:0;">
+            ${v.audioUrl?chatAudioPlayerHtml('rn-'+v.id,v.audioUrl,v.audioDuration):''}
+            ${v.notes?`<div class="rn-text">${esc(v.notes)}</div>`:''}
+            ${chatAttachmentsHtml((v.files||[]).map(f=>({data:f.data,name:f.name})))}
+          </div>
+          ${canEdit?`<button class="qbtn" onclick="event.stopPropagation();enableEditClientFeedback('${key}',${idx},'${v.id}')" title="تعديل الملاحظة"><i class="ti ti-edit"></i></button>`:''}
+        </div>
+        <div style="font-size:10px;color:#9A3412;margin-top:6px;opacity:.8;">${esc(v.createdBy||'—')} · ${fmtDateTime(v.createdAt)}${v.editedAt?' · <span style="font-style:italic;">(معدّلة)</span>':''}</div>
       </div>`).join('')}
     </div>
   </div>`;
@@ -6743,6 +6819,7 @@ function renderItemKindBox(it,key,idx,kind,dept,canAct,labelOverride){
   const label=labelOverride||ITEM_KIND_LABELS[kind]||kind;
   const versions=itemVersions(it).filter(v=>!v._legacy&&(v.stage||'design')===dept&&(v.kind===kind||(kind==='final_work'&&!v.kind)));
   const hasFiles=versions.length>0;
+  const filesWrapId=`ik-files-${key}-${idx}-${kind}`;
   const filesHtml=versions.map(v=>`<div class="ik-file-row">
     <div class="ik-file-row-main">
       <div class="ik-file-links">${(v.files||[]).map(f=>fileLinkHtml(f.name,f.data)).join('')}</div>
@@ -6754,9 +6831,12 @@ function renderItemKindBox(it,key,idx,kind,dept,canAct,labelOverride){
   return `<div class="ik-kind-card">
     <div class="ik-kind-head">
       <span class="ik-kind-title"><i class="ti ti-file-description"></i> ${esc(label)}</span>
-      <span class="ik-kind-status ${hasFiles?'done':'pending'}">${hasFiles?'<i class="ti ti-circle-check"></i> تم الرفع':'<i class="ti ti-clock"></i> بانتظار الرفع'}</span>
+      <div style="display:flex;align-items:center;gap:6px;">
+        ${hasFiles?`<button class="btn btn-out btn-xs" onclick="downloadAllFilesFromContainer('${filesWrapId}','${esc(label)}')"><i class="ti ti-download"></i> تنزيل الكل</button>`:''}
+        <span class="ik-kind-status ${hasFiles?'done':'pending'}">${hasFiles?'<i class="ti ti-circle-check"></i> تم الرفع':'<i class="ti ti-clock"></i> بانتظار الرفع'}</span>
+      </div>
     </div>
-    ${filesHtml||'<div class="ik-empty">لا توجد ملفات بعد</div>'}
+    <div id="${filesWrapId}">${filesHtml||'<div class="ik-empty">لا توجد ملفات بعد</div>'}</div>
     ${canAct?`<label class="ik-dropzone" for="${inputId}"><i class="ti ti-cloud-upload"></i> ${hasFiles?'استبدال / إضافة ملف':'اضغط لرفع الملف'}</label>
     <input type="file" multiple id="${inputId}" style="display:none" accept="*/*" onchange="saveItemKindFiles('${key}',${idx},'${kind}','${inputId}')"/>`:''}
   </div>`;
@@ -6787,7 +6867,7 @@ function buildItemWorkspacePage(){
       ${(canApproveClientProof()&&dcol==='waiting')?`<button class="btn btn-green btn-sm" onclick="approveItemProof('${key}',${idx})"><i class="ti ti-circle-check"></i> تعميد التصميم</button>`:''}
       ${(canApproveClientProof()&&dcol==='revision')?`<button class="btn btn-green btn-sm" onclick="approveItemProof('${key}',${idx})"><i class="ti ti-circle-check"></i> تعميد التصميم مباشرة</button>`:''}
     </div>`:''}
-    ${it.needsRevision&&allClientFeedbackNotes(it).length?`<div style="margin-bottom:14px;">${clientFeedbackHistoryBoxHtml(it)}</div>`:''}
+    ${it.needsRevision&&allClientFeedbackNotes(it).length?`<div style="margin-bottom:14px;">${clientFeedbackHistoryBoxHtml(it,key,idx)}</div>`:''}
     <div class="card" style="margin-bottom:14px;padding:16px 20px 8px;">${buildOrderProgressTimeline(o,key)}</div>
     <div class="card" style="margin-bottom:14px;">
       <div style="padding:18px 20px;display:flex;flex-direction:column;gap:12px;">
@@ -6800,8 +6880,8 @@ function buildItemWorkspacePage(){
         ${it.notes?`<div class="fg"><label>ملاحظات إضافية على البند</label><div style="font-size:12.5px;line-height:1.7;color:var(--text-2);">${esc(it.notes)}</div></div>`:''}
         ${specsHtml}
         ${it.requiredFiles?`<div class="fg"><label>ملاحظات مطلوبة</label><div style="font-size:12.5px;line-height:1.7;color:var(--text-2);">${esc(it.requiredFiles)}</div></div>`:''}
-        <div class="fg"><label>المرفقات الأصلية / ملفات العميل</label>
-          <div style="display:flex;flex-wrap:wrap;gap:6px;">${legacyVersions.length?legacyVersions.map(v=>(v.files||[]).map(f=>fileLinkHtml(f.name,f.data)).join('')).join(''):'<span style="font-size:11px;color:var(--text-3);">لا توجد مرفقات أصلية</span>'}</div>
+        <div class="fg"><label style="display:flex;align-items:center;justify-content:space-between;gap:8px;"><span>المرفقات الأصلية / ملفات العميل</span>${legacyVersions.length?`<button class="btn btn-out btn-xs" onclick="downloadAllFilesFromContainer('itemwork-legacy-files','المرفقات الأصلية')"><i class="ti ti-download"></i> تنزيل الكل</button>`:''}</label>
+          <div id="itemwork-legacy-files" style="display:flex;flex-wrap:wrap;gap:6px;">${legacyVersions.length?legacyVersions.map(v=>(v.files||[]).map(f=>fileLinkHtml(f.name,f.data)).join('')).join(''):'<span style="font-size:11px;color:var(--text-3);">لا توجد مرفقات أصلية</span>'}</div>
         </div>
       </div>
     </div>
@@ -6848,8 +6928,8 @@ function buildItemWorkspacePage(){
       // Any other stage (external, etc.) keeps the original generic
       // upload/versions flow — unaffected by this dynamic-workflow change.
       return`<div class="card" style="margin-bottom:14px;">
-        <div class="card-header"><span class="card-title"><i class="ti ti-upload"></i> الملفات المرفوعة لهذه المرحلة</span></div>
-        <div style="padding:16px 20px;display:flex;flex-direction:column;gap:8px;">
+        <div class="card-header" style="display:flex;align-items:center;justify-content:space-between;gap:8px;"><span class="card-title"><i class="ti ti-upload"></i> الملفات المرفوعة لهذه المرحلة</span>${stageVersions.length?`<button class="btn btn-out btn-xs" onclick="downloadAllFilesFromContainer('itemwork-stage-files','ملفات المرحلة')"><i class="ti ti-download"></i> تنزيل الكل</button>`:''}</div>
+        <div id="itemwork-stage-files" style="padding:16px 20px;display:flex;flex-direction:column;gap:8px;">
           ${stageVersions.length?stageVersions.map(v=>`<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:8px;padding:8px 10px;">
             <div>
               <div style="display:flex;flex-wrap:wrap;gap:5px;">${(v.files||[]).map(f=>fileLinkHtml(f.name,f.data)).join('')}</div>
@@ -9314,7 +9394,8 @@ function buildDeptWorkspaceCard(o,key,dk,canAct,nextBtnHtml,uploadAreaHtml){
   const stateBadge=state==='done'?'<span class="badge b-done">مكتمل</span>':state==='current'?'<span class="badge b-proc">قيد التنفيذ</span>':'<span class="badge b-new">قادم</span>';
   const checklistHtml=deptChecklistItems(o,dk).map(c=>`<div class="od-checklist-item ${c.done?'done':'pending'}"><i class="ti ${c.done?'ti-circle-check':'ti-circle-dashed'}"></i>${esc(c.label)}</div>`).join('');
   const files=deptFilesForStage(o,dk);
-  const filesHtml=files.length?`<div style="display:flex;flex-wrap:wrap;gap:6px;">${files.map(f=>fileLinkHtml(f.name,f.url,f.label)).join('')}</div>`:'<span style="font-size:11px;color:var(--text-3);">لا توجد ملفات مرفوعة لهذه المرحلة بعد</span>';
+  const deptFilesWrapId=`od-dept-files-${key}-${dk}`;
+  const filesHtml=files.length?`<div id="${deptFilesWrapId}" style="display:flex;flex-wrap:wrap;gap:6px;">${files.map(f=>fileLinkHtml(f.name,f.url,f.label)).join('')}</div>`:'<span style="font-size:11px;color:var(--text-3);">لا توجد ملفات مرفوعة لهذه المرحلة بعد</span>';
   const noteVal=o['deptNotes_'+dk]||'';
   return `<div class="od-dept-card" id="od-dept-${dk}">
     <div class="od-dept-head" style="--dept-tint:${meta.color}12;">
@@ -9330,7 +9411,7 @@ function buildDeptWorkspaceCard(o,key,dk,canAct,nextBtnHtml,uploadAreaHtml){
         <div class="od-checklist">${checklistHtml}</div>
       </div>
       <div>
-        <div class="od-dept-section-lbl">الملفات المرفوعة</div>
+        <div class="od-dept-section-lbl" style="display:flex;align-items:center;justify-content:space-between;gap:8px;"><span>الملفات المرفوعة</span>${files.length?`<button class="btn btn-out btn-xs" onclick="downloadAllFilesFromContainer('${deptFilesWrapId}','${esc(meta.label)}')"><i class="ti ti-download"></i> تنزيل الكل</button>`:''}</div>
         ${filesHtml}
       </div>
       <div class="od-dept-notes">
@@ -10169,7 +10250,9 @@ function renderApprovalFileList(o,key,ff,canAct){
   if(o[ff])rows.push({data:o[ff],name:o[ff+'Name'],uploadedBy:o[ff+'UploadedBy'],uploadedAt:o[ff+'UploadedAt'],slot:'primary'});
   (Array.isArray(o[ff+'Extra'])?o[ff+'Extra']:[]).forEach((f,i)=>rows.push({data:f.data,name:f.name,uploadedBy:f.uploadedBy,uploadedAt:f.uploadedAt,slot:String(i)}));
   if(!rows.length)return'<div style="font-size:11px;color:var(--text-3);">لا توجد ملفات مرفوعة بعد</div>';
-  return `<div style="display:flex;flex-direction:column;gap:5px;margin-top:4px;">${rows.map(r=>`
+  const wrapId=`approval-files-${key}-${ff}`;
+  const downloadAllBtn=rows.length>1?`<button class="btn btn-out btn-xs" style="margin-top:4px;" onclick="downloadAllFilesFromContainer('${wrapId}','${ff}')"><i class="ti ti-download"></i> تنزيل الكل</button>`:'';
+  return `${downloadAllBtn}<div id="${wrapId}" style="display:flex;flex-direction:column;gap:5px;margin-top:4px;">${rows.map(r=>`
     <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:8px;padding:5px 8px;">
       <div>
         ${fileLinkHtml(r.name,r.data)}
