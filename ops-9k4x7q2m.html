@@ -7397,7 +7397,7 @@ function buildQuotePage(){
   const todayQ=new Date().toISOString().split('T')[0];
   document.getElementById('page-quote').innerHTML=`
     <div class="page-header"><div class="ptitle"><i class="ti ti-receipt-2"></i> إصدار عرض سعر رسمي</div></div>
-    ${window._editingQuoteKey?`<div style="background:#FFF7E6;border:1px solid #F5D68A;color:#92400E;border-radius:var(--radius-md);padding:10px 16px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;"><span><i class="ti ti-edit"></i> وضع تعديل عرض السعر رقم <strong>${(standaloneQuotes[window._editingQuoteKey]&&standaloneQuotes[window._editingQuoteKey].ref)||window._editingQuoteKey}</strong></span><button class="btn btn-out btn-sm" onclick="cancelEditQuote()"><i class="ti ti-x"></i> إلغاء التعديل</button></div>`:''}
+    ${window._editingQuoteKey?`<div style="background:#FFF7E6;border:1px solid #F5D68A;color:#92400E;border-radius:var(--radius-md);padding:10px 16px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;"><span><i class="ti ti-edit"></i> وضع تعديل عرض السعر رقم <strong>${(standaloneQuotes[window._editingQuoteKey]&&standaloneQuotes[window._editingQuoteKey].ref)||window._editingQuoteKey}</strong></span><div style="display:flex;gap:8px;flex-wrap:wrap;">${(standaloneQuotes[window._editingQuoteKey]?.revisions||[]).length?`<button class="btn btn-out btn-sm" onclick="openQuoteRevisionsModal('${window._editingQuoteKey}')"><i class="ti ti-history"></i> سجل النسخ السابقة (${standaloneQuotes[window._editingQuoteKey].revisions.length})</button>`:''}<button class="btn btn-out btn-sm" onclick="cancelEditQuote()"><i class="ti ti-x"></i> إلغاء التعديل</button></div></div>`:''}
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;align-items:start;">
       <!-- Customer Info Card -->
       <div class="card">
@@ -7484,7 +7484,6 @@ function buildQuotePage(){
         <div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap;">
           <button class="btn btn-green btn-sm" onclick="saveQuoteToDb()"><i class="ti ti-device-floppy"></i> حفظ التعديلات</button>
           <button class="btn btn-out btn-sm" onclick="saveAndPreviewQuote()"><i class="ti ti-eye"></i> معاينة وطباعة A4</button>
-          ${(standaloneQuotes[window._editingQuoteKey]?.revisions||[]).length?`<button class="btn btn-out btn-sm" onclick="openQuoteRevisionsModal()"><i class="ti ti-history"></i> سجل التعديلات (${standaloneQuotes[window._editingQuoteKey].revisions.length})</button>`:''}
           <button class="btn btn-out btn-sm" onclick="cancelEditQuote()"><i class="ti ti-x"></i> إلغاء التعديل</button>
           <button class="btn btn-green" onclick="convertSelectedQuoteItemsToOrder()"><i class="ti ti-file-certificate"></i> تحويل البنود المحددة فقط إلى أمر عمل</button>
         </div>`:`
@@ -8023,8 +8022,8 @@ async function saveQuoteToDb(){
 // ============================================================
 // QUOTE REVISION HISTORY & ROLLBACK
 // ============================================================
-function openQuoteRevisionsModal(){
-  const key=window._editingQuoteKey;if(!key)return;
+function openQuoteRevisionsModal(quoteKey){
+  const key=quoteKey||window._editingQuoteKey;if(!key)return;
   const q=standaloneQuotes[key];if(!q)return;
   const revisions=q.revisions||[];
   const rowsHtml=revisions.length?revisions.slice().reverse().map((r,i)=>{
