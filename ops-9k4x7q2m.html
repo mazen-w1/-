@@ -7374,10 +7374,22 @@ function goToQuoteWithPrefill(clientEncoded,phoneEncoded,quickTaskKey){
   nav('quote');
 }
 function buildQuotePage(){
-  window._quoteLines=[];
-  window._quoteCalcMode='combined';
-  window._quoteShowMeters=false;
-  window._quoteAttachmentB64='';window._quoteAttachmentName='';
+  // editQuote() calls this to rebuild the page shell, then immediately maps
+  // every field of the saved record onto it right after this function
+  // returns. Blanking _quoteLines/calcMode/showMeters/attachment here
+  // unconditionally — and, further down, falling into the "no draft ->
+  // start a fresh blank line" branch — briefly puts the form into an empty
+  // state on every single edit-open, which editQuote() then has to write
+  // over. Skipping that reset while an edit is in progress removes that
+  // empty-state window entirely instead of relying on editQuote() always
+  // running synchronously right after to paper over it.
+  const isEditingQuote=!!window._editingQuoteKey;
+  if(!isEditingQuote){
+    window._quoteLines=[];
+    window._quoteCalcMode='combined';
+    window._quoteShowMeters=false;
+    window._quoteAttachmentB64='';window._quoteAttachmentName='';
+  }
   const cArr=Object.values(clients);
   // Auto-generate quote number (RA-0001 format, locked)
   const autoRef='RA-'+(Object.keys(standaloneQuotes).length+1).toString().padStart(4,'0');
@@ -7491,7 +7503,11 @@ function buildQuotePage(){
   if(_quoteDraft&&_quoteDraft.quoteLines&&_quoteDraft.quoteLines.length){
     restoreQuoteDraft(_quoteDraft);
     toast('✓ تم استرجاع مسودة عرض سعر محفوظة تلقائياً من آخر جلسة');
-  }else{
+  }else if(!isEditingQuote){
+    // Starting a blank line here too only makes sense for a brand-new quote —
+    // editQuote() supplies the real saved lines (however many there are)
+    // right after this function returns, so seeding a stray empty one here
+    // while editing would just be immediately thrown away.
     addQuoteLine();
     if(_hasQuotePrefill){
       const ce=document.getElementById('q-client');if(ce)ce.value=window._quotePrefillClient||'';
