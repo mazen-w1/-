@@ -1973,12 +1973,23 @@ function fileLinkHtml(name,url,label){
   const ext=fileExt(nm).toUpperCase();
   const isImg=isImageFileUrl(nm,url);
   const isPdf=!isImg&&isPdfFileUrl(nm,url);
-  // this.href (not the raw `url` var) so a large base64 file's data isn't
-  // duplicated a second time into the onclick attribute — same pattern
-  // textClick below already relies on.
-  const previewClick=(isImg||isPdf)?`event.preventDefault();openFilePreviewLightbox(this.href,'${encodeURIComponent(nm)}',${isPdf});`:'';
-  const textClick=isTextLikeFile(nm)?"event.preventDefault();forceDownloadFile(this.href,this.getAttribute('download'));":'';
-  return `<a href="${url}" download="${esc(nm)}" target="_blank" rel="noopener noreferrer" class="file-download-link" title="${esc(nm)}" onclick="event.stopPropagation();${previewClick||textClick}notifyFileAccess('${encodeURIComponent(nm)}')">
+  // Every click is handled entirely in JS now, never falling through to the
+  // browser's own [download]+target="_blank" handling — that combo silently
+  // just NAVIGATES instead of downloading for any cross-origin file
+  // (Cloudinary/Drive-hosted, unlike a same-origin data: URI), which for a
+  // link with no target="_blank" replaces this very tab's whole SPA and
+  // wipes the in-memory session (cu, orders, everything) the instant it
+  // happens — surfacing as a random "logout"/session-timeout. Images/PDFs
+  // preview in the shared lightbox (whose own تنزيل button forces a real
+  // Blob download); everything else downloads immediately via
+  // forceDownloadFile(), which already fetches-as-blob specifically to force
+  // an actual save regardless of hosting. this.href (not the raw `url` var)
+  // so a large base64 file's data isn't duplicated a second time into the
+  // onclick attribute.
+  const clickAction=(isImg||isPdf)
+    ?`openFilePreviewLightbox(this.href,'${encodeURIComponent(nm)}',${isPdf});`
+    :`forceDownloadFile(this.href,this.getAttribute('download'));`;
+  return `<a href="${url}" download="${esc(nm)}" class="file-download-link" title="${esc(nm)}" onclick="event.preventDefault();event.stopPropagation();${clickAction}notifyFileAccess('${encodeURIComponent(nm)}')">
     <i class="ti ${icon}"></i>
     <span class="file-link-name">${label?esc(label)+' — ':''}${esc(nm)}</span>
     ${ext?`<span class="file-link-ext">${ext}</span>`:''}
@@ -2482,6 +2493,11 @@ function _restoreDataCache(){
   }catch(e){return false;}
 }
 async function loadData(){
+  // Stamped unconditionally on every call (poll, nav, post-mutation refresh,
+  // login) — nav()'s own throttle reads this to skip a redundant re-fetch
+  // when the in-memory data was already refreshed moments ago from any
+  // source, not just its own previous call.
+  window._lastDataLoadAt=Date.now();
   // Essential vs. auxiliary data, split deliberately:
   //   - Essential: orders (+ clients, the current user's orderSeen map, and
   //     the staff directory via syncUsers()). These are the records the
@@ -3751,7 +3767,19 @@ async function nav(p,skipHistory=false){
   if(pg)pg.classList.add('active');if(nb)nb.classList.add('active');
   _buildPage(p);
   _applyScrollRestore();
-  if(!_navBusy){_navBusy=true;try{await loadData();}catch(e){}if(p!=='add'&&p!=='request'&&p!=='quote'){_buildPage(p);_applyScrollRestore();}_navBusy=false;}
+  // Every navigation used to unconditionally re-fetch the entire dataset
+  // (loadData() alone fires 13+ Firebase requests) and rebuild the page a
+  // SECOND time once that resolved — clicking through several sidebar items
+  // in quick succession fired that whole round-trip every single click,
+  // each one visibly re-rendering the page out from under the user a moment
+  // after it had already appeared. The background poll (see enterApp) already
+  // keeps in-memory data fresh on its own short interval, so a nav that lands
+  // well within that same freshness window can just render from what's
+  // already in memory — only actually worth re-fetching when the in-memory
+  // data might genuinely be stale (first load, or it's been a while since
+  // the last refresh from any source).
+  const _dataIsFresh=window._lastDataLoadAt&&(Date.now()-window._lastDataLoadAt<4000);
+  if(!_navBusy&&!_dataIsFresh){_navBusy=true;try{await loadData();}catch(e){}if(p!=='add'&&p!=='request'&&p!=='quote'){_buildPage(p);_applyScrollRestore();}_navBusy=false;}
   // Clear the one-shot KPI-card filter (see renderWfListView) once this ENTIRE
   // navigation — including the post-loadData re-render above — has finished,
   // not on first read; renderWfListView() itself no longer clears it, since
@@ -8682,7 +8710,11 @@ function openFilePreviewLightbox(url,nameEncoded,isPdf){
   }
   const name=safeDecodeURIComponent(nameEncoded||'')||(isPdf?'ملف PDF':'صورة');
   const previewHtml=isPdf?`<iframe src="${url}" title="${esc(name)}"></iframe>`:`<img src="${url}" alt="${esc(name)}"/>`;
-  ov.innerHTML=`<button type="button" class="chat-lightbox-close" onclick="closeChatImageLightbox()">×</button>${previewHtml}<a href="${url}" download="${esc(name)}" class="chat-lightbox-download" onclick="event.stopPropagation();"><i class="ti ti-download"></i> تنزيل</a>`;
+  // forceDownloadFile() (fetch-as-blob) instead of a plain [download] href —
+  // the native attribute is silently ignored for any cross-origin URL
+  // (Cloudinary/Drive-hosted), which navigates this tab away and destroys
+  // the whole in-memory SPA session instead of downloading anything.
+  ov.innerHTML=`<button type="button" class="chat-lightbox-close" onclick="closeChatImageLightbox()">×</button>${previewHtml}<a href="${url}" download="${esc(name)}" class="chat-lightbox-download" onclick="event.preventDefault();event.stopPropagation();forceDownloadFile(this.href,this.getAttribute('download'));"><i class="ti ti-download"></i> تنزيل</a>`;
   ov.classList.add('open');
   document.addEventListener('keydown',_chatLightboxEscHandler);
 }
