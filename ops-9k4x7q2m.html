@@ -690,6 +690,7 @@ input[type="password"]{direction:rtl;text-align:right;padding-left:40px;padding-
 .chat-lightbox-overlay{position:fixed;inset:0;background:rgba(0,0,0,.85);display:none;align-items:center;justify-content:center;flex-direction:column;z-index:99999;padding:30px;}
 .chat-lightbox-overlay.open{display:flex;}
 .chat-lightbox-overlay img{max-width:90vw;max-height:80vh;border-radius:10px;box-shadow:0 8px 40px rgba(0,0,0,.5);}
+.chat-lightbox-overlay iframe{width:90vw;height:85vh;max-width:900px;border:none;border-radius:10px;background:#fff;box-shadow:0 8px 40px rgba(0,0,0,.5);}
 .chat-lightbox-close{position:absolute;top:16px;left:16px;width:38px;height:38px;border-radius:50%;border:none;background:rgba(255,255,255,.15);color:#fff;font-size:22px;cursor:pointer;line-height:1;}
 .chat-lightbox-download{margin-top:14px;background:var(--gold,#D4AF37);color:#3a2a00;border-radius:var(--radius-sm);padding:8px 18px;font-size:12px;font-weight:800;text-decoration:none;display:inline-flex;align-items:center;gap:6px;}
 /* ── Rich, clickable "new event" banners — stacked top-corner cards, distinct from the plain bottom toast() bar ── */
@@ -1951,14 +1952,33 @@ async function forceDownloadFile(url,filename){
     window.open(url,'_blank','noopener,noreferrer');
   }
 }
+// Images/PDFs default to a full browser-page preview in a NEW TAB, taking
+// the user out of the app entirely for what's usually a quick look at a
+// proof or attachment. isImageFileUrl/isPdfFileUrl check both the file's
+// extension and (for base64 files) its data: URI's actual MIME type, since a
+// renamed or extension-less upload still carries the real type there.
+function isImageFileUrl(name,url){
+  if(url&&/^data:image\//i.test(url))return true;
+  return/\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(name||'');
+}
+function isPdfFileUrl(name,url){
+  if(url&&/^data:application\/pdf/i.test(url))return true;
+  return/\.pdf$/i.test(name||'');
+}
 function fileLinkHtml(name,url,label){
   if(!url)return'';
   const nm=name||'ملف';
   const icon=fileIconForName(nm);
   const size=fileSizeLabel(url);
   const ext=fileExt(nm).toUpperCase();
+  const isImg=isImageFileUrl(nm,url);
+  const isPdf=!isImg&&isPdfFileUrl(nm,url);
+  // this.href (not the raw `url` var) so a large base64 file's data isn't
+  // duplicated a second time into the onclick attribute — same pattern
+  // textClick below already relies on.
+  const previewClick=(isImg||isPdf)?`event.preventDefault();openFilePreviewLightbox(this.href,'${encodeURIComponent(nm)}',${isPdf});`:'';
   const textClick=isTextLikeFile(nm)?"event.preventDefault();forceDownloadFile(this.href,this.getAttribute('download'));":'';
-  return `<a href="${url}" download="${esc(nm)}" target="_blank" rel="noopener noreferrer" class="file-download-link" title="${esc(nm)}" onclick="event.stopPropagation();${textClick}notifyFileAccess('${encodeURIComponent(nm)}')">
+  return `<a href="${url}" download="${esc(nm)}" target="_blank" rel="noopener noreferrer" class="file-download-link" title="${esc(nm)}" onclick="event.stopPropagation();${previewClick||textClick}notifyFileAccess('${encodeURIComponent(nm)}')">
     <i class="ti ${icon}"></i>
     <span class="file-link-name">${label?esc(label)+' — ':''}${esc(nm)}</span>
     ${ext?`<span class="file-link-ext">${ext}</span>`:''}
@@ -2359,21 +2379,17 @@ async function enterApp(u){
   try{chatSeenMap=(await fbGet('chatSeen/'+u))||{};}catch(e){}
   nav(_restorePage);
   renderStarTicker();
-  // The 60s background poll used to also call refreshCurrentPage(), which
-  // — however carefully guarded (see its own input-focus/modal/dropdown/
-  // upload-queue checks) — still meant a full _buildPage() DOM rebuild could
-  // fire under the user at any moment a guard didn't happen to cover (e.g.
-  // it had no idea about a voice note mid-playback). loadData() itself
-  // already only ever touches in-memory state (orders/clients/etc.) plus a
-  // handful of reactive badge counters (updateNotifBell, unread dots,
-  // checkForNewEventNotifsAndAlert's banners) — never the active page's own
-  // DOM — so simply dropping the refreshCurrentPage() call here removes the
-  // last automatic full-page re-render in the app. The currently-open page
-  // now only ever rebuilds when the user actually navigates or takes an
-  // action that calls refreshCurrentPage() themselves (advancing a stage,
-  // closing an order, changing sort mode, etc.) — never from a silent
-  // background sync.
-  setInterval(async()=>{await loadData();renderStarTicker();},60000);
+  requestPushNotificationPermission();
+  // Background poll: 10s instead of the previous 60s, and refreshCurrentPage()
+  // is back in the loop — a stage advance/reversion by someone else now shows
+  // up on an open workflow/department board within ~10s instead of only on
+  // the next manual navigation. This was previously left out entirely because
+  // refreshCurrentPage()'s guards (input focus/modal/dropdown/upload-queue/
+  // selection) didn't account for a voice note mid-playback, so a rebuild
+  // could still yank the <audio> element out from under it — refreshCurrentPage()
+  // itself now checks for that too (see its own comment), closing that gap
+  // instead of avoiding the call altogether.
+  setInterval(async()=>{await loadData();renderStarTicker();refreshCurrentPage();},10000);
 }
 function logout(){localStorage.removeItem(SESSION_KEY);sessionStorage.removeItem(SESSION_KEY);location.reload();}
 // ============================================================
@@ -3767,6 +3783,13 @@ function refreshCurrentPage(){
   if(document.querySelector('[id^="my-req-"][style*="table-row"]'))return;
   const ae=document.activeElement;
   if(ae&&(ae.tagName==='INPUT'||ae.tagName==='TEXTAREA'||ae.tagName==='SELECT'||ae.isContentEditable))return;
+  // A voice-note/audio player mid-playback (chat, client feedback, etc.) has
+  // no DOM trace any of the checks above would catch, but a rebuild here
+  // would still yank the <audio> element out from under it and silently
+  // stop playback — this was the actual gap that got the background poll's
+  // own refreshCurrentPage() call removed entirely in the past; guarding it
+  // directly lets that call come back safely instead.
+  if(Array.from(document.querySelectorAll('audio')).some(a=>!a.paused))return;
   if(p==='teamchat'){loadAndRenderTeamChat();return;}
   if(p){const sx=window.scrollX,sy=window.scrollY;_buildPage(p);window.scrollTo(sx,sy);}
 }
@@ -3880,8 +3903,22 @@ async function revertOrderToPrevDept(key){
   const deptLbl={design:'التصميم',external:'التنفيذ الخارجي',print:'الطباعة',workshop:'الورشة'};
   if(!confirm(`هل تريد إرجاع الطلب لمرحلة: ${deptLbl[prev]||prev}؟`))return;
   showSaving('جاري الإرجاع...');
-  const upd={currentDept:prev,stageStartDate:new Date().toISOString(),status:'قيد المتابعة'};
+  // reverted/revertedAt/revertedBy/revertedFrom/revertedTo are permanent —
+  // never cleared, even once the order later finishes — so the "طلب مرجع"
+  // badge (orderRowBadges/od-header-title) keeps flagging that this order
+  // was sent backward at some point, for as long as the order exists.
+  const upd={currentDept:prev,stageStartDate:new Date().toISOString(),status:'قيد المتابعة',reverted:true,revertedAt:new Date().toISOString(),revertedBy:cu.name,revertedFrom:o.currentDept,revertedTo:prev};
   if(o.currentDept==='done'){upd.archivedAt=null;upd.workshopFeedbackDone=null;}
+  // Per-item independent workflow: itemCurrentDept() prefers an item's own
+  // currentDept over the order's, so an item already individually advanced
+  // past this point would otherwise keep sitting at its own later stage —
+  // invisible on the target department's per-item board — even though the
+  // order itself just moved back. Bring every item down to the same stage
+  // the whole order is being reverted to, so the target department's queue
+  // actually shows it immediately.
+  if(o.orderItems&&o.orderItems.length){
+    upd.orderItems=o.orderItems.map(it=>({...it,currentDept:prev}));
+  }
   try{
     await fbPatch(`orders/${key}`,upd);
     logOrderActivity(key,'ti-arrow-back-up',`تم إرجاع الطلب لمرحلة: ${deptLbl[prev]||prev}`);
@@ -5412,6 +5449,10 @@ function orderRowBadges(o){
   const overdue=isOrderOverdue(o);
   if(overdue)badges.push('<span class="row-pill overdue-pill"><i class="ti ti-alert-triangle"></i> متأخر</span>');
   if(o.onHold)badges.push('<span class="row-pill" style="background:#F59E0B;" title="'+esc(o.onHoldReason?('السبب: '+o.onHoldReason):'')+'"><i class="ti ti-clock-pause"></i> متوقف</span>');
+  // Permanent marker (never cleared) once an order has ever been sent back a
+  // stage via revertOrderToPrevDept() — stays visible on every card/table row
+  // even after the order later finishes.
+  if(o.reverted)badges.push('<span class="row-pill" style="background:#7C3AED;" title="'+esc(o.revertedAt?('بتاريخ: '+fmtDateTime(o.revertedAt)):'')+'"><i class="ti ti-arrow-back-up"></i> طلب مرجع</span>');
   const lineCount=Object.values(orders).filter(v=>v.parentOrderKey===o._key).length;
   if(lineCount)badges.push(`<span class="row-pill" style="background:#475569;" title="هذا الطلب يشمل خطوط إنتاج موازية إضافية"><i class="ti ti-git-branch"></i> ${lineCount+1} خطوط إنتاج</span>`);
   return badges.join('');
@@ -8628,18 +8669,26 @@ function seekChatAudio(aid,val){
   audio.currentTime=(val/100)*audio.duration;
 }
 // ---------- Lightbox ----------
-function openChatImageLightbox(url,nameEncoded){
+// Shared full-screen preview overlay for chat image attachments AND every
+// other in-app file link (fileLinkHtml) — images/PDFs open here in-page
+// instead of navigating away to a new browser tab. One overlay element,
+// lazily created, reused across the whole app.
+function openFilePreviewLightbox(url,nameEncoded,isPdf){
   let ov=document.getElementById('chat-lightbox-overlay');
   if(!ov){
     ov=document.createElement('div');ov.id='chat-lightbox-overlay';ov.className='chat-lightbox-overlay';
     ov.addEventListener('click',e=>{if(e.target===ov)closeChatImageLightbox();});
     document.body.appendChild(ov);
   }
-  const name=safeDecodeURIComponent(nameEncoded||'')||'صورة';
-  ov.innerHTML=`<button type="button" class="chat-lightbox-close" onclick="closeChatImageLightbox()">×</button><img src="${url}" alt="${esc(name)}"/><a href="${url}" download="${esc(name)}" class="chat-lightbox-download" onclick="event.stopPropagation();"><i class="ti ti-download"></i> تنزيل</a>`;
+  const name=safeDecodeURIComponent(nameEncoded||'')||(isPdf?'ملف PDF':'صورة');
+  const previewHtml=isPdf?`<iframe src="${url}" title="${esc(name)}"></iframe>`:`<img src="${url}" alt="${esc(name)}"/>`;
+  ov.innerHTML=`<button type="button" class="chat-lightbox-close" onclick="closeChatImageLightbox()">×</button>${previewHtml}<a href="${url}" download="${esc(name)}" class="chat-lightbox-download" onclick="event.stopPropagation();"><i class="ti ti-download"></i> تنزيل</a>`;
   ov.classList.add('open');
   document.addEventListener('keydown',_chatLightboxEscHandler);
 }
+// Kept as a thin alias — every existing chat-attachment call site already
+// calls this exact name for images.
+function openChatImageLightbox(url,nameEncoded){openFilePreviewLightbox(url,nameEncoded,false);}
 function closeChatImageLightbox(){
   const ov=document.getElementById('chat-lightbox-overlay');if(ov)ov.classList.remove('open');
   document.removeEventListener('keydown',_chatLightboxEscHandler);
@@ -8666,7 +8715,38 @@ function checkForNewEventNotifsAndAlert(){
   playNotifChime();
   // Cap how many stack at once — a burst of many events (bulk stage advance,
   // etc.) should still chime once but not flood the corner with a dozen cards.
-  fresh.slice(-3).forEach(([k,v])=>showEventNotifBanner({...v,_key:k}));
+  fresh.slice(-3).forEach(([k,v])=>{
+    showEventNotifBanner({...v,_key:k});
+    sendPushNotification({...v,_key:k});
+  });
+}
+// ---------- Native browser push notifications ----------
+// Plain Notification API — no service worker or push server involved, so
+// this only fires while the browser itself is actually open (a closed
+// browser/tab gets nothing, exactly as any non-service-worker Notification
+// implementation would), but that still covers "background tab, minimized
+// window, or another app focused" — which is what staff actually asked for.
+// Permission is requested once per login; a user who denies it simply keeps
+// getting the in-app banner/chime as before.
+function requestPushNotificationPermission(){
+  if(!('Notification' in window))return;
+  if(Notification.permission==='default')Notification.requestPermission().catch(()=>{});
+}
+function sendPushNotification(n){
+  if(!('Notification' in window)||Notification.permission!=='granted')return;
+  // Skip while this tab is actually the one being looked at — the in-app
+  // banner (showEventNotifBanner) already covers that case, and a native
+  // notification on top of it would just be a redundant duplicate.
+  if(!document.hidden&&document.hasFocus())return;
+  const meta=NOTIF_TYPE_META[n.type]||{label:'إشعار'};
+  try{
+    const notif=new Notification('روائع الأفكار — '+meta.label,{body:n.message||'',icon:'/logo.svg',tag:n._key||undefined});
+    notif.onclick=()=>{
+      window.focus();
+      if(n.orderKey)openOrderPage(n.orderKey);
+      notif.close();
+    };
+  }catch(e){}
 }
 function showEventNotifBanner(n){
   let stack=document.getElementById('event-notif-stack');
@@ -10083,7 +10163,7 @@ function buildOrderDetailsPage(){
     ${backBtnHtml()}
     <div class="od-header">
       <div class="od-header-main">
-        <div class="od-header-title"><i class="ti ti-file-text"></i> ${o.id||key} — ${esc(o.client)}${o.orderKind==='maintenance'?'<span class="urgent-tag" style="font-size:9px;background:linear-gradient(135deg,#991B1B,#DC2626);"><i class="ti ti-tool"></i>صيانة</span>':''}${o.isQuickTask?'<span class="urgent-tag" style="font-size:9px;"><i class="ti ti-bolt"></i>مهمة سريعة</span>':''}${o.staffReassigned?`<span class="urgent-tag" style="font-size:9px;background:linear-gradient(135deg,#7C3AED,#6D28D9);" title="${esc('آخر سبب: '+(o.lastReassignReason||'—'))}"><i class="ti ti-user-cog"></i>تمت إعادة تكليف الموظف</span>`:''}${o.onHold?`<span class="urgent-tag" style="font-size:9px;background:linear-gradient(135deg,#D97706,#B45309);" title="${esc(o.onHoldReason?('السبب: '+o.onHoldReason):'')}"><i class="ti ti-clock-pause"></i>متوقف / بانتظار العميل</span>`:''}</div>
+        <div class="od-header-title"><i class="ti ti-file-text"></i> ${o.id||key} — ${esc(o.client)}${o.orderKind==='maintenance'?'<span class="urgent-tag" style="font-size:9px;background:linear-gradient(135deg,#991B1B,#DC2626);"><i class="ti ti-tool"></i>صيانة</span>':''}${o.isQuickTask?'<span class="urgent-tag" style="font-size:9px;"><i class="ti ti-bolt"></i>مهمة سريعة</span>':''}${o.staffReassigned?`<span class="urgent-tag" style="font-size:9px;background:linear-gradient(135deg,#7C3AED,#6D28D9);" title="${esc('آخر سبب: '+(o.lastReassignReason||'—'))}"><i class="ti ti-user-cog"></i>تمت إعادة تكليف الموظف</span>`:''}${o.onHold?`<span class="urgent-tag" style="font-size:9px;background:linear-gradient(135deg,#D97706,#B45309);" title="${esc(o.onHoldReason?('السبب: '+o.onHoldReason):'')}"><i class="ti ti-clock-pause"></i>متوقف / بانتظار العميل</span>`:''}${o.reverted?`<span class="urgent-tag" style="font-size:9px;background:linear-gradient(135deg,#7C3AED,#6D28D9);" title="${esc(o.revertedAt?('بتاريخ: '+fmtDateTime(o.revertedAt)):'')}"><i class="ti ti-arrow-back-up"></i>طلب مرجع</span>`:''}</div>
         <div class="od-header-meta">
           <span>الخدمة: <strong>${esc(o.service)}</strong></span>
           <span>الحالة: ${deptBadge(o.currentDept)}</span>
