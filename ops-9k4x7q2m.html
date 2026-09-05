@@ -423,6 +423,44 @@ input[type="password"]{direction:rtl;text-align:right;padding-left:40px;padding-
 .oc-hint{font-size:10.5px;color:var(--text-3);margin-right:25px;}
 #add-content .card{border-color:rgba(212,175,55,.4);}
 #add-content .card-header{padding:16px 22px;}
+/* ============================================================ CREATE ORDER — PROGRESSIVE STEP WIZARD
+   Purely a navigation/layout shell around the exact same cards/fields/IDs
+   above — no field was removed, renamed, or had its business logic
+   touched. Steps are shown/hidden via [hidden], never removed from the
+   DOM, so the existing draft-autosave (delegated on #add-content) and
+   submitOrder() (reads the same element IDs regardless of which step is
+   visible) both keep working unmodified. */
+.aow-steps{display:flex;align-items:center;justify-content:center;gap:0;margin-bottom:20px;flex-wrap:wrap;}
+.aow-step-dot{display:flex;align-items:center;gap:8px;cursor:default;padding:4px 6px;border-radius:10px;border:none;background:none;font-family:inherit;}
+.aow-step-dot.clickable{cursor:pointer;}
+.aow-step-dot.clickable:hover .aow-step-num{border-color:var(--gold);}
+.aow-step-num{width:28px;height:28px;border-radius:50%;border:2px solid var(--border);color:var(--text-3);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;flex:none;background:#fff;transition:.15s;}
+.aow-step-dot.active .aow-step-num{border-color:var(--maroon);background:var(--maroon);color:#fff;}
+.aow-step-dot.done .aow-step-num{border-color:var(--gold);background:var(--gold);color:#fff;}
+.aow-step-label{font-size:11px;font-weight:700;color:var(--text-3);white-space:nowrap;}
+.aow-step-dot.active .aow-step-label{color:var(--maroon);font-weight:800;}
+.aow-step-dot.done .aow-step-label{color:var(--text-2);}
+.aow-step-sep{width:24px;height:2px;background:var(--border);margin:0 2px;flex:none;}
+@media(max-width:640px){.aow-step-label{display:none;}.aow-step-sep{width:12px;}}
+.aow-summary-bar{display:flex;flex-wrap:wrap;gap:10px 22px;align-items:center;background:linear-gradient(135deg,var(--maroon),var(--maroon-dark));border-radius:16px;padding:14px 20px;margin-bottom:20px;box-shadow:0 10px 26px rgba(74,14,23,.15);}
+.aow-sum-row{display:flex;flex-direction:column;gap:2px;min-width:64px;}
+.aow-sum-row span{font-size:9.5px;color:rgba(255,255,255,.65);font-weight:700;}
+.aow-sum-row strong{font-size:12.5px;color:#fff;font-weight:800;}
+.aow-sum-row.aow-sum-total strong{color:var(--gold);font-size:15px;}
+.aow-sum-wf{font-size:10.5px;color:rgba(255,255,255,.85);font-weight:700;background:rgba(255,255,255,.1);border-radius:8px;padding:5px 10px;}
+.aow-step-panel{animation:aowFadeIn .2s ease;}
+@keyframes aowFadeIn{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:translateY(0);}}
+.aow-nav{display:flex;justify-content:space-between;gap:10px;margin-top:18px;padding-top:14px;border-top:1px solid var(--border-soft);}
+.aow-review-group{background:#fff;border:1px solid rgba(212,175,55,.4);border-radius:16px;padding:16px 20px;margin-bottom:14px;}
+.aow-review-group-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+.aow-review-group-title{font-size:13px;font-weight:800;color:var(--maroon);display:flex;align-items:center;gap:8px;}
+.aow-review-row{display:flex;justify-content:space-between;gap:10px;font-size:12px;padding:5px 0;border-bottom:1px dashed var(--border-soft);}
+.aow-review-row:last-child{border-bottom:none;}
+.aow-review-row span{color:var(--text-3);font-weight:700;}
+.aow-review-row strong{color:var(--text-1);font-weight:800;text-align:left;}
+.aow-review-item{background:var(--surface-2);border:1px solid var(--border-soft);border-radius:10px;padding:10px 12px;margin-bottom:8px;font-size:11.5px;}
+.aow-review-item-name{font-weight:800;color:var(--maroon);margin-bottom:3px;}
+.aow-review-empty{text-align:center;color:var(--text-3);font-size:12px;padding:14px;}
 /* Order items — premium row cards (visual only, same fields/handlers) */
 .oi-row{background:#fff;border:1px solid var(--border-soft);border-radius:12px;padding:10px;margin-bottom:8px;box-shadow:0 2px 12px rgba(74,14,23,.05);}
 .oi-row-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:7px;}
@@ -2922,11 +2960,18 @@ function restoreOrderDraft(draft){
 // Delegated so it survives buildAddForm() rebuilding #add-content's innerHTML
 // as many times as the user opens the page — a listener attached inside that
 // function would otherwise be re-registered (and stack) on every rebuild.
+// Keeps the step-wizard's live order-summary bar (renderOrderSummaryPanel,
+// defined further down near buildAddForm) in sync with ANY change anywhere
+// in the form — workflow-preset buttons, department selects, etc. included
+// — without having to individually wire a call into every single one of
+// those call sites. Function declarations are hoisted, so the reference
+// here is valid regardless of definition order in the file.
+const renderOrderSummaryPanelDebounced=debounce(()=>{if(typeof renderOrderSummaryPanel==='function')renderOrderSummaryPanel();},250);
 document.addEventListener('input',function(e){
-  if(e.target&&e.target.closest&&e.target.closest('#add-content'))saveOrderDraftDebounced();
+  if(e.target&&e.target.closest&&e.target.closest('#add-content')){saveOrderDraftDebounced();renderOrderSummaryPanelDebounced();}
 });
 document.addEventListener('change',function(e){
-  if(e.target&&e.target.closest&&e.target.closest('#add-content'))saveOrderDraftDebounced();
+  if(e.target&&e.target.closest&&e.target.closest('#add-content')){saveOrderDraftDebounced();renderOrderSummaryPanelDebounced();}
 });
 // ── Same pattern as ORDER_DRAFT_* above, for the official quotation form.
 // Restoring only ever applies to a brand-new quote — see the guard in
@@ -10774,118 +10819,144 @@ function buildAddForm(isUrgentQuick=false){
   document.getElementById('add-content').innerHTML=`
     ${isUrgentQuick?'<div class="ro-notice" style="background:#FFF5F5;border-color:#FCA5A5;color:#991B1B"><i class="ti ti-bolt"></i> تسجيل طلب مستعجل</div>':''}
     <datalist id="cl-list">${cArr.map(c=>`<option value="${esc(c.name)}">`).join('')}</datalist>
-    <div class="order-cards-row">
-      <!-- CARD 1 (Far Right): CUSTOMER INFORMATION -->
-      <div class="oc-card">
-        <div class="oc-head"><div class="oc-icon"><i class="ti ti-user"></i></div><div class="oc-title">بيانات العميل</div></div>
-        <div class="fg"><label>اسم العميل / الجهة *</label><input id="fc" list="cl-list" oninput="onClientInput(this.value)" autocomplete="off" placeholder="اسم الشركة أو العميل"/></div>
-        <div class="fg"><label>رقم الجوال *</label>
-          <div style="display:flex;gap:6px;"><input id="fp" inputmode="tel" placeholder="05XXXXXXXX" maxlength="20" style="flex:1;" required/><button type="button" class="btn btn-whatsapp btn-sm" onclick="openWhatsapp(document.getElementById('fp').value)"><i class="ti ti-brand-whatsapp"></i></button></div>
-        </div>
-        <div class="fg"><label>الشخص المسؤول للتواصل (اختياري)</label><input id="f-contact-person" placeholder="اسم المسؤول عن التواصل..."/></div>
-      </div>
-      <!-- CARD 2: ORDER INFORMATION -->
-      <div class="oc-card">
-        <div class="oc-head"><div class="oc-icon"><i class="ti ti-clipboard-list"></i></div><div class="oc-title">بيانات الطلب</div></div>
-        <div class="fg"><label>الأولوية</label>
-          <select id="fpr"><option value="عادية">عادية</option><option value="متوسطة">متوسطة</option><option value="عاجلة"${isUrgentQuick?' selected':''}>عاجلة</option></select>
-        </div>
-        <div class="fg"><label>نوع الطلب</label>
-          <select id="f-order-type"><option value="">— غير محدد —</option>${Object.keys(SERVICE_TYPE_PRESETS).map(k=>`<option value="${k}">${k}</option>`).join('')}</select>
-        </div>
-        <div class="fg"><label>تاريخ التسليم المتوقع *</label><input type="datetime-local" id="fd" required/></div>
-        <div class="fg"><label>حالة الدفع *</label>
-          <select id="fpay" onchange="onPaymentChange(this.value)">
-            <option value="">— اختر حالة الدفع —</option>
-            <option value="تم الدفع">تم الدفع بالكامل</option>
-            <option value="دفع جزئي">دفع جزئي</option>
-            <option value="عند التسليم">عند التسليم</option>
-          </select>
+    <div class="aow-steps" id="aow-steps"></div>
+    <div class="aow-summary-bar" id="aow-summary-body"></div>
+    <!-- STEP 1: CUSTOMER -->
+    <div class="aow-step-panel" id="aow-step-1">
+      <div class="order-cards-row">
+        <div class="oc-card">
+          <div class="oc-head"><div class="oc-icon"><i class="ti ti-user"></i></div><div class="oc-title">بيانات العميل</div></div>
+          <div class="fg"><label>اسم العميل / الجهة *</label><input id="fc" list="cl-list" oninput="onClientInput(this.value)" autocomplete="off" placeholder="اسم الشركة أو العميل"/></div>
+          <div class="fg"><label>رقم الجوال *</label>
+            <div style="display:flex;gap:6px;"><input id="fp" inputmode="tel" placeholder="05XXXXXXXX" maxlength="20" style="flex:1;" required/><button type="button" class="btn btn-whatsapp btn-sm" onclick="openWhatsapp(document.getElementById('fp').value)"><i class="ti ti-brand-whatsapp"></i></button></div>
+          </div>
+          <div class="fg"><label>الشخص المسؤول للتواصل (اختياري)</label><input id="f-contact-person" placeholder="اسم المسؤول عن التواصل..."/></div>
         </div>
       </div>
-      <!-- CARD 3: NOTES & INSTRUCTIONS -->
-      <div class="oc-card">
-        <div class="oc-head"><div class="oc-icon"><i class="ti ti-notes"></i></div><div class="oc-title">ملاحظات وتعليمات</div></div>
-        <div class="fg" style="flex:1;"><label>ملاحظات وتفاصيل المواصفات</label><textarea id="fn" placeholder="اكتب الملاحظات والمقاسات هنا..." style="min-height:90px;"></textarea></div>
-        <label class="oc-checkbox-row"><input type="checkbox" id="f-urgent-important"/><i class="ti ti-alert-triangle"></i> طلب عاجل ومهم</label>
-        <label class="oc-checkbox-row"><input type="checkbox" id="f-maintenance"/><i class="ti ti-shield-check"></i> عقد صيانة</label>
-        <div class="oc-hint">عند تفعيل عقد الصيانة، سيُضاف الطلب تلقائياً لقائمة "ضمان اللوحات" بضمان سنة كاملة من تاريخ الإكمال</div>
-        <div class="fg"><label>تعليمات داخلية إضافية</label><textarea id="f-internal-notes" placeholder="تعليمات داخلية للفريق (غير ظاهرة للعميل)..." style="min-height:60px;"></textarea></div>
-      </div>
-      <!-- CARD 4 (Far Left): FINANCIAL SUMMARY -->
-      <div class="oc-card">
-        <div class="oc-head"><div class="oc-icon"><i class="ti ti-cash"></i></div><div class="oc-title">الملخص المالي</div></div>
-        <div class="oc-total-box">
-          <div class="oc-total-label">المبلغ الإجمالي (ر.س)</div>
-          <input type="text" id="f-total-amount" placeholder="0" readonly/>
-          <div class="oc-total-note">يُحسب تلقائياً من سعر البنود أدناه</div>
-        </div>
-        <!-- Multi-Channel Payment Matrix (partial or full payment) -->
-        <div id="payment-channels-section" class="pay-channels-compact" style="display:none;">
-          <div style="font-size:11px;font-weight:800;color:var(--text-2);margin-bottom:6px;"><i class="ti ti-credit-card"></i> مصفوفة الدفع — أدخل المبلغ حسب كل وسيلة دفع مستخدمة</div>
-          <div class="form-grid" style="gap:8px;">
-            <div class="fg"><label>شبكة</label><input type="text" inputmode="decimal" id="f-amt-network" placeholder="0" oninput="onPayChannelInput(this)" onfocus="this.select()"/></div>
-            <div class="fg"><label>كاش</label><input type="text" inputmode="decimal" id="f-amt-cash" placeholder="0" oninput="onPayChannelInput(this)" onfocus="this.select()"/></div>
-            <div class="fg"><label>تحويل</label><input type="text" inputmode="decimal" id="f-amt-transfer" placeholder="0" oninput="onPayChannelInput(this)" onfocus="this.select()"/></div>
-            <div class="fg partial-field-ro"><label>الإجمالي المدفوع</label><input type="text" id="f-paid-amount" readonly style="background:var(--surface-2);color:var(--maroon);font-weight:800;"/></div>
+      <div class="aow-nav"><span></span><button type="button" class="btn btn-brand btn-sm" onclick="goToAddOrderStep(2)">التالي: بيانات الطلب <i class="ti ti-arrow-left"></i></button></div>
+    </div>
+    <!-- STEP 2: ORDER INFO + NOTES + PAYMENT -->
+    <div class="aow-step-panel" id="aow-step-2" hidden>
+      <div class="order-cards-row">
+        <div class="oc-card">
+          <div class="oc-head"><div class="oc-icon"><i class="ti ti-clipboard-list"></i></div><div class="oc-title">بيانات الطلب</div></div>
+          <div class="fg"><label>الأولوية</label>
+            <select id="fpr"><option value="عادية">عادية</option><option value="متوسطة">متوسطة</option><option value="عاجلة"${isUrgentQuick?' selected':''}>عاجلة</option></select>
+          </div>
+          <div class="fg"><label>نوع الطلب</label>
+            <select id="f-order-type"><option value="">— غير محدد —</option>${Object.keys(SERVICE_TYPE_PRESETS).map(k=>`<option value="${k}">${k}</option>`).join('')}</select>
+          </div>
+          <div class="fg"><label>تاريخ التسليم المتوقع *</label><input type="datetime-local" id="fd" required/></div>
+          <div class="fg"><label>حالة الدفع *</label>
+            <select id="fpay" onchange="onPaymentChange(this.value)">
+              <option value="">— اختر حالة الدفع —</option>
+              <option value="تم الدفع">تم الدفع بالكامل</option>
+              <option value="دفع جزئي">دفع جزئي</option>
+              <option value="عند التسليم">عند التسليم</option>
+            </select>
           </div>
         </div>
-        <!-- Remaining amount (partial payment only) -->
-        <div id="partial-remaining-wrap" style="display:none;">
-          <div class="fg partial-field-ro">
-            <label>المبلغ المتبقي (ر.س)</label>
-            <input type="text" inputmode="decimal" id="f-remaining-amount" placeholder="0" readonly/>
+        <div class="oc-card">
+          <div class="oc-head"><div class="oc-icon"><i class="ti ti-notes"></i></div><div class="oc-title">ملاحظات وتعليمات</div></div>
+          <div class="fg" style="flex:1;"><label>ملاحظات وتفاصيل المواصفات</label><textarea id="fn" placeholder="اكتب الملاحظات والمقاسات هنا..." style="min-height:90px;"></textarea></div>
+          <label class="oc-checkbox-row"><input type="checkbox" id="f-urgent-important"/><i class="ti ti-alert-triangle"></i> طلب عاجل ومهم</label>
+          <label class="oc-checkbox-row"><input type="checkbox" id="f-maintenance"/><i class="ti ti-shield-check"></i> عقد صيانة</label>
+          <div class="oc-hint">عند تفعيل عقد الصيانة، سيُضاف الطلب تلقائياً لقائمة "ضمان اللوحات" بضمان سنة كاملة من تاريخ الإكمال</div>
+          <div class="fg"><label>تعليمات داخلية إضافية</label><textarea id="f-internal-notes" placeholder="تعليمات داخلية للفريق (غير ظاهرة للعميل)..." style="min-height:60px;"></textarea></div>
+        </div>
+        <div class="oc-card">
+          <div class="oc-head"><div class="oc-icon"><i class="ti ti-cash"></i></div><div class="oc-title">الملخص المالي</div></div>
+          <div class="oc-total-box">
+            <div class="oc-total-label">المبلغ الإجمالي (ر.س)</div>
+            <input type="text" id="f-total-amount" placeholder="0" readonly/>
+            <div class="oc-total-note">يُحسب تلقائياً من سعر البنود في الخطوة التالية</div>
+          </div>
+          <!-- Multi-Channel Payment Matrix (partial or full payment) -->
+          <div id="payment-channels-section" class="pay-channels-compact" style="display:none;">
+            <div style="font-size:11px;font-weight:800;color:var(--text-2);margin-bottom:6px;"><i class="ti ti-credit-card"></i> مصفوفة الدفع — أدخل المبلغ حسب كل وسيلة دفع مستخدمة</div>
+            <div class="form-grid" style="gap:8px;">
+              <div class="fg"><label>شبكة</label><input type="text" inputmode="decimal" id="f-amt-network" placeholder="0" oninput="onPayChannelInput(this)" onfocus="this.select()"/></div>
+              <div class="fg"><label>كاش</label><input type="text" inputmode="decimal" id="f-amt-cash" placeholder="0" oninput="onPayChannelInput(this)" onfocus="this.select()"/></div>
+              <div class="fg"><label>تحويل</label><input type="text" inputmode="decimal" id="f-amt-transfer" placeholder="0" oninput="onPayChannelInput(this)" onfocus="this.select()"/></div>
+              <div class="fg partial-field-ro"><label>الإجمالي المدفوع</label><input type="text" id="f-paid-amount" readonly style="background:var(--surface-2);color:var(--maroon);font-weight:800;"/></div>
+            </div>
+          </div>
+          <!-- Remaining amount (partial payment only) -->
+          <div id="partial-remaining-wrap" style="display:none;">
+            <div class="fg partial-field-ro">
+              <label>المبلغ المتبقي (ر.س)</label>
+              <input type="text" inputmode="decimal" id="f-remaining-amount" placeholder="0" readonly/>
+            </div>
+          </div>
+          <!-- Pay on delivery notice -->
+          <div id="delivery-amount-field" style="display:none;">
+            <div style="font-size:11px;color:#92400E;background:#FEF3C7;border-radius:8px;padding:9px 12px;font-weight:700;"><i class="ti ti-clock"></i> سيتم تحصيل المبلغ الإجمالي كاملاً عند التسليم</div>
           </div>
         </div>
-        <!-- Pay on delivery notice -->
-        <div id="delivery-amount-field" style="display:none;">
-          <div style="font-size:11px;color:#92400E;background:#FEF3C7;border-radius:8px;padding:9px 12px;font-weight:700;"><i class="ti ti-clock"></i> سيتم تحصيل المبلغ الإجمالي كاملاً عند التسليم</div>
-        </div>
       </div>
+      <div class="aow-nav"><button type="button" class="btn btn-out btn-sm" onclick="goToAddOrderStep(1)"><i class="ti ti-arrow-right"></i> السابق</button><button type="button" class="btn btn-brand btn-sm" onclick="goToAddOrderStep(3)">التالي: بنود الطلب <i class="ti ti-arrow-left"></i></button></div>
     </div>
-    <!-- ORDER ITEMS CARD (full width) -->
-    <div class="card">
-      <div class="card-header"><span class="card-title"><i class="ti ti-list-details"></i> بنود الطلب والخدمات</span><button class="btn btn-out btn-sm" type="button" onclick="addOrderLine()"><i class="ti ti-plus"></i> إضافة بند</button></div>
-      <div style="padding:16px;">
-        <div id="order-lines-wrap"><div style="text-align:center;color:var(--text-3);padding:20px;font-size:12px;"><i class="ti ti-list" style="font-size:28px;display:block;margin-bottom:8px;color:var(--border)"></i>اضغط "إضافة بند" لإضافة خدمات الطلب</div></div>
-        <div style="font-size:11px;color:var(--text-3);margin-top:8px;">يُستخدم اسم أول بند كاسم الخدمة الرئيسي في السجلات</div>
+    <!-- STEP 3: ITEMS -->
+    <div class="aow-step-panel" id="aow-step-3" hidden>
+      <div class="card">
+        <div class="card-header"><span class="card-title"><i class="ti ti-list-details"></i> بنود الطلب والخدمات</span><button class="btn btn-out btn-sm" type="button" onclick="addOrderLine()"><i class="ti ti-plus"></i> إضافة بند</button></div>
+        <div style="padding:16px;">
+          <div id="order-lines-wrap"><div style="text-align:center;color:var(--text-3);padding:20px;font-size:12px;"><i class="ti ti-list" style="font-size:28px;display:block;margin-bottom:8px;color:var(--border)"></i>اضغط "إضافة بند" لإضافة خدمات الطلب</div></div>
+          <div style="font-size:11px;color:var(--text-3);margin-top:8px;">يُستخدم اسم أول بند كاسم الخدمة الرئيسي في السجلات</div>
+        </div>
       </div>
+      <div class="aow-nav"><button type="button" class="btn btn-out btn-sm" onclick="goToAddOrderStep(2)"><i class="ti ti-arrow-right"></i> السابق</button><button type="button" class="btn btn-brand btn-sm" onclick="goToAddOrderStep(4)">التالي: سير العمل <i class="ti ti-arrow-left"></i></button></div>
     </div>
-    <div class="card">
-      <div class="card-header"><span class="card-title"><i class="ti ti-sitemap"></i> خطوط الإنتاج والتوكيل</span></div>
-      <!-- Service type quick-selector -->
-      <div style="padding:0 20px 16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-        <span style="font-size:12px;font-weight:700;color:var(--text-2);">تحديد سريع:</span>
-        ${Object.keys(SERVICE_TYPE_PRESETS).map(k=>`<button type="button" class="btn btn-out btn-xs" onclick="applyServicePreset('${k}')">${k}</button>`).join('')}
-      </div>
-      <div class="prod-line-row" style="background:var(--surface-2);border:1.5px solid var(--gold);border-radius:10px;padding:10px;">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
-          <span style="font-size:10px;font-weight:800;color:var(--gold);"><i class="ti ti-flag"></i> الخط الأساسي</span>
+    <!-- STEP 4: WORKFLOW -->
+    <div class="aow-step-panel" id="aow-step-4" hidden>
+      <div class="card">
+        <div class="card-header"><span class="card-title"><i class="ti ti-sitemap"></i> خطوط الإنتاج والتوكيل</span></div>
+        <!-- Service type quick-selector -->
+        <div style="padding:0 20px 16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+          <span style="font-size:12px;font-weight:700;color:var(--text-2);">تحديد سريع:</span>
+          ${Object.keys(SERVICE_TYPE_PRESETS).map(k=>`<button type="button" class="btn btn-out btn-xs" onclick="applyServicePreset('${k}')">${k}</button>`).join('')}
         </div>
-        <div class="fg" style="margin-bottom:8px;">
-          <label style="font-size:9.5px;">البنود التي يغطيها هذا الخط (اختياري — أي بند غير مخصص لخط موازٍ يعمل هنا تلقائياً)</label>
-          <div id="primary-line-items-wrap" style="display:flex;flex-wrap:wrap;"></div>
+        <div class="prod-line-row" style="background:var(--surface-2);border:1.5px solid var(--gold);border-radius:10px;padding:10px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+            <span style="font-size:10px;font-weight:800;color:var(--gold);"><i class="ti ti-flag"></i> الخط الأساسي</span>
+          </div>
+          <div class="fg" style="margin-bottom:8px;">
+            <label style="font-size:9.5px;">البنود التي يغطيها هذا الخط (اختياري — أي بند غير مخصص لخط موازٍ يعمل هنا تلقائياً)</label>
+            <div id="primary-line-items-wrap" style="display:flex;flex-wrap:wrap;"></div>
+          </div>
+          <div class="wf-stage-track" id="wf-stage-track"></div>
+          <div style="font-size:9.5px;color:var(--text-3);margin-top:6px;"><i class="ti ti-arrows-move"></i> اسحب البطاقات لإعادة ترتيب مراحل سير العمل حسب الحاجة (تصميم / تنفيذ خارجي / طباعة / ورشة)</div>
         </div>
-        <div class="wf-stage-track" id="wf-stage-track"></div>
-        <div style="font-size:9.5px;color:var(--text-3);margin-top:6px;"><i class="ti ti-arrows-move"></i> اسحب البطاقات لإعادة ترتيب مراحل سير العمل حسب الحاجة (تصميم / تنفيذ خارجي / طباعة / ورشة)</div>
-      </div>
-      <div style="padding:16px 20px 4px;border-top:1px solid var(--border-soft);margin-top:6px;">
-        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
-          <span style="font-size:12px;font-weight:800;color:var(--maroon);"><i class="ti ti-git-branch"></i> خطوط إنتاج متوازية إضافية</span>
-          <button type="button" class="btn btn-out btn-xs" id="add-prod-line-btn" onclick="addProductionLine()"><i class="ti ti-plus"></i> إضافة خط موازٍ</button>
+        <div style="padding:16px 20px 4px;border-top:1px solid var(--border-soft);margin-top:6px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
+            <span style="font-size:12px;font-weight:800;color:var(--maroon);"><i class="ti ti-git-branch"></i> خطوط إنتاج متوازية إضافية</span>
+            <button type="button" class="btn btn-out btn-xs" id="add-prod-line-btn" onclick="addProductionLine()"><i class="ti ti-plus"></i> إضافة خط موازٍ</button>
+          </div>
+          <div style="font-size:10.5px;color:var(--text-3);margin-bottom:10px;">حتى 4 خطوط إنتاج بالإجمالي (الخط الأساسي أعلاه + 3 خطوط إضافية). كل خط إضافي يعمل كطلب مستقل مرتبط، بحيث تعمل جميع الأقسام (تصميم، تنفيذ خارجي، طباعة، ورشة) في كل خط بالتوازي دون انتظار الخطوط الأخرى.</div>
+          <div id="prod-lines-wrap" style="display:flex;flex-direction:column;gap:10px;"></div>
         </div>
-        <div style="font-size:10.5px;color:var(--text-3);margin-bottom:10px;">حتى 4 خطوط إنتاج بالإجمالي (الخط الأساسي أعلاه + 3 خطوط إضافية). كل خط إضافي يعمل كطلب مستقل مرتبط، بحيث تعمل جميع الأقسام (تصميم، تنفيذ خارجي، طباعة، ورشة) في كل خط بالتوازي دون انتظار الخطوط الأخرى.</div>
-        <div id="prod-lines-wrap" style="display:flex;flex-direction:column;gap:10px;"></div>
       </div>
+      <div class="aow-nav"><button type="button" class="btn btn-out btn-sm" onclick="goToAddOrderStep(3)"><i class="ti ti-arrow-right"></i> السابق</button><button type="button" class="btn btn-brand btn-sm" onclick="goToAddOrderStep(5)">التالي: المراجعة النهائية <i class="ti ti-arrow-left"></i></button></div>
     </div>
-    <div style="padding:10px 0 4px;">
-      <button class="btn btn-brand" onclick="submitOrder(${isUrgentQuick})"><i class="ti ti-check"></i> حفظ الطلب وإطلاق المهام</button>
+    <!-- STEP 5: FINAL REVIEW -->
+    <div class="aow-step-panel" id="aow-step-5" hidden>
+      <div id="aow-review-body"></div>
+      <div class="aow-nav"><button type="button" class="btn btn-out btn-sm" onclick="goToAddOrderStep(4)"><i class="ti ti-arrow-right"></i> السابق</button>
+        <div style="display:flex;gap:8px;">
+          <button type="button" class="btn btn-out btn-sm" onclick="saveOrderDraft();toast('✓ تم حفظ المسودة')"><i class="ti ti-device-floppy"></i> حفظ كمسودة</button>
+          <button class="btn btn-brand" onclick="submitOrder(${isUrgentQuick})"><i class="ti ti-check"></i> حفظ الطلب وإطلاق المهام</button>
+        </div>
+      </div>
     </div>`;
   window.globalAttachedFiles=[];window.externalFileB64='';window.externalFileName='';
   window._prodLines=[];window._prodLineDesignWorkers=dw;window._prodLinePrintWorkers=pw;window._prodLineExternalWorkers=ew;window._prodLineWorkshopWorkers=ww;window._primaryLineItemIds=[];renderProductionLines();renderPrimaryLineItems();
   window._workflowOrder=['design','external','print','workshop'];
   window._wfStageWorkers={dw,pw,ww,ew,isDesigner,isUrgentQuick,cuName:cu.name,cuUname:cu._uname};
   renderWorkflowStageTrack();
+  window._addOrderStep=1;
+  renderAddOrderStepIndicator();
+  renderAddOrderStepVisibility();
+  renderOrderSummaryPanel();
   // Converting a multi-stage quick task (see transferQuickTaskToOrder()):
   // apply its per-department assignments to the matching fw-* selects. The
   // order-registration selects have no "assign to all" broadcast option
@@ -10936,7 +11007,156 @@ function buildAddForm(isUrgentQuick=false){
       renderOrderLines();
       toast('✓ تم إرفاق ملف المهمة السريعة تلقائياً بالبند الأول');
     }
+    renderOrderSummaryPanel();
   },80);
+}
+// ============================================================
+// ORDER REGISTRATION — PROGRESSIVE STEP WIZARD (navigation shell only)
+// ============================================================
+const ADD_ORDER_STEPS=[
+  {n:1,label:'العميل',icon:'ti-user'},
+  {n:2,label:'بيانات الطلب',icon:'ti-clipboard-list'},
+  {n:3,label:'البنود',icon:'ti-list-details'},
+  {n:4,label:'سير العمل',icon:'ti-sitemap'},
+  {n:5,label:'المراجعة',icon:'ti-checklist'},
+];
+function renderAddOrderStepIndicator(){
+  const el=document.getElementById('aow-steps');if(!el)return;
+  const cur=window._addOrderStep||1;
+  el.innerHTML=ADD_ORDER_STEPS.map((s,i)=>{
+    const state=s.n===cur?'active':(s.n<cur?'done':'');
+    // Only steps already reached are clickable to jump back — jumping
+    // forward still has to go through goToAddOrderStep()'s own validation.
+    const clickable=s.n<=cur;
+    const dot=`<button type="button" class="aow-step-dot ${state} ${clickable?'clickable':''}" ${clickable?`onclick="goToAddOrderStep(${s.n})"`:'disabled'}>
+      <span class="aow-step-num">${state==='done'?'<i class=\"ti ti-check\"></i>':s.n}</span>
+      <span class="aow-step-label">${esc(s.label)}</span>
+    </button>`;
+    return i<ADD_ORDER_STEPS.length-1?dot+'<div class="aow-step-sep"></div>':dot;
+  }).join('');
+}
+function renderAddOrderStepVisibility(){
+  const cur=window._addOrderStep||1;
+  for(let i=1;i<=5;i++){
+    const panel=document.getElementById('aow-step-'+i);
+    if(panel)panel.hidden=(i!==cur);
+  }
+  renderAddOrderStepIndicator();
+}
+// Validates only what the CURRENT step actually asked for — never the whole
+// form at once, so the user is never confronted with a wall of unrelated
+// errors from steps they haven't reached yet.
+function validateAddOrderStep(step){
+  if(step===1){
+    const name=document.getElementById('fc')?.value.trim();
+    const phone=document.getElementById('fp')?.value.trim();
+    if(!name){toast('⚠️ يرجى إدخال اسم العميل / الجهة');document.getElementById('fc')?.focus();return false;}
+    if(!phone){toast('⚠️ يرجى إدخال رقم الجوال');document.getElementById('fp')?.focus();return false;}
+    return true;
+  }
+  if(step===2){
+    const date=document.getElementById('fd')?.value;
+    const pay=document.getElementById('fpay')?.value;
+    if(!date){toast('⚠️ يرجى تحديد تاريخ التسليم المتوقع');document.getElementById('fd')?.focus();return false;}
+    if(!pay){toast('⚠️ يرجى تحديد حالة الدفع');document.getElementById('fpay')?.focus();return false;}
+    return true;
+  }
+  if(step===3){
+    const hasItem=(window._orderLines||[]).some(l=>(l.name||'').trim());
+    if(!hasItem){toast('⚠️ يرجى إضافة بند واحد على الأقل باسم صحيح');return false;}
+    return true;
+  }
+  return true;
+}
+function goToAddOrderStep(step){
+  const cur=window._addOrderStep||1;
+  if(step>cur){
+    for(let s=cur;s<step;s++){if(!validateAddOrderStep(s))return;}
+  }
+  window._addOrderStep=step;
+  renderAddOrderStepVisibility();
+  if(step===5)renderOrderReviewStep();
+  const wrap=document.getElementById('add-content');
+  if(wrap)wrap.scrollIntoView({behavior:'smooth',block:'start'});
+}
+// Live order summary — reused across every step (not just a review-step
+// concept) via the aow-summary-body bar built into buildAddForm()'s
+// template. Recomputed from the exact same in-memory state
+// (window._orderLines/_prodLines/_workflowOrder, the fc/fp/fd inputs)
+// everything else already reads — no separate/duplicate state of its own.
+function renderOrderSummaryPanel(){
+  const el=document.getElementById('aow-summary-body');if(!el)return;
+  const client=document.getElementById('fc')?.value.trim();
+  const phone=document.getElementById('fp')?.value.trim();
+  const deliveryRaw=document.getElementById('fd')?.value||'';
+  let delivery='—';
+  if(deliveryRaw){try{delivery=new Date(deliveryRaw).toLocaleString('ar-SA',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});}catch(e){}}
+  const lines=(window._orderLines||[]).filter(l=>(l.name||'').trim());
+  const totalQty=lines.reduce((s,l)=>s+(parseFloat(normalizeDigits(String(l.qty??0)))||0),0);
+  const totalAmt=lines.reduce((s,l)=>s+orderLineTotal(l),0);
+  const wfOrder=window._workflowOrder||['design','external','print','workshop'];
+  const activeWf=wfOrder.filter(k=>{const sel=document.getElementById('fw-'+k);return sel&&sel.value&&sel.value!=='none';}).map(k=>WF_STAGE_META[k]?.label||k);
+  el.innerHTML=`
+    <div class="aow-sum-row"><span>العميل</span><strong>${esc(client||'—')}</strong></div>
+    <div class="aow-sum-row"><span>الجوال</span><strong style="direction:ltr;">${esc(phone||'—')}</strong></div>
+    <div class="aow-sum-row"><span>التسليم</span><strong>${esc(delivery)}</strong></div>
+    <div class="aow-sum-row"><span>البنود</span><strong>${lines.length}</strong></div>
+    <div class="aow-sum-row"><span>الكمية</span><strong>${totalQty||'—'}</strong></div>
+    <div class="aow-sum-row aow-sum-total"><span>الإجمالي</span><strong>${fmtMoney(totalAmt)} ر.س</strong></div>
+    ${activeWf.length?`<div class="aow-sum-wf"><i class="ti ti-route"></i> ${activeWf.join(' ← ')}</div>`:''}
+  `;
+}
+// Final review step (11) — pure read-out of the exact same state every
+// other step already collected; nothing here is a separate source of
+// truth. "تعديل" on each group jumps straight back to the step that owns
+// that data via goToAddOrderStep() (always allowed going backward).
+function renderOrderReviewStep(){
+  const el=document.getElementById('aow-review-body');if(!el)return;
+  const client=document.getElementById('fc')?.value.trim()||'—';
+  const phone=document.getElementById('fp')?.value.trim()||'—';
+  const contact=document.getElementById('f-contact-person')?.value.trim();
+  const priority=document.getElementById('fpr')?.value||'عادية';
+  const orderType=document.getElementById('f-order-type')?.value||'—';
+  const deliveryRaw=document.getElementById('fd')?.value||'';
+  let delivery='—';
+  if(deliveryRaw){try{delivery=new Date(deliveryRaw).toLocaleString('ar-SA',{day:'numeric',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'});}catch(e){}}
+  const pay=document.getElementById('fpay')?.value||'—';
+  const lines=(window._orderLines||[]).filter(l=>(l.name||'').trim());
+  const totalAmt=lines.reduce((s,l)=>s+orderLineTotal(l),0);
+  const wfOrder=window._workflowOrder||['design','external','print','workshop'];
+  const activeWf=wfOrder.filter(k=>{const sel=document.getElementById('fw-'+k);return sel&&sel.value&&sel.value!=='none';}).map(k=>WF_STAGE_META[k]?.label||k);
+  const itemsHtml=lines.length?lines.map((l,i)=>{
+    const specsTxt=(l.template&&PRODUCT_TEMPLATES[l.template]&&l.specs)?Object.values(l.specs).filter(Boolean).join(' / '):(l.details||'');
+    return `<div class="aow-review-item">
+      <div class="aow-review-item-name">${i+1}. ${esc(l.name)}</div>
+      <div style="color:var(--text-3);">الكمية: ${esc(String(l.qty??1))}${l.template&&PRODUCT_TEMPLATES[l.template]?' · '+esc(PRODUCT_TEMPLATES[l.template].label):''}${specsTxt?' · '+esc(specsTxt):''}${(l.files&&l.files.length)?' · '+l.files.length+' مرفق':''} · <strong style="color:var(--maroon);">${fmtMoney(orderLineTotal(l))} ر.س</strong></div>
+    </div>`;
+  }).join(''):'<div class="aow-review-empty">لم تتم إضافة بنود بعد</div>';
+  el.innerHTML=`
+    <div class="aow-review-group">
+      <div class="aow-review-group-head"><span class="aow-review-group-title"><i class="ti ti-user"></i> العميل</span><button type="button" class="btn btn-out btn-xs" onclick="goToAddOrderStep(1)"><i class="ti ti-pencil"></i> تعديل</button></div>
+      <div class="aow-review-row"><span>الاسم</span><strong>${esc(client)}</strong></div>
+      <div class="aow-review-row"><span>الجوال</span><strong style="direction:ltr;">${esc(phone)}</strong></div>
+      ${contact?`<div class="aow-review-row"><span>المسؤول</span><strong>${esc(contact)}</strong></div>`:''}
+    </div>
+    <div class="aow-review-group">
+      <div class="aow-review-group-head"><span class="aow-review-group-title"><i class="ti ti-clipboard-list"></i> بيانات الطلب</span><button type="button" class="btn btn-out btn-xs" onclick="goToAddOrderStep(2)"><i class="ti ti-pencil"></i> تعديل</button></div>
+      <div class="aow-review-row"><span>الأولوية</span><strong>${esc(priority)}</strong></div>
+      <div class="aow-review-row"><span>نوع الطلب</span><strong>${esc(orderType)}</strong></div>
+      <div class="aow-review-row"><span>التسليم المتوقع</span><strong>${esc(delivery)}</strong></div>
+      <div class="aow-review-row"><span>حالة الدفع</span><strong>${esc(pay)}</strong></div>
+    </div>
+    <div class="aow-review-group">
+      <div class="aow-review-group-head"><span class="aow-review-group-title"><i class="ti ti-list-details"></i> البنود (${lines.length})</span><button type="button" class="btn btn-out btn-xs" onclick="goToAddOrderStep(3)"><i class="ti ti-pencil"></i> تعديل</button></div>
+      ${itemsHtml}
+    </div>
+    <div class="aow-review-group">
+      <div class="aow-review-group-head"><span class="aow-review-group-title"><i class="ti ti-sitemap"></i> سير العمل</span><button type="button" class="btn btn-out btn-xs" onclick="goToAddOrderStep(4)"><i class="ti ti-pencil"></i> تعديل</button></div>
+      ${activeWf.length?`<div class="aow-review-row"><span>الترتيب</span><strong>${activeWf.join(' ← ')}</strong></div>`:'<div class="aow-review-empty">لا توجد مراحل مفعّلة</div>'}
+    </div>
+    <div class="aow-review-group" style="background:linear-gradient(135deg,var(--maroon),var(--maroon-dark));border:none;">
+      <div class="aow-review-row" style="border:none;"><span style="color:rgba(255,255,255,.7);">الإجمالي</span><strong style="color:var(--gold);font-size:18px;">${fmtMoney(totalAmt)} ر.س</strong></div>
+    </div>`;
 }
 function normalizeDigits(str){
   if(str==null)return str;
@@ -10988,6 +11208,7 @@ function recalcOrderTotal(){
   }else{
     calcRemaining();
   }
+  renderOrderSummaryPanel();
 }
 function onPaymentChange(v){
   const channels=document.getElementById('payment-channels-section');
@@ -11320,6 +11541,10 @@ function updateOrderLineSpec(id,key,val){
 // ── Order Line Items ──────────────────────────────────────────────────────────
 function addOrderLine(){
   if(!window._orderLines)window._orderLines=[];
+  // Auto-collapse every existing item once a new one is added — keeps the
+  // items list from growing into a wall of fully-expanded forms as more
+  // items get added; only the item actively being filled in stays open.
+  window._orderLines.forEach(l=>{l.collapsed=true;});
   const id='ol'+Date.now();
   window._orderLines.push({id,name:'',details:'',price:'',qty:1,files:[],collapsed:false,template:'',specs:{}});
   renderOrderLines();
@@ -11342,6 +11567,24 @@ function toggleOrderLineCollapse(id){
   const l=(window._orderLines||[]).find(x=>x.id===id);if(!l)return;
   l.collapsed=!l.collapsed;
   renderOrderLines();
+}
+// Copies an item's full details (name/qty/price/template/specs) as a new
+// line right after it — for near-identical repeat items (same board in two
+// sizes, same product in two colors) without retyping everything. Files
+// are intentionally NOT copied — a duplicate item needs its own proof/
+// attachments, not a second pointer at the original's files.
+function duplicateOrderLine(id){
+  if(!window._orderLines)return;
+  const idx=window._orderLines.findIndex(x=>x.id===id);if(idx===-1)return;
+  const src=window._orderLines[idx];
+  const copy={...src,id:'ol'+Date.now()+Math.random().toString(36).slice(2,6),specs:{...(src.specs||{})},files:[],collapsed:false};
+  window._orderLines.forEach(l=>{l.collapsed=true;});
+  window._orderLines.splice(idx+1,0,copy);
+  renderOrderLines();
+  renderProductionLines();
+  renderPrimaryLineItems();
+  saveOrderDraft();
+  toast('✓ تم تكرار البند');
 }
 function updateOrderLine(id,f,v){
   const l=(window._orderLines||[]).find(x=>x.id===id);if(l)l[f]=v;
@@ -11376,16 +11619,30 @@ function renderOrderLines(){
     recalcOrderTotal();
     return;
   }
+  // Compact collapsed-row summary: qty, product/template, specs, attachment
+  // count, and price all in one line — enough to recognize the item at a
+  // glance without expanding it, matching every other field's own data
+  // (never a separate/duplicate description of the item).
+  const collapsedSummary=l=>{
+    const parts=[`${l.qty??1} وحدة`];
+    if(l.template&&PRODUCT_TEMPLATES[l.template])parts.push(esc(PRODUCT_TEMPLATES[l.template].label));
+    const specsTxt=(l.template&&PRODUCT_TEMPLATES[l.template]&&l.specs)?Object.values(l.specs).filter(Boolean).join(' / '):'';
+    if(specsTxt)parts.push(esc(specsTxt));
+    if(l.files&&l.files.length)parts.push(`${l.files.length} مرفق`);
+    parts.push(`<strong style="color:var(--maroon);">${fmtMoney(orderLineTotal(l))} ر.س</strong>`);
+    return parts.join(' <span style="color:var(--border);">|</span> ');
+  };
   wrap.innerHTML=window._orderLines.map((l,i)=>`
     <div class="oi-row">
       <div class="oi-row-head">
         <div class="oi-row-head-left">
           <span class="oi-badge">بند #${i+1}</span>
           ${i===0?'<span class="oi-main-tag">(الخدمة الرئيسية)</span>':''}
-          ${l.collapsed?`<span class="oi-collapsed-summary">${esc(l.name||'بند بدون اسم')} — ${(l.qty??1)} × ${fmtMoney(parseFloat(normalizeDigits(l.price))||0)} = ${fmtMoney(orderLineTotal(l))} ر.س</span>`:''}
+          ${l.collapsed?`<div><div style="font-weight:800;font-size:12.5px;color:var(--text-1);">${esc(l.name||'بند بدون اسم')}</div><span class="oi-collapsed-summary">${collapsedSummary(l)}</span></div>`:''}
         </div>
         <div style="display:flex;gap:6px;">
           <button class="btn btn-out btn-xs" type="button" onclick="toggleOrderLineCollapse('${l.id}')" title="${l.collapsed?'توسيع البند':'طي البند'}"><i class="ti ${l.collapsed?'ti-chevron-down':'ti-chevron-up'}"></i></button>
+          <button class="btn btn-out btn-xs" type="button" onclick="duplicateOrderLine('${l.id}')" title="تكرار البند"><i class="ti ti-copy"></i></button>
           ${window._orderLines.length>1?`<button class="btn btn-red btn-xs" type="button" onclick="removeOrderLine('${l.id}')"><i class="ti ti-trash"></i> حذف</button>`:''}
         </div>
       </div>
