@@ -727,8 +727,12 @@ input[type="password"]{direction:rtl;text-align:right;padding-left:40px;padding-
 .chat-attach-thumb img{width:100%;height:100%;object-fit:cover;display:block;}
 .chat-lightbox-overlay{position:fixed;inset:0;background:rgba(0,0,0,.85);display:none;align-items:center;justify-content:center;flex-direction:column;z-index:99999;padding:30px;}
 .chat-lightbox-overlay.open{display:flex;}
-.chat-lightbox-overlay img{max-width:90vw;max-height:80vh;border-radius:10px;box-shadow:0 8px 40px rgba(0,0,0,.5);}
-.chat-lightbox-overlay iframe{width:90vw;height:85vh;max-width:900px;border:none;border-radius:10px;background:#fff;box-shadow:0 8px 40px rgba(0,0,0,.5);}
+/* A clean, squared card frame around the preview (not a bare image floating
+   on the dark backdrop) — bounded to a consistent max size so it reads as
+   one contained modal regardless of the source image's own aspect ratio. */
+.chat-lightbox-card{background:#fff;border-radius:14px;padding:16px;box-shadow:0 12px 48px rgba(0,0,0,.5);max-width:min(92vw,720px);max-height:82vh;display:flex;align-items:center;justify-content:center;overflow:hidden;}
+.chat-lightbox-overlay img{max-width:100%;max-height:78vh;border-radius:8px;display:block;}
+.chat-lightbox-overlay iframe{width:min(88vw,860px);height:76vh;border:none;border-radius:8px;background:#fff;}
 .chat-lightbox-close{position:absolute;top:16px;left:16px;width:38px;height:38px;border-radius:50%;border:none;background:rgba(255,255,255,.15);color:#fff;font-size:22px;cursor:pointer;line-height:1;}
 .chat-lightbox-download{margin-top:14px;background:var(--gold,#D4AF37);color:#3a2a00;border-radius:var(--radius-sm);padding:8px 18px;font-size:12px;font-weight:800;text-decoration:none;display:inline-flex;align-items:center;gap:6px;}
 /* ── Rich, clickable "new event" banners — stacked top-corner cards, distinct from the plain bottom toast() bar ── */
@@ -2429,16 +2433,21 @@ async function enterApp(u){
   nav(_restorePage);
   renderStarTicker();
   requestPushNotificationPermission();
-  // Background poll: 10s instead of the previous 60s, and refreshCurrentPage()
-  // is back in the loop — a stage advance/reversion by someone else now shows
-  // up on an open workflow/department board within ~10s instead of only on
-  // the next manual navigation. This was previously left out entirely because
-  // refreshCurrentPage()'s guards (input focus/modal/dropdown/upload-queue/
-  // selection) didn't account for a voice note mid-playback, so a rebuild
-  // could still yank the <audio> element out from under it — refreshCurrentPage()
-  // itself now checks for that too (see its own comment), closing that gap
-  // instead of avoiding the call altogether.
-  setInterval(async()=>{await loadData();renderStarTicker();refreshCurrentPage();},10000);
+  // Background poll: refreshes in-memory data (orders/clients/badges/
+  // notifications) every 20s WITHOUT touching the visible page's DOM.
+  // A prior version of this also called refreshCurrentPage() here, which
+  // meant the entire current page (a full innerHTML rebuild of whatever
+  // list/board/table was open) silently re-rendered out from under the
+  // user every single cycle — a visible flicker/reset even while they were
+  // just reading, scrolling, or mid-search, exactly the instability this is
+  // meant to avoid. Data freshness for OTHER users' changes now comes from:
+  // this poll keeping memory current, plus nav()'s own freshness-aware
+  // re-render the next time the user actually navigates or reopens the page
+  // — never a silent rebuild while they're sitting still. Whoever performs
+  // an action themselves (advancing a stage, reverting, etc.) still sees it
+  // instantly, since every mutation already calls refreshCurrentPage()
+  // itself right after saving.
+  setInterval(async()=>{await loadData();renderStarTicker();},20000);
 }
 function logout(){localStorage.removeItem(SESSION_KEY);sessionStorage.removeItem(SESSION_KEY);location.reload();}
 // ============================================================
@@ -5270,7 +5279,7 @@ function renderWfFilesView(){
         <td style="font-size:12px;"><i class="ti ${r.icon}"></i> ${esc(r.label)} <span style="color:var(--text-3);">(${esc(r.fileName)})</span></td>
         <td style="font-size:11.5px;">${esc(r.uploadedBy)}</td>
         <td style="font-size:11px;">${formatDate(r.uploadedAt)}</td>
-        <td><a href="${r.fileData}" download="${esc(r.fileName)}" target="_blank" rel="noopener noreferrer" class="btn btn-out btn-xs" ${isTextLikeFile(r.fileName)?`onclick="event.preventDefault();forceDownloadFile(this.href,this.getAttribute('download'));"`:''}><i class="ti ti-download"></i></a></td>
+        <td><a href="${r.fileData}" download="${esc(r.fileName)}" class="btn btn-out btn-xs" onclick="event.preventDefault();forceDownloadFile(this.href,this.getAttribute('download'));"><i class="ti ti-download"></i></a></td>
       </tr>`).join(''):'<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text-3)">لا توجد ملفات مرفوعة بعد</td></tr>'}</tbody></table></div></div>`;
 }
 function filterWfFilesRows(){
@@ -8538,7 +8547,21 @@ async function startQuoteToOrderConversion(key,selectedIdxs=null){
     // price so price×qty on the order line reconstructs that exact same
     // total instead of silently dropping the area factor.
     const hasDims=!!(l.dims&&l.dims.length);
-    const price=(hasDims&&q.showMeters)?(quoteLinePreVatTotal(l,true)/qty):(l.p||0);
+    const preVatPrice=(hasDims&&q.showMeters)?(quoteLinePreVatTotal(l,true)/qty):(l.p||0);
+    // Quote line prices are pre-VAT ("السعر غير شامل الضريبة" — see the quote
+    // builder's own q-line-notax input); order item prices are VAT-inclusive
+    // by convention throughout the rest of the app (o.totalAmount, computed
+    // directly as sum(qty×price) with no separate VAT step — see
+    // recalcOrderTotal/buildFinancialBreakdownCard's matching subtotal=
+    // total/1.15 derivation). Copying the quote's pre-VAT figure straight
+    // across understated the resulting order's total (and therefore its
+    // invoice) by the full 15% VAT — this is what actually produced a
+    // mismatch between what a quote quoted the client and what the order
+    // created from it later invoiced. Converting to VAT-inclusive here, at
+    // the conversion boundary, keeps both systems' own internal conventions
+    // intact while making the number the client actually agreed to survive
+    // the conversion unchanged.
+    const price=preVatPrice*1.15;
     return{
       name:l.lbl||'بند',
       details:quoteLineDimsSummary(l)||`الكمية: ${qty}`,
@@ -8759,7 +8782,7 @@ function openFilePreviewLightbox(url,nameEncoded,isPdf){
   // the native attribute is silently ignored for any cross-origin URL
   // (Cloudinary/Drive-hosted), which navigates this tab away and destroys
   // the whole in-memory SPA session instead of downloading anything.
-  ov.innerHTML=`<button type="button" class="chat-lightbox-close" onclick="closeChatImageLightbox()">×</button>${previewHtml}<a href="${url}" download="${esc(name)}" class="chat-lightbox-download" onclick="event.preventDefault();event.stopPropagation();forceDownloadFile(this.href,this.getAttribute('download'));"><i class="ti ti-download"></i> تنزيل</a>`;
+  ov.innerHTML=`<button type="button" class="chat-lightbox-close" onclick="closeChatImageLightbox()">×</button><div class="chat-lightbox-card">${previewHtml}</div><a href="${url}" download="${esc(name)}" class="chat-lightbox-download" onclick="event.preventDefault();event.stopPropagation();forceDownloadFile(this.href,this.getAttribute('download'));"><i class="ti ti-download"></i> تنزيل</a>`;
   ov.classList.add('open');
   document.addEventListener('keydown',_chatLightboxEscHandler);
 }
@@ -11656,7 +11679,7 @@ function renderOrderLines(){
             <i class="ti ti-plus" style="color:var(--gold)"></i> إضافة ملف
             <input type="file" accept="*/*" multiple style="display:none" onchange="attachOrderLineFile('${l.id}',this.files)"/>
           </label>
-          ${(l.files&&l.files.length)?`<div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px;">${l.files.map((f,fi)=>`<span style="display:inline-flex;align-items:center;gap:4px;background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:3px 8px;font-size:10px;"><a href="${f.data}" download="${esc(f.name)}" target="_blank" rel="noopener noreferrer" style="color:var(--maroon);text-decoration:none;" ${isTextLikeFile(f.name)?`onclick="event.preventDefault();forceDownloadFile(this.href,this.getAttribute('download'));"`:''}><i class="ti ti-download"></i> ${esc(f.name)}</a><button type="button" onclick="removeOrderLineFile('${l.id}',${fi})" style="background:none;border:none;color:#EF4444;cursor:pointer;padding:0 0 0 2px;font-size:11px;line-height:1;">×</button></span>`).join('')}</div>`:'<div style="font-size:10px;color:var(--text-3);margin-top:4px;">لا توجد مرفقات</div>'}
+          ${(l.files&&l.files.length)?`<div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px;">${l.files.map((f,fi)=>`<span style="display:inline-flex;align-items:center;gap:4px;background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:3px 8px;font-size:10px;"><a href="${f.data}" download="${esc(f.name)}" style="color:var(--maroon);text-decoration:none;" onclick="event.preventDefault();forceDownloadFile(this.href,this.getAttribute('download'));"><i class="ti ti-download"></i> ${esc(f.name)}</a><button type="button" onclick="removeOrderLineFile('${l.id}',${fi})" style="background:none;border:none;color:#EF4444;cursor:pointer;padding:0 0 0 2px;font-size:11px;line-height:1;">×</button></span>`).join('')}</div>`:'<div style="font-size:10px;color:var(--text-3);margin-top:4px;">لا توجد مرفقات</div>'}
         </div>
         <div class="oi-grid-2">
           <div class="fg"><label>سعر الحبة (ر.س)</label><input type="text" inputmode="decimal" placeholder="0" min="0" value="${(l.price||'').toString().replace(/"/g,'&quot;')}" oninput="updateOrderLinePrice(this,'${l.id}')" onfocus="this.select()"/></div>
