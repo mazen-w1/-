@@ -73,7 +73,23 @@ function doPost(e) {
 
     const folder = DriveApp.getFolderById(FOLDER_ID);
     const file = folder.createFile(blob);
-    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    // Public-read so any department staff member's browser can view/download
+    // the file with no Google sign-in at all — a file left on Drive's
+    // default (private) sharing is exactly what produces the "Request
+    // Access" page the viewer/lightbox hits instead of the actual preview.
+    // If files still hit "Request Access" after this runs successfully,
+    // the cause is outside this script's control: a Google Workspace admin
+    // policy (Admin console → Apps → Google Workspace → Drive and Docs →
+    // Sharing settings) can force external/anyone-with-link sharing off
+    // for the whole domain, in which case setSharing() below either no-ops
+    // or throws — check that policy first before assuming this code is at
+    // fault.
+    try {
+      file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    } catch (sharingErr) {
+      console.error('gdrive-upload-script setSharing failed: ' + sharingErr);
+      return jsonError_('sharing-not-permitted');
+    }
 
     return jsonOk_({
       url: 'https://drive.google.com/uc?export=view&id=' + file.getId(),

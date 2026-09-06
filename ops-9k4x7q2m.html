@@ -471,6 +471,8 @@ input[type="password"]{direction:rtl;text-align:right;padding-left:40px;padding-
 .oi-grid{display:grid;grid-template-columns:2fr 1fr 0.7fr 1fr;gap:8px;}
 .oi-grid-2{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
 @media(max-width:640px){.oi-grid-2{grid-template-columns:1fr;}}
+.oi-grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;}
+@media(max-width:640px){.oi-grid-3{grid-template-columns:1fr;}}
 @media(max-width:640px){.oi-grid{grid-template-columns:1fr;}}
 .oi-row .fg{gap:3px;}
 .oi-row label{font-size:10px;}
@@ -2030,7 +2032,7 @@ function fileLinkHtml(name,url,label){
   // onclick attribute.
   const clickAction=(isImg||isPdf)
     ?`openFilePreviewLightbox(this.href,'${encodeURIComponent(nm)}',${isPdf});`
-    :`forceDownloadFile(this.href,this.getAttribute('download'));`;
+    :`forceDownloadFile(gdriveDownloadUrl(this.href),this.getAttribute('download'));`;
   return `<a href="${url}" download="${esc(nm)}" class="file-download-link" title="${esc(nm)}" onclick="event.preventDefault();event.stopPropagation();${clickAction}notifyFileAccess('${encodeURIComponent(nm)}')">
     <i class="ti ${icon}"></i>
     <span class="file-link-name">${label?esc(label)+' — ':''}${esc(nm)}</span>
@@ -8567,6 +8569,7 @@ async function startQuoteToOrderConversion(key,selectedIdxs=null){
       details:quoteLineDimsSummary(l)||`الكمية: ${qty}`,
       qty,
       price,
+      priceExclVat:preVatPrice,
       files:l.img?[{data:l.img,name:(l.lbl||'بند')+'.jpg'}]:[]
     };
   });
@@ -8769,6 +8772,19 @@ function seekChatAudio(aid,val){
 // other in-app file link (fileLinkHtml) — images/PDFs open here in-page
 // instead of navigating away to a new browser tab. One overlay element,
 // lazily created, reused across the whole app.
+// Google Drive's uc?export=view URL renders fine inside an <img> tag but is
+// unreliable for embedding a PDF in an <iframe> (depending on the file it
+// can force a download instead of previewing, or show a bare "can't
+// preview" page) — Drive's own documented iframe-embed format is
+// /file/d/<id>/preview instead. Detected purely from the URL shape (only
+// ever matches a real Drive uc?...id=<fileId> link — every other URL shape,
+// base64 data: or Cloudinary-hosted, is returned unchanged).
+function gdriveFileId(url){
+  const m=/drive\.google\.com\/uc\?[^"']*[?&]id=([\w-]+)/.exec(url||'');
+  return m?m[1]:null;
+}
+function gdrivePreviewUrl(url){const id=gdriveFileId(url);return id?`https://drive.google.com/file/d/${id}/preview`:url;}
+function gdriveDownloadUrl(url){const id=gdriveFileId(url);return id?`https://drive.google.com/uc?export=download&id=${id}`:url;}
 function openFilePreviewLightbox(url,nameEncoded,isPdf){
   let ov=document.getElementById('chat-lightbox-overlay');
   if(!ov){
@@ -8777,12 +8793,18 @@ function openFilePreviewLightbox(url,nameEncoded,isPdf){
     document.body.appendChild(ov);
   }
   const name=safeDecodeURIComponent(nameEncoded||'')||(isPdf?'ملف PDF':'صورة');
-  const previewHtml=isPdf?`<iframe src="${url}" title="${esc(name)}"></iframe>`:`<img src="${url}" alt="${esc(name)}"/>`;
+  const previewHtml=isPdf?`<iframe src="${gdrivePreviewUrl(url)}" title="${esc(name)}"></iframe>`:`<img src="${url}" alt="${esc(name)}"/>`;
   // forceDownloadFile() (fetch-as-blob) instead of a plain [download] href —
   // the native attribute is silently ignored for any cross-origin URL
   // (Cloudinary/Drive-hosted), which navigates this tab away and destroys
-  // the whole in-memory SPA session instead of downloading anything.
-  ov.innerHTML=`<button type="button" class="chat-lightbox-close" onclick="closeChatImageLightbox()">×</button><div class="chat-lightbox-card">${previewHtml}</div><a href="${url}" download="${esc(name)}" class="chat-lightbox-download" onclick="event.preventDefault();event.stopPropagation();forceDownloadFile(this.href,this.getAttribute('download'));"><i class="ti ti-download"></i> تنزيل</a>`;
+  // the whole in-memory SPA session instead of downloading anything. Drive
+  // itself doesn't send permissive CORS headers for that fetch() either way,
+  // so forceDownloadFile()'s own fallback (a plain window.open) is what
+  // actually runs for a Drive-hosted file — pointed at the export=download
+  // variant specifically, so that fallback still triggers a real download
+  // instead of landing on Drive's viewer page.
+  const downloadUrl=gdriveDownloadUrl(url);
+  ov.innerHTML=`<button type="button" class="chat-lightbox-close" onclick="closeChatImageLightbox()">×</button><div class="chat-lightbox-card">${previewHtml}</div><a href="${downloadUrl}" download="${esc(name)}" class="chat-lightbox-download" onclick="event.preventDefault();event.stopPropagation();forceDownloadFile(this.href,this.getAttribute('download'));"><i class="ti ti-download"></i> تنزيل</a>`;
   ov.classList.add('open');
   document.addEventListener('keydown',_chatLightboxEscHandler);
 }
@@ -10340,7 +10362,10 @@ function openAddItemModal(key,editIdx){
     <div style="display:flex;flex-direction:column;gap:10px;">
       <div class="fg"><label>اسم البند *</label><input id="new-item-name" placeholder="مثال: لوحة إعلانية إضافية" value="${nameVal}"/></div>
       <div class="fg"><label>الكمية</label><input type="text" inputmode="decimal" id="new-item-qty" placeholder="1" min="1" value="${isEdit?(existing.qty||''):''}" onfocus="this.select()"/></div>
-      <div class="fg"><label>سعر البند (ر.س) <span style="color:#EF4444">*</span></label><input type="text" inputmode="decimal" id="new-item-price" placeholder="0" min="0" value="${isEdit?(existing.price||''):''}" oninput="normalizeAmountInput(this)" onfocus="this.select()"/></div>
+      <div class="oi-grid-2">
+        <div class="fg"><label>السعر غير شامل الضريبة</label><input type="text" inputmode="decimal" id="new-item-price-excl" placeholder="0" min="0" value="${isEdit?(existing.priceExclVat||''):''}" oninput="syncNewItemPriceFromExcl(this)" onfocus="this.select()"/></div>
+        <div class="fg"><label>السعر شامل الضريبة (ر.س) <span style="color:#EF4444">*</span></label><input type="text" inputmode="decimal" id="new-item-price" placeholder="0" min="0" value="${isEdit?(existing.price||''):''}" oninput="syncNewItemPriceFromIncl(this)" onfocus="this.select()"/></div>
+      </div>
       <div class="fg"><label>التفاصيل والمواصفات (المقاسات/الأبعاد)</label><textarea id="new-item-details" placeholder="المقاسات، المواد..." style="min-height:60px;">${esc(detailsVal)}</textarea></div>
       <div class="fg"><label>ملاحظات إضافية على البند</label><textarea id="edit-item-notes" placeholder="أدخل أي ملاحظات خاصة بالبند...">${esc(notesVal)}</textarea></div>
       <div class="fg"><label>إرفاق ملف (اختياري)</label>
@@ -10395,6 +10420,7 @@ async function submitNewOrderItem(key){
   const qtyRaw=normalizeDigits(document.getElementById('new-item-qty')?.value||'');
   const qty=qtyRaw?parseFloat(qtyRaw):undefined;
   const priceRaw=normalizeDigits(document.getElementById('new-item-price').value);
+  const priceExclVatRaw=normalizeDigits(document.getElementById('new-item-price-excl')?.value||'');
   const details=document.getElementById('new-item-details').value.trim();
   const notes=document.getElementById('edit-item-notes')?.value.trim()||'';
   if(!name){toast('⚠️ يرجى إدخال اسم البند');return;}
@@ -10407,9 +10433,19 @@ async function submitNewOrderItem(key){
     const items=Array.isArray(o.orderItems)?[...o.orderItems]:[];
     if(isEdit){
       const prev=items[editIdx]||{};
-      items[editIdx]={...prev,name,qty,details,notes,price,files:window._newItemFiles||[],edited:true,editedAt:new Date().toISOString(),editedBy:cu.name};
+      // Dual pricing is for new/newly-touched data only — never backfilled
+      // onto an old item just because it happened to get edited for an
+      // unrelated reason (qty, notes, etc.). Only written here if the user
+      // actually typed into the exclusive-VAT field themselves this time;
+      // otherwise whatever the item already had (nothing, for anything
+      // created before this feature existed) is carried over untouched.
+      const priceExclVat=priceExclVatRaw?parseFloat(priceExclVatRaw):prev.priceExclVat;
+      items[editIdx]={...prev,name,qty,details,notes,price,...(priceExclVat!==undefined?{priceExclVat}:{}),files:window._newItemFiles||[],edited:true,editedAt:new Date().toISOString(),editedBy:cu.name};
     }else{
-      items.push({name,qty,details,notes,price,files:window._newItemFiles||[],addedLater:true,addedAt:new Date().toISOString(),addedBy:cu.name});
+      // A brand-new item always gets both figures — defaulting the excl-VAT
+      // one from the entered price when the user didn't separately type it.
+      const priceExclVat=priceExclVatRaw?parseFloat(priceExclVatRaw):price/1.15;
+      items.push({name,qty,details,notes,price,priceExclVat,files:window._newItemFiles||[],addedLater:true,addedAt:new Date().toISOString(),addedBy:cu.name});
     }
     // Keep order-level totals in sync with item prices whenever the order already
     // tracks payment. Must match orderLineTotal()'s own price×qty formula (the
@@ -11016,7 +11052,7 @@ function buildAddForm(isUrgentQuick=false){
       _prefillIt.forEach(pi=>{
         addOrderLine();
         const line=window._orderLines[window._orderLines.length-1];
-        Object.assign(line,{name:pi.name||'',details:pi.details||'',price:pi.price||'',qty:pi.qty||1,files:pi.files||[]});
+        Object.assign(line,{name:pi.name||'',details:pi.details||'',price:pi.price||'',priceExclVat:pi.priceExclVat||'',qty:pi.qty||1,files:pi.files||[]});
       });
       renderOrderLines();
       toast(`✓ تم تجهيز ${_prefillIt.length} بند من عرض السعر — راجع الأسعار والمواصفات ثم أكمل باقي بيانات الطلب`);
@@ -11195,6 +11231,24 @@ function normalizeAmountInput(el){
     try{el.setSelectionRange(pos,pos);}catch(e){}
   }
   calcRemaining();
+}
+// Dual price fields on the "add/edit item" modal (openAddItemModal), same
+// convention as the order-registration line editor and the quotes module:
+// new-item-price stays the canonical VAT-inclusive figure submitNewOrderItem()
+// already reads; new-item-price-excl is kept in sync with it in both
+// directions purely for entry/transparency.
+function syncNewItemPriceFromExcl(el){
+  normalizeAmountInput(el);
+  const excl=parseFloat(normalizeDigits(el.value))||0;
+  const inclEl=document.getElementById('new-item-price');
+  if(inclEl)inclEl.value=fmtMoney(excl*1.15);
+  calcRemaining();
+}
+function syncNewItemPriceFromIncl(el){
+  normalizeAmountInput(el);
+  const incl=parseFloat(normalizeDigits(el.value))||0;
+  const exclEl=document.getElementById('new-item-price-excl');
+  if(exclEl)exclEl.value=fmtMoney(incl/1.15);
 }
 function calcRemaining(){
   const total=parseFloat(normalizeDigits(document.getElementById('f-total-amount')?.value))||0;
@@ -11569,7 +11623,7 @@ function addOrderLine(){
   // items get added; only the item actively being filled in stays open.
   window._orderLines.forEach(l=>{l.collapsed=true;});
   const id='ol'+Date.now();
-  window._orderLines.push({id,name:'',details:'',price:'',qty:1,files:[],collapsed:false,template:'',specs:{}});
+  window._orderLines.push({id,name:'',details:'',price:'',priceExclVat:'',qty:1,files:[],collapsed:false,template:'',specs:{}});
   renderOrderLines();
   renderProductionLines();
   renderPrimaryLineItems();
@@ -11615,10 +11669,38 @@ function updateOrderLine(id,f,v){
   // their labels/options are derived directly from the order's item list above.
   if(f==='name'){renderProductionLines();renderPrimaryLineItems();}
 }
+// Dual price fields, same convention as the quotes module's own
+// q-line-notax/q-line-wtax pair: l.price stays the single canonical,
+// VAT-INCLUSIVE figure every downstream consumer already reads
+// (orderLineTotal, recalcOrderTotal, o.totalAmount, the invoice/financial
+// card) — completely unchanged. l.priceExclVat is a second, explicitly
+// persisted field purely for transparency/entry convenience, kept in sync
+// with l.price in both directions so editing either one updates the other
+// live, exactly like the quote builder already does.
 function updateOrderLinePrice(el,id){
   const norm=normalizeDigits(el.value);
   if(norm!==el.value){const pos=el.selectionStart;el.value=norm;try{el.setSelectionRange(pos,pos);}catch(e){}}
   updateOrderLine(id,'price',norm);
+  const l=(window._orderLines||[]).find(x=>x.id===id);
+  if(l){
+    l.priceExclVat=fmtMoney((parseFloat(norm)||0)/1.15);
+    const exclEl=document.getElementById('ol-price-excl-'+id);
+    if(exclEl)exclEl.value=l.priceExclVat;
+  }
+  updateOrderLineTotalDisplay(id);
+  recalcOrderTotal();
+}
+function updateOrderLinePriceExclVat(el,id){
+  const norm=normalizeDigits(el.value);
+  if(norm!==el.value){const pos=el.selectionStart;el.value=norm;try{el.setSelectionRange(pos,pos);}catch(e){}}
+  updateOrderLine(id,'priceExclVat',norm);
+  const l=(window._orderLines||[]).find(x=>x.id===id);
+  if(l){
+    const incl=fmtMoney((parseFloat(norm)||0)*1.15);
+    l.price=incl;
+    const inclEl=document.getElementById('ol-price-incl-'+id);
+    if(inclEl)inclEl.value=incl;
+  }
   updateOrderLineTotalDisplay(id);
   recalcOrderTotal();
 }
@@ -11681,9 +11763,10 @@ function renderOrderLines(){
           </label>
           ${(l.files&&l.files.length)?`<div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px;">${l.files.map((f,fi)=>`<span style="display:inline-flex;align-items:center;gap:4px;background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:3px 8px;font-size:10px;"><a href="${f.data}" download="${esc(f.name)}" style="color:var(--maroon);text-decoration:none;" onclick="event.preventDefault();forceDownloadFile(this.href,this.getAttribute('download'));"><i class="ti ti-download"></i> ${esc(f.name)}</a><button type="button" onclick="removeOrderLineFile('${l.id}',${fi})" style="background:none;border:none;color:#EF4444;cursor:pointer;padding:0 0 0 2px;font-size:11px;line-height:1;">×</button></span>`).join('')}</div>`:'<div style="font-size:10px;color:var(--text-3);margin-top:4px;">لا توجد مرفقات</div>'}
         </div>
-        <div class="oi-grid-2">
-          <div class="fg"><label>سعر الحبة (ر.س)</label><input type="text" inputmode="decimal" placeholder="0" min="0" value="${(l.price||'').toString().replace(/"/g,'&quot;')}" oninput="updateOrderLinePrice(this,'${l.id}')" onfocus="this.select()"/></div>
-          <div class="fg"><label>الإجمالي</label><div id="ol-line-total-${l.id}" style="display:flex;align-items:center;min-height:34px;font-size:12px;font-weight:800;color:var(--maroon);background:var(--surface-2);border:1.5px solid var(--border);border-radius:8px;padding:0 10px;">${fmtMoney(orderLineTotal(l))} ر.س</div></div>
+        <div class="oi-grid-3">
+          <div class="fg"><label>السعر غير شامل الضريبة</label><input type="text" inputmode="decimal" id="ol-price-excl-${l.id}" placeholder="0" min="0" value="${(l.priceExclVat||'').toString().replace(/"/g,'&quot;')}" oninput="updateOrderLinePriceExclVat(this,'${l.id}')" onfocus="this.select()"/></div>
+          <div class="fg"><label>السعر شامل الضريبة (ر.س)</label><input type="text" inputmode="decimal" id="ol-price-incl-${l.id}" placeholder="0" min="0" value="${(l.price||'').toString().replace(/"/g,'&quot;')}" oninput="updateOrderLinePrice(this,'${l.id}')" onfocus="this.select()"/></div>
+          <div class="fg"><label>الإجمالي (شامل الضريبة)</label><div id="ol-line-total-${l.id}" style="display:flex;align-items:center;min-height:34px;font-size:12px;font-weight:800;color:var(--maroon);background:var(--surface-2);border:1.5px solid var(--border);border-radius:8px;padding:0 10px;">${fmtMoney(orderLineTotal(l))} ر.س</div></div>
         </div>
       </div>`}
     </div>`).join('');
@@ -11774,7 +11857,7 @@ async function submitOrder(isUrgentQuick=false){
   const primaryLines=(window._orderLines||[]).filter(l=>!claimedItemIds.has(l.id));
   const primaryService=(primaryLines.find(l=>l.name.trim())||_lines[0]).name.trim()||s;
   const ord={
-    client:c,service:primaryService,orderItems:primaryLines.map(l=>({name:l.name,details:l.details,price:parseFloat(normalizeDigits(l.price))||0,qty:parseFloat(normalizeDigits(l.qty))||1,files:l.files||[],template:l.template||'',specs:l.specs||{}})),date:today,createdAt:new Date().toISOString(),stageStartDate:new Date().toISOString(),
+    client:c,service:primaryService,orderItems:primaryLines.map(l=>({name:l.name,details:l.details,price:parseFloat(normalizeDigits(l.price))||0,priceExclVat:parseFloat(normalizeDigits(l.priceExclVat))||0,qty:parseFloat(normalizeDigits(l.qty))||1,files:l.files||[],template:l.template||'',specs:l.specs||{}})),date:today,createdAt:new Date().toISOString(),stageStartDate:new Date().toISOString(),
     priority:document.getElementById('fpr').value,phone:normalizeSaudiPhone(phone),
     paymentStatus:payStatus,paidAmount:paidAmt,
     paidNetwork,paidCash,paidTransfer,paymentMethod:payChannelsText,
@@ -11828,7 +11911,7 @@ async function submitOrder(isUrgentQuick=false){
       const lineDept=_lineWfOrder.find(k=>_lineDeptToVal[k]!=='none')||'design';
       const lineOrd={
         client:c,service:(lineItems.length?lineItems.map(x=>x.name).join(' + '):s)+' — خط إنتاج موازٍ #'+(i+2),
-        orderItems:lineItems.map(x=>({name:x.name,details:x.details,price:parseFloat(normalizeDigits(x.price))||0,qty:parseFloat(normalizeDigits(x.qty))||1,files:x.files||[],template:x.template||'',specs:x.specs||{}})),
+        orderItems:lineItems.map(x=>({name:x.name,details:x.details,price:parseFloat(normalizeDigits(x.price))||0,priceExclVat:parseFloat(normalizeDigits(x.priceExclVat))||0,qty:parseFloat(normalizeDigits(x.qty))||1,files:x.files||[],template:x.template||'',specs:x.specs||{}})),
         date:today,createdAt:new Date().toISOString(),stageStartDate:new Date().toISOString(),
         priority:document.getElementById('fpr').value,phone:normalizeSaudiPhone(phone),
         deadline:document.getElementById('fd').value||'—',notes:'خط إنتاج موازٍ مرتبط بالطلب '+newId,
