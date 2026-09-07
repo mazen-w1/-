@@ -3330,6 +3330,27 @@ async function convertFileToBase64(file,folderCtx,onProgress){const MAX_IMAGE_SO
   }
 }
 const DRIVE_PROXY_URL='https://rawaee-drive-proxy.vercel.app/api/token';
+// Same deployment as DRIVE_PROXY_URL, just the origin without the /api/token
+// path — used below to build streaming preview/download links that never
+// touch drive.google.com from the viewer's browser. See driveProxyStreamUrl().
+const DRIVE_PROXY_ORIGIN='https://rawaee-drive-proxy.vercel.app';
+// Root fix for "يجب طلب الإذن بالوصول" (Request Access): instead of pointing
+// admins/staff/designers at a drive.google.com URL — which only works if
+// Google's OWN sharing permission on that specific file happens to be set to
+// "anyone with the link", and which a Google Workspace admin can override
+// with an org-wide "no external sharing" policy no app code can get around —
+// this streams the file's actual bytes through our own already-authorized
+// proxy server (api/file.js, companion to api/token.js in the
+// rawaee-drive-proxy Vercel project). The proxy holds a valid OAuth access
+// token server-side (the same one uploadToGoogleDrive() gets from
+// DRIVE_PROXY_URL) and fetches the file from Drive itself, then forwards the
+// bytes to whoever asked. The viewer's browser only ever talks to our own
+// domain, so Google's access-request wall never enters the picture, no
+// matter what Google account (or no account at all) the viewer is signed
+// into and regardless of that org's Drive sharing policy.
+function driveProxyStreamUrl(fileId,download){
+  return DRIVE_PROXY_ORIGIN+'/api/file?id='+encodeURIComponent(fileId)+(download?'&download=1':'');
+}
 const MAX_DRIVE_BYTES=500*1024*1024;
 // Adaptive chunk size instead of one fixed value: each chunk's measured
 // throughput sizes the NEXT chunk, clamped to [2MB, 5MB] (all multiples of
@@ -3581,11 +3602,38 @@ async function uploadToGoogleDrive(file,folderCtx,onProgress){
     }
     if(!fileId)throw new Error('⚠️ فشل رفع الملف إلى Google Drive: لم يتم استلام تأكيد الاكتمال.');
   }
-  try{
-    await fetchWithTimeout('https://www.googleapis.com/drive/v3/files/'+fileId+'/permissions',{method:'POST',headers:{Authorization:'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({role:'reader',type:'anyone'})});
-  }catch(e){}
+  await _shareFilePublicly(fileId,accessToken);
   (onProgress||setUploadProgress)(100);
   return 'https://drive.google.com/file/d/'+fileId+'/view?usp=sharing';
+}
+// Best-effort "anyone with the link can view" sharing on the Drive file
+// itself. IMPORTANT: this is no longer what makes in-app preview/download
+// work (see driveProxyStreamUrl() below, which routes every viewer through
+// our own proxy instead of drive.google.com and doesn't depend on this
+// permission landing at all) — it only matters if someone copies the raw
+// drive.google.com link out of the app (forwards it in WhatsApp, pastes it
+// elsewhere). The old version of this call swallowed every failure silently
+// (fetch() doesn't throw on a 403/domain-policy rejection, only on a network
+// error), so a Workspace account with "sharing outside the organization"
+// disabled would fail here forever with nobody ever finding out. This
+// version actually checks the response and retries once, then logs the real
+// reason instead of pretending it worked. If the failure reason is a domain
+// policy, no code fix can override that — it has to be turned on by that
+// Google Workspace's admin at admin.google.com → Apps → Google Workspace →
+// Drive and Docs → Sharing settings → "Sharing outside of <organization>".
+async function _shareFilePublicly(fileId,accessToken){
+  for(let attempt=0;attempt<2;attempt++){
+    try{
+      const res=await fetchWithTimeout('https://www.googleapis.com/drive/v3/files/'+fileId+'/permissions',{method:'POST',headers:{Authorization:'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({role:'reader',type:'anyone'})});
+      if(res.ok)return true;
+      if(attempt===1){
+        const body=await res.json().catch(()=>null);
+        const reason=(body&&body.error&&(body.error.message||body.error.status))||('HTTP '+res.status);
+        console.warn('⚠️ تعذر ضبط مشاركة "أي شخص لديه الرابط" على ملف Drive ('+fileId+'):',reason,'— هذا لا يمنع المعاينة/التنزيل داخل النظام (يمر عبر الخادم الوسيط)، لكنه يمنع عمل رابط Drive الخام إن تمت مشاركته خارج النظام.');
+      }
+    }catch(e){if(attempt===1)console.warn('⚠️ تعذر ضبط مشاركة الملف على Drive (خطأ شبكة):',e);}
+  }
+  return false;
 }
 function normalizeSaudiPhone(v){
   let s=toEnglishDigits(String(v||'')).trim();
@@ -8772,19 +8820,30 @@ function seekChatAudio(aid,val){
 // other in-app file link (fileLinkHtml) — images/PDFs open here in-page
 // instead of navigating away to a new browser tab. One overlay element,
 // lazily created, reused across the whole app.
-// Google Drive's uc?export=view URL renders fine inside an <img> tag but is
-// unreliable for embedding a PDF in an <iframe> (depending on the file it
-// can force a download instead of previewing, or show a bare "can't
-// preview" page) — Drive's own documented iframe-embed format is
-// /file/d/<id>/preview instead. Detected purely from the URL shape (only
-// ever matches a real Drive uc?...id=<fileId> link — every other URL shape,
-// base64 data: or Cloudinary-hosted, is returned unchanged).
+// FIX: this only ever matched the legacy `uc?...id=` link shape. Every file
+// that actually goes through uploadToGoogleDrive() (the main pipeline for
+// PDF/ZIP and large "other" files — see convertFileToBase64) returns
+// `https://drive.google.com/file/d/<id>/view?usp=sharing` instead, which this
+// regex never matched — so gdriveFileId() silently returned null for every
+// real upload, gdrivePreviewUrl()/gdriveDownloadUrl() fell through to
+// "return url unchanged", and the iframe/lightbox ended up embedding Google's
+// own /view page (not meant to be iframed, and gated behind Drive's sharing
+// permission) instead of the intended /preview or uc?export=download shape.
+// That mismatch — on top of any Drive sharing-permission failure — is what
+// produced the "يجب طلب الإذن بالوصول" wall for admins/staff/designers alike.
 function gdriveFileId(url){
-  const m=/drive\.google\.com\/uc\?[^"']*[?&]id=([\w-]+)/.exec(url||'');
+  if(!url)return null;
+  let m=/drive\.google\.com\/file\/d\/([\w-]+)/.exec(url);
+  if(m)return m[1];
+  m=/drive\.google\.com\/uc\?[^"']*[?&]id=([\w-]+)/.exec(url);
   return m?m[1]:null;
 }
-function gdrivePreviewUrl(url){const id=gdriveFileId(url);return id?`https://drive.google.com/file/d/${id}/preview`:url;}
-function gdriveDownloadUrl(url){const id=gdriveFileId(url);return id?`https://drive.google.com/uc?export=download&id=${id}`:url;}
+// Both now route through driveProxyStreamUrl() (our own proxy server, see
+// its definition near DRIVE_PROXY_URL) instead of straight to drive.google.com
+// — this is what actually makes preview/download stop depending on Google's
+// own access wall, for every viewer, permanently.
+function gdrivePreviewUrl(url){const id=gdriveFileId(url);return id?driveProxyStreamUrl(id,false):url;}
+function gdriveDownloadUrl(url){const id=gdriveFileId(url);return id?driveProxyStreamUrl(id,true):url;}
 function openFilePreviewLightbox(url,nameEncoded,isPdf){
   let ov=document.getElementById('chat-lightbox-overlay');
   if(!ov){
@@ -8793,16 +8852,20 @@ function openFilePreviewLightbox(url,nameEncoded,isPdf){
     document.body.appendChild(ov);
   }
   const name=safeDecodeURIComponent(nameEncoded||'')||(isPdf?'ملف PDF':'صورة');
-  const previewHtml=isPdf?`<iframe src="${gdrivePreviewUrl(url)}" title="${esc(name)}"></iframe>`:`<img src="${url}" alt="${esc(name)}"/>`;
+  // Drive-hosted images route through gdrivePreviewUrl() too now (it falls
+  // back to the raw `url` unchanged for Cloudinary/base64 images, which are
+  // the only ones this pipeline actually produces — see convertFileToBase64
+  // — so this is a defensive fix for any Drive-hosted image link rather than
+  // something exercised by the current upload flow).
+  const previewHtml=isPdf?`<iframe src="${gdrivePreviewUrl(url)}" title="${esc(name)}"></iframe>`:`<img src="${gdrivePreviewUrl(url)}" alt="${esc(name)}"/>`;
   // forceDownloadFile() (fetch-as-blob) instead of a plain [download] href —
-  // the native attribute is silently ignored for any cross-origin URL
-  // (Cloudinary/Drive-hosted), which navigates this tab away and destroys
-  // the whole in-memory SPA session instead of downloading anything. Drive
-  // itself doesn't send permissive CORS headers for that fetch() either way,
-  // so forceDownloadFile()'s own fallback (a plain window.open) is what
-  // actually runs for a Drive-hosted file — pointed at the export=download
-  // variant specifically, so that fallback still triggers a real download
-  // instead of landing on Drive's viewer page.
+  // the native attribute is silently ignored for any cross-origin URL, which
+  // navigates this tab away and destroys the whole in-memory SPA session
+  // instead of downloading anything. Drive-hosted files now go through our
+  // own proxy (driveProxyStreamUrl(), used inside gdriveDownloadUrl()) which
+  // sends permissive CORS headers deliberately, so the fetch-as-blob path
+  // actually succeeds instead of falling back to forceDownloadFile()'s
+  // window.open() — no more landing on Drive's own viewer/access page.
   const downloadUrl=gdriveDownloadUrl(url);
   ov.innerHTML=`<button type="button" class="chat-lightbox-close" onclick="closeChatImageLightbox()">×</button><div class="chat-lightbox-card">${previewHtml}</div><a href="${downloadUrl}" download="${esc(name)}" class="chat-lightbox-download" onclick="event.preventDefault();event.stopPropagation();forceDownloadFile(this.href,this.getAttribute('download'));"><i class="ti ti-download"></i> تنزيل</a>`;
   ov.classList.add('open');
