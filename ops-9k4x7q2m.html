@@ -10681,6 +10681,16 @@ async function sendToNextDept(key,next){
   const startField={design:'designStartAt',external:'externalStartAt',print:'printStartAt',workshop:'workshopStartAt'};
   const assigneeField={design:'designTo',external:'externalTo',print:'printTo',workshop:'workshopTo'};
   const upd={currentDept:next,stageStartDate:new Date().toISOString()};
+  // Same fix as revertOrderToPrevDept(): itemCurrentDept() prefers an item's
+  // own currentDept over the order's, so any item already individually
+  // advanced (via advanceItemDept/bulkAdvanceItems) would otherwise keep
+  // sitting at its own stale stage — invisible on the new department's
+  // per-item board — even though the order itself just moved forward here.
+  // Bring every item up to the same stage the whole order is moving to, so
+  // the target department's queue actually shows it immediately.
+  if(o.orderItems&&o.orderItems.length){
+    upd.orderItems=o.orderItems.map(it=>({...it,currentDept:next}));
+  }
   // Same "جديد" signal as reassignment — an order landing in the next
   // department is effectively newly assigned to whoever's responsible there.
   upd.lastItemUpdateAt=new Date().toISOString();upd.lastItemUpdateBy=cu.name;
@@ -10780,7 +10790,13 @@ async function finishOrder(key){
   if(!guardWrite(cu.type==='admin'||cu.type==='receiver'||isMyOrder(o),'⚠️ لا تملك صلاحية إغلاق هذا الطلب'))return;
   showSaving('جاري الإغلاق...');
   try{
-    await fbPatch(`orders/${key}`,{currentDept:'done',status:'مكتمل',workshopDoneAt:new Date().toISOString()});
+    // Same item-sync fix as sendToNextDept()/revertOrderToPrevDept() — without
+    // it, an item individually advanced past this point keeps its own stale
+    // currentDept, so it can still show as "active" in a staff member's queue
+    // after the order itself has been closed.
+    const _upd={currentDept:'done',status:'مكتمل',workshopDoneAt:new Date().toISOString()};
+    if(o.orderItems&&o.orderItems.length)_upd.orderItems=o.orderItems.map(it=>({...it,currentDept:'done'}));
+    await fbPatch(`orders/${key}`,_upd);
     logOrderActivity(key,'ti-circle-check','✅ تم إغلاق الطلب — اكتمل التسليم');
     await createWarrantyIfNeeded(key,o);
     dispatchAutoWhatsapp(o,'ready_for_delivery');
@@ -10800,7 +10816,10 @@ async function archiveOrder(key){
   if(!confirm(`إنهاء وأرشفة الطلب "${o?.id||key}"؟`))return;
   showSaving('جاري الأرشفة...');
   try{
-    await fbPatch(`orders/${key}`,{currentDept:'done',status:'مؤرشف',archivedAt:new Date().toISOString(),archivedBy:cu.name});
+    // Same item-sync fix as sendToNextDept()/finishOrder() above.
+    const _upd={currentDept:'done',status:'مؤرشف',archivedAt:new Date().toISOString(),archivedBy:cu.name};
+    if(o?.orderItems&&o.orderItems.length)_upd.orderItems=o.orderItems.map(it=>({...it,currentDept:'done'}));
+    await fbPatch(`orders/${key}`,_upd);
     logOrderActivity(key,'ti-archive','📦 تم إنهاء الطلب وأرشفته');
     await createWarrantyIfNeeded(key,o);
     if(o?.phone&&o.phone!=='—')await sendSmsNotification(o.phone,`مرحباً ${esc(o.client)}، طلبكم ${o.id||key} تم إغلاقه. روائع الأفكار الإعلانية.`);
