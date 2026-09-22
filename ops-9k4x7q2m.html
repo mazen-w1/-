@@ -1527,6 +1527,21 @@ body.has-ticker .upload-queue-widget{bottom:48px;}
 .od-file-category-title{font-size:11.5px;font-weight:800;color:var(--maroon);margin-bottom:8px;display:flex;align-items:center;gap:6px;}
 .od-file-grid{display:flex;flex-wrap:wrap;gap:8px;}
 .od-file-thumb{width:64px;height:64px;border-radius:10px;object-fit:cover;border:1px solid var(--border);}
+/* Traceable file-manager cards — replaces a flat row of bare file chips
+   with one card per file carrying uploader identity, purpose tag, the
+   item/line it belongs to, and its upload timestamp. */
+.ofm-file-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;}
+.ofm-file-card{background:var(--surface-2);border:1px solid var(--border-soft);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:6px;}
+.ofm-file-card-top{display:flex;align-items:flex-start;justify-content:space-between;gap:6px;}
+.ofm-uploader{display:flex;align-items:center;gap:7px;min-width:0;}
+.ofm-uploader-av{width:26px;height:26px;border-radius:50%;background:var(--gold);color:#fff;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.ofm-uploader-txt{min-width:0;}
+.ofm-uploader-name{font-size:11px;font-weight:800;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.ofm-uploader-role{font-size:9px;color:var(--text-3);font-weight:600;}
+.ofm-tag{font-size:9px;flex-shrink:0;white-space:nowrap;}
+.ofm-item-label{font-size:10px;color:var(--maroon);font-weight:700;background:var(--gold-soft);border-radius:6px;padding:2px 8px;display:inline-flex;align-items:center;gap:4px;width:fit-content;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.ofm-file-card-bottom{display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap;}
+.ofm-file-time{font-size:9.5px;color:var(--text-3);white-space:nowrap;display:flex;align-items:center;gap:3px;}
 @media(max-width:640px){.od-summary-grid{grid-template-columns:repeat(2,1fr);}.od-proof-grid{grid-template-columns:1fr;}}
 
 /* ============================================================ MODULE 5 — ORDER DETAIL MODAL SPLIT-COLUMN LAYOUT */
@@ -3719,19 +3734,28 @@ function deadlineDateTime(o){
 // flood and silently drop the rest. The running "ملف N من M" toast is the
 // only visible sign a multi-file download is even in progress, since each
 // individual file no longer shows its own confirmation.
-function downloadAllFiles(files,baseName){
+// Sequential, awaited forceDownloadFile() per file instead of a staggered
+// setTimeout loop of raw <a download> clicks. The old loop worked only for
+// Firebase base64 (data:) files — for a Cloudinary/Drive-hosted URL the
+// native [download] attribute is silently ignored on cross-origin links
+// (same root cause fileLinkHtml()/forceDownloadFile() already document),
+// so every file past the first either opened as a stray browser tab or got
+// eaten by the popup blocker once it fired from inside a setTimeout instead
+// of directly off the click. forceDownloadFile() itself fetches each file
+// as a Blob and downloads it via a same-origin blob: URL, which needs no
+// "fresh user gesture" to succeed — so doing this sequentially (not in
+// parallel, to avoid hammering the network/host with N simultaneous fetches
+// for a large batch) reliably downloads every file, not just the first.
+async function downloadAllFiles(files,baseName){
   const valid=(files||[]).filter(f=>f&&f.data);
   if(!valid.length){toast('⚠️ لا توجد مرفقات');return;}
   toast(`جاري تنزيل ${valid.length} ملف...`);
-  valid.forEach((f,i)=>{
-    setTimeout(()=>{
-      toast(`جاري تنزيل ملف ${i+1} من ${valid.length}...`);
-      const a=document.createElement('a');
-      a.href=f.data;a.download=f.name||`${baseName||'ملف'}_${i+1}`;
-      a.target='_blank';a.rel='noopener noreferrer';
-      document.body.appendChild(a);a.click();a.remove();
-    },i*400);
-  });
+  for(let i=0;i<valid.length;i++){
+    const f=valid[i];
+    toast(`جاري تنزيل ملف ${i+1} من ${valid.length}...`);
+    await forceDownloadFile(f.data,f.name||`${baseName||'ملف'}_${i+1}`);
+  }
+  toast(`✓ تم تنزيل ${valid.length} ملف`);
 }
 function transferQuickTaskToOrder(key){
   const o=orders[key];if(!o)return;
@@ -5669,6 +5693,23 @@ function stagePillHtml(dept){
   const d=m[dept]||m.design;
   return `<span class="stage-pill ${d.c}">${d.l}</span>`;
 }
+// Operations table "المرحلة" cell: the plain stagePillHtml() above only ever
+// showed the PRIMARY line's bare stage name, with no per-stage counter and
+// no visibility at all into parallel production lines (parentOrderKey-linked
+// child orders) — a manager had to open the order modal just to see whether
+// a parallel line was stuck. deptBadge(d,o) (already built for the order
+// detail view) gives the "stage (N/M)" counter + hover tooltip for free;
+// this just also enumerates every linked child line the same way
+// stageBar()/buildOrderDetailsPage() already label them ("الخط الرئيسي" /
+// "خط إنتاج موازٍ #N"), so a multi-track order's full status is visible
+// directly in the row.
+function stageCellHtml(o){
+  const children=Object.entries(orders).filter(([,v])=>v.parentOrderKey===o._key)
+    .sort((a,b)=>(a[1].productionLineIndex||0)-(b[1].productionLineIndex||0));
+  if(!children.length)return deptBadge(o.currentDept,o);
+  const lineRow=(label,dept,ord)=>`<div style="margin-top:3px;"><span style="font-size:8.5px;font-weight:800;color:var(--text-3);">${label}:</span> ${deptBadge(dept,ord)}</div>`;
+  return`<div>${lineRow('الخط الرئيسي',o.currentDept,o)}${children.map(([,cv])=>lineRow('الخط الموازي #'+(cv.productionLineIndex||'؟'),cv.currentDept,cv)).join('')}</div>`;
+}
 // ── Column 2: client/service summary — primary item name + size/spec ──
 function orderItemSummary(o){
   const items=o.orderItems||[];
@@ -6185,14 +6226,14 @@ function renderWfListView(){
         </div>
       </td>
       <td><div style="font-weight:800;font-size:12.5px;color:var(--text-1);">${esc(o.client||'—')}</div><div style="font-size:11px;color:var(--text-3);margin-top:2px;">${orderItemSummary(o)}</div></td>
-      <td>${stagePillHtml(o.currentDept)}</td>
+      <td>${stageCellHtml(o)}</td>
       <td>${(proof&&o.currentDept==='design')?`<span class="proof-pill proof-${proof.key}"><i class="ti ${proof.icon}"></i> ${proof.label}</span>`:'<span style="color:var(--text-3);font-size:11px;">—</span>'}</td>
       <td><span class="countdown-pill cd-${countdown.cls||'none'}">${countdown.text}</span></td>
       <td style="font-size:11.5px;line-height:1.6;"><div><strong>المسؤول:</strong> ${esc(currentPersonName(o))}</div><div style="color:var(--text-3);">${esc(o.createdBy?('أنشئ: '+o.createdBy):'')}</div></td>
       <td onclick="event.stopPropagation();">${orderQuickActionsHtml(o)}</td>
     </tr>`;
   };
-  const theadHtml='<tr><th style="width:130px">رقم الطلب</th><th>العميل والخدمة</th><th style="width:95px">المرحلة</th><th style="width:135px">البروفة والعميل</th><th style="width:135px">موعد التسليم</th><th style="width:150px">المسؤول / المنشئ</th><th style="width:105px">إجراءات</th></tr>';
+  const theadHtml='<tr><th style="width:130px">رقم الطلب</th><th>العميل والخدمة</th><th style="width:150px">المرحلة</th><th style="width:135px">البروفة والعميل</th><th style="width:135px">موعد التسليم</th><th style="width:150px">المسؤول / المنشئ</th><th style="width:105px">إجراءات</th></tr>';
   // Completed orders get their own collapsed-by-default section instead of
   // sitting mixed into the active list — see toggleWfCollapse(). Toggling
   // only re-invokes this render function directly (no nav()/full page
@@ -7342,7 +7383,12 @@ function buildItemWorkspacePage(){
         ${specsHtml}
         ${it.requiredFiles?`<div class="fg"><label>ملاحظات مطلوبة</label><div style="font-size:12.5px;line-height:1.7;color:var(--text-2);">${esc(it.requiredFiles)}</div></div>`:''}
         <div class="fg"><label style="display:flex;align-items:center;justify-content:space-between;gap:8px;"><span>المرفقات الأصلية / ملفات العميل</span>${legacyVersions.length?`<button class="btn btn-out btn-xs" onclick="downloadAllFilesFromContainer('itemwork-legacy-files','المرفقات الأصلية')"><i class="ti ti-download"></i> تنزيل الكل</button>`:''}</label>
-          <div id="itemwork-legacy-files" style="display:flex;flex-wrap:wrap;gap:6px;">${legacyVersions.length?legacyVersions.map(v=>(v.files||[]).map(f=>fileLinkHtml(f.name,f.data)).join('')).join(''):'<span style="font-size:11px;color:var(--text-3);">لا توجد مرفقات أصلية</span>'}</div>
+          <div id="itemwork-legacy-files">${legacyVersions.length?legacyVersions.map(v=>`<div class="ik-file-row">
+            <div class="ik-file-row-main">
+              <div class="ik-file-links">${(v.files||[]).map(f=>fileLinkHtml(f.name,f.data)).join('')}</div>
+              <div class="ik-file-meta"><i class="ti ti-user"></i> ${esc(v.createdBy||'—')} ${v.createdAt?'· '+fmtDateTime(v.createdAt):''}</div>
+            </div>
+          </div>`).join(''):'<span style="font-size:11px;color:var(--text-3);">لا توجد مرفقات أصلية</span>'}</div>
         </div>
       </div>
     </div>
@@ -9565,10 +9611,35 @@ function canEditOrderComposition(){return cu.type==='admin'||cu.type==='receiver
 function openOrderEditModal(key){
   if(!canEditOrderComposition()){toast('⚠️ هذا الإجراء متاح للمدير أو موظف الاستقبال فقط');return;}
   const o=orders[key];if(!o)return;
-  document.getElementById('order-edit-modal-body').innerHTML=orderEditModalHtml(key);
+  const bodyEl=document.getElementById('order-edit-modal-body');
+  const rootKey=(o.parentOrderKey&&orders[o.parentOrderKey])?o.parentOrderKey:key;
+  const hasParallelLines=Object.values(orders).some(v=>v.parentOrderKey===rootKey);
+  bodyEl.style.maxWidth=hasParallelLines?'820px':'640px';
+  bodyEl.innerHTML=orderEditModalHtml(key);
   openModal('order-edit-modal');
 }
 function orderEditModalHtml(key){
+  const o=orders[key];if(!o)return'';
+  // A parallel-line order (parentOrderKey set) used to have no way at all to
+  // reach its own edit panel here — this modal only ever rendered the ONE
+  // order matching `key`. Resolve to the root/primary order first (whichever
+  // of key/its parent has no parentOrderKey of its own), then render one
+  // panel per line — the primary plus every parentOrderKey-linked child, in
+  // productionLineIndex order — each fully independent (its own dates/items/
+  // reassignment/stage-order controls, saved straight to that line's own
+  // orders/{lineKey} record) so editing one line can never overwrite or drop
+  // another.
+  const rootKey=(o.parentOrderKey&&orders[o.parentOrderKey])?o.parentOrderKey:key;
+  const root=orders[rootKey];
+  const children=Object.entries(orders).filter(([,v])=>v.parentOrderKey===rootKey)
+    .sort((a,b)=>(a[1].productionLineIndex||0)-(b[1].productionLineIndex||0));
+  const linesHtml=orderEditLinePanelHtml(rootKey,children.length?'الخط الرئيسي':null)
+    +children.map(([ck,cv])=>orderEditLinePanelHtml(ck,'خط إنتاج موازٍ #'+(cv.productionLineIndex||'؟'))).join('');
+  return`
+    <div class="modal-header"><span class="modal-title"><i class="ti ti-settings"></i> تعديل الطلب — ${esc(root.id||rootKey)}</span><button class="btn-close" onclick="closeModal('order-edit-modal')">×</button></div>
+    ${linesHtml}`;
+}
+function orderEditLinePanelHtml(key,lineLabel){
   const o=orders[key];if(!o)return'';
   const items=o.orderItems||[];
   const itemsHtml=items.length?items.map((it,i)=>`<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:8px;padding:8px 12px;margin-bottom:6px;">
@@ -9598,8 +9669,7 @@ function orderEditModalHtml(key){
       </div>
     </div>`;
   }).join('');
-  return`
-    <div class="modal-header"><span class="modal-title"><i class="ti ti-settings"></i> تعديل الطلب — ${esc(o.id||key)}</span><button class="btn-close" onclick="closeModal('order-edit-modal')">×</button></div>
+  const bodyHtml=`
     <div style="display:flex;flex-direction:column;gap:16px;">
       <div>
         <div style="font-size:12.5px;font-weight:800;color:var(--maroon);margin-bottom:8px;"><i class="ti ti-calendar-time"></i> تواريخ الطلب</div>
@@ -9625,6 +9695,11 @@ function orderEditModalHtml(key){
         <div id="oe-add-stage-wrap-${key}"></div>
       </div>
     </div>`;
+  if(!lineLabel)return bodyHtml;
+  return`<div class="oe-line-panel" style="border:1.5px solid var(--border-soft);border-radius:12px;padding:14px;margin-bottom:14px;">
+    <div style="font-size:11.5px;font-weight:900;color:#fff;background:var(--maroon);display:inline-flex;align-items:center;gap:5px;padding:4px 12px;border-radius:20px;margin-bottom:12px;"><i class="ti ti-git-branch"></i> ${esc(lineLabel)} — ${esc(o.id||key)} — ${(WF_DEPT_META[o.currentDept]||{label:o.currentDept}).label||''}</div>
+    ${bodyHtml}
+  </div>`;
 }
 // ── Add a currently-inactive department to an order's production pipeline.
 // Most useful for sending an order back to the designer once an item is
@@ -10114,61 +10189,120 @@ function buildOrderActivityTimeline(o,key){
       <div class="od-timeline-body"><strong>${esc(s.text)}</strong> — ${fmt(s.at)}${s.actor?` <span style="color:var(--text-3);">(بواسطة ${esc(s.actor)})</span>`:''}</div>
     </div>`).join('')}</div>`;
 }
+// ============================================================
+// FILE MANAGER — categorized, traceable attachment cards. Used to render
+// every file on the order as a bare fileLinkHtml() chip sitting flat/side-
+// by-side with no context — no uploader, no exact purpose, no per-file
+// timestamp, and no indication of which item/production line it belonged
+// to on a multi-item order. Every piece of that metadata already exists in
+// the data (uploadFileDirect() stamps UploadedBy/UploadedAt on every
+// order-level upload field + its Extra[] array; itemVersions() carries
+// createdBy/createdAt/kind per version) — it just wasn't being surfaced.
+// ============================================================
+// Human label for a version's `kind` tag (set by saveItemKindFiles()) —
+// falls back to the version's own label/status when no kind was set
+// (legacy versions, client-feedback replies, etc).
+function fileKindTagLabel(v){
+  const KIND_LABELS={
+    design_proof:'بروفة تصميم',
+    design_approved:'ملف معتمد من العميل',
+    workshop_production:'ملف إنتاج للورشة',
+    final_work:'صورة/ملف المنجز النهائي',
+    client_feedback:'رد العميل / طلب تعديل',
+  };
+  return KIND_LABELS[v.kind]||v.label||v.status||'مرفق';
+}
+// Upload fields are stamped with the uploader's display NAME (cu.name), not
+// their username — reverse-looked-up here against USERS to also surface
+// their role/color for the avatar, same identity chip used across the app.
+function resolveUploaderMeta(name){
+  if(!name||name==='—')return{name:name||'—',role:'',color:'var(--gold)'};
+  const rec=Object.values(USERS).find(u=>u.name===name);
+  return{name,role:rec?.role||'',color:rec?.color||'var(--gold)'};
+}
+function fileRecordCardHtml(entry){
+  const uploader=resolveUploaderMeta(entry.uploaderName);
+  return`<div class="ofm-file-card">
+    <div class="ofm-file-card-top">
+      <div class="ofm-uploader">
+        <div class="ofm-uploader-av" style="background:${uploader.color};">${esc((uploader.name||'—').charAt(0))}</div>
+        <div class="ofm-uploader-txt"><div class="ofm-uploader-name">${esc(uploader.name)}</div>${uploader.role?`<div class="ofm-uploader-role">${esc(uploader.role)}</div>`:''}</div>
+      </div>
+      ${entry.tag?`<span class="badge b-new ofm-tag">${esc(entry.tag)}</span>`:''}
+    </div>
+    ${entry.itemLabel?`<div class="ofm-item-label"><i class="ti ti-package"></i> ${esc(entry.itemLabel)}</div>`:''}
+    <div class="ofm-file-card-bottom">
+      ${fileLinkHtml(entry.name,entry.url)}
+      <span class="ofm-file-time"><i class="ti ti-clock"></i> ${fmtDateTime(entry.timestamp)}</span>
+    </div>
+  </div>`;
+}
+// Every entry an order-level upload field (uploadFileDirect()) can hold: its
+// primary slot plus every file in its Extra[] array, each carrying its own
+// real uploadedBy/uploadedAt.
+function orderFieldFileEntries(o,field,tag){
+  const out=[];
+  if(o[field])out.push({name:o[field+'Name']||tag,url:o[field],uploaderName:o[field+'UploadedBy']||o.createdBy||'—',timestamp:o[field+'UploadedAt']||o.createdAt||o.date,tag});
+  (Array.isArray(o[field+'Extra'])?o[field+'Extra']:[]).forEach(f=>{
+    if(!f||!f.data)return;
+    out.push({name:f.name||tag,url:f.data,uploaderName:f.uploadedBy||'—',timestamp:f.uploadedAt||'',tag});
+  });
+  return out;
+}
+// Every per-item version file across every item, tagged with its stage
+// (design/print/workshop/external) for department grouping, its kind for
+// the purpose tag, and which item it belongs to (only meaningfully shown
+// when the order has more than one item).
+function itemFileEntriesByStage(o,stage){
+  const items=o.orderItems||[];
+  const multi=items.length>1;
+  const out=[];
+  items.forEach((it,i)=>{
+    itemVersionsForStage(it,stage).forEach(v=>{
+      (v.files||[]).forEach(f=>{
+        if(!f||!f.data)return;
+        out.push({name:f.name,url:f.data,uploaderName:v.createdBy||'—',timestamp:v.createdAt||'',tag:fileKindTagLabel(v),itemLabel:multi?(it.name||('بند '+(i+1))):''});
+      });
+    });
+  });
+  return out;
+}
 function buildOrderFileManager(o,key){
   const cats=[
-    {title:'ملفات العميل',icon:'ti-user',files:(o.files||[]).filter(f=>f&&f.data&&f.name).map(f=>({name:f.name,url:f.data}))},
-    {title:'ملفات التصميم',icon:'ti-brush',files:deptFilesForStage(o,'design')},
-    {title:'ملفات الاعتماد',icon:'ti-user-check',files:[
-      o.clientApprovalImage?{name:o.clientApprovalImageName||'صورة الاعتماد',url:o.clientApprovalImage}:null,
-      o.clientApprovalPdf?{name:o.clientApprovalPdfName||'PDF الاعتماد',url:o.clientApprovalPdf}:null,
-    ].filter(Boolean)},
-    {title:'ملفات الورشة',icon:'ti-tools',files:[
-      ...deptFilesForStage(o,'workshop'),
-      o.workshopDeptFile?{name:o.workshopDeptFileName||'ملف الورشة',url:o.workshopDeptFile}:null,
-      o.workshopProofImage?{name:o.workshopProofImageName||'بروفة الورشة',url:o.workshopProofImage}:null,
-    ].filter(Boolean)},
-    {title:'الملفات النهائية',icon:'ti-circle-check',files:[
-      o.approvedPrintFile?{name:o.approvedPrintFileName||'ملف الطباعة المعتمد',url:o.approvedPrintFile}:null,
-      o.approvedWorkshopFile?{name:o.approvedWorkshopFileName||'مخطط الورشة المعتمد',url:o.approvedWorkshopFile}:null,
-      o.finalWorkshopDoneFile?{name:o.finalWorkshopDoneFileName||'صورة المنجز',url:o.finalWorkshopDoneFile}:null,
-    ].filter(Boolean)},
-  ].filter(c=>c.files.length);
+    {title:'ملفات العميل الأصلية',icon:'ti-user',key:'client',
+      entries:(o.files||[]).filter(f=>f&&f.data&&f.name).map(f=>({name:f.name,url:f.data,uploaderName:o.createdBy||'—',timestamp:o.createdAt||o.date,tag:'مرفق عند تسجيل الطلب'}))},
+    {title:'ملفات التصميم',icon:'ti-brush',key:'design',entries:itemFileEntriesByStage(o,'design')},
+    {title:'ملفات الاعتماد',icon:'ti-user-check',key:'approval',entries:[
+      ...orderFieldFileEntries(o,'clientApprovalImage','صورة الاعتماد'),
+      ...orderFieldFileEntries(o,'clientApprovalPdf','PDF الاعتماد'),
+    ]},
+    {title:'ملفات الطباعة',icon:'ti-printer',key:'print',entries:itemFileEntriesByStage(o,'print')},
+    {title:'ملفات الورشة',icon:'ti-tools',key:'workshop',entries:[
+      ...itemFileEntriesByStage(o,'workshop'),
+      ...orderFieldFileEntries(o,'workshopDeptFile','ملف الورشة'),
+      ...orderFieldFileEntries(o,'workshopProofImage','بروفة الورشة'),
+    ]},
+    {title:'ملفات التنفيذ الخارجي',icon:'ti-world',key:'external',entries:[
+      ...itemFileEntriesByStage(o,'external'),
+      ...orderFieldFileEntries(o,'externalFile','ملف التوريد الخارجي'),
+    ]},
+    {title:'الملفات النهائية',icon:'ti-circle-check',key:'final',entries:[
+      ...orderFieldFileEntries(o,'approvedPrintFile','ملف الطباعة المعتمد'),
+      ...orderFieldFileEntries(o,'approvedWorkshopFile','مخطط الورشة المعتمد'),
+      ...orderFieldFileEntries(o,'finalWorkshopDoneFile','صورة المنجز'),
+    ]},
+  ].filter(c=>c.entries.length);
   if(!cats.length)return'<div style="font-size:11px;color:var(--text-3);">لا توجد ملفات مرفوعة على هذا الطلب بعد</div>';
-  return cats.map(c=>`<div class="od-file-category">
-    <div class="od-file-category-title" style="${c.title==='ملفات التصميم'?'justify-content:space-between;flex-wrap:wrap;':''}">
-      <span style="display:flex;align-items:center;gap:6px;"><i class="ti ${c.icon}"></i> ${c.title} (${c.files.length})</span>
-      ${c.title==='ملفات التصميم'?`<button class="btn btn-out btn-xs" onclick="downloadAllDesignFiles('${key}')"><i class="ti ti-download"></i> تنزيل الكل</button>`:''}
+  return cats.map(c=>{
+    const wrapId=`ofm-cat-${key}-${c.key}`;
+    return`<div class="od-file-category">
+    <div class="od-file-category-title" style="justify-content:space-between;flex-wrap:wrap;">
+      <span style="display:flex;align-items:center;gap:6px;"><i class="ti ${c.icon}"></i> ${c.title} (${c.entries.length})</span>
+      ${c.entries.length>1?`<button class="btn btn-out btn-xs" onclick="downloadAllFilesFromContainer('${wrapId}','${esc(c.title)}')"><i class="ti ti-download"></i> تنزيل الكل</button>`:''}
     </div>
-    <div class="od-file-grid">${c.files.map(f=>fileLinkHtml(f.name,f.url,f.label)).join('')}</div>
-  </div>`).join('');
-}
-// Bulk-downloads every design-related file on the order: the order-level
-// approved/proof design files (clientApprovalImage/Pdf) plus every design-
-// stage version attachment across all line items (same source list
-// deptFilesForStage(o,'design') already feeds into the "ملفات التصميم"
-// category above). Triggers each <a download> in sequence with a 400ms
-// stagger (the minimum gap that reliably survives browser popup blockers —
-// anything shorter and a batch of 10+ files gets treated as a single popup
-// flood, with everything past the first one silently dropped), and a
-// running "ملف N من M" toast so a long batch doesn't look stalled/frozen.
-function downloadAllDesignFiles(key){
-  const o=orders[key];if(!o){toast('⚠️ تعذر العثور على الطلب');return;}
-  const files=[];
-  if(o.clientApprovalImage)files.push({name:o.clientApprovalImageName||'صورة الاعتماد',url:o.clientApprovalImage});
-  if(o.clientApprovalPdf)files.push({name:o.clientApprovalPdfName||'PDF الاعتماد',url:o.clientApprovalPdf});
-  files.push(...deptFilesForStage(o,'design'));
-  const valid=files.filter(f=>f&&f.url);
-  if(!valid.length){toast('⚠️ لا توجد ملفات تصميم لتنزيلها');return;}
-  toast(`جاري تنزيل ${valid.length} ملف...`);
-  valid.forEach((f,i)=>{
-    setTimeout(()=>{
-      toast(`جاري تنزيل ملف ${i+1} من ${valid.length}...`);
-      const a=document.createElement('a');
-      a.href=f.url;a.download=f.name||('ملف-'+(i+1));
-      a.target='_blank';a.rel='noopener noreferrer';
-      document.body.appendChild(a);a.click();a.remove();
-    },i*400);
-  });
+    <div class="ofm-file-grid" id="${wrapId}">${c.entries.map(fileRecordCardHtml).join('')}</div>
+  </div>`;
+  }).join('');
 }
 // ============================================================
 // MODULE 5 — ORDER DETAIL MODAL (split-column layout helpers)
