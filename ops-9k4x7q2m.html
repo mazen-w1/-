@@ -283,10 +283,10 @@ tbody tr:hover td{background:var(--surface-2);}
 .dept-progress-badge{position:relative;display:inline-block;vertical-align:middle;}
 .dept-progress-badge .dpb-count{opacity:.8;font-weight:600;}
 .dept-progress-badge .dept-progress-tip{
-  display:none;position:absolute;bottom:calc(100% + 6px);right:0;
+  display:none;position:fixed;
   background:var(--surface);border:1px solid var(--border);border-radius:10px;
   box-shadow:0 8px 22px rgba(0,0,0,.16);padding:8px 10px;min-width:150px;
-  z-index:80;direction:rtl;white-space:nowrap;
+  z-index:400;direction:rtl;white-space:nowrap;
 }
 .dept-progress-badge:hover .dept-progress-tip{display:block;}
 .dept-progress-tip .dpt-step{display:flex;align-items:center;gap:6px;font-size:10.5px;font-weight:700;color:var(--text-3);padding:2px 0;}
@@ -430,7 +430,7 @@ input[type="password"]{direction:rtl;text-align:right;padding-left:40px;padding-
 .pay-channels-compact .fg label{font-size:10px;}
 .pay-channels-compact .fg input{font-size:11px;padding:5px 8px;height:30px;}
 .row-menu-wrap{position:relative;display:inline-block;}
-.row-menu{position:absolute;top:100%;left:0;background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,.14);z-index:60;min-width:160px;padding:4px;}
+.row-menu{position:absolute;top:100%;left:0;background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,.14);z-index:400;min-width:160px;padding:4px;}
 .row-menu button{display:flex;align-items:center;gap:6px;width:100%;text-align:right;padding:7px 9px;font-size:11px;font-weight:700;color:var(--text-1);background:none;border:none;cursor:pointer;border-radius:6px;font-family:inherit;}
 .row-menu button:hover{background:var(--surface-2);color:var(--maroon);}
 /* ============================================================ CREATE ORDER FORM — compact sizing */
@@ -3993,6 +3993,17 @@ function refreshCurrentPage(){
   if(document.querySelector('[id^="my-req-"][style*="table-row"]'))return;
   const ae=document.activeElement;
   if(ae&&(ae.tagName==='INPUT'||ae.tagName==='TEXTAREA'||ae.tagName==='SELECT'||ae.isContentEditable))return;
+  // Typed search/filter text survives even once the field loses focus (the
+  // user tabbed to a dropdown, clicked a checkbox, etc.) — the activeElement
+  // check above only catches the field while it's still focused. Several
+  // search inputs across the app (deptstage-search, header search, gov-hub
+  // search, ...) rebuild as a fresh, empty <input> on every render instead
+  // of restoring their value from persisted state, so a rebuild here would
+  // silently wipe out a query the user is actively filtering by, even
+  // though they're not mid-keystroke right this instant.
+  const hasTypedSearchText=Array.from(document.querySelectorAll('input[type="text"],input[type="search"],input:not([type])'))
+    .some(inp=>inp.value&&inp.value.trim()&&inp.offsetParent!==null);
+  if(hasTypedSearchText)return;
   // A voice-note/audio player mid-playback (chat, client feedback, etc.) has
   // no DOM trace any of the checks above would catch, but a rebuild here
   // would still yank the <audio> element out from under it and silently
@@ -6568,7 +6579,20 @@ async function downloadQuotePDF(savedKey){
 function buildOrderInvoiceData(o,key){
   const childLineOrders=Object.values(orders).filter(v=>v.parentOrderKey===key);
   const allItems=[...(o.orderItems||[]),...childLineOrders.flatMap(cv=>cv.orderItems||[])];
-  const lines=allItems.filter(it=>it&&(Number(it.price)||Number(it.qty))).map(it=>({lbl:it.name||'—',q:Number(it.qty)||1,p:Number(it.price)||0,m:1}));
+  // it.price is VAT-INCLUSIVE (the order-items convention throughout this
+  // app — see orderLineTotal()/o.totalAmount, computed as a direct sum with
+  // no separate VAT step) — but renderA4Quote()'s line table treats `p` as
+  // PRE-VAT and multiplies it by 1.15 itself to show "السعر شامل الضريبة"
+  // (the quotes-module convention, where l.p really is pre-VAT). Passing
+  // it.price straight through as `p` used to tax an already tax-inclusive
+  // price a second time on every line — the grand-total box stayed correct
+  // (authoritativeTotal derives it straight from o.totalAmount below,
+  // untouched by the line array), but the per-line prices/totals didn't
+  // reconcile with it. Prefer the item's own stored pre-VAT price
+  // (it.priceExclVat, set explicitly whenever dual pricing was used) and
+  // only fall back to deriving it from the inclusive price for older items
+  // that never had that field.
+  const lines=allItems.filter(it=>it&&(Number(it.price)||Number(it.qty))).map(it=>({lbl:it.name||'—',q:Number(it.qty)||1,p:Number(it.priceExclVat)||((Number(it.price)||0)/1.15),m:1}));
   if(!lines.length)return null;
   return{
     ref:o.id||key,
@@ -6634,7 +6658,7 @@ function toggleCompletedWfColumn(){window._wfCompletedExpanded=!window._wfComple
 // ============================================================
 // STANDALONE PER-DEPARTMENT STAGE PAGE
 // ============================================================
-function openDeptStagePage(deptKey){window._deptStageKey=deptKey;nav('deptstage');}
+function openDeptStagePage(deptKey){window._deptStageKey=deptKey;window._deptStageSearchQ='';window._deptStagePersonQ='';nav('deptstage');}
 function hasLaterMaintenanceForOrder(o){
   if(o.maintenanceVisits&&o.maintenanceVisits.length)return true;
   return ordersArr().some(m=>m.orderKind==='maintenance'&&m.linkedOrderKey===o._key);
@@ -6731,7 +6755,7 @@ function buildDeptStagePage(){
     ?`${canDelete?'<th style="width:150px;">إجراءات</th>':''}<th style="width:80px">رقم الطلب</th><th>العميل</th><th style="width:100px">المبلغ</th><th>الخدمة</th><th style="width:120px">منشئ الطلب</th><th style="width:90px">التاريخ</th><th style="width:110px">المدة الزمنية</th>`
     :`<th style="width:80px">رقم الطلب</th><th>العميل</th><th>الخدمة</th><th style="width:100px">المسؤول</th><th style="width:110px">منشئ الطلب</th><th style="width:120px">تاريخ التسليم</th><th style="width:90px">الأولوية</th><th style="width:90px">المدة</th>${cu.type==='admin'?'<th style="width:40px;"></th>':''}`;
   const personOptions=hasAssignee?[...new Set(arr.map(o=>o[assigneeField]).filter(v=>v&&v!=='none'))]
-    .map(u=>`<option value="${esc(u)}">${esc(USERS[u]?.name||u)}</option>`).join(''):'';
+    .map(u=>`<option value="${esc(u)}"${window._deptStagePersonQ===u?' selected':''}>${esc(USERS[u]?.name||u)}</option>`).join(''):'';
   // ── Incoming Queue: orders still sitting in whatever stage precedes this
   // one (per that specific order's own getActiveDepts() sequence — not a
   // fixed dept order, since workflowOrder varies per order) that will land
@@ -6788,8 +6812,8 @@ function buildDeptStagePage(){
     ${externalControlPanel}
     ${incomingHtml}
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;">
-      <input id="deptstage-search" placeholder="ابحث عن عميل أو خدمة أو رقم طلب..." oninput="filterDeptStageRows()" style="flex:1;min-width:220px;"/>
-      ${hasAssignee?`<select id="deptstage-person-filter" onchange="filterDeptStageRows()" style="min-width:180px;">
+      <input id="deptstage-search" placeholder="ابحث عن عميل أو خدمة أو رقم طلب..." value="${esc(window._deptStageSearchQ||'')}" oninput="window._deptStageSearchQ=this.value;filterDeptStageRows()" style="flex:1;min-width:220px;"/>
+      ${hasAssignee?`<select id="deptstage-person-filter" onchange="window._deptStagePersonQ=this.value;filterDeptStageRows()" style="min-width:180px;">
         <option value="">كل الموظفين</option>
         ${personOptions}
       </select>`:''}
@@ -6806,6 +6830,12 @@ function buildDeptStagePage(){
     <tbody>${rows||`<tr><td colspan="${6+(canDelete?1:0)}" style="text-align:center;padding:24px;color:var(--text-3)">لا توجد طلبات في هذه المرحلة حالياً</td></tr>`}</tbody></table></div></div>
     </div>`
       :((accordionCardsHtml||rows)?`<div class="wf-grid">${accordionCardsHtml}${rows}</div>`:'<div class="card" style="text-align:center;padding:30px;color:var(--text-3);"><i class="ti ti-inbox" style="font-size:32px;display:block;margin-bottom:8px;"></i>لا توجد طلبات في هذه المرحلة حالياً</div>')}`;
+  // The search/person filter values above are restored from persisted state
+  // (window._deptStageSearchQ/_deptStagePersonQ) rather than always starting
+  // blank, but setting an <input>'s value/a <select>'s selected option via
+  // HTML doesn't itself re-run the filtering logic — apply it once here so
+  // a restored query actually takes effect immediately after any rebuild.
+  if(window._deptStageSearchQ||window._deptStagePersonQ)filterDeptStageRows();
 }
 // Generic per-department counterpart to designerOrderCardHtml/designerItemRowHtml
 // (buildDesignerBoard) — same collapsible order-accordion shell and CSS
@@ -6922,14 +6952,62 @@ function filterDeptStageRows(){
     r.style.display=(matchesSearch&&matchesPerson)?'':'none';
   });
 }
+// Generic floating-panel positioner — escapes ANY ancestor's overflow
+// clipping (a scrollable .tbl-wrap, a .card, a modal, ...) by switching the
+// panel to position:fixed and computing its coordinates directly from the
+// trigger's viewport-relative bounding rect, instead of relying on the
+// position:absolute chain a clipping ancestor can cut off. .tbl-wrap only
+// ever sets overflow-x:auto, but per the CSS overflow spec that silently
+// forces overflow-y to auto too — so anything absolutely positioned that
+// pops above/below a table row was getting clipped vertically as a side
+// effect, worst on the first/last couple of rows where there's no room for
+// the popup to fully render before hitting that clip.
+// anchorLeft: true keeps the panel's LEFT edge under the trigger's left
+// edge (matches this app's existing dropdown-menu convention); the default
+// (false) keeps the RIGHT edges aligned (this app's RTL default, matches
+// the tooltip's old right:0). openDownThreshold: below this many px from
+// the top of the viewport, the panel opens downward instead of upward so
+// it can never be clipped off the top of the screen.
+function positionFloatingPanel(triggerEl,panelEl,opts={}){
+  if(!triggerEl||!panelEl)return;
+  const rect=triggerEl.getBoundingClientRect();
+  const openDownThreshold=opts.openDownThreshold??160;
+  panelEl.style.position='fixed';
+  panelEl.style.left='';panelEl.style.right='';panelEl.style.top='';panelEl.style.bottom='';
+  if(opts.anchorLeft)panelEl.style.left=Math.max(4,rect.left)+'px';
+  else panelEl.style.right=Math.max(4,window.innerWidth-rect.right)+'px';
+  if(rect.top<openDownThreshold)panelEl.style.top=(rect.bottom+6)+'px';
+  else panelEl.style.bottom=(window.innerHeight-rect.top+6)+'px';
+}
 function toggleRowMenu(id){
   document.querySelectorAll('.row-menu').forEach(m=>{if(m.id!==id)m.style.display='none';});
   const el=document.getElementById(id);if(!el)return;
-  el.style.display=el.style.display==='block'?'none':'block';
+  const opening=el.style.display!=='block';
+  el.style.display=opening?'block':'none';
+  if(opening)positionFloatingPanel(el.closest('.row-menu-wrap')||el.previousElementSibling,el,{anchorLeft:true});
 }
 function closeAllRowMenus(){document.querySelectorAll('.row-menu').forEach(m=>m.style.display='none');}
 document.addEventListener('click',function(e){
   if(!e.target.closest('.row-menu-wrap'))closeAllRowMenus();
+});
+// A fixed-position open menu stays put in viewport coordinates while its
+// trigger scrolls away underneath it inside a scrollable table/card — close
+// it instead of leaving it visually detached. Capture phase so this also
+// catches scrolling inside a nested container (.tbl-wrap), not just the
+// window itself.
+document.addEventListener('scroll',closeAllRowMenus,true);
+// .dept-progress-badge's hover tooltip (.dept-progress-tip) is positioned
+// via positionFloatingPanel() (position:fixed, computed from the badge's
+// own bounding rect) instead of pure CSS position:absolute, so it always
+// escapes .tbl-wrap's overflow clipping and — for a badge near the top of
+// the viewport — opens downward instead of being clipped off-screen
+// upward. Delegated on mouseover since badges are re-rendered constantly
+// across every table/board in the app.
+document.addEventListener('mouseover',function(e){
+  const badge=e.target.closest('.dept-progress-badge');
+  if(!badge)return;
+  const tip=badge.querySelector('.dept-progress-tip');
+  if(tip)positionFloatingPanel(badge,tip);
 });
 function toggleDeptStageSelect(key,checked){
   if(!window._deptStageSelected)window._deptStageSelected=new Set();
