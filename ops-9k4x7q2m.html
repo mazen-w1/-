@@ -280,19 +280,27 @@ tbody tr:hover td{background:var(--surface-2);}
 .tbl-wrap{overflow-x:auto;}
 /* ============================================================ BADGES */
 .badge{display:inline-flex;align-items:center;gap:3px;padding:3px 10px;border-radius:20px;font-size:10px;font-weight:700;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis;vertical-align:middle;}
-.dept-progress-badge{position:relative;display:inline-block;vertical-align:middle;}
+.dept-progress-badge{position:relative;display:inline-flex;vertical-align:middle;}
 .dept-progress-badge .dpb-count{opacity:.8;font-weight:600;}
 .dept-progress-badge .dept-progress-tip{
-  display:none;position:fixed;
-  background:var(--surface);border:1px solid var(--border);border-radius:10px;
-  box-shadow:0 8px 22px rgba(0,0,0,.16);padding:8px 10px;min-width:150px;
-  z-index:400;direction:rtl;white-space:nowrap;
+  display:none;position:absolute;top:calc(100% + 8px);left:50%;transform:translateX(-50%);
+  background:#ffffff!important;border:1px solid var(--border);border-radius:10px;
+  box-shadow:0 10px 25px rgba(0,0,0,.18);padding:8px 10px;min-width:150px;
+  z-index:99999;direction:rtl;white-space:nowrap;
 }
 .dept-progress-badge:hover .dept-progress-tip{display:block;}
 .dept-progress-tip .dpt-step{display:flex;align-items:center;gap:6px;font-size:10.5px;font-weight:700;color:var(--text-3);padding:2px 0;}
 .dept-progress-tip .dpt-step.done{color:#10B981;}
 .dept-progress-tip .dpt-step.current{color:var(--maroon);}
 .dept-progress-tip .dpt-step i{font-size:11px;width:14px;text-align:center;flex-shrink:0;}
+/* Parallel-production-line stage chips (stageCellHtml, Operations table) —
+   each line (primary + every parallel track) gets its own compact, bordered
+   pill instead of a bare label + badge stacked loosely, so multiple tracks
+   in the same cell read as distinct rows instead of cluttered/overlapping
+   text. */
+.stage-line-chips{display:flex;flex-direction:column;gap:4px;align-items:flex-start;}
+.stage-line-chip{display:inline-flex;align-items:center;gap:5px;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:20px;padding:3px 9px 3px 5px;max-width:100%;}
+.stage-line-chip-label{font-size:8.5px;font-weight:800;color:var(--text-3);white-space:nowrap;flex-shrink:0;}
 .b-new{background:#DBEAFE;color:#1E40AF;}
 .b-proc{background:#FEF3C7;color:#92400E;}
 .b-done{background:#D1FAE5;color:#065F46;}
@@ -5718,8 +5726,8 @@ function stageCellHtml(o){
   const children=Object.entries(orders).filter(([,v])=>v.parentOrderKey===o._key)
     .sort((a,b)=>(a[1].productionLineIndex||0)-(b[1].productionLineIndex||0));
   if(!children.length)return deptBadge(o.currentDept,o);
-  const lineRow=(label,dept,ord)=>`<div style="margin-top:3px;"><span style="font-size:8.5px;font-weight:800;color:var(--text-3);">${label}:</span> ${deptBadge(dept,ord)}</div>`;
-  return`<div>${lineRow('الخط الرئيسي',o.currentDept,o)}${children.map(([,cv])=>lineRow('الخط الموازي #'+(cv.productionLineIndex||'؟'),cv.currentDept,cv)).join('')}</div>`;
+  const lineChip=(label,dept,ord)=>`<div class="stage-line-chip"><span class="stage-line-chip-label">${label}</span>${deptBadge(dept,ord)}</div>`;
+  return`<div class="stage-line-chips">${lineChip('الخط الرئيسي',o.currentDept,o)}${children.map(([,cv])=>lineChip('الخط الموازي #'+(cv.productionLineIndex||'؟'),cv.currentDept,cv)).join('')}</div>`;
 }
 // ── Column 2: client/service summary — primary item name + size/spec ──
 function orderItemSummary(o){
@@ -6996,19 +7004,6 @@ document.addEventListener('click',function(e){
 // catches scrolling inside a nested container (.tbl-wrap), not just the
 // window itself.
 document.addEventListener('scroll',closeAllRowMenus,true);
-// .dept-progress-badge's hover tooltip (.dept-progress-tip) is positioned
-// via positionFloatingPanel() (position:fixed, computed from the badge's
-// own bounding rect) instead of pure CSS position:absolute, so it always
-// escapes .tbl-wrap's overflow clipping and — for a badge near the top of
-// the viewport — opens downward instead of being clipped off-screen
-// upward. Delegated on mouseover since badges are re-rendered constantly
-// across every table/board in the app.
-document.addEventListener('mouseover',function(e){
-  const badge=e.target.closest('.dept-progress-badge');
-  if(!badge)return;
-  const tip=badge.querySelector('.dept-progress-tip');
-  if(tip)positionFloatingPanel(badge,tip);
-});
 function toggleDeptStageSelect(key,checked){
   if(!window._deptStageSelected)window._deptStageSelected=new Set();
   if(checked)window._deptStageSelected.add(key);else window._deptStageSelected.delete(key);
