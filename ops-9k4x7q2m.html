@@ -309,6 +309,7 @@ tbody tr:hover td{background:var(--surface-2);}
 .b-print{background:#E0E7FF;color:#3730A3;}
 .b-workshop{background:#FFEDD5;color:#9A3412;}
 .b-ext{background:#FEF9C3;color:#713F12;}
+.b-delivery{background:#DBEAFE;color:#0369A1;}
 .b-paid{background:#D1FAE5;color:#065F46;}
 .b-partial{background:#FEF3C7;color:#92400E;}
 .b-delivery{background:#E0E7FF;color:#3730A3;}
@@ -2092,9 +2093,23 @@ function isPdfFileUrl(name,url){
   if(url&&/^data:application\/pdf/i.test(url))return true;
   return/\.pdf$/i.test(name||'');
 }
+// Videos uploaded through this app go through uploadToCloudinary() (see
+// convertFileToBase64) for anything under the size threshold, NOT stored as
+// a data: URI like images/small files — the stored "data" field ends up a
+// plain https Cloudinary URL (data.secure_url), so detection can't rely on
+// a data:video/ prefix alone. Checking the URL's own video extension and
+// Cloudinary's own /video/upload/ delivery path (a reliable signal
+// regardless of what the original filename looked like — e.g. an
+// extension-less name from a mobile camera capture) catches those; the
+// data: prefix and name-extension checks stay as fallbacks for legacy/
+// other-storage files.
 function isVideoFileUrl(name,url){
-  if(url&&/^data:video\//i.test(url))return true;
-  return/\.(mp4|webm|mov|m4v|ogg|ogv)$/i.test(name||'');
+  if(url){
+    if(/^data:video\//i.test(url))return true;
+    if(/\/video\/upload\//i.test(url))return true;
+    if(/\.(mp4|webm|mov|m4v|ogg|ogv|3gp|avi|mkv)(\?|#|$)/i.test(url))return true;
+  }
+  return/\.(mp4|webm|mov|m4v|ogg|ogv|3gp|avi|mkv)$/i.test(name||'');
 }
 function fileLinkHtml(name,url,label){
   if(!url)return'';
@@ -4059,14 +4074,14 @@ function onHoldBadge(o){
 // have a bare dept string (e.g. a quick task with no per-order workflow
 // path) can still call deptBadge(d) and get the old plain badge.
 function deptBadge(d,o){
-  const m={design:'b-design',print:'b-print',workshop:'b-workshop',external:'b-ext',done:'b-done'};
-  const ml={design:'تصميم',print:'طباعة',workshop:'ورشة',external:'تنفيذ خارجي',done:'مكتمل'};
+  const m={design:'b-design',print:'b-print',workshop:'b-workshop',external:'b-ext',delivery:'b-delivery',done:'b-done'};
+  const ml={design:'تصميم',print:'طباعة',workshop:'ورشة',external:'تنفيذ خارجي',delivery:'التسليم',done:'مكتمل'};
   const label=ml[d]||d||'جديد';
   if(!o)return`<span class="badge ${m[d]||'b-new'}">${label}</span>`;
   let seq=null;
   try{seq=getActiveDepts(o);}catch(e){}
   if(!seq||!seq.length)return`<span class="badge ${m[d]||'b-new'}">${label}</span>`;
-  const full=[...seq,'done'];
+  const full=[...seq,'delivery','done'];
   const total=full.length;
   const idx=d==='done'?total:(full.indexOf(d)+1);
   if(idx<=0)return`<span class="badge ${m[d]||'b-new'}">${label}</span>`;
@@ -4142,14 +4157,20 @@ function getActiveDepts(o){
   const order=(o.workflowOrder&&o.workflowOrder.length)?o.workflowOrder:['design','external','print','workshop'];
   return order.filter(k=>isOn[k]);
 }
-function getNextDept(o){const seq=getActiveDepts(o);const idx=seq.indexOf(o.currentDept);if(idx===-1||idx===seq.length-1)return'done';return seq[idx+1];}
-function getPrevDept(o){const seq=getActiveDepts(o);if(o.currentDept==='done')return seq[seq.length-1]||null;const idx=seq.indexOf(o.currentDept);if(idx<=0)return null;return seq[idx-1];}
+// 'delivery' (التسليم) is a fixed, universal final gate for every order —
+// not a per-order customizable production department (it has no assignee
+// field, no getDeptWorkers() concept), so it deliberately isn't part of
+// getActiveDepts()'s sequence — handled here as an implicit extra step
+// between the last active production department and 'done' (the actual
+// "المكتملة" archive).
+function getNextDept(o){if(o.currentDept==='delivery')return'done';const seq=getActiveDepts(o);const idx=seq.indexOf(o.currentDept);if(idx===-1||idx===seq.length-1)return'delivery';return seq[idx+1];}
+function getPrevDept(o){const seq=getActiveDepts(o);if(o.currentDept==='done')return'delivery';if(o.currentDept==='delivery')return seq[seq.length-1]||null;const idx=seq.indexOf(o.currentDept);if(idx<=0)return null;return seq[idx-1];}
 async function revertOrderToPrevDept(key){
   if(cu.type!=='admin'){toast('⚠️ هذا الإجراء متاح للمدير فقط');return;}
   const o=orders[key];if(!o)return;
   const prev=getPrevDept(o);
   if(!prev){toast('⚠️ لا توجد مرحلة سابقة للرجوع إليها');return;}
-  const deptLbl={design:'التصميم',external:'التنفيذ الخارجي',print:'الطباعة',workshop:'الورشة'};
+  const deptLbl={design:'التصميم',external:'التنفيذ الخارجي',print:'الطباعة',workshop:'الورشة',delivery:'التسليم'};
   if(!confirm(`هل تريد إرجاع الطلب لمرحلة: ${deptLbl[prev]||prev}؟`))return;
   showSaving('جاري الإرجاع...');
   // reverted/revertedAt/revertedBy/revertedFrom/revertedTo are permanent —
@@ -4187,7 +4208,7 @@ function isMyOrder(o){
   if(t==='external')return o.currentDept==='external'&&o.externalTo===cu._uname;
   return false;
 }
-function orderProgress(o){const seq=getActiveDepts(o);const total=seq.length;if(!total)return o.currentDept==='done'?100:0;if(o.currentDept==='done')return 100;const idx=seq.indexOf(o.currentDept);return idx===-1?0:Math.round((idx/total)*100);}
+function orderProgress(o){const seq=getActiveDepts(o);const total=seq.length;const finished=o.currentDept==='done'||o.currentDept==='delivery';if(!total)return finished?100:0;if(finished)return 100;const idx=seq.indexOf(o.currentDept);return idx===-1?0:Math.round((idx/total)*100);}
 // ============================================================
 // PER-ITEM WORKFLOW + DESIGN VERSIONS
 // Additive schema on top of orderItems[i]: `currentDept` (independent
@@ -4814,8 +4835,8 @@ async function pushItemFeedbackExtra(orderKey,idx,extra){
     if(window._cfbKey===orderKey&&window._cfbIdx===idx)openClientFeedbackPanel(orderKey,idx);
   }catch(e){toast('❌ فشل إرسال الملاحظة');}
 }
-function progressColor(o){const m={new:'#CBD5E1',design:'#6B21A8',external:'#B45309',print:'#3730A3',workshop:'#9A3412',done:'#10B981'};return m[o.currentDept||'new']||'#475569';}
-function currentPersonName(o){if(!o.currentDept||o.currentDept==='design')return o.designName||'—';if(o.currentDept==='external')return o.externalName||o.externalNote||'تنفيذ خارجي';if(o.currentDept==='print')return o.printName||'—';if(o.currentDept==='workshop')return o.workshopName||'—';if(o.currentDept==='done')return'✓ مكتمل';return'—';}
+function progressColor(o){const m={new:'#CBD5E1',design:'#6B21A8',external:'#B45309',print:'#3730A3',workshop:'#9A3412',delivery:'#0EA5E9',done:'#10B981'};return m[o.currentDept||'new']||'#475569';}
+function currentPersonName(o){if(!o.currentDept||o.currentDept==='design')return o.designName||'—';if(o.currentDept==='external')return o.externalName||o.externalNote||'تنفيذ خارجي';if(o.currentDept==='print')return o.printName||'—';if(o.currentDept==='workshop')return o.workshopName||'—';if(o.currentDept==='delivery')return'📦 بانتظار الأرشفة';if(o.currentDept==='done')return'✓ مكتمل';return'—';}
 function hoursAgo(dateStr){if(!dateStr)return 0;return Math.round((new Date()-new Date(dateStr))/3600000);}
 function timeBadge(hours){if(hours<24)return`<span class="time-badge time-ok"><i class="ti ti-clock"></i>${hours}س</span>`;const days=Math.round(hours/24);if(days<=3)return`<span class="time-badge time-warn"><i class="ti ti-clock"></i>${days}ي</span>`;return`<span class="time-badge time-over"><i class="ti ti-alarm"></i>${days}ي</span>`;}
 function orderTimerBadge(o){
@@ -5255,7 +5276,6 @@ function handleWfSitePhoto(files){
 const ASSUMED_CAPACITY_PER_STAFF=5;
 function buildDeptWorkloadHtml(){
   const arr=ordersArr();
-  const now=new Date();
   const rows=[
     {key:'design',label:'التصميم',icon:'ti-brush',color:'#6B21A8',roleType:'designer',
       count:arr.filter(o=>(o.currentDept||'design')==='design').length},
@@ -5263,15 +5283,15 @@ function buildDeptWorkloadHtml(){
       count:arr.filter(o=>o.currentDept==='print').length},
     {key:'workshop',label:'الورشة',icon:'ti-tools',color:'#C05621',roleType:'workshop',
       count:arr.filter(o=>o.currentDept==='workshop').length},
-    {key:'delivery',label:'التسليم',icon:'ti-truck-delivery',color:'#2F855A',roleType:null,
-      count:arr.filter(o=>o.currentDept==='done'&&o.workshopDoneAt&&(now-new Date(o.workshopDoneAt))<172800000).length},
+    {key:'delivery',label:'التسليم',icon:'ti-truck-delivery',color:'#0EA5E9',roleType:null,
+      count:arr.filter(o=>o.currentDept==='delivery').length},
   ];
   const rowsHtml=rows.map(d=>{
     const team=d.roleType?Object.values(USERS).filter(u=>u.type===d.roleType):[];
     const capacity=Math.max(1,team.length*ASSUMED_CAPACITY_PER_STAFF);
     const pct=Math.min(100,Math.round((d.count/capacity)*100));
     const overLimit=d.count>capacity;
-    return`<div class="dept-load-row" onclick="${d.key==='delivery'?"dashGoto('done')":`openDeptStagePage('${d.key}')`}">
+    return`<div class="dept-load-row" onclick="openDeptStagePage('${d.key}')">
       <div class="dept-load-head">
         <div class="dept-load-icon" style="background:${d.color};"><i class="ti ${d.icon}"></i></div>
         <div class="dept-load-label">${d.label}</div>
@@ -5507,6 +5527,7 @@ function renderWfKanbanView(){
         ${_canSeeCardTotal&&o.totalAmount?`<div style="font-size:11px;font-weight:800;color:var(--maroon);margin-top:3px;"><i class="ti ti-cash"></i> إجمالي المبلغ: ${fmtMoney(Number(o.totalAmount))} ر.س</div>`:''}
         ${deadlineBadge(o.deadline,o.currentDept,o.onHold)}
         ${qtActions}
+        ${o.currentDept==='delivery'&&(cu.type==='admin'||cu.type==='receiver')?`<button class="btn btn-green btn-xs" style="width:100%;margin-top:6px;" onclick="event.stopPropagation();finishOrder('${o._key}')"><i class="ti ti-archive"></i> أرشفة الطلب ونقله للمكتملة</button>`:''}
       </div><div class="wf-card-prog"><div class="wf-card-fill" style="width:${pct}%;background:${col}"></div></div></div>`;
   };
   const colsDef=[
@@ -5514,21 +5535,23 @@ function renderWfKanbanView(){
     {key:'print',label:'الطباعة',cls:'b-print',icon:'ti-printer'},
     {key:'workshop',label:'الورشة',cls:'b-workshop',icon:'ti-tool'},
     {key:'external',label:'تنفيذ خارجي',cls:'b-ext',icon:'ti-truck-delivery'},
-    {key:'done',label:'التسليم',cls:'b-done',icon:'ti-circle-check'},
+    {key:'delivery',label:'التسليم',cls:'b-delivery',icon:'ti-truck-delivery'},
     {key:'completed',label:'الطلبات المكتملة',cls:'b-done',icon:'ti-archive'}
   ];
-  const buckets={design:[],print:[],workshop:[],external:[],done:[],completed:[]};
+  const buckets={design:[],print:[],workshop:[],external:[],delivery:[],completed:[]};
   const _wfNow=Date.now();
   arr.forEach(o=>{
     const d=o.currentDept||'design';
-    if(d==='done'){
-      const ageH=(_wfNow-new Date(o.stageStartDate||o.date).getTime())/3600000;
-      if(ageH>=24) buckets.completed.push(o); else buckets.done.push(o);
-    } else {
-      (buckets[d]||buckets.design).push(o);
-    }
+    // Distinct "التسليم" stage (currentDept:'delivery') vs the actual
+    // "المكتملة" archive (currentDept:'done') — previously both lived under
+    // the same 'done' value and this board could only fake the distinction
+    // by an order's AGE (older than 24h looked "completed"), even though
+    // nothing had actually archived it yet. Now a real, explicit field.
+    if(d==='done')buckets.completed.push(o);
+    else if(d==='delivery')buckets.delivery.push(o);
+    else (buckets[d]||buckets.design).push(o);
   });
-  const _visibleColsDef=_activeStatKey==='all'?colsDef:colsDef.filter(c=>_activeStatKey==='delivery'?(c.key==='done'||c.key==='completed'):c.key===_activeStatKey);
+  const _visibleColsDef=_activeStatKey==='all'?colsDef:colsDef.filter(c=>_activeStatKey==='delivery'?(c.key==='delivery'||c.key==='completed'):c.key===_activeStatKey);
   const colsHtml=_visibleColsDef.map(c=>{
     const list=buckets[c.key]||[];
     let cardsHtml;
@@ -5558,7 +5581,7 @@ function renderWfKanbanView(){
       cardsHtml=list.length?list.map(cardHtml).join(''):'<div style="color:var(--text-3);padding:20px 10px;text-align:center;font-size:12px;"><i class="ti ti-inbox" style="font-size:26px;display:block;margin-bottom:6px;"></i>لا توجد أعمال</div>';
     }
     const _deptRoleKey={designer:'design',printer:'print',workshop:'workshop',external:'external'}[cu.type];
-    const isStageLink=['design','external','print','workshop','done','completed'].includes(c.key)&&(!_deptRoleKey||c.key===_deptRoleKey);
+    const isStageLink=['design','external','print','workshop','delivery','completed'].includes(c.key)&&(!_deptRoleKey||c.key===_deptRoleKey);
     const stageLinkKey=c.key==='completed'?'done':c.key;
     return `<div class="wf-kanban-col">
       <div class="wf-kanban-col-header"${isStageLink?` onclick="openDeptStagePage('${stageLinkKey}')" style="cursor:pointer;" title="عرض صفحة مستقلة كاملة للطلبات المكتملة"`:''}><span class="badge ${c.cls}"><i class="ti ${c.icon}"></i> ${c.label}</span><span class="wf-kanban-count">${list.length}</span></div>
@@ -5571,7 +5594,7 @@ function renderWfKanbanView(){
     {key:'print',label:'الطباعة',num:buckets.print.length,icon:'ti-printer',grad:'radial-gradient(circle at 32% 26%,#818cf8 0%,#4F46C4 55%,#3730A3 100%)',bar:'#4F46C4',bg:'#E7E9FC',accent:'#3730A3',pillBg:'rgba(79,70,196,.12)',pillFg:'#3730A3'},
     {key:'workshop',label:'الورشة',num:buckets.workshop.length,icon:'ti-tool',grad:'radial-gradient(circle at 32% 26%,#f0a06e 0%,#C2571F 55%,#9A3412 100%)',bar:'#C2571F',bg:'#FDEBDD',accent:'#9A3412',pillBg:'rgba(194,87,31,.12)',pillFg:'#9A3412'},
     {key:'external',label:'قيد التنفيذ',num:buckets.external.length,icon:'ti-clock',grad:'radial-gradient(circle at 32% 26%,#F0D060 0%,var(--gold) 55%,#a9841f 100%)',bar:'var(--gold)',bg:'var(--gold-soft)',accent:'#8a6d1f',pillBg:'var(--gold-soft)',pillFg:'#8a6d1f'},
-    {key:'delivery',label:'التسليم',num:buckets.done.length+buckets.completed.length,icon:'ti-circle-check',grad:'radial-gradient(circle at 32% 26%,#6EE7B7 0%,#34D399 55%,#10B981 100%)',bar:'#34D399',bg:'#E6F7EE',accent:'#047857',pillBg:'rgba(16,185,129,.12)',pillFg:'#047857'}
+    {key:'delivery',label:'التسليم',num:buckets.delivery.length+buckets.completed.length,icon:'ti-truck-delivery',grad:'radial-gradient(circle at 32% 26%,#6EE7B7 0%,#34D399 55%,#10B981 100%)',bar:'#34D399',bg:'#E6F7EE',accent:'#047857',pillBg:'rgba(16,185,129,.12)',pillFg:'#047857'}
   ].map(s=>({...s,pct:arr.length?Math.round(s.num/arr.length*100):0}));
   const statsHtml=`<div class="wf-stats-row">${_wfStats.map(s=>`
     <div class="wf-stat-card${s.key===_activeStatKey?' wf-stat-active':''}" style="--wf-stat-bg:${s.bg};--wf-stat-accent:${s.accent};" onclick="setWfStatFilter('${s.key}')" title="${s.key==='all'?'إظهار كل المراحل':'فلترة حسب '+s.label}">
@@ -5609,7 +5632,12 @@ const WF_DEPT_META={
   print:{label:'الطباعة',color:'#3730A3',icon:'ti-printer'},
   workshop:{label:'الورشة',color:'#9A3412',icon:'ti-tools'},
   external:{label:'تنفيذ خارجي',color:'#713F12',icon:'ti-world'},
-  done:{label:'التسليم',color:'#10B981',icon:'ti-circle-check'}
+  // 'delivery': production finished, awaiting the explicit manual archive
+  // action (finishOrder) into 'done'. Previously 'done' itself carried the
+  // "التسليم" label even though it actually meant fully archived — that
+  // conflation is exactly what this distinct stage separates out.
+  delivery:{label:'التسليم',color:'#0EA5E9',icon:'ti-truck-delivery'},
+  done:{label:'مكتمل',color:'#10B981',icon:'ti-circle-check'}
 };
 function wfEffectiveDate(o){
   const d=(o.deadline&&o.deadline!=='—')?o.deadline:o.date;
@@ -5740,9 +5768,16 @@ function orderItemSummary(o){
 }
 // ── Column 7: quick actions — WhatsApp / advance stage / view ──
 function orderQuickActionsHtml(o){
-  const next=o.currentDept!=='done'?getNextDept(o):null;
   const waBtn=(typeof canSeeWhatsappBtn==='function'&&canSeeWhatsappBtn()&&o.phone)?`<button class="qbtn qbtn-wa" title="واتساب" onclick="openWhatsapp('${encodeURIComponent(o.phone)}')"><i class="ti ti-brand-whatsapp"></i></button>`:'';
-  const advBtn=next?`<button class="qbtn qbtn-brand" title="نقل للمرحلة التالية" onclick="sendToNextDept('${o._key}','${next}')"><i class="ti ti-arrow-left"></i></button>`:'';
+  // "التسليم" (delivery) never auto-advances into "done" via the generic
+  // next-stage arrow — that would skip finishOrder()'s archive-specific side
+  // effects (warranty creation, the completion WhatsApp, sheet resync). It
+  // gets its own explicit, distinctly-styled archive action instead — the
+  // "external action button" the row needs to manually move an order from
+  // "التسليم" into "المكتملة".
+  const advBtn=o.currentDept==='delivery'
+    ?((cu.type==='admin'||cu.type==='receiver')?`<button class="qbtn" title="أرشفة الطلب ونقله للمكتملة" style="background:#10B981;color:#fff;" onclick="finishOrder('${o._key}')"><i class="ti ti-archive"></i></button>`:'')
+    :(o.currentDept!=='done'&&getNextDept(o)?`<button class="qbtn qbtn-brand" title="نقل للمرحلة التالية" onclick="sendToNextDept('${o._key}','${getNextDept(o)}')"><i class="ti ti-arrow-left"></i></button>`:'');
   const viewBtn=`<button class="qbtn" title="عرض الطلب" onclick="openOrderPage('${o._key}')"><i class="ti ti-eye"></i></button>`;
   return `<div style="display:flex;gap:5px;">${waBtn}${advBtn}${viewBtn}</div>`;
 }
@@ -5758,7 +5793,7 @@ function wfListFiltersBarHtml(f){
   const showEmployeeSelect=!deptWorkers||deptWorkers.length>1;
   const employeeSource=deptWorkers||Object.entries(USERS).filter(([,u])=>['designer','printer','workshop','external'].includes(u.type)).map(([uname,u])=>({uname,name:u.name}));
   const employeeOptions=employeeSource.map(u=>`<option value="${esc(u.uname)}"${f.employee===u.uname?' selected':''}>${esc(u.name)}</option>`).join('');
-  const deptOptions=['design','print','workshop','external','done']
+  const deptOptions=['design','print','workshop','external','delivery','done']
     .map(k=>`<option value="${k}"${f.dept===k?' selected':''}>${WF_DEPT_META[k].label}</option>`).join('');
   const singleAssigneeNote=(deptWorkers&&deptWorkers.length===1)?`<span class="wf-toggle-chip active" style="pointer-events:none;"><i class="ti ti-user-check"></i> ${esc(deptWorkers[0].name)}</span>`:'';
   return `<div class="wf-list-filterbar">
@@ -6054,7 +6089,7 @@ function wfFiltersBarHtml(f){
     .map(([uname,u])=>`<option value="${esc(uname)}"${f.employee===uname?' selected':''}>${esc(u.name)}</option>`).join('');
   const statusOptions=['قيد المتابعة','قيد التشغيل','قيد التنفيذ','مكتمل','مؤرشف','غير مكتمل']
     .map(s=>`<option value="${s}"${f.status===s?' selected':''}>${s}</option>`).join('');
-  const deptOptions=['design','print','workshop','external','done']
+  const deptOptions=['design','print','workshop','external','delivery','done']
     .map(k=>`<option value="${k}"${f.dept===k?' selected':''}>${WF_DEPT_META[k].label}</option>`).join('');
   const priorityOptions=['عادية','متوسطة','عاجلة'].map(p=>`<option value="${p}"${f.priority===p?' selected':''}>${p}</option>`).join('');
   return `<div style="display:flex;gap:8px;flex-wrap:wrap;">
@@ -6360,11 +6395,17 @@ function openWfInlinePanel(key,skipScroll){
   const _prevDept=getPrevDept(o);
   const nextLabels={design:'اعتماد التصميم والإرسال للمرحلة التالية ➔',external:'إنهاء التوريد والنقل ➔',print:'إتمام الطباعة ➔',workshop:'اكتمال التركيب ✓'};
   let nextBtn='';
-  if(canAct&&o.currentDept!=='done'){
-    if(nd==='done'&&o.currentDept==='workshop'){
-      nextBtn=o.finalWorkshopDoneFile?`<button class="btn btn-green btn-sm" onclick="finishOrder('${key}')"><i class="ti ti-circle-check"></i> إتمام الطلب وأرشفته</button>`:`<span style="font-size:11px;color:#EF4444;font-weight:700"><i class="ti ti-alert-triangle"></i> يرجى إرفاق صورة المنجز أولاً (من النافذة الكاملة)</span>`;
-    }else if(nd==='done'){
-      nextBtn=`<button class="btn btn-green btn-sm" onclick="finishOrder('${key}')"><i class="ti ti-circle-check"></i> إتمام وأرشفة الطلب</button>`;
+  // Distinct "التسليم" (Delivery) stage: production finishing (workshop/
+  // print/external's own last step) now lands the order in currentDept
+  // 'delivery' — a normal stage move via sendToNextDept(), same as any
+  // other — NOT an automatic archive. Only FROM 'delivery' does an explicit
+  // manual action (finishOrder(), unchanged internally) move it into
+  // currentDept 'done' (the "المكتملة" archive).
+  if(canAct&&o.currentDept==='delivery'){
+    nextBtn=`<button class="btn btn-green btn-sm" onclick="finishOrder('${key}')"><i class="ti ti-archive"></i> أرشفة الطلب ونقله للمكتملة</button>`;
+  }else if(canAct&&o.currentDept!=='done'){
+    if(nd==='delivery'&&o.currentDept==='workshop'){
+      nextBtn=o.finalWorkshopDoneFile?`<button class="btn btn-brand btn-sm" onclick="sendToNextDept('${key}','delivery')"><i class="ti ti-truck-delivery"></i> ${nextLabels[o.currentDept]||'نقل لمرحلة التسليم'}</button>`:`<span style="font-size:11px;color:#EF4444;font-weight:700"><i class="ti ti-alert-triangle"></i> يرجى إرفاق صورة المنجز أولاً (من النافذة الكاملة)</span>`;
     }else{
       const needsFile=o.currentDept==='design'&&(o.printTo==='none'&&o.workshopTo!=='none'?!o.approvedWorkshopFile:(o.printTo!=='none'&&(!o.clientApprovalImage||!o.approvedPrintFile||(o.workshopTo!=='none'&&!o.approvedWorkshopFile))));
       nextBtn=needsFile
@@ -6678,7 +6719,8 @@ function buildDeptStagePage(){
     external:{label:'التنفيذ الخارجي',icon:'ti-world',color:'#713F12'},
     print:{label:'الطباعة',icon:'ti-printer',color:'#3730A3'},
     workshop:{label:'الورشة',icon:'ti-tools',color:'#9A3412'},
-    done:{label:'التسليم',icon:'ti-circle-check',color:'#10B981'}
+    delivery:{label:'التسليم',icon:'ti-truck-delivery',color:'#0EA5E9'},
+    done:{label:'مكتمل',icon:'ti-circle-check',color:'#10B981'}
   };
   const meta=deptMeta[deptKey]||deptMeta.design;
   const isCompleted=deptKey==='done';
@@ -6756,6 +6798,7 @@ function buildDeptStagePage(){
       <div style="font-size:11.5px;color:var(--text-2);margin-top:4px;"><i class="ti ti-user"></i> ${esc(currentPersonName(o))}</div>
       <div style="font-size:10.5px;color:var(--text-3);"><i class="ti ti-calendar-time"></i> ${deadlineDateTime(o)}</div>
       <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:6px;">${gpbadge(o.priority,o.currentDept)} ${orderTimerBadge(o)}</div>
+      ${deptKey==='delivery'&&(cu.type==='admin'||cu.type==='receiver')?`<button class="btn btn-green btn-sm" style="margin-top:8px;width:100%;" onclick="event.stopPropagation();finishOrder('${o._key}')"><i class="ti ti-archive"></i> أرشفة الطلب ونقله للمكتملة</button>`:''}
     </div>
     <div class="wf-card-prog"><div class="wf-card-fill" style="width:${orderProgress(o)}%;background:${progressColor(o)}"></div></div>
   </div>`).join('');
@@ -8331,11 +8374,13 @@ function renderQuoteLines(){
     <input type="text" inputmode="decimal" id="q-line-notax-${l.id}" placeholder="السعر غير شامل الضريبة" value="${l.p}" oninput="updateQuoteLine('${l.id}','p',this.value)" min="0" onfocus="this.select()"/>
     <input type="text" inputmode="decimal" id="q-line-wtax-${l.id}" placeholder="السعر شامل الضريبة" value="${fmtMoney((l.p*1.15))}" oninput="updateQuoteLineFromTax('${l.id}',this.value)" min="0" onfocus="this.select()"/>
     <div id="q-line-total-${l.id}" style="display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:var(--maroon);background:var(--surface-2);border:1.5px solid var(--border);border-radius:8px;padding:8px 6px;text-align:center;">${fmtMoney(quoteLinePreVatTotal(l,showMeters)*1.15)}</div>
-    <label title="إرفاق صورة للبند" style="cursor:pointer;display:flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:8px;border:1px dashed var(--border);background:var(--bg);flex-shrink:0;transition:.12s;" onmouseover="this.style.borderColor='var(--gold)'" onmouseout="this.style.borderColor='var(--border)'">
-      ${l.img?`<img src="${cloudinaryThumb(l.img,80)}" style="width:28px;height:28px;object-fit:cover;border-radius:6px;" loading="lazy"/>`:
-      `<i class="ti ti-photo" style="font-size:14px;color:var(--text-3);"></i>`}
+    ${l.img?`<div title="اضغط لتكبير الصورة" style="position:relative;cursor:zoom-in;display:flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:8px;border:1px solid var(--border);background:var(--bg);flex-shrink:0;" onclick="openChatImageLightbox('${l.img}','${encodeURIComponent((l.lbl||'صورة البند')+'.jpg')}')">
+      <img src="${cloudinaryThumb(l.img,80)}" style="width:28px;height:28px;object-fit:cover;border-radius:6px;" loading="lazy"/>
+      <label title="تغيير الصورة" style="position:absolute;bottom:-4px;left:-4px;width:15px;height:15px;border-radius:50%;background:var(--maroon);color:#fff;display:flex;align-items:center;justify-content:center;font-size:8px;cursor:pointer;" onclick="event.stopPropagation();"><i class="ti ti-pencil" style="font-size:7px;"></i><input type="file" accept="*/*" style="display:none" onchange="attachLineImage('${l.id}',this.files)"/></label>
+    </div>`:`<label title="إرفاق صورة للبند" style="cursor:pointer;display:flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:8px;border:1px dashed var(--border);background:var(--bg);flex-shrink:0;transition:.12s;" onmouseover="this.style.borderColor='var(--gold)'" onmouseout="this.style.borderColor='var(--border)'">
+      <i class="ti ti-photo" style="font-size:14px;color:var(--text-3);"></i>
       <input type="file" accept="*/*" style="display:none" onchange="attachLineImage('${l.id}',this.files)"/>
-    </label>
+    </label>`}
     <button class="btn btn-red btn-sm btn-icon" onclick="removeQuoteLine('${l.id}')"><i class="ti ti-trash"></i></button>
     ${showMeters?`<div style="grid-column:1/-1;">
       <button class="btn btn-out btn-xs" type="button" onclick="addQuoteLineDimension('${l.id}')"><i class="ti ti-ruler-2"></i> + إضافة مقاس / بُعد</button>
@@ -8694,7 +8739,7 @@ function renderA4Quote(data,key=''){
     const priceAfterTax=price*1.15;
     const lineTotal=quoteLinePreVatTotal(l,showMeters)*1.15;
     const imgCell=hasAnyImg?(l.img
-      ?`<td style="padding:8px;text-align:center;"><img src="${l.img}" style="width:44px;height:44px;object-fit:cover;border-radius:8px;border:1px solid #EDE3D0;"/></td>`
+      ?`<td style="padding:8px;text-align:center;"><img src="${l.img}" style="width:44px;height:44px;object-fit:cover;border-radius:8px;border:1px solid #EDE3D0;cursor:zoom-in;" onclick="openChatImageLightbox('${l.img}','${encodeURIComponent((l.lbl||'صورة البند')+'.jpg')}')" title="اضغط لتكبير الصورة"/></td>`
       :`<td style="padding:8px;text-align:center;"><div style="width:44px;height:44px;border-radius:8px;background:#F3EEE4;display:inline-flex;align-items:center;justify-content:center;"><i class="ti ti-photo" style="color:#C9A227;font-size:16px;"></i></div></td>`):'';
     return `<tr style="background:${i%2===0?'#ffffff':'#FBF8F2'};">
       ${imgCell}
@@ -9131,8 +9176,7 @@ function chatIsImageFile(f){
 }
 function chatIsVideoFile(f){
   if(!f)return false;
-  if(/^data:video\//i.test(f.data||''))return true;
-  return/\.(mp4|webm|mov|m4v|ogg|ogv)$/i.test(f.name||'');
+  return isVideoFileUrl(f.name,f.data);
 }
 function chatAttachmentsHtml(attachments){
   if(!attachments||!attachments.length)return'';
@@ -9220,11 +9264,13 @@ function openFilePreviewLightbox(url,nameEncoded,isPdf){
   const name=safeDecodeURIComponent(nameEncoded||'')||(isPdf?'ملف PDF':'صورة');
   // Video files used to silently fall into the <img> branch below (which
   // just shows a broken-image icon for a video src) since this function only
-  // ever branched on isPdf vs everything-else. Detect a video by its data:
-  // mime or file extension so it gets a real <video> element instead —
-  // reusing the same single overlay div, so switching between previews still
-  // never touches/reloads the main page DOM.
-  const isVideo=!isPdf&&(/^data:video\//i.test(url||'')||/\.(mp4|webm|mov|m4v|ogg|ogv)(\?|#|$)/i.test(url||'')||/\.(mp4|webm|mov|m4v|ogg|ogv)$/i.test(name||''));
+  // ever branched on isPdf vs everything-else. isVideoFileUrl() (the same
+  // detector fileLinkHtml()/chatIsVideoFile() use) checks the data: mime,
+  // Cloudinary's own /video/upload/ delivery path, and the file/URL
+  // extension, so it gets a real <video> element instead — reusing the same
+  // single overlay div, so switching between previews still never touches/
+  // reloads the main page DOM.
+  const isVideo=!isPdf&&isVideoFileUrl(name,url);
   const previewHtml=isPdf?`<iframe src="${gdrivePreviewUrl(url)}" title="${esc(name)}"></iframe>`
     :isVideo?`<video src="${url}" controls autoplay playsinline style="max-width:100%;max-height:80vh;border-radius:10px;background:#000;"></video>`
     :`<img src="${url}" alt="${esc(name)}"/>`;
@@ -10154,12 +10200,12 @@ function renderParallelLineSections(o,key,canAct){
 function buildOrderProgressTimeline(o,key){
   const seq=getActiveDepts(o);
   const nodes=[{key:'received',label:'استلام الطلب'},{key:'reviewed',label:'مراجعة الطلب'},
-    ...seq.map(dk=>({key:dk,label:WF_DEPT_META[dk]?.label||dk})),{key:'done',label:'التسليم'}];
+    ...seq.map(dk=>({key:dk,label:WF_DEPT_META[dk]?.label||dk})),{key:'delivery',label:'التسليم'},{key:'done',label:'مكتمل'}];
   const curIdx=o.currentDept==='done'?nodes.length-1:nodes.findIndex(n=>n.key===o.currentDept);
   const effectiveIdx=curIdx<0?1:curIdx;
   const html=nodes.map((n,i)=>{
     const st=(o.currentDept==='done'&&n.key==='done')?'done':(i<effectiveIdx?'done':(i===effectiveIdx?'current':''));
-    const jump=(n.key!=='received'&&n.key!=='reviewed'&&n.key!=='done')?`scrollToDeptCard('${n.key}')`:'';
+    const jump=(n.key!=='received'&&n.key!=='reviewed'&&n.key!=='done'&&n.key!=='delivery')?`scrollToDeptCard('${n.key}')`:'';
     return `<div class="od-progress-node ${st}" ${jump?`onclick="${jump}"`:''}>
         <div class="od-progress-dot"><i class="ti ${st==='done'?'ti-check':'ti-circle'}"></i></div>
         <div class="od-progress-lbl">${esc(n.label)}</div>
@@ -10685,20 +10731,24 @@ function buildOrderDetailsPage(){
   const _hasParallelLines=Object.values(orders).some(v=>v.parentOrderKey===key);
   const nextLabels={design:'اعتماد التصميم والإرسال للمرحلة التالية ➔',external:'إنهاء التوريد والنقل ➔',print:'إتمام الطباعة ➔',workshop:'اكتمال التركيب ✓'};
   let nextBtn='';
-  if(canAct&&o.currentDept!=='done'){
+  // Distinct "التسليم" (Delivery) stage — see openWfInlinePanel() for the
+  // matching change in the workflow list's inline panel. Reaching
+  // currentDept 'delivery' is a normal stage move (sendToNextDept); only
+  // FROM 'delivery' does the explicit manual archive button appear.
+  if(canAct&&o.currentDept==='delivery'){
+    nextBtn=`<button class="btn btn-green btn-sm" onclick="finishOrder('${key}')"><i class="ti ti-archive"></i> أرشفة الطلب ونقله للمكتملة</button>`;
+  }else if(canAct&&o.currentDept!=='done'){
     if(o.orderKind==='maintenance'&&nd==='done'&&o.currentDept==='workshop'){
       nextBtn=`<div style="width:100%;display:flex;flex-direction:column;gap:8px;">
         <textarea id="mnt-resolution-${key}" placeholder="اكتب وصف حل المشكلة..." style="min-height:60px;font-size:12px;"></textarea>
         <button class="btn btn-green btn-sm" style="align-self:flex-start;" onclick="resolveMaintenanceOrder('${key}')"><i class="ti ti-circle-check"></i> تسجيل الحل وإتمام الطلب</button>
       </div>`;
-    }else if(nd==='done'&&o.currentDept==='workshop'){
+    }else if(nd==='delivery'&&o.currentDept==='workshop'){
       // Admin can finish/archive regardless of the completion photo — files
       // stay optional for a manager overriding a normal staff gate.
       nextBtn=(o.finalWorkshopDoneFile||cu.type==='admin')
-        ?`<button class="btn btn-green btn-sm" onclick="finishOrder('${key}')"><i class="ti ti-circle-check"></i> إتمام الطلب وأرشفته</button>${(!o.finalWorkshopDoneFile&&cu.type==='admin')?`<div style="font-size:10.5px;color:#B45309;margin-top:6px;"><i class="ti ti-alert-triangle"></i> لم يتم إرفاق صورة المنجز (اختياري) — يمكنك المتابعة كمدير</div>`:''}`
+        ?`<button class="btn btn-brand btn-sm" onclick="sendToNextDept('${key}','delivery')"><i class="ti ti-truck-delivery"></i> نقل لمرحلة التسليم</button>${(!o.finalWorkshopDoneFile&&cu.type==='admin')?`<div style="font-size:10.5px;color:#B45309;margin-top:6px;"><i class="ti ti-alert-triangle"></i> لم يتم إرفاق صورة المنجز (اختياري) — يمكنك المتابعة كمدير</div>`:''}`
         :`<span style="font-size:11px;color:#EF4444;font-weight:700"><i class="ti ti-alert-triangle"></i> يرجى إرفاق صورة المنجز أولاً</span>`;
-    }else if(nd==='done'){
-      nextBtn=`<button class="btn btn-green btn-sm" onclick="finishOrder('${key}')"><i class="ti ti-circle-check"></i> إتمام وأرشفة الطلب</button>`;
     }else{
       // Design cannot move an order on to print/workshop until the approved
       // deliverables those departments actually need are uploaded — mirrors
