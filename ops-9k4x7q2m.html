@@ -7003,39 +7003,25 @@ function filterDeptStageRows(){
     r.style.display=(matchesSearch&&matchesPerson)?'':'none';
   });
 }
-// Generic floating-panel positioner — escapes ANY ancestor's overflow
-// clipping (a scrollable .tbl-wrap, a .card, a modal, ...) by switching the
-// panel to position:fixed and computing its coordinates directly from the
-// trigger's viewport-relative bounding rect, instead of relying on the
-// position:absolute chain a clipping ancestor can cut off. .tbl-wrap only
-// ever sets overflow-x:auto, but per the CSS overflow spec that silently
-// forces overflow-y to auto too — so anything absolutely positioned that
-// pops above/below a table row was getting clipped vertically as a side
-// effect, worst on the first/last couple of rows where there's no room for
-// the popup to fully render before hitting that clip.
-// anchorLeft: true keeps the panel's LEFT edge under the trigger's left
-// edge (matches this app's existing dropdown-menu convention); the default
-// (false) keeps the RIGHT edges aligned (this app's RTL default, matches
-// the tooltip's old right:0). openDownThreshold: below this many px from
-// the top of the viewport, the panel opens downward instead of upward so
-// it can never be clipped off the top of the screen.
-function positionFloatingPanel(triggerEl,panelEl,opts={}){
-  if(!triggerEl||!panelEl)return;
-  const rect=triggerEl.getBoundingClientRect();
-  const openDownThreshold=opts.openDownThreshold??160;
-  panelEl.style.position='fixed';
-  panelEl.style.left='';panelEl.style.right='';panelEl.style.top='';panelEl.style.bottom='';
-  if(opts.anchorLeft)panelEl.style.left=Math.max(4,rect.left)+'px';
-  else panelEl.style.right=Math.max(4,window.innerWidth-rect.right)+'px';
-  if(rect.top<openDownThreshold)panelEl.style.top=(rect.bottom+6)+'px';
-  else panelEl.style.bottom=(window.innerHeight-rect.top+6)+'px';
-}
+// NOTE: this used to switch .row-menu to position:fixed (computed from the
+// trigger's getBoundingClientRect()) to escape .tbl-wrap's overflow
+// clipping. That broke in practice: .page.active carries a persistent
+// transform via its entrance animation's fill-mode (@keyframes lxIn's `to`
+// state ends at transform:translateY(0) scale(1) — NOT the literal
+// keyword `none`, and `animation:...both` keeps that computed value applied
+// for as long as the page is active, not just during the .52s transition).
+// Per the CSS spec, ANY non-none transform on an ancestor becomes the
+// containing block for position:fixed descendants — so every row-menu
+// was actually being positioned relative to the .page.active container,
+// not the real viewport, silently growing more wrong the further the page
+// had been scrolled from the top. Reverted to plain position:absolute,
+// anchored directly on .row-menu-wrap (position:relative) — simple and
+// reliable regardless of scroll position, at the cost of being clippable
+// by a genuinely overflow:hidden ancestor (none of this app's tables are).
 function toggleRowMenu(id){
   document.querySelectorAll('.row-menu').forEach(m=>{if(m.id!==id)m.style.display='none';});
   const el=document.getElementById(id);if(!el)return;
-  const opening=el.style.display!=='block';
-  el.style.display=opening?'block':'none';
-  if(opening)positionFloatingPanel(el.closest('.row-menu-wrap')||el.previousElementSibling,el,{anchorLeft:true});
+  el.style.display=el.style.display==='block'?'none':'block';
 }
 function closeAllRowMenus(){document.querySelectorAll('.row-menu').forEach(m=>m.style.display='none');}
 document.addEventListener('click',function(e){
