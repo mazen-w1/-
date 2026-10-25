@@ -1927,6 +1927,7 @@ input:focus,select:focus,textarea:focus{box-shadow:inset 0 1px 3px rgba(74,14,23
         <div class="page" id="page-itemwork"><div id="itemwork-content"></div></div>
         <div class="page" id="page-orderdetails"><div id="orderdetails-content"></div></div>
         <div class="page" id="page-orderpresets"><div id="orderpresets-content"></div></div>
+        <div class="page" id="page-instanttasks"><div id="instanttasks-content"></div></div>
       </div>
     </div>
   </div>
@@ -2333,7 +2334,7 @@ const INITIAL_USERS={
 // still available from the sort dropdown for whoever wants it, just no
 // longer the default view.
 let cu=null,orders={},clients={},USERS={},currentSortMode='id-desc';
-let submittedRequests={},chats={},standaloneQuotes={},warranties={},teamChat={},govRecords={},urgentRequests={},tasksData={},eventNotifs={},tickerAnnouncementsData={},orderPresets={};
+let submittedRequests={},chats={},standaloneQuotes={},warranties={},teamChat={},govRecords={},urgentRequests={},tasksData={},eventNotifs={},tickerAnnouncementsData={},orderPresets={},instantTasks={};
 // Workload dashboard settings (section F — configurable measurement mode +
 // per-department thresholds). Shared/admin-configured (not a per-browser
 // preference), so it lives in Firebase like every other small settings
@@ -2804,13 +2805,14 @@ async function loadData(){
     ['tickerAnnouncements',v=>tickerAnnouncementsData=v],
     ['orderPresets',v=>orderPresets=v],
     ['workloadSettings',v=>workloadSettings=v||{}],
+    ['instantTasks',v=>instantTasks=v],
   ];
   await Promise.all(aux.map(async([path,assign])=>{
     try{assign((await fbGet(path))||{});}
     catch(e){console.warn(`${path} fetch failed (non-fatal — check Firebase rules allow this path)`,e);}
   }));
   try{
-    updateNotifBell();updateRequestsBadgeSidebar();updateTeamChatBadge();updatePrepBadgeSidebar();updateWfBadgeSidebar();
+    updateNotifBell();updateRequestsBadgeSidebar();updateTeamChatBadge();updatePrepBadgeSidebar();updateWfBadgeSidebar();updateInstantTasksBadgeSidebar();
     checkForNewEventNotifsAndAlert();
     checkNewAssignments();
     checkNewEventNotifs();
@@ -3860,6 +3862,7 @@ function transferQuickTaskToOrder(key){
   window._prefillFromQuickTaskKey=key;
   const _tfiles=[];
   if(o.quickTaskFile)_tfiles.push({data:o.quickTaskFile,name:o.quickTaskFileName||'الصورة_الأساسية'});
+  if(Array.isArray(o.quickTaskFilesExtra))o.quickTaskFilesExtra.forEach((f,i)=>{if(f&&f.data)_tfiles.push({data:f.data,name:f.name||('مرفق_'+(i+2))});});
   if(o.approvedPrintFile)_tfiles.push({data:o.approvedPrintFile,name:o.approvedPrintFileName||'ملف_البروفة_المرسل_للعميل'});
   if(o.workshopSitePhoto)_tfiles.push({data:o.workshopSitePhoto,name:o.workshopSitePhotoName||'صورة_الموقع_الميداني'});
   window._prefillFiles=_tfiles;
@@ -3908,6 +3911,7 @@ function buildSidebar(){
       ni('wf','ti-grid-dots','سير العمل','','wf-badge'),
       ni('prep','ti-list-check','مرحلة التجهيز','','prep-badge'),
       ni('orderpresets','ti-template','قوالب الطلبات'),
+      ni('instanttasks','ti-flare','المهام الفورية','','instanttasks-badge'),
     ]);
     h+=navGroup('الخدمات',[
       ni('clients','ti-address-book','العملاء'),
@@ -3924,16 +3928,16 @@ function buildSidebar(){
       ni('quote','ti-receipt-2','عرض سعر رسمي'),
       ni('wf','ti-grid-dots','سير العمل','','wf-badge'),
     ]);
-    h+=navGroup('إضافي',[ni('urgent','ti-bolt','طلب عاجل')]);
+    h+=navGroup('إضافي',[ni('instanttasks','ti-flare','المهام الفورية','','instanttasks-badge'),ni('urgent','ti-bolt','طلب عاجل')]);
   }else if(t==='designer'){
     // Unified single-page designer view: "لوحة العمل" now covers everything
     // "أعمالي الحالية" used to show separately (see buildDesignerBoard).
     h+=navGroup('لوحة التصميم',[ni('designer','ti-layout-kanban','لوحة العمل','','dept-new-badge')]);
-    h+=navGroup('إضافي',[ni('urgent','ti-bolt','طلب عاجل')]);
+    h+=navGroup('إضافي',[ni('instanttasks','ti-flare','المهام الفورية','','instanttasks-badge'),ni('urgent','ti-bolt','طلب عاجل')]);
   }else if(['printer','workshop'].includes(t)){
     h+=navGroup('الإنتاج',[ni('production','ti-progress-check','قائمة الإنتاج','','dept-new-badge'),ni('my','ti-user-check','أعمالي الحالية')]);
-    if(t==='printer'){h+=navGroup('إضافي',[ni('urgent','ti-bolt','طلب عاجل')]);}
-    if(t==='workshop'){h+=navGroup('إضافي',[ni('maintreq','ti-tool','طلب صيانة')]);}
+    if(t==='printer'){h+=navGroup('إضافي',[ni('instanttasks','ti-flare','المهام الفورية','','instanttasks-badge'),ni('urgent','ti-bolt','طلب عاجل')]);}
+    if(t==='workshop'){h+=navGroup('إضافي',[ni('instanttasks','ti-flare','المهام الفورية','','instanttasks-badge'),ni('maintreq','ti-tool','طلب صيانة')]);}
   }else if(t==='follower'){
     h+=navGroup('المتابعة',[ni('wf','ti-grid-dots','متابعة الأعمال','','wf-badge')]);
   }else if(t==='admin'){
@@ -3945,6 +3949,7 @@ function buildSidebar(){
       ni('wf','ti-grid-dots','سير العمل','','wf-badge'),
       ni('prep','ti-list-check','مرحلة التجهيز','','prep-badge'),
       ni('orderpresets','ti-template','قوالب الطلبات'),
+      ni('instanttasks','ti-flare','المهام الفورية','','instanttasks-badge'),
       ni('urgent','ti-bolt','طلب عاجل'),
       ni('request','ti-file-upload','رفع طلب'),
     ]);
@@ -5454,7 +5459,7 @@ function qtCardStageStripHtml(o){
 function openQuickTaskPicker(){
   document.getElementById('qt-modal-title').innerHTML=`<i class="ti ti-bolt"></i> تكليف مهمة فورية`;
   document.getElementById('qt-modal-body').innerHTML=`
-    <div style="font-size:12px;color:var(--text-2);margin-bottom:12px;">اختر نوع المهمة لتحويلها وتكليفها فوراً للقسم المعني:</div>
+    <div style="font-size:12px;color:var(--text-2);margin-bottom:12px;">اختر نوع المهمة — تُحفظ كمهمة فورية مستقلة بشكل افتراضي، ولا تتحول إلى أمر عمل رسمي إلا إذا اخترت ذلك صراحةً في الخطوة التالية:</div>
     <div style="display:flex;flex-direction:column;gap:10px;">
       <button class="btn btn-orange" style="justify-content:center;" onclick="openQuickTask('measure')"><i class="ti ti-ruler"></i> قياسات ومعاينة ميدانية</button>
       <button class="btn btn-purple" style="justify-content:center;" onclick="openQuickTask('proof')"><i class="ti ti-brush"></i> تصميم مستعجل (بروفة عاجلة)</button>
@@ -5462,39 +5467,111 @@ function openQuickTaskPicker(){
     </div>`;
   openModal('quick-task-modal');
 }
+// A standalone staff list for the instant-task assignee field — flat across
+// every department (unlike getDeptWorkers(), which is scoped to one dept's
+// roles), since a standalone instant task has no department of its own to
+// scope the picker by.
+function allStaffList(){
+  return Object.entries(USERS).map(([uname,v])=>({uname,name:v.name}));
+}
 function openQuickTask(type){
   const isProof=type==='proof';const isTest=type==='test';
-  document.getElementById('qt-modal-title').innerHTML=`<i class="ti ${isProof?'ti-brush':isTest?'ti-flask':'ti-ruler'}"></i> ${isProof?'طلب بروفة عاجلة':isTest?'طلب تست':'تكليف الورشة بأخذ قياسات'}`;
+  document.getElementById('qt-modal-title').innerHTML=`<i class="ti ${isProof?'ti-brush':isTest?'ti-flask':'ti-ruler'}"></i> ${isProof?'بروفة عاجلة':isTest?'عينة / تست':'قياسات ميدانية'} — مهمة فورية`;
+  const staff=allStaffList();
   document.getElementById('qt-modal-body').innerHTML=`
     <div style="display:flex;flex-direction:column;gap:14px;padding:4px 0;">
-      <div class="fg"><label>اسم العميل / الجهة *</label><input id="qt-client" placeholder="اسم العميل"/></div>
-      <div class="fg"><label>رقم الجوال *</label><input id="qt-phone" inputmode="tel" placeholder="05XXXXXXXX"/></div>
-      ${qtPipelineSelectorHtml()}
-      <div class="fg" id="qt-location-wrap" style="display:none;"><label>الموقع الميداني *</label><input id="qt-location" placeholder="اسم المنطقة والموقع..."/></div>
-      <div class="fg"><label>ملاحظات / تفاصيل إضافية</label><textarea id="qt-notes" placeholder="وصف المهمة المطلوبة..."></textarea></div>
-      <div class="fg"><label>إرفاق ملف (اختياري)</label>
-        <div class="dept-upload-box" onclick="document.getElementById('qt-file').click()"><i class="ti ti-upload" style="font-size:20px;color:var(--gold);"></i><br>اضغط لرفع ملف</div>
-        <input type="file" id="qt-file" style="display:none" accept="*/*" onchange="handleQtFile(this.files)"/>
+      <div class="fg"><label>وصف المهمة *</label><textarea id="qt-notes" placeholder="وصف المهمة المطلوبة... (بروفة، قياس، تست، ملاحظة سريعة)"></textarea></div>
+      <div class="fg"><label>إرفاق ملف أو أكثر (اختياري)</label>
+        <div class="dept-upload-box" onclick="document.getElementById('qt-file').click()"><i class="ti ti-upload" style="font-size:20px;color:var(--gold);"></i><br>اضغط لرفع ملف أو أكثر</div>
+        <input type="file" id="qt-file" multiple style="display:none" accept="*/*" onchange="handleQtFile(this.files)"/>
         <div id="qt-file-note" style="font-size:11px;color:#10B981;margin-top:4px;font-weight:700;"></div>
+        <div id="qt-file-preview"></div>
       </div>
-      <button class="btn btn-brand" style="width:100%;justify-content:center;" onclick="submitQuickTask('${type}')"><i class="ti ti-send"></i> إرسال وتكليف الأقسام</button>
+      <div class="fg" id="qt-instant-assignee-wrap"><label>تكليف شخص (اختياري)</label>
+        <select id="qt-instant-assignee"><option value="">— بدون تكليف محدد —</option>${staff.map(w=>`<option value="${esc(w.uname)}">${esc(w.name)}</option>`).join('')}</select>
+      </div>
       <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:4px;">
         <label style="color:var(--maroon);font-weight:800;font-size:12px;display:block;margin-bottom:7px;"><i class="ti ti-link"></i> ربط بأمر تشغيل موجود (اختياري)</label>
         <select id="qt-link-order-sel"><option value="">— بدون ربط —</option></select>
       </div>
+      <label style="display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:800;color:var(--maroon);cursor:pointer;background:#FFFBEB;border:1px solid #FDE68A;border-radius:8px;padding:10px 12px;">
+        <input type="checkbox" id="qt-convert-toggle" onchange="toggleQtConvert()" style="width:16px;height:16px;"/>
+        تحويل إلى أمر عمل رسمي (تعيين قسم، موظف، ومواعيد)
+      </label>
+      <div id="qt-order-fields" style="display:none;flex-direction:column;gap:14px;">
+        <div class="fg"><label>اسم العميل / الجهة *</label><input id="qt-client" placeholder="اسم العميل"/></div>
+        <div class="fg"><label>رقم الجوال *</label><input id="qt-phone" inputmode="tel" placeholder="05XXXXXXXX"/></div>
+        ${qtPipelineSelectorHtml()}
+        <div class="fg" id="qt-location-wrap" style="display:none;"><label>الموقع الميداني *</label><input id="qt-location" placeholder="اسم المنطقة والموقع..."/></div>
+      </div>
+      <button class="btn btn-brand" id="qt-submit-btn" style="width:100%;justify-content:center;" onclick="submitQuickTaskOrInstant('${type}')"><i class="ti ti-device-floppy"></i> حفظ كمهمة فورية مستقلة</button>
     </div>`;
-  window._qtFileB64='';window._qtFileName='';window._qtLinkedOrderKey='';
+  window._qtFiles=[];window._qtLinkedOrderKey='';
   applyQtPipelinePreset(qtPipelinePresetForType(type));
   openModal('quick-task-modal');
   setTimeout(fillQtOrderSelect,40);
 }
+// Shows/hides the full order-creation fields (client/phone/department
+// pipeline/location) based on the "تحويل إلى أمر عمل" checkbox — unchecked
+// by default, so a plain instant task never has to go through them at all.
+function toggleQtConvert(){
+  const checked=document.getElementById('qt-convert-toggle')?.checked;
+  const fieldsWrap=document.getElementById('qt-order-fields');
+  const assigneeWrap=document.getElementById('qt-instant-assignee-wrap');
+  const btn=document.getElementById('qt-submit-btn');
+  if(fieldsWrap)fieldsWrap.style.display=checked?'flex':'none';
+  if(assigneeWrap)assigneeWrap.style.display=checked?'none':'';
+  if(btn)btn.innerHTML=checked?'<i class="ti ti-send"></i> إرسال وتكليف الأقسام':'<i class="ti ti-device-floppy"></i> حفظ كمهمة فورية مستقلة';
+}
+function submitQuickTaskOrInstant(type){
+  const checked=document.getElementById('qt-convert-toggle')?.checked;
+  return checked?submitQuickTask(type):submitInstantTaskStandalone(type);
+}
 function handleQtFile(files){
   if(!files||!files.length)return;
-  const file=files[0];
-  runQueuedUpload(file.name,onProgress=>convertFileToBase64(file,undefined,onProgress),async b64=>{
-    window._qtFileB64=b64;window._qtFileName=file.name;
-    const note=document.getElementById('qt-file-note');if(note)note.textContent='✓ تم: '+file.name;
+  const fileList=Array.from(files);
+  const label=fileList.length>1?`${fileList.length} ملفات — مهمة فورية`:fileList[0].name;
+  runQueuedUpload(label,async onProgress=>{
+    const results=[];
+    for(let i=0;i<fileList.length;i++){
+      const f=fileList[i];
+      const b64=await convertFileToBase64(f,undefined,pct=>onProgress(((i+pct/100)/fileList.length)*100));
+      results.push({data:b64,name:f.name});
+    }
+    return results;
+  },async results=>{
+    if(!window._qtFiles)window._qtFiles=[];
+    window._qtFiles.push(...results);
+    const note=document.getElementById('qt-file-note');if(note)note.textContent='✓ تم إرفاق '+window._qtFiles.length+' ملف';
+    const preview=document.getElementById('qt-file-preview');if(preview)preview.innerHTML=chatAttachmentsHtml(window._qtFiles);
   });
+}
+// Genuinely standalone path (checkbox left unchecked, the default): no
+// client, phone, department, or assignee required at all — just saves a
+// lightweight record to its own `instantTasks` collection, completely
+// separate from `orders`, so it never enters the department workflow
+// engine, workload counts, or any order-based report.
+async function submitInstantTaskStandalone(type){
+  const notes=document.getElementById('qt-notes')?.value.trim()||'';
+  const files=window._qtFiles||[];
+  if(!notes&&!files.length){toast('⚠️ يرجى كتابة وصف للمهمة أو إرفاق ملف');return;}
+  const assignee=document.getElementById('qt-instant-assignee')?.value||'';
+  const linkedOrderKey=document.getElementById('qt-link-order-sel')?.value||'';
+  const typeLabel=type==='proof'?'بروفة عاجلة':type==='test'?'عينة / تست':'قياسات ميدانية';
+  showSaving('جاري الحفظ...');
+  try{
+    const rec={
+      type,typeLabel,notes:notes||'—',files,
+      assignedTo:assignee||'none',assignedToName:assignee?(USERS[assignee]?.name||assignee):'',
+      linkedOrderKey,done:false,
+      createdBy:cu.name,createdByUname:cu._uname,createdAt:new Date().toISOString(),
+    };
+    const res=await fbPush('instantTasks',rec);
+    await loadData();hideSaving();closeModal('quick-task-modal');
+    toast('✓ تم حفظ المهمة الفورية');
+    if(assignee&&assignee!=='none')pushNotification({type:'instant_task',message:`📌 مهمة فورية جديدة (${esc(typeLabel)}) موجهة إليك`,orderKey:'',orderId:'',client:'',targetUname:assignee});
+    refreshCurrentPage();
+  }catch(e){hideSaving();toast('❌ فشل الحفظ، حاول مرة أخرى');}
 }
 async function submitQuickTask(type){
   const c=document.getElementById('qt-client').value.trim();
@@ -5524,7 +5601,8 @@ async function submitQuickTask(type){
     workshopTo:assignees.workshop||'none',
     workflowOrder:pipeline,
     quickTaskType:type,quickTaskPipeline:pipeline,
-    quickTaskFile:window._qtFileB64||'',quickTaskFileName:window._qtFileName||'',
+    quickTaskFile:(window._qtFiles&&window._qtFiles[0])?window._qtFiles[0].data:'',quickTaskFileName:(window._qtFiles&&window._qtFiles[0])?window._qtFiles[0].name:'',
+    quickTaskFilesExtra:(window._qtFiles||[]).slice(1),
     quickTaskLocation:location,status:'قيد التنفيذ',isQuickTask:true,
     relatedOrderKey:document.getElementById('qt-link-order-sel')?.value||window._qtLinkedOrderKey||'',
     workshopFeedback:'',workshopFeedbackDate:''
@@ -5535,9 +5613,112 @@ async function submitQuickTask(type){
     const newId='QT-'+String(Date.now()).slice(-4);
     await fbPatch(`orders/${res.name}`,{id:newId});
     logOrderActivity(res.name,'ti-bolt','تم إنشاء مهمة سريعة');
+    // If this submission came from "تحويل إلى أمر عمل" on an existing
+    // standalone instant task (promoteInstantTaskToOrder), that source
+    // record is done — it's now a real order, not a parallel duplicate.
+    if(window._promotingInstantTaskKey){
+      try{await fbDelete('instantTasks/'+window._promotingInstantTaskKey);}catch(e){}
+      window._promotingInstantTaskKey=null;
+    }
     await loadData();hideSaving();closeModal('quick-task-modal');
     toast('✓ تم إرسال المهمة');refreshCurrentPage();
   }catch(e){hideSaving();toast('❌ فشل إرسال المهمة، حاول مرة أخرى');}
+}
+// ============================================================
+// STANDALONE INSTANT TASKS — list/management page. Separate collection
+// (instantTasks), separate page, never touches `orders` unless explicitly
+// promoted — see submitInstantTaskStandalone()/openQuickTask() above for
+// the creation side of this feature.
+// ============================================================
+function canSeeAllInstantTasks(){return cu.type==='admin'||cu.type==='receiver';}
+function myInstantTasks(){
+  const all=Object.entries(instantTasks||{}).map(([k,v])=>({...v,_key:k}));
+  if(canSeeAllInstantTasks())return all;
+  return all.filter(t=>t.assignedTo===cu._uname||t.createdByUname===cu._uname);
+}
+function buildInstantTasksPage(){
+  const el=document.getElementById('instanttasks-content');if(!el)return;
+  const all=myInstantTasks().sort((a,b)=>new Date(b.createdAt||0)-new Date(a.createdAt||0));
+  const pending=all.filter(t=>!t.done);
+  const done=all.filter(t=>t.done);
+  const tab=['pending','done'].includes(window._itTab)?window._itTab:'pending';
+  const list=tab==='pending'?pending:done;
+  el.innerHTML=`
+    ${backBtnHtml()}
+    <div class="page-header"><div class="ptitle"><i class="ti ti-flare"></i> المهام الفورية المستقلة</div>
+      <button class="btn btn-brand btn-sm" onclick="openQuickTaskPicker()"><i class="ti ti-plus"></i> مهمة فورية جديدة</button>
+    </div>
+    <div style="font-size:11.5px;color:var(--text-3);margin-bottom:12px;"><i class="ti ti-info-circle"></i> ملاحظات سريعة ومرفقات (بروفات، قياسات، عينات) مستقلة تماماً عن أوامر التشغيل — تتحول لأمر عمل رسمي فقط عند اختيار ذلك صراحةً.</div>
+    <div class="tab-bar" style="margin-bottom:14px;">
+      <button class="tab-btn ${tab==='pending'?'active':''}" onclick="setInstantTaskTab('pending')"><i class="ti ti-hourglass"></i> قيد الانتظار (${pending.length})</button>
+      <button class="tab-btn ${tab==='done'?'active':''}" onclick="setInstantTaskTab('done')"><i class="ti ti-circle-check"></i> منتهية (${done.length})</button>
+    </div>
+    <div class="wf-grid">${list.length?list.map(instantTaskCardHtml).join(''):`<div class="card" style="text-align:center;padding:30px;color:var(--text-3);grid-column:1/-1;"><i class="ti ti-inbox" style="font-size:32px;display:block;margin-bottom:8px;"></i>لا توجد مهام ${tab==='pending'?'قيد الانتظار':'منتهية'}</div>`}</div>`;
+  updateInstantTasksBadgeSidebar();
+}
+function setInstantTaskTab(tab){window._itTab=tab;buildInstantTasksPage();}
+const QT_TYPE_ICON={proof:'ti-brush',test:'ti-flask',measure:'ti-ruler'};
+function instantTaskCardHtml(t){
+  const linkedOrder=t.linkedOrderKey?orders[t.linkedOrderKey]:null;
+  const canManage=canSeeAllInstantTasks()||t.createdByUname===cu._uname;
+  return `<div class="wf-card" style="cursor:default;">
+    <div class="wf-card-top">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+        <span class="badge b-new"><i class="ti ${QT_TYPE_ICON[t.type]||'ti-flare'}"></i> ${esc(t.typeLabel||'مهمة فورية')}</span>
+        ${t.done?'<span class="badge b-done"><i class="ti ti-circle-check"></i> منتهية</span>':''}
+      </div>
+      <div style="font-size:13px;color:var(--text-1);font-weight:700;white-space:pre-wrap;">${esc(t.notes||'—')}</div>
+      ${t.files&&t.files.length?chatAttachmentsHtml(t.files):''}
+      <div style="font-size:10.5px;color:var(--text-3);margin-top:6px;"><i class="ti ti-user"></i> ${esc(t.createdBy||'—')} · ${fmtDateTime(t.createdAt)}</div>
+      ${t.assignedTo&&t.assignedTo!=='none'?`<div style="font-size:11px;color:var(--maroon);font-weight:700;margin-top:2px;"><i class="ti ti-user-check"></i> موجهة إلى: ${esc(t.assignedToName||t.assignedTo)}</div>`:''}
+      ${linkedOrder?`<div style="font-size:11px;color:var(--text-2);margin-top:4px;cursor:pointer;" onclick="openOrderPage('${t.linkedOrderKey}')"><i class="ti ti-link"></i> مرتبطة بالطلب: <strong>${esc(linkedOrder.id||t.linkedOrderKey)}</strong></div>`:''}
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;">
+        ${canManage?`<button class="btn ${t.done?'btn-out':'btn-green'} btn-xs" onclick="toggleInstantTaskDone('${t._key}')"><i class="ti ti-${t.done?'rotate':'circle-check'}"></i> ${t.done?'إعادة فتح':'إنهاء'}</button>`:''}
+        ${canManage&&!t.done?`<button class="btn btn-out btn-xs" onclick="promoteInstantTaskToOrder('${t._key}')"><i class="ti ti-arrow-up-right"></i> تحويل إلى أمر عمل</button>`:''}
+        ${canManage?`<button class="btn btn-out btn-xs" style="color:#DC2626;" onclick="deleteInstantTask('${t._key}')"><i class="ti ti-trash"></i> حذف</button>`:''}
+      </div>
+    </div>
+  </div>`;
+}
+async function toggleInstantTaskDone(key){
+  const t=instantTasks[key];if(!t)return;
+  const nowDone=!t.done;
+  try{
+    await fbPatch('instantTasks/'+key,{done:nowDone,doneAt:nowDone?new Date().toISOString():null,doneBy:nowDone?cu.name:null});
+    await loadData();toast(nowDone?'✓ تم إنهاء المهمة':'↩️ تمت إعادة فتح المهمة');refreshCurrentPage();
+  }catch(e){toast('❌ فشل التحديث');}
+}
+async function deleteInstantTask(key){
+  if(!confirm('حذف هذه المهمة الفورية نهائياً؟ لا يمكن التراجع عن هذا الإجراء.'))return;
+  showSaving('جاري الحذف...');
+  try{
+    await fbDelete('instantTasks/'+key);
+    await loadData();hideSaving();toast('✓ تم الحذف');refreshCurrentPage();
+  }catch(e){hideSaving();toast('❌ فشل الحذف');}
+}
+// Opens the exact same creation modal used for a brand-new instant task,
+// pre-filled from this one, with "تحويل إلى أمر عمل" already checked — the
+// source instantTasks record is deleted only once the order is actually
+// created successfully (see submitQuickTask()'s _promotingInstantTaskKey
+// cleanup), so nothing is lost if the manager cancels partway through.
+function promoteInstantTaskToOrder(key){
+  const t=instantTasks[key];if(!t)return;
+  openQuickTask(t.type||'measure');
+  window._promotingInstantTaskKey=key;
+  setTimeout(()=>{
+    const notesEl=document.getElementById('qt-notes');if(notesEl)notesEl.value=t.notes&&t.notes!=='—'?t.notes:'';
+    window._qtFiles=Array.isArray(t.files)?[...t.files]:[];
+    const preview=document.getElementById('qt-file-preview');if(preview)preview.innerHTML=chatAttachmentsHtml(window._qtFiles);
+    const note=document.getElementById('qt-file-note');if(note&&window._qtFiles.length)note.textContent='✓ '+window._qtFiles.length+' ملف من المهمة الأصلية';
+    const toggle=document.getElementById('qt-convert-toggle');
+    if(toggle){toggle.checked=true;toggleQtConvert();}
+    if(t.linkedOrderKey){window._qtLinkedOrderKey=t.linkedOrderKey;fillQtOrderSelect();}
+  },60);
+}
+function updateInstantTasksBadgeSidebar(){
+  const badge=document.getElementById('instanttasks-badge');if(!badge)return;
+  const n=myInstantTasks().filter(t=>!t.done).length;
+  if(n>0){badge.style.display='inline-block';badge.textContent=n;}else{badge.style.display='none';}
 }
 // Workshop Feedback
 function openWorkshopFeedback(key){
@@ -13540,6 +13721,12 @@ function openQuickTaskLinked(type,orderKey){
   const o=orders[orderKey];if(!o)return;
   openQuickTask(type);
   setTimeout(()=>{
+    // This entry point is specifically "assign real department work tied to
+    // an existing order" — not a bare standalone note — so, unlike the
+    // generic picker, it defaults straight into the convert-to-order fields
+    // already filled in, instead of leaving them hidden behind the checkbox.
+    const toggle=document.getElementById('qt-convert-toggle');
+    if(toggle){toggle.checked=true;toggleQtConvert();}
     const cEl=document.getElementById('qt-client');
     const pEl=document.getElementById('qt-phone');
     if(cEl)cEl.value=o.client||'';
@@ -15120,6 +15307,7 @@ function _buildPage(p){
   else if(p==='itemwork') buildItemWorkspacePage();
   else if(p==='orderdetails') buildOrderDetailsPage();
   else if(p==='orderpresets') buildOrderPresetsPage();
+  else if(p==='instanttasks') buildInstantTasksPage();
 }
    </script>
 <script>
