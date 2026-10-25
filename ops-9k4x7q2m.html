@@ -365,6 +365,7 @@ tbody tr:hover td{background:var(--surface-2);}
 .countdown-pill.cd-soon{color:#C05621;}
 .countdown-pill.cd-overdue{color:#C53030;font-weight:900;}
 .countdown-pill.cd-done{color:#2F855A;}
+.countdown-pill.cd-frozen{color:#64748B;}
 /* Column-7 quick-action icon buttons */
 .qbtn{width:28px;height:28px;border-radius:8px;border:1.5px solid var(--border);background:var(--surface);color:var(--text-2);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;font-size:13px;transition:.15s;}
 .qbtn:hover{border-color:var(--gold);color:var(--maroon);}
@@ -704,6 +705,7 @@ input[type="password"]{direction:rtl;text-align:right;padding-left:40px;padding-
 .time-over{background:#FEE2E2;color:#991B1B;}
 .deadline-warn{background:#FEF3C7;color:#92400E;border:1px solid #FDE68A;border-radius:8px;padding:4px 8px;font-size:10px;font-weight:700;display:inline-flex;align-items:center;gap:4px;margin-top:6px;}
 .deadline-over{background:#FEE2E2;color:#991B1B;border-color:#FCA5A5;}
+.deadline-frozen{background:#F1F5F9;color:#475569;border-color:#E2E8F0;}
 /* ============================================================ CONTROLS */
 .controls-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:16px;}
 .search-bar{display:flex;align-items:center;gap:8px;background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:8px 13px;min-width:220px;flex:1;max-width:320px;}
@@ -921,6 +923,23 @@ input[type="password"]{direction:rtl;text-align:right;padding-left:40px;padding-
 .dept-load-team{font-size:10px;color:var(--text-3);font-weight:700;}
 .dept-load-track{height:6px;border-radius:5px;background:var(--surface-2);border:1px solid var(--border-soft);overflow:hidden;}
 .dept-load-fill{height:100%;border-radius:5px;transition:width .3s;}
+/* Section A — unified multi-department workload overview */
+.wl-dash-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;padding:12px 16px;}
+.wl-dash-card{background:var(--surface-2);border:1px solid var(--border-soft);border-radius:12px;padding:12px 14px;cursor:pointer;transition:.15s;}
+.wl-dash-card:hover{box-shadow:0 4px 14px rgba(0,0,0,.08);border-color:var(--gold);}
+.wl-dash-card-head{display:flex;align-items:center;gap:9px;margin-bottom:10px;}
+.wl-dash-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;}
+.wl-dash-stat{text-align:center;background:var(--surface);border:1px solid var(--border-soft);border-radius:8px;padding:6px 2px;}
+.wl-dash-stat i{font-size:13px;}
+.wl-dash-stat-val{font-size:15px;font-weight:800;line-height:1.3;}
+.wl-dash-stat-lbl{font-size:8.5px;color:var(--text-3);font-weight:700;white-space:nowrap;}
+.wl-emp-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:4px 10px;font-size:10px;color:var(--text-3);font-weight:700;}
+.wl-emp-head .wl-emp-stats{text-align:center;}
+.wl-emp-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;border-radius:8px;cursor:pointer;transition:.15s;border:1px solid transparent;}
+.wl-emp-row:hover{background:var(--surface-2);}
+.wl-emp-row.active{background:var(--gold-soft,#FDF4E3);border-color:var(--gold);}
+.wl-emp-name{font-size:12.5px;font-weight:700;flex:1;min-width:0;}
+.wl-emp-stats{display:grid;grid-template-columns:repeat(5,34px);gap:4px;font-size:12.5px;font-weight:800;text-align:center;}
 /* ============================================================ DASHBOARD GRID */
 .dash-main-grid{display:grid;grid-template-columns:1fr 340px;gap:16px;margin-bottom:16px;}
 @media(max-width:1100px){.dash-main-grid{grid-template-columns:1fr;}}
@@ -1530,6 +1549,12 @@ body.has-ticker .upload-queue-widget{bottom:48px;}
 .od-timeline-row{display:flex;gap:10px;padding:6px 0;}
 .od-timeline-dot{width:22px;height:22px;border-radius:50%;background:var(--maroon);color:var(--gold);display:flex;align-items:center;justify-content:center;font-size:11px;flex-shrink:0;}
 .od-timeline-body{font-size:12px;}
+.od-timeline-row-clickable{cursor:pointer;border-radius:6px;transition:.12s;padding-right:4px;margin-right:-4px;}
+.od-timeline-row-clickable:hover{background:var(--surface-2);}
+.ad-detail-grid{display:flex;flex-direction:column;gap:6px;}
+.ad-detail-row{display:flex;justify-content:space-between;gap:10px;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:8px;padding:6px 10px;font-size:12px;}
+.ad-detail-k{font-weight:800;color:var(--text-2);flex-shrink:0;}
+.ad-detail-v{color:var(--maroon);font-weight:700;text-align:left;word-break:break-word;}
 .od-timeline-body strong{color:var(--maroon);}
 
 .od-file-category{margin-bottom:14px;}
@@ -1892,6 +1917,7 @@ input:focus,select:focus,textarea:focus{box-shadow:inset 0 1px 3px rgba(74,14,23
 <!-- MODALS -->
 <div class="modal-overlay" id="order-modal"><div class="modal-box" dir="rtl" id="order-modal-body" style="max-width:1180px;"></div></div>
 <div class="modal-overlay" id="timeline-modal"><div class="modal-box" dir="rtl" id="timeline-modal-body" style="max-width:480px;"></div></div>
+<div class="modal-overlay" id="activity-detail-modal"><div class="modal-box" dir="rtl" id="activity-detail-modal-body" style="max-width:440px;"></div></div>
 <div class="modal-overlay proofs-drawer-overlay" id="proofs-drawer-modal"><div class="modal-box proofs-drawer-box" dir="rtl" id="proofs-drawer-body"></div></div>
 <div class="modal-overlay" id="add-item-modal"><div class="modal-box" dir="rtl" id="add-item-modal-body" style="max-width:480px;"></div></div>
 <div class="modal-overlay" id="gov-modal"><div class="modal-box" dir="rtl" id="gov-modal-body" style="max-width:480px;"></div></div>
@@ -2289,6 +2315,15 @@ const INITIAL_USERS={
 // longer the default view.
 let cu=null,orders={},clients={},USERS={},currentSortMode='id-desc';
 let submittedRequests={},chats={},standaloneQuotes={},warranties={},teamChat={},govRecords={},urgentRequests={},tasksData={},eventNotifs={},tickerAnnouncementsData={},orderPresets={};
+// Workload dashboard settings (section F — configurable measurement mode +
+// per-department thresholds). Shared/admin-configured (not a per-browser
+// preference), so it lives in Firebase like every other small settings
+// doc already loaded via loadData()'s aux list — defaults applied at read
+// time in workloadCount()/workload threshold lookups, never written back
+// just from viewing, so a brand-new deployment with no doc yet behaves
+// identically to one with explicit defaults saved.
+let workloadSettings={};
+const WORKLOAD_DEFAULT_THRESHOLDS={design:8,print:10,workshop:10,external:6,delivery:10};
 // Per-user order-seen map (orderKey -> ISO timestamp), backed by Firebase at
 // orderSeen/{uname} instead of localStorage — see markOrderUpdateSeen()/
 // hasOrderUpdate() below. Loaded once at login (enterApp) and refreshed on
@@ -2742,6 +2777,7 @@ async function loadData(){
     ['standalone_quotes',v=>standaloneQuotes=v],
     ['tickerAnnouncements',v=>tickerAnnouncementsData=v],
     ['orderPresets',v=>orderPresets=v],
+    ['workloadSettings',v=>workloadSettings=v||{}],
   ];
   await Promise.all(aux.map(async([path,assign])=>{
     try{assign((await fbGet(path))||{});}
@@ -2865,7 +2901,7 @@ function notifRelevantToMe(o){
 }
 function getNotifications(){
   const notifs=[];const arr=ordersArr();const now=new Date();
-  arr.filter(o=>o.currentDept!=='done'&&notifRelevantToMe(o)).forEach(o=>{
+  arr.filter(o=>o.currentDept!=='done'&&!o.cancelled&&notifRelevantToMe(o)).forEach(o=>{
     if(o.priority==='عاجلة')notifs.push({type:'urgent',msg:`طلب عاجل: ${o.id||o._key} — ${esc(o.client)}`,key:o._key,color:'#EF4444'});
     // On hold: the client/an external party is the reason for the delay, not
     // the assigned staff — deadline-approaching/overdue alerts pause too.
@@ -2913,9 +2949,15 @@ async function pushNotification(n){
 // buildOrderActivityTimeline(), merged chronologically with the existing
 // stage-transition timestamps from computeOrderStageTimeline().
 // ============================================================
-function logOrderActivity(key,icon,text){
+// `meta` is an optional plain {label:value} object carrying the exact
+// before/after data for the change (e.g. {'من':oldName,'إلى':newName}) —
+// surfaced by the interactive timeline's detail view (openActivityDetail())
+// for entries that have one; entries logged without it just show their text.
+function logOrderActivity(key,icon,text,meta){
   if(!key||!text)return;
-  fbPush(`orders/${key}/activityLog`,{at:new Date().toISOString(),actor:(cu&&cu.name)||'—',icon,text}).catch(()=>{});
+  const rec={at:new Date().toISOString(),actor:(cu&&cu.name)||'—',icon,text};
+  if(meta&&typeof meta==='object')rec.meta=meta;
+  fbPush(`orders/${key}/activityLog`,rec).catch(()=>{});
 }
 function isEventNotifForMe(n){
   if(!n)return false;
@@ -4058,7 +4100,9 @@ function gpbadge(p,currentDept){if(currentDept==='done')return'';const m={'عا�
 // one of them at once instead of only whichever spots remembered to add
 // their own `!o.onHold` guard.
 function isOrderOverdue(o){
-  return!!(o&&!o.onHold&&o.deadline&&o.deadline!=='—'&&o.currentDept!=='done'&&new Date(o.deadline).getTime()<Date.now());
+  // Frozen (not "overdue") once on hold or already at delivery — see
+  // deadlineBadge()'s matching freeze for the same reasoning.
+  return!!(o&&!o.onHold&&!o.cancelled&&o.deadline&&o.deadline!=='—'&&o.currentDept!=='done'&&o.currentDept!=='delivery'&&new Date(o.deadline).getTime()<Date.now());
 }
 // "متوقف مؤقتاً / بانتظار العميل" status pill — shown in workflow lists/
 // tables and the order-details header whenever an order is on hold, so the
@@ -4067,6 +4111,10 @@ function isOrderOverdue(o){
 function onHoldBadge(o){
   if(!o||!o.onHold)return'';
   return`<span class="badge" style="background:#FEF3C7;color:#92400E;" title="${esc(o.onHoldReason?('السبب: '+o.onHoldReason):'')}"><i class="ti ti-clock-pause"></i> متوقف / بانتظار العميل</span>`;
+}
+function cancelledBadge(o){
+  if(!o||!o.cancelled)return'';
+  return`<span class="badge" style="background:#FEE2E2;color:#991B1B;" title="${esc(o.cancelReason?('السبب: '+o.cancelReason):'')}"><i class="ti ti-ban"></i> ملغى</span>`;
 }
 // o (optional, the order object) lets this render a structured "stage N of
 // M" badge with a hover tooltip listing the order's full workflow path
@@ -4165,39 +4213,106 @@ function getActiveDepts(o){
 // "المكتملة" archive).
 function getNextDept(o){if(o.currentDept==='delivery')return'done';const seq=getActiveDepts(o);const idx=seq.indexOf(o.currentDept);if(idx===-1||idx===seq.length-1)return'delivery';return seq[idx+1];}
 function getPrevDept(o){const seq=getActiveDepts(o);if(o.currentDept==='done')return'delivery';if(o.currentDept==='delivery')return seq[seq.length-1]||null;const idx=seq.indexOf(o.currentDept);if(idx<=0)return null;return seq[idx-1];}
-async function revertOrderToPrevDept(key){
-  if(cu.type!=='admin'){toast('⚠️ هذا الإجراء متاح للمدير فقط');return;}
+// ============================================================
+// FLEXIBLE RETURN — replaces the old revertOrderToPrevDept() (whole-order,
+// immediately-previous-stage-only). A manager can now return either the
+// whole order or one specific item, to ANY earlier stage in its own
+// sequence (not just the immediately preceding one), logged with full
+// before/after detail. getPrevDept(o) stays in use elsewhere (badges,
+// nextBtn gating) purely to decide WHETHER a return is possible at all.
+// ============================================================
+function openReturnOrderModal(key,itemIdx){
   const o=orders[key];if(!o)return;
-  const prev=getPrevDept(o);
-  if(!prev){toast('⚠️ لا توجد مرحلة سابقة للرجوع إليها');return;}
-  const deptLbl={design:'التصميم',external:'التنفيذ الخارجي',print:'الطباعة',workshop:'الورشة',delivery:'التسليم'};
-  if(!confirm(`هل تريد إرجاع الطلب لمرحلة: ${deptLbl[prev]||prev}؟`))return;
+  if(cu.type!=='admin'){toast('⚠️ هذا الإجراء متاح للمدير فقط');return;}
+  const items=o.orderItems||[];
+  const initialScope=(itemIdx!==undefined&&itemIdx!==null)?String(itemIdx):'order';
+  const scopeOptionsHtml=items.length>1?`<div class="fg"><label>نطاق الإرجاع</label>
+    <select id="ret-scope-${key}" onchange="renderReturnTargetOptions('${key}')">
+      <option value="order" ${initialScope==='order'?'selected':''}>الطلب بالكامل</option>
+      ${items.map((it,i)=>`<option value="${i}" ${initialScope===String(i)?'selected':''}>بند: ${esc(it.name||('#'+(i+1)))}</option>`).join('')}
+    </select>
+  </div>`:'';
+  document.getElementById('task-modal-body').innerHTML=`
+    <div class="modal-header"><span class="modal-title"><i class="ti ti-arrow-back-up"></i> إرجاع لمرحلة سابقة</span><button class="btn-close" onclick="closeModal('task-modal')">×</button></div>
+    ${scopeOptionsHtml}
+    <div class="fg"><label>المرحلة المستهدفة</label><div id="ret-target-wrap-${key}"></div></div>
+    <div class="fg"><label>سبب الإرجاع (اختياري)</label><textarea id="ret-reason-${key}" placeholder="مثال: يحتاج تعديل من التصميم..." style="min-height:70px;"></textarea></div>
+    <button class="btn btn-brand" style="width:100%;justify-content:center;" onclick="confirmReturnOrder('${key}')"><i class="ti ti-arrow-back-up"></i> تأكيد الإرجاع</button>`;
+  renderReturnTargetOptions(key);
+  openModal('task-modal');
+}
+function renderReturnTargetOptions(key){
+  const o=orders[key];if(!o)return;
+  const wrap=document.getElementById('ret-target-wrap-'+key);if(!wrap)return;
+  const scopeSel=document.getElementById('ret-scope-'+key);
+  const scopeVal=scopeSel?scopeSel.value:'order';
+  const seq=getActiveDepts(o);
+  let fullSeq,curIdx;
+  if(scopeVal==='order'){
+    // Items never sit at 'delivery' (it's order-level only), but the ORDER
+    // itself can — include it as a valid return target for an order that
+    // already reached delivery/done.
+    fullSeq=[...seq,'delivery'];
+    curIdx=o.currentDept==='done'?fullSeq.length:fullSeq.indexOf(o.currentDept);
+  }else{
+    const it=(o.orderItems||[])[parseInt(scopeVal,10)];
+    fullSeq=seq;
+    curIdx=it?seq.indexOf(itemCurrentDept(it,o)):-1;
+  }
+  if(curIdx===-1)curIdx=0;
+  const options=fullSeq.slice(0,curIdx).map(dk=>`<option value="${dk}">${esc((WF_DEPT_META[dk]||{label:dk}).label)}</option>`);
+  wrap.innerHTML=options.length?`<select id="ret-target-${key}">${options.join('')}</select>`:'<div style="font-size:11.5px;color:var(--text-3);">لا توجد مرحلة سابقة يمكن الإرجاع إليها لهذا النطاق</div>';
+}
+async function confirmReturnOrder(key){
+  const o=orders[key];if(!o)return;
+  if(!guardWrite(cu.type==='admin','⚠️ هذا الإجراء متاح للمدير فقط'))return;
+  const scopeSel=document.getElementById('ret-scope-'+key);
+  const scopeVal=scopeSel?scopeSel.value:'order';
+  const targetSel=document.getElementById('ret-target-'+key);
+  if(!targetSel||!targetSel.value){toast('⚠️ لا توجد مرحلة سابقة متاحة لهذا النطاق');return;}
+  const targetDept=targetSel.value;
+  const reason=(document.getElementById('ret-reason-'+key)?.value||'').trim();
+  const deptLbl=(WF_DEPT_META[targetDept]||{label:targetDept}).label;
   showSaving('جاري الإرجاع...');
-  // reverted/revertedAt/revertedBy/revertedFrom/revertedTo are permanent —
-  // never cleared, even once the order later finishes — so the "طلب مرجع"
-  // badge (orderRowBadges/od-header-title) keeps flagging that this order
-  // was sent backward at some point, for as long as the order exists.
-  const upd={currentDept:prev,stageStartDate:new Date().toISOString(),status:'قيد المتابعة',reverted:true,revertedAt:new Date().toISOString(),revertedBy:cu.name,revertedFrom:o.currentDept,revertedTo:prev};
-  if(o.currentDept==='done'){upd.archivedAt=null;upd.workshopFeedbackDone=null;}
-  // Per-item independent workflow: itemCurrentDept() prefers an item's own
-  // currentDept over the order's, so an item already individually advanced
-  // past this point would otherwise keep sitting at its own later stage —
-  // invisible on the target department's per-item board — even though the
-  // order itself just moved back. Bring every item down to the same stage
-  // the whole order is being reverted to, so the target department's queue
-  // actually shows it immediately.
-  if(o.orderItems&&o.orderItems.length){
-    upd.orderItems=o.orderItems.map(it=>({...it,currentDept:prev}));
-  }
   try{
-    await fbPatch(`orders/${key}`,upd);
-    logOrderActivity(key,'ti-arrow-back-up',`تم إرجاع الطلب لمرحلة: ${deptLbl[prev]||prev}`);
-    await loadData();hideSaving();closeModal('order-modal');
-    const prevAssignee=o[prev+'To'];
-    pushNotification({type:'workflow_update',message:`تم إرجاع الطلب ${esc(o.id||key)} إليك — ${esc(deptLbl[prev]||prev)}`,orderKey:key,orderId:o.id,client:o.client,targetUname:(prevAssignee&&prevAssignee!=='none')?prevAssignee:'all-admin'});
-    toast('✓ تم إرجاع الطلب للمرحلة السابقة');refreshCurrentPage();
-  }
-  catch(e){hideSaving();toast('❌ فشل الإرجاع');}
+    if(scopeVal==='order'){
+      const fromLbl=(WF_DEPT_META[o.currentDept]||{label:o.currentDept}).label;
+      // reverted/revertedAt/revertedBy/revertedFrom/revertedTo are permanent —
+      // never cleared, even once the order later finishes — so the "طلب مرجع"
+      // badge (orderRowBadges/od-header-title) keeps flagging that this order
+      // was sent backward at some point, for as long as the order exists.
+      const upd={currentDept:targetDept,stageStartDate:new Date().toISOString(),status:'قيد المتابعة',reverted:true,revertedAt:new Date().toISOString(),revertedBy:cu.name,revertedFrom:o.currentDept,revertedTo:targetDept};
+      if(o.currentDept==='done'){upd.archivedAt=null;upd.workshopFeedbackDone=null;}
+      // Per-item independent workflow: itemCurrentDept() prefers an item's own
+      // currentDept over the order's, so an item already individually advanced
+      // past this point would otherwise keep sitting at its own later stage —
+      // invisible on the target department's per-item board — even though the
+      // order itself just moved back. Bring every item down to the same stage
+      // the whole order is being reverted to, so the target department's queue
+      // actually shows it immediately.
+      if(o.orderItems&&o.orderItems.length)upd.orderItems=o.orderItems.map(it=>({...it,currentDept:targetDept}));
+      await fbPatch(`orders/${key}`,upd);
+      logOrderActivity(key,'ti-arrow-back-up',`↩️ ${cu.name} أرجع الطلب بالكامل إلى مرحلة: ${deptLbl}${reason?' — السبب: '+reason:''}`,{'النطاق':'الطلب بالكامل','من':fromLbl,'إلى':deptLbl,'السبب':reason||'—'});
+      const targetAssignee=targetDept!=='delivery'?o[targetDept+'To']:null;
+      pushNotification({type:'workflow_update',message:`تم إرجاع الطلب ${esc(o.id||key)} إليك — ${esc(deptLbl)}`,orderKey:key,orderId:o.id,client:o.client,targetUname:(targetAssignee&&targetAssignee!=='none')?targetAssignee:'all-admin'});
+    }else{
+      const idx=parseInt(scopeVal,10);
+      const items=[...(o.orderItems||[])];
+      const it=items[idx];
+      if(!it){hideSaving();toast('⚠️ تعذر العثور على البند');return;}
+      const fromLbl=(WF_DEPT_META[itemCurrentDept(it,o)]||{label:itemCurrentDept(it,o)}).label;
+      items[idx]={...it,currentDept:targetDept};
+      const upd={orderItems:items};
+      const newOrderDept=computeOrderDeptFromItems(o,items);
+      if(newOrderDept&&newOrderDept!==o.currentDept){upd.currentDept=newOrderDept;upd.stageStartDate=new Date().toISOString();}
+      await fbPatch(`orders/${key}`,upd);
+      logOrderActivity(key,'ti-arrow-back-up',`↩️ ${cu.name} أرجع البند "${esc(it.name||('#'+(idx+1)))}" إلى مرحلة: ${deptLbl}${reason?' — السبب: '+reason:''}`,{'النطاق':'بند: '+(it.name||('#'+(idx+1))),'من':fromLbl,'إلى':deptLbl,'السبب':reason||'—'});
+      const targetAssignee=o[targetDept+'To'];
+      pushNotification({type:'workflow_update',message:`تم إرجاع بند من الطلب ${esc(o.id||key)} إليك — ${esc(deptLbl)}`,orderKey:key,orderId:o.id,client:o.client,targetUname:(targetAssignee&&targetAssignee!=='none')?targetAssignee:'all-admin'});
+    }
+    await loadData();hideSaving();closeModal('task-modal');closeModal('order-modal');
+    toast('✓ تم الإرجاع');refreshCurrentPage();
+  }catch(e){hideSaving();toast('❌ فشل الإرجاع، حاول مرة أخرى');}
 }
 function getDeptWorkers(deptKey){const dept=DEPTS.find(d=>d.key===deptKey);if(!dept||!dept.roles.length)return[];return Object.entries(USERS).filter(([,v])=>dept.roles.includes(v.type)).map(([uname,v])=>({uname,name:v.name}));}
 function isMyOrder(o){
@@ -4224,6 +4339,160 @@ function orderProgress(o){const seq=getActiveDepts(o);const total=seq.length;con
 function itemDeptSeq(o){return[...getActiveDepts(o),'done'];}
 function itemCurrentDept(it,o){return it.currentDept||o.currentDept||itemDeptSeq(o)[0]||'design';}
 function itemNextDept(it,o){const seq=itemDeptSeq(o);const idx=seq.indexOf(itemCurrentDept(it,o));if(idx===-1||idx===seq.length-1)return null;return seq[idx+1];}
+// ============================================================
+// WORKLOAD MANAGEMENT — department + employee level, built entirely on
+// existing fields (o.currentDept, o[dept+'To'], it.currentDept,
+// getActiveDepts/itemDeptSeq's already-dynamic per-order route). No new
+// stages, no new assignment model — this only AGGREGATES what already
+// exists into current/upcoming/completed/overdue/waiting buckets, per
+// department and per employee, for whole-order AND itemized orders alike.
+// ============================================================
+// The dashboard/department-picker list to iterate — reads straight from the
+// existing DEPTS config (never a second, hardcoded department list) plus
+// the 'delivery' gate stage, which intentionally has no roles/assignees of
+// its own (see getNextDept()'s comment) so it's appended here rather than
+// living in DEPTS.
+function workloadDeptList(){
+  return[...DEPTS,{key:'delivery',label:'التسليم',icon:'ti-truck-delivery',color:'#0EA5E9',roles:[]}];
+}
+// Classifies every item (or, for a non-itemized order, the order itself as
+// one pseudo-item) relative to one department into exactly one of
+// current/upcoming/completed — never more than one, so a dashboard total
+// across buckets can never double-count a single item. An order whose own
+// configured route (getActiveDepts/itemDeptSeq — already respects
+// o.workflowOrder custom routes and optional stages like External
+// Execution being skipped entirely when unassigned) never touches
+// deptKey at all is excluded outright — it was never "upcoming" there to
+// begin with. Archived (currentDept:'done') and cancelled orders are
+// excluded from every bucket, matching "exclude cancelled and completed
+// ORDERS from active workload" — an order's own completed ITEMS (still
+// relevant to e.g. "jobs awaiting transfer" at an earlier department) stay
+// visible via the 'completed' bucket on that earlier department's page.
+function computeDeptWorkload(deptKey){
+  const current=[],upcoming=[],completed=[];
+  ordersArr().forEach(o=>{
+    if(o.currentDept==='done'||o.cancelled)return;
+    if(deptKey==='delivery'){
+      // Delivery is an order-level-only gate (see workloadDeptList()) — no
+      // per-item granularity, no assignee (admin/receiver act on it, not a
+      // production employee).
+      const entry={o,idx:null,it:null,assignee:null};
+      if(o.currentDept==='delivery')current.push(entry);
+      else if(getNextDept(o)==='delivery')upcoming.push(entry);
+      return;
+    }
+    const seq=itemDeptSeq(o);
+    const deptIdx=seq.indexOf(deptKey);
+    if(deptIdx===-1)return; // this order's route never includes deptKey (e.g. External Execution left unassigned)
+    const assigneeRaw=o[deptKey+'To'];
+    const assignee=(assigneeRaw&&assigneeRaw!=='none')?assigneeRaw:null;
+    const items=(o.orderItems&&o.orderItems.length)?o.orderItems.map((it,idx)=>({it,idx})):[{it:null,idx:null}];
+    items.forEach(({it,idx})=>{
+      const cur=it?itemCurrentDept(it,o):o.currentDept;
+      const curIdx=seq.indexOf(cur);
+      const entry={o,idx,it,assignee};
+      if(cur===deptKey)current.push(entry);
+      // curIdx===-1 means the item's own current stage (e.g. 'delivery') isn't
+      // even IN this department's sequence at all — it has necessarily moved
+      // past every production department already.
+      else if(curIdx===-1||curIdx>deptIdx)completed.push(entry);
+      else upcoming.push(entry);
+    });
+  });
+  return{current,upcoming,completed};
+}
+// "Waiting/blocked" is derived from existing fields only — never a new
+// persisted status. o.onHold (an existing, universal "client/external party
+// is the reason for the delay" flag) applies to every department the same
+// way; the rest mirrors the exact file/approval gates sendToNextDept() and
+// buildOrderDetailsPage() already enforce for that department, so this
+// never invents a block the rest of the app doesn't already recognize.
+function deptWaitingReason(e,deptKey){
+  const{o,it}=e;
+  if(o.onHold)return'متوقف — بانتظار العميل';
+  if(deptKey==='design'){
+    if(it&&it.needsRevision)return'بانتظار تعديل بعد ملاحظات العميل';
+    if(it&&itemDesignColumn(it)==='waiting')return'بانتظار رد العميل على البروفة';
+    if(!it&&o.currentDept==='design'){
+      const proof=proofStatusForOrder(o);
+      if(proof&&proof.key==='revision')return'بانتظار تعديل بعد ملاحظات العميل';
+      if(proof&&proof.key==='waiting')return'بانتظار رد العميل على البروفة';
+    }
+  }else if(deptKey==='print'){
+    if(!o.clientApprovalImage||!o.approvedPrintFile)return'بانتظار ملف الطباعة المعتمد';
+  }else if(deptKey==='workshop'){
+    if(o.printTo!=='none'&&!o.approvedWorkshopFile&&!o.approvedPrintFile)return'بانتظار ملف الإنتاج من التصميم/الطباعة';
+  }else if(deptKey==='external'){
+    if((o.externalMode||'both')!=='text'&&!o.externalFile)return'بانتظار ملف/تأكيد التوريد الخارجي';
+  }
+  return null;
+}
+// Measurement mode (section F): 'items' counts every work item separately
+// (default, matches the current per-item boards); 'orders' counts each
+// order once regardless of how many items it has inside this department.
+// Persisted per-browser (a display preference, not shared data) via
+// workloadSettings below.
+function workloadCount(entries,mode){
+  mode=mode||(workloadSettings&&workloadSettings.countMode)||'items';
+  if(mode==='orders')return new Set(entries.map(e=>e.o._key)).size;
+  return entries.length;
+}
+function workloadThreshold(deptKey){
+  const custom=workloadSettings&&workloadSettings.thresholds&&workloadSettings.thresholds[deptKey];
+  return Number(custom)||WORKLOAD_DEFAULT_THRESHOLDS[deptKey]||8;
+}
+// Deliberately coarse (low/medium/high) and always captioned as an
+// ESTIMATE wherever it's shown (buildWorkloadOverviewPage()) — a count of
+// open items/orders is not a measure of actual remaining production hours,
+// so this must never be presented as a hard capacity guarantee.
+function workloadLevel(count,threshold){
+  if(count<=0)return{key:'empty',label:'لا يوجد عمل',color:'#94A3B8'};
+  const pct=count/Math.max(1,threshold);
+  if(pct<0.6)return{key:'low',label:'منخفض',color:'#10B981'};
+  if(pct<=1)return{key:'medium',label:'متوسط',color:'#D97706'};
+  return{key:'high',label:'مرتفع',color:'#DC2626'};
+}
+async function saveWorkloadSettings(countMode,thresholds){
+  if(cu.type!=='admin'){toast('⚠️ هذا الإجراء متاح للمدير فقط');return;}
+  try{
+    await fbSet('workloadSettings',{countMode,thresholds});
+    workloadSettings={countMode,thresholds};
+    toast('✓ تم حفظ إعدادات أعباء العمل');
+    refreshCurrentPage();
+  }catch(e){toast('❌ فشل الحفظ');}
+}
+// Per-employee breakdown within one department — the roster comes from
+// getDeptWorkers() (existing USERS/roles data), plus a synthetic "غير معيّن"
+// (unassigned) bucket so upcoming/current work with no real o[dept+'To']
+// assignee is never silently folded into some employee's own count (point
+// E: "do not assume an employee is responsible... unless actually
+// assigned").
+function computeEmployeeWorkload(deptKey){
+  const{current,upcoming,completed}=computeDeptWorkload(deptKey);
+  const workers=getDeptWorkers(deptKey);
+  const byUname={};
+  workers.forEach(w=>{byUname[w.uname]={uname:w.uname,name:w.name,current:[],upcoming:[],completed:[],overdue:[],waiting:[]};});
+  byUname.none={uname:'none',name:'غير معيّن',current:[],upcoming:[],completed:[],overdue:[],waiting:[]};
+  byUname.all={uname:'all',name:'فريق مشترك (الكل)',current:[],upcoming:[],completed:[],overdue:[],waiting:[]};
+  current.forEach(e=>{
+    const k=(e.assignee&&byUname[e.assignee])?e.assignee:(e.assignee==='all'?'all':'none');
+    byUname[k].current.push(e);
+    if(isOrderOverdue(e.o))byUname[k].overdue.push(e);
+    if(deptWaitingReason(e,deptKey))byUname[k].waiting.push(e);
+  });
+  upcoming.forEach(e=>{
+    const k=(e.assignee&&byUname[e.assignee])?e.assignee:(e.assignee==='all'?'all':'none');
+    byUname[k].upcoming.push(e);
+  });
+  completed.forEach(e=>{
+    const k=(e.assignee&&byUname[e.assignee])?e.assignee:(e.assignee==='all'?'all':'none');
+    byUname[k].completed.push(e);
+  });
+  return Object.values(byUname).filter(w=>{
+    if(w.uname==='none'||w.uname==='all')return(w.current.length+w.upcoming.length+w.completed.length)>0;
+    return true;
+  });
+}
 // Item-level moves (advanceItemDept/bulkAdvanceItems) only ever touched
 // orderItems[i].currentDept, leaving the order's own top-level currentDept —
 // which drives admin/department "active orders" lists, isMyOrder, Kanban
@@ -4567,6 +4836,23 @@ function itemDimensionsText(it){
   }
   return it.details?esc(it.details):'';
 }
+// Groups a single item's design attachments/files vertically, directly
+// underneath its own item card, instead of leaving them only in the
+// separate order-wide file manager / dept workspace cards further down the
+// page — each version/upload batch on its own row (newest first), folded
+// behind one compact accordion by default so a heavily-revised item
+// doesn't blow up the card grid's layout.
+function itemFilesBlockHtml(it,key,idx){
+  const versions=itemVersions(it).slice().reverse();
+  const withFiles=versions.filter(v=>v.files&&v.files.length);
+  if(!withFiles.length)return'';
+  const totalFiles=withFiles.reduce((n,v)=>n+v.files.length,0);
+  const rowsHtml=withFiles.map(v=>`<div style="margin-bottom:8px;">
+    <div style="font-size:10px;color:var(--text-3);font-weight:700;margin-bottom:3px;">${esc(fileKindTagLabel(v))}${v.createdAt?' · '+fmtDateTime(v.createdAt):''}${v.createdBy?' · '+esc(v.createdBy):''}</div>
+    ${chatAttachmentsHtml(v.files)}
+  </div>`).join('');
+  return `<div style="margin-top:8px;">${omAccordion('ti-paperclip',`الملفات والمرفقات (${totalFiles})`,rowsHtml,false,`oi-files-${key}-${idx}`)}</div>`;
+}
 function renderOrderItemsCards(o,key,canAct){
   const items=o.orderItems&&Array.isArray(o.orderItems)?o.orderItems:[];
   const deptRestricted=['designer','printer','workshop','follower'].includes(cu.type);
@@ -4612,6 +4898,7 @@ function renderOrderItemsCards(o,key,canAct){
       </div>
       ${dims?`<div style="font-size:11px;color:var(--text-2);margin-top:6px;"><i class="ti ti-ruler-2"></i> ${dims}</div>`:''}
       ${it.notes?`<div style="font-size:11px;color:var(--text-2);margin-top:6px;"><i class="ti ti-note"></i> ${esc(it.notes)}</div>`:''}
+      ${itemFilesBlockHtml(it,key,i)}
       <div style="margin-top:8px;">${gpbadge(o.priority,o.currentDept)}</div>
       ${clientFeedbackHistoryBoxHtml(it,key,i)}
       ${(()=>{
@@ -4885,7 +5172,24 @@ function preciseTimeBadge(hours){
   if(days<=3)return`<span class="time-badge time-warn"><i class="ti ti-clock"></i>${txt}</span>`;
   return`<span class="time-badge time-over"><i class="ti ti-alarm"></i>${txt}</span>`;
 }
-function deadlineBadge(deadline,currentDept,onHold){if(currentDept==='done')return'';if(onHold)return'';if(!deadline||deadline==='—')return'';const now=new Date();const dl=new Date(deadline);const hours=Math.round((dl-now)/3600000);if(hours<0)return`<div class="deadline-warn deadline-over"><i class="ti ti-alert-triangle"></i>تجاوز موعد التسليم!</div>`;if(hours<=24)return`<div class="deadline-warn"><i class="ti ti-clock"></i>التسليم خلال ${hours} ساعة</div>`;if(hours<=72)return`<div class="deadline-warn"><i class="ti ti-clock"></i>التسليم خلال ${Math.round(hours/24)} أيام</div>`;return'';}
+// The countdown/overdue alarm freezes (shows a calm "متوقف الاحتساب" pill
+// instead of an escalating warning) whenever the order is on hold or has
+// already reached the delivery stage — production is either paused through
+// no fault of the assigned staff, or already finished and just awaiting
+// handover, so neither case should keep flashing an "overdue" alarm. The
+// original deadline date itself is untouched and still shown by
+// deadlineDateTime(o) wherever this badge is rendered alongside it.
+function deadlineBadge(deadline,currentDept,onHold,cancelled){
+  if(currentDept==='done'||cancelled)return'';
+  if(!deadline||deadline==='—')return'';
+  if(onHold)return`<div class="deadline-warn deadline-frozen"><i class="ti ti-player-pause"></i>متوقف الاحتساب (إيقاف مؤقت)</div>`;
+  if(currentDept==='delivery')return`<div class="deadline-warn deadline-frozen"><i class="ti ti-player-pause"></i>متوقف الاحتساب (بانتظار التسليم)</div>`;
+  const now=new Date();const dl=new Date(deadline);const hours=Math.round((dl-now)/3600000);
+  if(hours<0)return`<div class="deadline-warn deadline-over"><i class="ti ti-alert-triangle"></i>تجاوز موعد التسليم!</div>`;
+  if(hours<=24)return`<div class="deadline-warn"><i class="ti ti-clock"></i>التسليم خلال ${hours} ساعة</div>`;
+  if(hours<=72)return`<div class="deadline-warn"><i class="ti ti-clock"></i>التسليم خلال ${Math.round(hours/24)} أيام</div>`;
+  return'';
+}
 function formatDate(iso){if(!iso)return'—';try{return new Date(iso).toLocaleDateString('ar-SA');}catch{return iso;}}
 function fmtDateTime(iso){if(!iso)return'—';try{const d=new Date(iso);return d.toLocaleDateString('en-CA')+' · '+d.toLocaleTimeString('ar-SA',{hour:'2-digit',minute:'2-digit'});}catch{return iso;}}
 function renderDeptTrackRow(o){
@@ -5274,42 +5578,77 @@ function handleWfSitePhoto(files){
 // orders/person) since there's no explicit per-employee capacity field;
 // that assumption is intentionally visible in code, not hidden in the UI.
 const ASSUMED_CAPACITY_PER_STAFF=5;
+// Unified department-level workload overview (section A) — every active
+// department from workloadDeptList() (DEPTS config + the delivery gate),
+// never a hardcoded subset, each showing current/upcoming/overdue/waiting
+// counts (computeDeptWorkload — respects custom per-order routes,
+// independent per-item progression, optional stages), assigned employee
+// count, and a configurable-threshold workload estimate pill, linking into
+// that department's own detailed workload page.
 function buildDeptWorkloadHtml(){
-  const arr=ordersArr();
-  const rows=[
-    {key:'design',label:'التصميم',icon:'ti-brush',color:'#6B21A8',roleType:'designer',
-      count:arr.filter(o=>(o.currentDept||'design')==='design').length},
-    {key:'print',label:'الطباعة',icon:'ti-printer',color:'#2B6CB0',roleType:'printer',
-      count:arr.filter(o=>o.currentDept==='print').length},
-    {key:'workshop',label:'الورشة',icon:'ti-tools',color:'#C05621',roleType:'workshop',
-      count:arr.filter(o=>o.currentDept==='workshop').length},
-    {key:'delivery',label:'التسليم',icon:'ti-truck-delivery',color:'#0EA5E9',roleType:null,
-      count:arr.filter(o=>o.currentDept==='delivery').length},
-  ];
-  const rowsHtml=rows.map(d=>{
-    const team=d.roleType?Object.values(USERS).filter(u=>u.type===d.roleType):[];
-    const capacity=Math.max(1,team.length*ASSUMED_CAPACITY_PER_STAFF);
-    const pct=Math.min(100,Math.round((d.count/capacity)*100));
-    const overLimit=d.count>capacity;
-    return`<div class="dept-load-row" onclick="openDeptStagePage('${d.key}')">
-      <div class="dept-load-head">
+  const countMode=(workloadSettings&&workloadSettings.countMode)||'items';
+  const canConfigure=cu.type==='admin';
+  const cardsHtml=workloadDeptList().map(d=>{
+    const{current,upcoming,completed}=computeDeptWorkload(d.key);
+    const overdue=current.filter(e=>isOrderOverdue(e.o));
+    const waiting=current.filter(e=>deptWaitingReason(e,d.key));
+    const team=getDeptWorkers(d.key);
+    const curN=workloadCount(current,countMode),upN=workloadCount(upcoming,countMode),ovN=workloadCount(overdue,countMode),waN=workloadCount(waiting,countMode);
+    const threshold=workloadThreshold(d.key);
+    const level=workloadLevel(curN,threshold);
+    const stat=(icon,label,val,color)=>`<div class="wl-dash-stat"><i class="ti ${icon}" style="color:${color};"></i><div class="wl-dash-stat-val" style="color:${color};">${val}</div><div class="wl-dash-stat-lbl">${label}</div></div>`;
+    return`<div class="wl-dash-card" onclick="openDeptStagePage('${d.key}')" style="border-right:4px solid ${d.color};">
+      <div class="wl-dash-card-head">
         <div class="dept-load-icon" style="background:${d.color};"><i class="ti ${d.icon}"></i></div>
-        <div class="dept-load-label">${d.label}</div>
-        <div class="dept-load-count">${d.count} <span>طلب</span></div>
-        <div class="dept-load-team">${team.length?`<i class="ti ti-users"></i> ${team.length} موظف`:''}</div>
+        <div style="flex:1;min-width:0;">
+          <div class="dept-load-label">${esc(d.label)}</div>
+          <div style="font-size:10.5px;color:var(--text-3);">${team.length?`<i class="ti ti-users"></i> ${team.length} موظف`:'بدون فريق مخصص'}</div>
+        </div>
+        <span class="badge" style="background:${level.color}1A;color:${level.color};font-weight:800;" title="تقدير تقريبي بعدد الطلبات/البنود — ليس قياساً للطاقة الإنتاجية الفعلية">${level.label}</span>
       </div>
-      <div class="dept-load-track"><div class="dept-load-fill" style="width:${pct}%;background:${overLimit?'#C53030':d.color};"></div></div>
+      <div class="wl-dash-stats">
+        ${stat('ti-player-play','الحالي',curN,d.color)}
+        ${stat('ti-clock-hour-4','قادم',upN,'#64748B')}
+        ${stat('ti-alert-triangle','متأخر',ovN,ovN>0?'#DC2626':'#94A3B8')}
+        ${stat('ti-hourglass','بانتظار إجراء',waN,waN>0?'#D97706':'#94A3B8')}
+      </div>
     </div>`;
   }).join('');
   return`<div class="card dash-workload-card" style="margin-bottom:16px;">
-    <div class="card-header"><span class="card-title"><i class="ti ti-chart-bar"></i> أعباء العمل وخط الإنتاج بالأقسام</span></div>
-    <div class="dept-load-list">${rowsHtml}</div>
+    <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+      <span class="card-title"><i class="ti ti-chart-bar"></i> أعباء العمل بالأقسام</span>
+      ${canConfigure?`<button class="btn btn-out btn-xs" onclick="event.stopPropagation();toggleWorkloadSettingsPanel()"><i class="ti ti-adjustments"></i> إعدادات القياس</button>`:''}
+    </div>
+    <div id="workload-settings-panel" style="display:${window._wlSettingsOpen?'block':'none'};margin-bottom:12px;">${canConfigure?workloadSettingsPanelHtml():''}</div>
+    <div class="wl-dash-grid">${cardsHtml}</div>
+    <div style="font-size:10px;color:var(--text-3);margin-top:10px;"><i class="ti ti-info-circle"></i> المستويات (منخفض/متوسط/مرتفع) تقدير تقريبي بعدد ${countMode==='orders'?'الطلبات':'البنود'} المفتوحة، وليست قياساً دقيقاً للطاقة الإنتاجية المتاحة.</div>
+  </div>`;
+}
+function toggleWorkloadSettingsPanel(){
+  window._wlSettingsOpen=!window._wlSettingsOpen;
+  const panel=document.getElementById('workload-settings-panel');
+  if(panel){panel.style.display=window._wlSettingsOpen?'block':'none';panel.innerHTML=window._wlSettingsOpen?workloadSettingsPanelHtml():'';}
+}
+function workloadSettingsPanelHtml(){
+  const countMode=(workloadSettings&&workloadSettings.countMode)||'items';
+  const thresholdInputs=workloadDeptList().map(d=>`<div class="fg" style="min-width:120px;margin-bottom:0;"><label>${esc(d.label)}</label><input type="number" min="1" id="wl-th-${d.key}" value="${workloadThreshold(d.key)}"/></div>`).join('');
+  return`<div class="card" style="background:var(--surface-2);border-style:dashed;">
+    <div style="font-size:11.5px;font-weight:800;color:var(--maroon);margin-bottom:8px;"><i class="ti ti-adjustments"></i> طريقة القياس والحدود (تقديرية — للمدير فقط)</div>
+    <div class="fg" style="max-width:260px;margin-bottom:10px;"><label>طريقة العدّ</label>
+      <select id="wl-count-mode">
+        <option value="items" ${countMode==='items'?'selected':''}>عدد البنود (الافتراضي)</option>
+        <option value="orders" ${countMode==='orders'?'selected':''}>عدد الطلبات الفريدة</option>
+      </select>
+    </div>
+    <div style="font-size:11px;color:var(--text-2);margin-bottom:6px;font-weight:700;">حد العمل "المتوسط" لكل قسم (عدد ${countMode==='orders'?'الطلبات':'البنود'} النشطة):</div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px;">${thresholdInputs}</div>
+    <button class="btn btn-brand btn-sm" onclick="saveWorkloadSettings(document.getElementById('wl-count-mode').value,{${workloadDeptList().map(d=>`${d.key}:parseInt(document.getElementById('wl-th-${d.key}').value)||${WORKLOAD_DEFAULT_THRESHOLDS[d.key]||8}`).join(',')}})"><i class="ti ti-device-floppy"></i> حفظ</button>
   </div>`;
 }
 function buildDash(){
   const t=cu.type;
   const arr=ordersArr();
-  const running=arr.filter(o=>o.currentDept!=='done');
+  const running=arr.filter(o=>o.currentDept!=='done'&&!o.cancelled);
   const now=new Date();
   const todayStr=now.toISOString().slice(0,10);
   const total=running.length;
@@ -5520,13 +5859,14 @@ function renderWfKanbanView(){
         <div class="wf-card-svc">${esc(o.service)}</div>
         ${o.isQuickTask?`<div style="font-size:11px;color:var(--maroon);font-weight:700;margin-bottom:4px;"><i class="ti ti-user"></i> اسم العميل: ${esc(o.client||'—')} &nbsp; <i class="ti ti-phone"></i> رقم الجوال: ${esc(o.phone||'—')}</div>`:''}
         ${qtCardStageStripHtml(o)}
-        <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;margin-bottom:6px;">${deptBadge(o.currentDept,o)} ${gpbadge(o.priority,o.currentDept)} ${orderTimerBadge(o)} ${productionLinesBadgeHtml(o)} ${onHoldBadge(o)}</div>
+        <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;margin-bottom:6px;">${o.cancelled?cancelledBadge(o):deptBadge(o.currentDept,o)} ${gpbadge(o.priority,o.currentDept)} ${orderTimerBadge(o)} ${productionLinesBadgeHtml(o)} ${onHoldBadge(o)}</div>
         <div style="font-size:11px;color:var(--text-3);">المسؤول: ${esc(currentPersonName(o))}</div>
         <div style="font-size:10px;color:var(--text-3);"><i class="ti ti-user-circle"></i> أنشئ بواسطة: ${esc(o.createdBy||'—')}</div>
         <div style="font-size:10.5px;color:var(--text-3);"><i class="ti ti-calendar-time"></i> التسليم: ${deadlineDateTime(o)}</div>
         ${_canSeeCardTotal&&o.totalAmount?`<div style="font-size:11px;font-weight:800;color:var(--maroon);margin-top:3px;"><i class="ti ti-cash"></i> إجمالي المبلغ: ${fmtMoney(Number(o.totalAmount))} ر.س</div>`:''}
-        ${deadlineBadge(o.deadline,o.currentDept,o.onHold)}
+        ${deadlineBadge(o.deadline,o.currentDept,o.onHold,o.cancelled)}
         ${qtActions}
+        ${o.currentDept==='delivery'?paymentStatusLineHtml(o):''}
         ${o.currentDept==='delivery'&&(cu.type==='admin'||cu.type==='receiver')?`<button class="btn btn-green btn-xs" style="width:100%;margin-top:6px;" onclick="event.stopPropagation();finishOrder('${o._key}')"><i class="ti ti-archive"></i> أرشفة الطلب ونقله للمكتملة</button>`:''}
       </div><div class="wf-card-prog"><div class="wf-card-fill" style="width:${pct}%;background:${col}"></div></div></div>`;
   };
@@ -5536,18 +5876,25 @@ function renderWfKanbanView(){
     {key:'workshop',label:'الورشة',cls:'b-workshop',icon:'ti-tool'},
     {key:'external',label:'تنفيذ خارجي',cls:'b-ext',icon:'ti-truck-delivery'},
     {key:'delivery',label:'التسليم',cls:'b-delivery',icon:'ti-truck-delivery'},
-    {key:'completed',label:'الطلبات المكتملة',cls:'b-done',icon:'ti-archive'}
+    {key:'completed',label:'الطلبات المكتملة',cls:'b-done',icon:'ti-archive'},
+    {key:'cancelled',label:'الطلبات الملغاة',cls:'b-urg',icon:'ti-ban'}
   ];
-  const buckets={design:[],print:[],workshop:[],external:[],delivery:[],completed:[]};
+  const buckets={design:[],print:[],workshop:[],external:[],delivery:[],completed:[],cancelled:[]};
   const _wfNow=Date.now();
   arr.forEach(o=>{
     const d=o.currentDept||'design';
+    // A cancelled order keeps whatever currentDept it was frozen at (so its
+    // existing stage badge/history stays intact for the record) but must
+    // never sit in that department's live board column — it goes to its own
+    // column instead, checked first so it never falls through to 'done' or
+    // a normal production column below.
+    if(o.cancelled)buckets.cancelled.push(o);
     // Distinct "التسليم" stage (currentDept:'delivery') vs the actual
     // "المكتملة" archive (currentDept:'done') — previously both lived under
     // the same 'done' value and this board could only fake the distinction
     // by an order's AGE (older than 24h looked "completed"), even though
     // nothing had actually archived it yet. Now a real, explicit field.
-    if(d==='done')buckets.completed.push(o);
+    else if(d==='done')buckets.completed.push(o);
     else if(d==='delivery')buckets.delivery.push(o);
     else (buckets[d]||buckets.design).push(o);
   });
@@ -5577,6 +5924,15 @@ function renderWfKanbanView(){
           cardsHtml+='<div onclick="toggleCompletedWfColumn()" style="cursor:pointer;text-align:center;padding:10px;font-size:12px;color:var(--text-3);border-top:1px dashed var(--border);">إخفاء الطلبات القديمة</div>';
         }
       }
+    } else if(c.key==='cancelled'){
+      // Same fold-behind-a-button treatment as the completed column —
+      // cancellations should stay visible/auditable, not clutter the board.
+      const colOpen=!!window._wfCollapseState['kanban-cancelled'];
+      cardsHtml=!colOpen?`<div style="padding:18px 10px;text-align:center;">
+          <button class="btn btn-out btn-sm" onclick="toggleWfCollapse('kanban-cancelled');renderWfKanbanView();"><i class="ti ti-chevron-down"></i> عرض الطلبات الملغاة (${list.length})</button>
+        </div>`
+        :`<button class="btn btn-out btn-sm" style="width:100%;justify-content:center;margin-bottom:8px;" onclick="toggleWfCollapse('kanban-cancelled');renderWfKanbanView();"><i class="ti ti-chevron-up"></i> إخفاء الطلبات الملغاة</button>`
+        +(list.length?list.map(cardHtml).join(''):'<div style="color:var(--text-3);padding:20px 10px;text-align:center;font-size:12px;"><i class="ti ti-inbox" style="font-size:26px;display:block;margin-bottom:6px;"></i>لا توجد طلبات ملغاة</div>');
     } else {
       cardsHtml=list.length?list.map(cardHtml).join(''):'<div style="color:var(--text-3);padding:20px 10px;text-align:center;font-size:12px;"><i class="ti ti-inbox" style="font-size:26px;display:block;margin-bottom:6px;"></i>لا توجد أعمال</div>';
     }
@@ -5705,6 +6061,11 @@ function deliveryCountdownText(o){
   if(isNaN(dl))return{text:o.deadline,cls:''};
   const diffMs=dl-now;
   if(o.currentDept==='done')return{text:'تم التسليم',cls:'done'};
+  // Same freeze as deadlineBadge()/isOrderOverdue(): on hold or already at
+  // delivery, stop ticking the countdown but keep the original recorded
+  // date visible instead of an alarming "متأخر" readout.
+  if(o.onHold)return{text:'متوقف — '+dl.toLocaleDateString('ar-SA'),cls:'frozen'};
+  if(o.currentDept==='delivery')return{text:'بانتظار التسليم — '+dl.toLocaleDateString('ar-SA'),cls:'frozen'};
   if(diffMs<0){
     const hOver=Math.round(-diffMs/3600000);
     return{text:hOver<24?`متأخر ${hOver} ساعة`:`متأخر ${Math.round(hOver/24)} يوم`,cls:'overdue'};
@@ -6068,7 +6429,7 @@ function buildProductionQueue(){
   else renderProductionQueueBody(deptForType);
 }
 function renderProductionQueueBody(deptForType){
-  const arr=ordersArr().filter(o=>o.currentDept===deptForType&&(cu.type==='admin'||isMyOrder(o)));
+  const arr=ordersArr().filter(o=>o.currentDept===deptForType&&!o.cancelled&&(cu.type==='admin'||isMyOrder(o)));
   const el=document.getElementById('production-body');if(!el)return;
   if(!arr.length){el.innerHTML='<div class="card" style="text-align:center;padding:40px;color:var(--text-3);"><i class="ti ti-inbox" style="font-size:30px;display:block;margin-bottom:8px;"></i>لا توجد طلبات في قائمة الإنتاج حالياً</div>';return;}
   el.innerHTML=`<div class="card"><div class="tbl-wrap"><table class="wf-dense-table">
@@ -6413,7 +6774,7 @@ function openWfInlinePanel(key,skipScroll){
         :`<button class="btn btn-brand btn-sm" onclick="sendToNextDept('${key}','${nd}')"><i class="ti ti-arrow-left"></i> ${nextLabels[o.currentDept]||'إرسال للمرحلة التالية'}</button>`;
     }
   }
-  const revertBtn=(t==='admin'&&_prevDept)?`<button class="btn btn-out btn-sm" onclick="revertOrderToPrevDept('${key}')"><i class="ti ti-arrow-right"></i> إرجاع للمرحلة السابقة</button>`:'';
+  const revertBtn=(t==='admin'&&_prevDept)?`<button class="btn btn-out btn-sm" onclick="openReturnOrderModal('${key}')"><i class="ti ti-arrow-right"></i> إرجاع لمرحلة سابقة</button>`:'';
   const pct=orderProgress(o);
   const statusLabel=o.currentDept==='done'?'مكتمل':'قيد التنفيذ';
   const timelineSeq=[...getActiveDepts(o),'done'];
@@ -6697,6 +7058,25 @@ async function downloadInvoiceFromPreview(){
   await _exportA4PdfFromPrintArea(p.data,p.key,p.filename);
 }
 function fmtMoney(n){n=Number(n)||0;var s=n.toFixed(2);if(s.slice(-3)===".00")return s.slice(0,-3);return s;}
+// Compact "payment status + exact amount" line for the delivery view —
+// section 7's ask: staff handing an order over need to instantly see
+// whether it's Paid/Partial/On-Delivery and the exact figure that implies,
+// without opening the full financial breakdown card.
+function paymentStatusLineHtml(o){
+  const total=Number(o.totalAmount||0);
+  const paid=Number(o.paidAmount||0);
+  const remaining=Number(o.remainingAmount!=null?o.remainingAmount:Math.max(0,total-paid));
+  const status=o.paymentStatus||'—';
+  const cfg={
+    'تم الدفع':{color:'#16A34A',bg:'#F0FDF4',amountLbl:'الإجمالي المدفوع',amount:total},
+    'دفع جزئي':{color:'#D97706',bg:'#FFFBEB',amountLbl:'المتبقي للتحصيل',amount:remaining},
+    'عند التسليم':{color:'#2563EB',bg:'#EFF6FF',amountLbl:'المستحق عند التسليم',amount:total},
+  }[status]||{color:'#64748B',bg:'#F1F5F9',amountLbl:'الإجمالي',amount:total};
+  return`<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;background:${cfg.bg};border:1px solid ${cfg.color}33;border-radius:8px;padding:6px 10px;margin-top:6px;">
+    <span style="font-size:11px;font-weight:800;color:${cfg.color};"><i class="ti ti-receipt"></i> ${esc(status)}</span>
+    <span style="font-size:11.5px;font-weight:800;color:${cfg.color};">${cfg.amountLbl}: ${fmtMoney(cfg.amount)} ر.س</span>
+  </div>`;
+}
 // Financial figures on the clients page are masked by default (***) and only reveal
 // the real amount on an explicit click — a second click re-masks it.
 function toggleAmountMask(el){
@@ -6707,10 +7087,61 @@ function toggleCompletedWfColumn(){window._wfCompletedExpanded=!window._wfComple
 // ============================================================
 // STANDALONE PER-DEPARTMENT STAGE PAGE
 // ============================================================
-function openDeptStagePage(deptKey){window._deptStageKey=deptKey;window._deptStageSearchQ='';window._deptStagePersonQ='';nav('deptstage');}
+function openDeptStagePage(deptKey){window._deptStageKey=deptKey;window._deptStageSearchQ='';window._deptStagePersonQ='';window._deptStageTab='current';nav('deptstage');}
 function hasLaterMaintenanceForOrder(o){
   if(o.maintenanceVisits&&o.maintenanceVisits.length)return true;
   return ordersArr().some(m=>m.orderKind==='maintenance'&&m.linkedOrderKey===o._key);
+}
+function setDeptStageTab(tab){window._deptStageTab=tab;buildDeptStagePage();}
+function setDeptStagePersonFilter(uname){window._deptStagePersonQ=uname;buildDeptStagePage();}
+// Order-level summary card for the workload tabs (sections B/C) — one card
+// per order even when several of its items fall in the same bucket
+// (section E: never double-count/duplicate-render an item's own order),
+// annotated with the item names actually in this bucket, the department-
+// SPECIFIC assignee (o[deptKey+'To'] — not whatever o.currentDept's own
+// assignee happens to be, which would be wrong once an order is being
+// shown here precisely because it's upcoming/completed relative to a
+// DIFFERENT current stage), and — only on the "بانتظار إجراء" tab — the
+// first concrete blocking reason from deptWaitingReason().
+function deptStageOrderCardHtml(o,deptKey,items,tab){
+  const assigneeField=deptKey+'To';
+  const assigneeUname=o[assigneeField];
+  const assigneeName=(assigneeUname&&assigneeUname!=='none')?(assigneeUname==='all'?'فريق مشترك (الكل)':(USERS[assigneeUname]?.name||assigneeUname)):'غير معيّن';
+  const searchBlob=esc([o.id,o._key,o.client,o.service].filter(Boolean).join(' ').toLowerCase());
+  let waitReason=null;
+  if(tab==='waiting'){
+    const probe=(items&&items.length)?items:[{it:null}];
+    for(const p of probe){const r=deptWaitingReason({o,it:p.it},deptKey);if(r){waitReason=r;break;}}
+  }
+  const itemChips=(items&&items.length)?`<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;">${items.slice(0,4).map(({it})=>`<span class="badge b-new" style="font-size:9px;">${esc(it.name||'بند')}</span>`).join('')}${items.length>4?`<span class="badge" style="font-size:9px;">+${items.length-4}</span>`:''}</div>`:'';
+  // Drill down to the exact item workspace when the card represents a
+  // single item (the common case once filtered by department/employee);
+  // a multi-item or itemless card opens the order page instead, since
+  // there's no single item to land on.
+  const openTarget=(items&&items.length===1)?`openItemWorkspace('${o._key}',${items[0].idx})`:`openOrderPage('${o._key}')`;
+  return`<div class="wf-card" data-search="${searchBlob}" data-assignee="${esc(assigneeUname||'')}" onclick="${openTarget}" style="cursor:pointer;">
+    ${cu.type==='admin'?`<div class="row-menu-wrap" style="position:absolute;top:8px;left:8px;z-index:2;" onclick="event.stopPropagation()">
+      <button class="btn btn-out btn-xs" style="padding:2px 6px;" onclick="toggleRowMenu('dsam-${o._key}')" title="إجراءات سريعة"><i class="ti ti-dots-vertical"></i></button>
+      <div class="row-menu" id="dsam-${o._key}" style="display:none;">
+        <button onclick="closeAllRowMenus();openOrderPage('${o._key}')"><i class="ti ti-edit"></i> فتح / تعديل</button>
+        <button style="color:#DC2626;" onclick="deleteOrderSingle('${o._key}')"><i class="ti ti-trash"></i> حذف</button>
+      </div>
+    </div>`:''}
+    <div class="wf-card-top">
+      <div class="wf-card-name" style="font-size:15.5px;">${esc(o.client||'—')}</div>
+      <div class="wf-card-svc">${esc(o.service||'—')}</div>
+      <div class="wf-card-id">${o.id||o._key}</div>
+      <div style="font-size:11.5px;color:var(--text-2);margin-top:4px;"><i class="ti ti-user"></i> ${esc(assigneeName)}</div>
+      <div style="font-size:10.5px;color:var(--text-3);"><i class="ti ti-calendar-time"></i> ${deadlineDateTime(o)}</div>
+      <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:6px;">${deptBadge(o.currentDept,o)} ${gpbadge(o.priority,o.currentDept)} ${orderTimerBadge(o)}</div>
+      ${itemChips}
+      ${waitReason?`<div style="font-size:10.5px;color:#D97706;font-weight:700;margin-top:4px;"><i class="ti ti-hourglass"></i> ${esc(waitReason)}</div>`:''}
+      ${deptKey==='delivery'?paymentStatusLineHtml(o):''}
+      ${deptKey==='delivery'&&(cu.type==='admin'||cu.type==='receiver')?`<button class="btn btn-green btn-sm" style="margin-top:8px;width:100%;" onclick="event.stopPropagation();finishOrder('${o._key}')"><i class="ti ti-archive"></i> أرشفة الطلب ونقله للمكتملة</button>`:''}
+      ${deptKey!=='delivery'&&tab==='current'&&(cu.type==='admin'||cu.type==='receiver')&&getNextDept(o)?`<button class="btn btn-brand btn-sm" style="margin-top:8px;width:100%;" onclick="event.stopPropagation();sendToNextDept('${o._key}','${getNextDept(o)}')"><i class="ti ti-arrow-left"></i> نقل للمرحلة التالية</button>`:''}
+    </div>
+    <div class="wf-card-prog"><div class="wf-card-fill" style="width:${orderProgress(o)}%;background:${progressColor(o)}"></div></div>
+  </div>`;
 }
 function buildDeptStagePage(){
   const deptKey=window._deptStageKey||'design';
@@ -6725,8 +7156,6 @@ function buildDeptStagePage(){
   const meta=deptMeta[deptKey]||deptMeta.design;
   const isCompleted=deptKey==='done';
   const canDelete=isCompleted&&cu.type==='admin';
-  const assigneeField=deptKey+'To';
-  const hasAssignee=['design','external','print','workshop'].includes(deptKey);
   // ── Strict department isolation: designer/printer/workshop/external staff can
   // only reach this shared stage-queue page for their OWN department, and only
   // ever see the orders assigned to them there — never another department's
@@ -6742,150 +7171,140 @@ function buildDeptStagePage(){
     </div>`;
     return;
   }
-  // ordersArr() already returns orders in currentSortMode order (strict
-  // descending numeric order-ID by default) — re-sorting by date here would
-  // silently override that, the same bug already fixed on the List view.
-  const arr=ordersArr().filter(o=>(o.currentDept||'design')===deptKey)
-    .filter(o=>isDeptRestricted?isMyOrder(o):true);
-  window._deptStageSelected=new Set();
-  // Own-queue view for print/workshop/external staff: group itemized orders
-  // into the same collapsible per-order accordion (order header + per-item
-  // rows) the Designer board already uses, instead of a flat card per order
-  // that hides per-item state entirely — standardizes the production roles'
-  // working page on the Designer page's layout instead of two different
-  // list styles. Orders with no per-item breakdown still render as a plain
-  // card below (nothing to accordion). Admin/receiver/oversight views keep
-  // the flat list — myAssignedItems() is scoped to cu.type's own production
-  // role and wouldn't group anything meaningful for them.
-  const itemizedKeys=new Set();
-  let accordionCardsHtml='';
-  if(isDeptRestricted&&!isCompleted){
+  // ── True archive ("المكتملة") — unrelated to the workload tabs below,
+  // which never apply to deptKey 'done' (see workloadDeptList()). Unchanged
+  // from the original implementation. ──
+  if(isCompleted){
+    const arr=ordersArr().filter(o=>o.currentDept==='done');
+    window._deptStageSelected=new Set();
+    const searchBlob=o=>esc([o.id,o._key,o.client,o.service].filter(Boolean).join(' ').toLowerCase());
+    const rows=arr.map(o=>`<tr data-search="${searchBlob(o)}" onclick="openOrderPage('${o._key}')" style="cursor:pointer;">
+      ${canDelete?`<td style="width:150px;" onclick="event.stopPropagation()">
+        <div class="deptstage-action-box">
+          <input type="checkbox" class="deptstage-check" data-key="${o._key}" onchange="toggleDeptStageSelect('${o._key}',this.checked)" title="تحديد للحذف الجماعي"/>
+          <button class="btn btn-out btn-xs" onclick="openReturnOrderModal('${o._key}')" title="إرجاع الطلب لمرحلة إنتاج سابقة"><i class="ti ti-arrow-back-up"></i> إرجاع الطلب</button>
+        </div>
+      </td>`:''}
+      <td style="text-align:right;direction:rtl;"><strong style="color:var(--maroon)">${o.id||o._key}</strong></td>
+      <td><strong style="font-size:13px;">${esc(o.client||'—')}</strong>${hasLaterMaintenanceForOrder(o)?' <span class="badge" style="background:#FEE2E2;color:#991B1B;font-size:9px;"><i class="ti ti-tool"></i> طلب صيانة لاحق</span>':''}</td>
+      <td style="font-weight:800;">${o.totalAmount?fmtMoney(Number(o.totalAmount))+' ر.س':'—'}</td>
+      <td style="font-size:12px;">${esc(o.service||'—')}</td>
+      <td style="font-size:12px;">${esc(o.createdBy||'—')}</td>
+      <td style="font-size:11px;">${o.date||'—'}</td>
+      <td style="width:110px;" onclick="event.stopPropagation()"><button class="btn btn-out btn-xs" onclick="openOrderTimelineView('${o._key}')" title="عرض تفصيل مدة كل مرحلة"><i class="ti ti-hourglass"></i> مدة المراحل</button></td>
+    </tr>`).join('');
+    const thead=`${canDelete?'<th style="width:150px;">إجراءات</th>':''}<th style="width:80px">رقم الطلب</th><th>العميل</th><th style="width:100px">المبلغ</th><th>الخدمة</th><th style="width:120px">منشئ الطلب</th><th style="width:90px">التاريخ</th><th style="width:110px">المدة الزمنية</th>`;
+    document.getElementById('deptstage-content').innerHTML=`
+      ${backBtnHtml()}
+      <div class="page-header"><div class="ptitle"><i class="ti ${meta.icon}" style="color:${meta.color}"></i> أرشيف الطلبات المكتملة (${arr.length})</div>
+      ${canDelete?`<button class="btn btn-red btn-sm" id="deptstage-bulk-del-btn" style="display:none;" onclick="bulkDeleteDeptStage()"><i class="ti ti-trash"></i> حذف المحدد (<span id="deptstage-sel-count">0</span>)</button>`:''}</div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;">
+        <input id="deptstage-search" placeholder="ابحث عن عميل أو خدمة أو رقم طلب..." value="${esc(window._deptStageSearchQ||'')}" oninput="window._deptStageSearchQ=this.value;filterDeptStageRows()" style="flex:1;min-width:220px;"/>
+      </div>
+      <div class="card"><div class="tbl-wrap"><table><thead><tr>${thead}</tr></thead>
+      <tbody>${rows||`<tr><td colspan="${7+(canDelete?1:0)}" style="text-align:center;padding:24px;color:var(--text-3)">لا توجد طلبات مكتملة بعد</td></tr>`}</tbody></table></div></div>`;
+    if(window._deptStageSearchQ)filterDeptStageRows();
+    return;
+  }
+  // ── Production/Delivery workload page — sections B, C, D, E ──
+  const{current,upcoming,completed}=computeDeptWorkload(deptKey);
+  const overdue=current.filter(e=>isOrderOverdue(e.o));
+  const waiting=current.filter(e=>deptWaitingReason(e,deptKey));
+  const allowAll=deptKey==='design'||deptKey==='workshop';
+  const scopeToMe=list=>isDeptRestricted?list.filter(e=>e.assignee===cu._uname||(allowAll&&e.assignee==='all')):list;
+  const buckets={current:scopeToMe(current),upcoming:scopeToMe(upcoming),overdue:scopeToMe(overdue),waiting:scopeToMe(waiting),completed:scopeToMe(completed)};
+  const countMode=(workloadSettings&&workloadSettings.countMode)||'items';
+  const tabDefs=[
+    {key:'current',label:'الحالي',icon:'ti-player-play'},
+    {key:'upcoming',label:'قادم',icon:'ti-clock-hour-4'},
+    {key:'overdue',label:'متأخر',icon:'ti-alert-triangle'},
+    {key:'waiting',label:'بانتظار إجراء',icon:'ti-hourglass'},
+    {key:'completed',label:'مكتمل',icon:'ti-circle-check'},
+  ];
+  const activeTab=['current','upcoming','overdue','waiting','completed'].includes(window._deptStageTab)?window._deptStageTab:'current';
+  const tabsHtml=tabDefs.map(t=>`<button class="tab-btn ${activeTab===t.key?'active':''}" onclick="setDeptStageTab('${t.key}')"><i class="ti ${t.icon}"></i> ${t.label} <span class="badge b-new" style="margin-right:4px;">${workloadCount(buckets[t.key],countMode)}</span></button>`).join('');
+  const activeEntries=buckets[activeTab];
+  // Group into one card per order (never per bare item — section E: an
+  // item's own order is never double-counted/duplicated across cards).
+  const grouped=[];const seen={};
+  activeEntries.forEach(e=>{
+    if(!seen[e.o._key]){seen[e.o._key]={o:e.o,items:[]};grouped.push(seen[e.o._key]);}
+    if(e.it)seen[e.o._key].items.push({it:e.it,idx:e.idx});
+  });
+  const entriesHtml=grouped.length?`<div class="wf-grid">${grouped.map(g=>deptStageOrderCardHtml(g.o,deptKey,g.items,activeTab)).join('')}</div>`
+    :'<div class="card" style="text-align:center;padding:30px;color:var(--text-3);"><i class="ti ti-inbox" style="font-size:32px;display:block;margin-bottom:8px;"></i>لا توجد عناصر في هذا التصنيف حالياً</div>';
+  // The pre-existing "my own current queue" per-item accordion (with its
+  // own advance-stage action per item) is preserved EXACTLY for production
+  // roles — but only on the "الحالي" tab with no employee filter active,
+  // since that action only makes sense for work genuinely sitting at this
+  // department right now, and employee filtering is meaningless when
+  // you're already restricted to your own work.
+  let tabBody=entriesHtml;
+  if(isDeptRestricted&&activeTab==='current'){
     const groups={};
     myAssignedItems().forEach(({o,idx,it})=>{
       groups[o._key]=groups[o._key]||{o,items:[]};
       groups[o._key].items.push({it,idx});
-      itemizedKeys.add(o._key);
     });
-    accordionCardsHtml=Object.values(groups).map(g=>deptAccordionOrderCardHtml(g.o,g.items,deptKey)).join('');
+    const accordionCardsHtml=Object.values(groups).map(g=>deptAccordionOrderCardHtml(g.o,g.items,deptKey)).join('');
+    // Orders with no itemized breakdown never show up in myAssignedItems()
+    // (it only walks o.orderItems) — still render those as plain cards
+    // alongside the itemized accordion so they aren't silently dropped.
+    const flatCardsHtml=grouped.filter(g=>!groups[g.o._key]).map(g=>deptStageOrderCardHtml(g.o,deptKey,g.items,activeTab)).join('');
+    const combined=accordionCardsHtml+flatCardsHtml;
+    tabBody=combined?`<div class="wf-grid">${combined}</div>`:entriesHtml;
   }
-  const searchBlob=o=>esc([o.id,o._key,o.client,o.service].filter(Boolean).join(' ').toLowerCase());
-  const rows=arr.filter(o=>!itemizedKeys.has(o._key)).map(o=>isCompleted?`<tr data-search="${searchBlob(o)}" onclick="openOrderPage('${o._key}')" style="cursor:pointer;">
-    ${canDelete?`<td style="width:150px;" onclick="event.stopPropagation()">
-      <div class="deptstage-action-box">
-        <input type="checkbox" class="deptstage-check" data-key="${o._key}" onchange="toggleDeptStageSelect('${o._key}',this.checked)" title="تحديد للحذف الجماعي"/>
-        <button class="btn btn-out btn-xs" onclick="revertOrderToPrevDept('${o._key}')" title="إرجاع الطلب لمرحلة الإنتاج السابقة"><i class="ti ti-arrow-back-up"></i> إرجاع الطلب</button>
+  // Employee breakdown (section C) — admin/receiver/follower/accountant
+  // oversight only; production staff only ever see their own work above,
+  // which is already exactly what "their employee row" would show.
+  const workers=getDeptWorkers(deptKey);
+  const employeeHtml=(!isDeptRestricted&&workers.length)?(()=>{
+    const emp=computeEmployeeWorkload(deptKey);
+    // No employee-level threshold is stored anywhere in the data model —
+    // only a per-department one (workloadSettings.thresholds). As a stand-in
+    // "if employee-level thresholds are available" per the spec, split the
+    // department threshold evenly across its real (named) workers so each
+    // row still gets a rough estimate badge, clearly labeled as such.
+    const namedWorkerCount=Math.max(1,workers.length);
+    const perEmpThreshold=Math.max(1,Math.round(workloadThreshold(deptKey)/namedWorkerCount));
+    const rowsHtml=emp.map(w=>{
+      const active=window._deptStagePersonQ===w.uname;
+      const isNamed=w.uname!=='none'&&w.uname!=='all';
+      const curN=workloadCount(w.current,countMode);
+      const level=isNamed?workloadLevel(curN,perEmpThreshold):null;
+      return`<div class="wl-emp-row ${active?'active':''}" onclick="setDeptStagePersonFilter('${active?'':w.uname}')">
+        <div class="wl-emp-name"><i class="ti ti-user"></i> ${esc(w.name)} ${level?`<span class="badge" style="background:${level.color}1A;color:${level.color};font-size:9px;font-weight:800;margin-right:4px;" title="تقدير تقريبي بعدد ${countMode==='orders'?'الطلبات':'البنود'} الحالية — ليس قياساً دقيقاً للطاقة الفعلية">${level.label}</span>`:''}</div>
+        <div class="wl-emp-stats">
+          <span>${curN}</span>
+          <span style="color:#64748B;">${workloadCount(w.upcoming,countMode)}</span>
+          <span style="color:${w.overdue.length?'#DC2626':'#94A3B8'};">${workloadCount(w.overdue,countMode)}</span>
+          <span style="color:${w.waiting.length?'#D97706':'#94A3B8'};">${workloadCount(w.waiting,countMode)}</span>
+          <span style="color:#10B981;">${workloadCount(w.completed,countMode)}</span>
+        </div>
+      </div>`;
+    }).join('');
+    return`<div class="card" style="margin-bottom:14px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;">
+        <span style="font-size:13px;font-weight:800;color:var(--maroon);"><i class="ti ti-users"></i> أعباء العمل حسب الموظف (اضغط للتصفية)</span>
+        ${window._deptStagePersonQ?`<button class="btn btn-out btn-xs" onclick="setDeptStagePersonFilter('')"><i class="ti ti-x"></i> إلغاء تحديد الموظف</button>`:''}
       </div>
-    </td>`:''}
-    <td style="text-align:right;direction:rtl;"><strong style="color:var(--maroon)">${o.id||o._key}</strong></td>
-    <td><strong style="font-size:13px;">${esc(o.client||'—')}</strong>${hasLaterMaintenanceForOrder(o)?' <span class="badge" style="background:#FEE2E2;color:#991B1B;font-size:9px;"><i class="ti ti-tool"></i> طلب صيانة لاحق</span>':''}</td>
-    <td style="font-weight:800;">${o.totalAmount?fmtMoney(Number(o.totalAmount))+' ر.س':'—'}</td>
-    <td style="font-size:12px;">${esc(o.service||'—')}</td>
-    <td style="font-size:12px;">${esc(o.createdBy||'—')}</td>
-    <td style="font-size:11px;">${o.date||'—'}</td>
-    <td style="width:110px;" onclick="event.stopPropagation()"><button class="btn btn-out btn-xs" onclick="openOrderTimelineView('${o._key}')" title="عرض تفصيل مدة كل مرحلة"><i class="ti ti-hourglass"></i> مدة المراحل</button></td>
-  </tr>`:`<div class="wf-card" data-search="${searchBlob(o)}"${hasAssignee?` data-assignee="${esc(o[assigneeField]||'')}"`:''} onclick="openOrderPage('${o._key}')" style="cursor:pointer;">
-    ${cu.type==='admin'?`<div class="row-menu-wrap" style="position:absolute;top:8px;left:8px;z-index:2;" onclick="event.stopPropagation()">
-      <button class="btn btn-out btn-xs" style="padding:2px 6px;" onclick="toggleRowMenu('dsam-${o._key}')" title="إجراءات سريعة"><i class="ti ti-dots-vertical"></i></button>
-      <div class="row-menu" id="dsam-${o._key}" style="display:none;">
-        <button onclick="closeAllRowMenus();openOrderPage('${o._key}')"><i class="ti ti-edit"></i> فتح / تعديل</button>
-        <button style="color:#DC2626;" onclick="deleteOrderSingle('${o._key}')"><i class="ti ti-trash"></i> حذف</button>
-      </div>
-    </div>`:''}
-    <div class="wf-card-top">
-      <div class="wf-card-name" style="font-size:15.5px;">${esc(o.client||'—')}</div>
-      <div class="wf-card-svc">${esc(o.service||'—')}</div>
-      <div class="wf-card-id">${o.id||o._key}</div>
-      <div style="font-size:11.5px;color:var(--text-2);margin-top:4px;"><i class="ti ti-user"></i> ${esc(currentPersonName(o))}</div>
-      <div style="font-size:10.5px;color:var(--text-3);"><i class="ti ti-calendar-time"></i> ${deadlineDateTime(o)}</div>
-      <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:6px;">${gpbadge(o.priority,o.currentDept)} ${orderTimerBadge(o)}</div>
-      ${deptKey==='delivery'&&(cu.type==='admin'||cu.type==='receiver')?`<button class="btn btn-green btn-sm" style="margin-top:8px;width:100%;" onclick="event.stopPropagation();finishOrder('${o._key}')"><i class="ti ti-archive"></i> أرشفة الطلب ونقله للمكتملة</button>`:''}
-    </div>
-    <div class="wf-card-prog"><div class="wf-card-fill" style="width:${orderProgress(o)}%;background:${progressColor(o)}"></div></div>
-  </div>`).join('');
-  const thead=isCompleted
-    ?`${canDelete?'<th style="width:150px;">إجراءات</th>':''}<th style="width:80px">رقم الطلب</th><th>العميل</th><th style="width:100px">المبلغ</th><th>الخدمة</th><th style="width:120px">منشئ الطلب</th><th style="width:90px">التاريخ</th><th style="width:110px">المدة الزمنية</th>`
-    :`<th style="width:80px">رقم الطلب</th><th>العميل</th><th>الخدمة</th><th style="width:100px">المسؤول</th><th style="width:110px">منشئ الطلب</th><th style="width:120px">تاريخ التسليم</th><th style="width:90px">الأولوية</th><th style="width:90px">المدة</th>${cu.type==='admin'?'<th style="width:40px;"></th>':''}`;
-  const personOptions=hasAssignee?[...new Set(arr.map(o=>o[assigneeField]).filter(v=>v&&v!=='none'))]
-    .map(u=>`<option value="${esc(u)}"${window._deptStagePersonQ===u?' selected':''}>${esc(USERS[u]?.name||u)}</option>`).join(''):'';
-  // ── Incoming Queue: orders still sitting in whatever stage precedes this
-  // one (per that specific order's own getActiveDepts() sequence — not a
-  // fixed dept order, since workflowOrder varies per order) that will land
-  // here next once their current stage finishes. Gives dept staff visibility
-  // into upcoming volume before it actually arrives, instead of only ever
-  // seeing work the instant it's already assigned to them. ──
-  const incomingArr=isCompleted?[]:ordersArr().filter(o=>o.currentDept!=='done'&&getNextDept(o)===deptKey);
-  const incomingHtml=incomingArr.length?`<div class="card" style="border-right:4px solid #94A3B8;margin-bottom:14px;">
-    <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;" onclick="toggleDeptStageIncoming()">
-      <span style="font-size:13px;font-weight:800;color:#475569;"><i class="ti ti-clock-hour-4"></i> قائمة الانتظار — قادمة من المرحلة السابقة (${incomingArr.length})</span>
-      <button class="btn btn-out btn-xs" onclick="event.stopPropagation();toggleDeptStageIncoming()"><i class="ti ti-chevron-${window._deptStageIncomingOpen?'up':'down'}"></i> ${window._deptStageIncomingOpen?'إخفاء':'عرض'}</button>
-    </div>
-    <div id="deptstage-incoming-body" style="display:${window._deptStageIncomingOpen?'block':'none'};margin-top:10px;">
-      <div class="tbl-wrap"><table><thead><tr><th style="width:80px">رقم الطلب</th><th>العميل</th><th>الخدمة</th><th style="width:110px">المرحلة الحالية</th><th style="width:120px">تاريخ التسليم</th></tr></thead>
-      <tbody>${incomingArr.map(o=>`<tr onclick="openOrderPage('${o._key}')" style="cursor:pointer;">
-        <td style="text-align:right;direction:rtl;"><strong style="color:var(--maroon)">${esc(o.id||o._key)}</strong></td>
-        <td><strong style="font-size:13px;">${esc(o.client||'—')}</strong></td>
-        <td style="font-size:12px;">${esc(o.service||'—')}</td>
-        <td>${deptBadge(o.currentDept,o)}</td>
-        <td style="font-size:11px;">${deadlineDateTime(o)}</td>
-      </tr>`).join('')}</tbody></table></div>
-    </div>
-  </div>`:'';
-  const externalControlPanel=(deptKey==='external'&&!isCompleted)?(()=>{
-    const now=new Date();
-    const overdueCount=arr.filter(isOrderOverdue).length;
-    const soonCount=arr.filter(o=>!o.onHold&&o.deadline&&new Date(o.deadline)>=now&&(new Date(o.deadline)-now)/3600000<=48).length;
-    const unassignedCount=arr.filter(o=>!o[assigneeField]||o[assigneeField]==='none').length;
-    const byAssignee={};
-    arr.forEach(o=>{const a=o[assigneeField]&&o[assigneeField]!=='none'?o[assigneeField]:null;if(a)byAssignee[a]=(byAssignee[a]||0)+1;});
-    const empChips=Object.entries(byAssignee).sort((a,b)=>b[1]-a[1]).map(([u,n])=>
-      `<span class="badge b-new" style="font-size:11px;"><i class="ti ti-user"></i> ${esc(USERS[u]?.name||u)}: ${n}</span>`).join(' ')||'<span style="font-size:12px;color:var(--text-3);">لا يوجد موظفون معينون حالياً</span>';
-    const statBox=(icon,label,val,color)=>`<div style="flex:1;min-width:120px;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:10px;padding:10px 14px;text-align:center;">
-      <i class="ti ${icon}" style="font-size:18px;color:${color};"></i>
-      <div style="font-size:20px;font-weight:800;color:${color};margin-top:4px;">${val}</div>
-      <div style="font-size:11px;color:var(--text-3);margin-top:2px;">${label}</div>
-    </div>`;
-    return `<div class="card" style="border-right:4px solid ${meta.color};margin-bottom:14px;">
-      <div style="font-size:14px;font-weight:800;color:${meta.color};margin-bottom:10px;"><i class="ti ti-layout-dashboard"></i> لوحة التحكم — تنفيذ الأعمال الخارجية</div>
-      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
-        ${statBox('ti-list-details','إجمالي الطلبات النشطة',arr.length,meta.color)}
-        ${statBox('ti-alert-triangle','متأخرة عن التسليم',overdueCount,'#DC2626')}
-        ${statBox('ti-clock','تسليم قريب (48س)',soonCount,'#D97706')}
-        ${statBox('ti-user-question','بدون مسؤول',unassignedCount,'#64748B')}
-      </div>
-      <div style="font-size:12px;color:var(--text-2);margin-bottom:6px;font-weight:700;"><i class="ti ti-users"></i> توزيع الأعمال حسب الموظف:</div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;">${empChips}</div>
+      <div class="wl-emp-head"><span></span><div class="wl-emp-stats"><span>الحالي</span><span>قادم</span><span>متأخر</span><span>بانتظار</span><span>مكتمل</span></div></div>
+      ${rowsHtml}
     </div>`;
   })():'';
   document.getElementById('deptstage-content').innerHTML=`
     ${backBtnHtml()}
-    <div class="page-header"><div class="ptitle"><i class="ti ${meta.icon}" style="color:${meta.color}"></i> مرحلة ${meta.label} — ${isCompleted?'أرشيف الطلبات المكتملة':'الطلبات النشطة'} (${arr.length})</div>
-    ${canDelete?`<button class="btn btn-red btn-sm" id="deptstage-bulk-del-btn" style="display:none;" onclick="bulkDeleteDeptStage()"><i class="ti ti-trash"></i> حذف المحدد (<span id="deptstage-sel-count">0</span>)</button>`:''}</div>
-    ${externalControlPanel}
-    ${incomingHtml}
+    <div class="page-header"><div class="ptitle"><i class="ti ${meta.icon}" style="color:${meta.color}"></i> مرحلة ${meta.label}</div></div>
+    ${employeeHtml}
+    <div class="tab-bar" style="margin-bottom:14px;flex-wrap:wrap;">${tabsHtml}</div>
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;">
       <input id="deptstage-search" placeholder="ابحث عن عميل أو خدمة أو رقم طلب..." value="${esc(window._deptStageSearchQ||'')}" oninput="window._deptStageSearchQ=this.value;filterDeptStageRows()" style="flex:1;min-width:220px;"/>
-      ${hasAssignee?`<select id="deptstage-person-filter" onchange="window._deptStagePersonQ=this.value;filterDeptStageRows()" style="min-width:180px;">
+      ${(!isDeptRestricted&&workers.length)?`<select id="deptstage-person-filter" onchange="window._deptStagePersonQ=this.value;filterDeptStageRows()" style="min-width:180px;">
         <option value="">كل الموظفين</option>
-        ${personOptions}
+        ${workers.map(w=>`<option value="${esc(w.uname)}"${window._deptStagePersonQ===w.uname?' selected':''}>${esc(w.name)}</option>`).join('')}
       </select>`:''}
     </div>
-    ${isCompleted
-      ?`<div class="card" style="margin-bottom:10px;cursor:pointer;" onclick="toggleDeptStageArchive()">
-      <div style="display:flex;align-items:center;justify-content:space-between;">
-        <span style="font-size:13px;font-weight:800;color:var(--maroon);"><i class="ti ti-archive"></i> سجل الطلبات المكتملة (${arr.length})</span>
-        <button class="btn btn-out btn-xs" onclick="event.stopPropagation();toggleDeptStageArchive()"><i class="ti ti-chevron-${window._deptStageArchiveOpen?'up':'down'}"></i> ${window._deptStageArchiveOpen?'إخفاء':'عرض'}</button>
-      </div>
-    </div>
-    <div id="deptstage-archive-body" style="display:${window._deptStageArchiveOpen?'block':'none'};">
-      <div class="card"><div class="tbl-wrap"><table><thead><tr>${thead}</tr></thead>
-    <tbody>${rows||`<tr><td colspan="${6+(canDelete?1:0)}" style="text-align:center;padding:24px;color:var(--text-3)">لا توجد طلبات في هذه المرحلة حالياً</td></tr>`}</tbody></table></div></div>
-    </div>`
-      :((accordionCardsHtml||rows)?`<div class="wf-grid">${accordionCardsHtml}${rows}</div>`:'<div class="card" style="text-align:center;padding:30px;color:var(--text-3);"><i class="ti ti-inbox" style="font-size:32px;display:block;margin-bottom:8px;"></i>لا توجد طلبات في هذه المرحلة حالياً</div>')}`;
-  // The search/person filter values above are restored from persisted state
-  // (window._deptStageSearchQ/_deptStagePersonQ) rather than always starting
-  // blank, but setting an <input>'s value/a <select>'s selected option via
-  // HTML doesn't itself re-run the filtering logic — apply it once here so
-  // a restored query actually takes effect immediately after any rebuild.
+    ${tabBody}`;
   if(window._deptStageSearchQ||window._deptStagePersonQ)filterDeptStageRows();
 }
 // Generic per-department counterpart to designerOrderCardHtml/designerItemRowHtml
@@ -6982,17 +7401,6 @@ function renderItemProofsDrawer(){
     <div class="proofs-drawer-tabs">${tabsHtml||'<span style="font-size:11px;color:var(--text-3);padding:4px;">لا توجد بروفات بعد</span>'}</div>
     <div class="proofs-drawer-body">${cardsHtml}</div>
   `;
-}
-// Folded by default — the completed-orders archive can grow very large over
-// time, and most visits to this page are about the ACTIVE queue, not
-// browsing history.
-function toggleDeptStageArchive(){
-  window._deptStageArchiveOpen=!window._deptStageArchiveOpen;
-  buildDeptStagePage();
-}
-function toggleDeptStageIncoming(){
-  window._deptStageIncomingOpen=!window._deptStageIncomingOpen;
-  buildDeptStagePage();
 }
 function filterDeptStageRows(){
   const q=(document.getElementById('deptstage-search')?.value||'').trim().toLowerCase();
@@ -7208,7 +7616,7 @@ function myAssignedItems(){
   const allowAll=deptKey==='design'||deptKey==='workshop';
   const out=[];
   ordersArr().forEach(o=>{
-    if(o.currentDept==='done')return;
+    if(o.currentDept==='done'||o.cancelled)return;
     if(!o.orderItems||!o.orderItems.length)return;
     const assignee=o[deptKey+'To'];
     if(!assignee||assignee==='none')return;
@@ -7269,7 +7677,7 @@ function buildMyWork(){
       <div style="font-size:11px;color:var(--text-3);">المسؤول: ${esc(currentPersonName(o))}</div>
       <div style="font-size:10.5px;color:var(--text-3);"><i class="ti ti-calendar-time"></i> التسليم: ${deadlineDateTime(o)}</div>
       ${_canSeeCardTotal&&o.totalAmount?`<div style="font-size:11px;font-weight:800;color:var(--maroon);margin-top:3px;"><i class="ti ti-cash"></i> إجمالي المبلغ: ${fmtMoney(Number(o.totalAmount))} ر.س</div>`:''}
-      ${deadlineBadge(o.deadline,o.currentDept,o.onHold)}
+      ${deadlineBadge(o.deadline,o.currentDept,o.onHold,o.cancelled)}
       ${o.quickTaskLocation?`<div style="font-size:11px;color:#9A3412;margin-top:6px;"><i class="ti ti-map-pin"></i> ${esc(o.quickTaskLocation)}</div>`:''}
       ${isWorkshop&&o.isQuickTask&&!o.workshopFeedbackDone?`<div style="margin-top:8px;"><button class="btn btn-orange btn-sm" onclick="event.stopPropagation();openWorkshopFeedback('${o._key}')"><i class="ti ti-clipboard-check"></i> إدخال القياسات</button></div>`:''}
       ${o.workshopFeedbackDone?`<div style="margin-top:6px;background:#F0FDF4;border:1px solid #BBF7D0;border-radius:6px;padding:6px 10px;font-size:11px;"><i class="ti ti-check" style="color:#10B981"></i> تم رفع التقرير — بانتظار الإجراء</div>`:''}
@@ -9749,7 +10157,11 @@ function orderEditLinePanelHtml(key,lineLabel){
   const items=o.orderItems||[];
   const itemsHtml=items.length?items.map((it,i)=>`<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:8px;padding:8px 12px;margin-bottom:6px;">
     <div style="min-width:0;flex:1;"><strong style="font-size:12px;color:var(--maroon);">بند #${i+1} — ${esc(it.name||'—')}</strong>${it.qty?`<span style="font-size:11px;color:var(--text-3);"> ×${esc(String(it.qty))}</span>`:''}${it.details?`<div style="font-size:11px;color:var(--text-2);margin-top:2px;">${esc(it.details)}</div>`:''}${it.notes?`<div style="font-size:11px;color:var(--text-2);margin-top:2px;"><i class="ti ti-note"></i> ${esc(it.notes)}</div>`:''}${chatAttachmentsHtml(itemVersions(it).flatMap(v=>v.files||[]))}</div>
-    <button class="btn btn-out btn-xs" style="flex-shrink:0;" onclick="closeModal('order-edit-modal');openAddItemModal('${key}',${i})"><i class="ti ti-pencil"></i> تعديل</button>
+    <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0;">
+      <button class="btn btn-out btn-xs" onclick="closeModal('order-edit-modal');openAddItemModal('${key}',${i})"><i class="ti ti-pencil"></i> تعديل</button>
+      ${items.length>1?`<button class="btn btn-out btn-xs" onclick="closeModal('order-edit-modal');openReturnOrderModal('${key}',${i})"><i class="ti ti-arrow-back-up"></i> إرجاع</button>`:''}
+      <button class="btn btn-out btn-xs" style="color:#DC2626;" onclick="confirmDeleteOrderItem('${key}',${i})"><i class="ti ti-trash"></i> حذف</button>
+    </div>
   </div>`).join(''):'<div style="font-size:11.5px;color:var(--text-3);">لا توجد بنود بعد</div>';
   const seq=getActiveDepts(o);
   const reassignHtml=seq.map(dk=>{
@@ -9805,6 +10217,26 @@ function orderEditLinePanelHtml(key,lineLabel){
     <div style="font-size:11.5px;font-weight:900;color:#fff;background:var(--maroon);display:inline-flex;align-items:center;gap:5px;padding:4px 12px;border-radius:20px;margin-bottom:12px;"><i class="ti ti-git-branch"></i> ${esc(lineLabel)} — ${esc(o.id||key)} — ${(WF_DEPT_META[o.currentDept]||{label:o.currentDept}).label||''}</div>
     ${bodyHtml}
   </div>`;
+}
+async function confirmDeleteOrderItem(key,idx){
+  const o=orders[key];if(!o)return;
+  if(!guardWrite(canEditOrderComposition(),'⚠️ حذف بنود الطلب متاح للمدير أو موظف الاستقبال فقط'))return;
+  const items=o.orderItems||[];
+  const it=items[idx];if(!it)return;
+  if(items.length<=1){toast('⚠️ لا يمكن حذف آخر بند في الطلب — احذف الطلب بالكامل بدلاً من ذلك');return;}
+  if(!confirm(`حذف البند "${it.name||('#'+(idx+1))}" نهائياً من هذا الطلب؟ لا يمكن التراجع عن هذا الإجراء.`))return;
+  showSaving('جاري الحذف...');
+  try{
+    const newItems=items.filter((_,i)=>i!==idx);
+    const upd={orderItems:newItems,lastItemUpdateAt:new Date().toISOString(),lastItemUpdateBy:cu.name};
+    const newOrderDept=computeOrderDeptFromItems(o,newItems);
+    if(newOrderDept&&newOrderDept!==o.currentDept)upd.currentDept=newOrderDept;
+    await fbPatch(`orders/${key}`,upd);
+    logOrderActivity(key,'ti-trash',`🗑 ${cu.name} حذف البند "${it.name||('#'+(idx+1))}" من الطلب`,{'البند المحذوف':it.name||('#'+(idx+1)),'الكمية':it.qty||'—','السعر':it.price?fmtMoney(Number(it.price))+' ر.س':'—'});
+    await loadData();hideSaving();toast('✓ تم حذف البند');
+    openOrderEditModal(key);
+    _refreshOrderItemsViews(key);
+  }catch(e){hideSaving();toast('❌ فشل الحذف');}
 }
 // ── Add a currently-inactive department to an order's production pipeline.
 // Most useful for sending an order back to the designer once an item is
@@ -10229,11 +10661,24 @@ function saveDeptNote(key,dk){
   if(!guardWrite(cu.type==='admin'||cu.type==='receiver'||isMyOrder(o),'⚠️ لا تملك صلاحية حفظ هذه الملاحظة'))return;
   const el=document.getElementById('od-note-'+dk);if(!el)return;
   const noteVal=el.value.trim();
+  const hadNote=!!(o['deptNotes_'+dk]||'').trim();
   const upd={};upd['deptNotes_'+dk]=noteVal;
   fbPatch(`orders/${key}`,upd).then(()=>{
     toast('✓ تم حفظ الملاحظة');
     if(noteVal&&o)pushNotification({type:'comment',message:`ملاحظة جديدة على الطلب ${esc(o.id||key)} — ${esc(WF_DEPT_META[dk]?.label||dk)}`,orderKey:key,orderId:o.id,client:o.client});
+    if(hadNote&&!noteVal)logOrderActivity(key,'ti-trash',`🗑 ${cu.name} حذف ملاحظة قسم ${WF_DEPT_META[dk]?.label||dk}`);
   }).catch(()=>toast('❌ فشل الحفظ'));
+}
+function deleteDeptNote(key,dk){
+  const o=orders[key];if(!o)return;
+  if(!guardWrite(cu.type==='admin'||cu.type==='receiver'||isMyOrder(o),'⚠️ لا تملك صلاحية حذف هذه الملاحظة'))return;
+  if(!confirm('حذف ملاحظة هذا القسم؟'))return;
+  const oldVal=o['deptNotes_'+dk]||'';
+  fbPatch(`orders/${key}`,{['deptNotes_'+dk]:''}).then(()=>{
+    logOrderActivity(key,'ti-trash',`🗑 ${cu.name} حذف ملاحظة قسم ${WF_DEPT_META[dk]?.label||dk}`,{'القسم':WF_DEPT_META[dk]?.label||dk,'الملاحظة المحذوفة':oldVal});
+    toast('✓ تم حذف الملاحظة');
+    const el=document.getElementById('od-note-'+dk);if(el)el.value='';
+  }).catch(()=>toast('❌ فشل الحذف'));
 }
 function buildDeptWorkspaceCard(o,key,dk,canAct,nextBtnHtml,uploadAreaHtml){
   const meta=WF_DEPT_META[dk]||{label:dk,icon:'ti-circle',color:'#475569'};
@@ -10267,6 +10712,7 @@ function buildDeptWorkspaceCard(o,key,dk,canAct,nextBtnHtml,uploadAreaHtml){
         <div class="od-dept-section-lbl">ملاحظات القسم</div>
         <textarea id="od-note-${dk}" placeholder="ملاحظات خاصة بهذا القسم..." ${canAct?'':'disabled'}>${esc(noteVal)}</textarea>
         ${canAct?`<button class="btn btn-out btn-xs" onclick="saveDeptNote('${key}','${dk}')"><i class="ti ti-device-floppy"></i> حفظ الملاحظة</button>`:''}
+        ${canAct&&noteVal?`<button class="btn btn-out btn-xs" style="color:#DC2626;" onclick="deleteDeptNote('${key}','${dk}')"><i class="ti ti-trash"></i> حذف الملاحظة</button>`:''}
       </div>
       ${state==='current'&&(uploadAreaHtml||nextBtnHtml)?`<div>
         <div class="od-dept-section-lbl">الإجراءات المطلوبة</div>
@@ -10277,22 +10723,54 @@ function buildDeptWorkspaceCard(o,key,dk,canAct,nextBtnHtml,uploadAreaHtml){
   </div>`;
 }
 function scrollToDeptCard(dk){const el=document.getElementById('od-dept-'+dk);if(el)el.scrollIntoView({behavior:'smooth',block:'center'});}
+function openActivityDetail(cacheKey){
+  const s=(window._timelineDetailCache||{})[cacheKey];if(!s)return;
+  const metaRows=s.meta?Object.entries(s.meta).map(([k,v])=>`<div class="ad-detail-row"><span class="ad-detail-k">${esc(k)}</span><span class="ad-detail-v">${esc(v===undefined||v===null||v===''?'—':String(v))}</span></div>`).join(''):'';
+  document.getElementById('activity-detail-modal-body').innerHTML=`
+    <div class="modal-header"><span class="modal-title"><i class="ti ${s.icon||'ti-activity'}"></i> تفاصيل الحدث</span><button class="btn-close" onclick="closeModal('activity-detail-modal')">×</button></div>
+    <div style="display:flex;flex-direction:column;gap:12px;">
+      <div style="font-size:13.5px;font-weight:700;color:var(--maroon);line-height:1.6;">${esc(s.text)}</div>
+      <div style="display:flex;gap:14px;flex-wrap:wrap;font-size:11.5px;color:var(--text-3);">
+        <span><i class="ti ti-calendar-time"></i> ${esc(s.fmtAt)}</span>
+        ${s.actor?`<span><i class="ti ti-user"></i> بواسطة ${esc(s.actor)}</span>`:''}
+      </div>
+      <div>
+        <div style="font-size:11.5px;font-weight:800;color:var(--text-2);margin-bottom:6px;">البيانات والتفاصيل المحددة</div>
+        ${metaRows?`<div class="ad-detail-grid">${metaRows}</div>`:'<div style="font-size:11.5px;color:var(--text-3);">لا توجد تفاصيل إضافية مسجلة لهذا الحدث — النص أعلاه يحوي كل ما تم تسجيله عنه.</div>'}
+      </div>
+      ${s.orderKey?`<button class="btn btn-out btn-sm" style="width:100%;justify-content:center;" onclick="closeModal('activity-detail-modal');openOrderPage('${s.orderKey}')"><i class="ti ti-file-text"></i> فتح الطلب</button>`:''}
+    </div>`;
+  openModal('activity-detail-modal');
+}
+// Every timeline row is clickable (interactive timeline) and opens
+// openActivityDetail() with the exact data for that event. Since the detail
+// needs the full record (including any structured `meta`) and stuffing that
+// into an inline onclick attribute means fighting quote-escaping on
+// arbitrary Arabic/user text, each rendered item is cached by a synthetic
+// key in window._timelineDetailCache instead — openActivityDetail() just
+// looks it up there. The cache is rebuilt fresh on every render, which is
+// fine since it only ever needs to serve a click on the page that just
+// rendered it.
 function buildOrderActivityTimeline(o,key){
   // Merges two sources chronologically: the coarse stage-transition
   // milestones (computeOrderStageTimeline — always available, derived from
   // timestamps every order already has) with the fine-grained discrete
   // events logged via logOrderActivity() (proof uploads, feedback, item
   // add/edit, approvals, payments, messages, etc. — see its call sites).
-  const stageItems=computeOrderStageTimeline(o).map(s=>({at:s.at,icon:s.icon,text:s.label,actor:s.key==='date'?o.createdBy:null}));
-  const logItems=Object.values(o.activityLog||{}).map(e=>({at:e.at,icon:e.icon||'ti-activity',text:e.text||'',actor:e.actor||null}));
+  const stageItems=computeOrderStageTimeline(o).map(s=>({at:s.at,icon:s.icon,text:s.label,actor:s.key==='date'?o.createdBy:null,meta:null}));
+  const logItems=Object.entries(o.activityLog||{}).map(([id,e])=>({at:e.at,icon:e.icon||'ti-activity',text:e.text||'',actor:e.actor||null,meta:e.meta||null,logId:id}));
   const items=[...stageItems,...logItems].filter(s=>s.at).sort((a,b)=>new Date(a.at)-new Date(b.at));
   if(!items.length)return'<div style="font-size:11px;color:var(--text-3);">لا توجد أحداث مسجلة بعد</div>';
   const fmt=d=>{try{return new Date(d).toLocaleString('ar-SA',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});}catch(e){return d;}};
-  return `<div class="od-timeline-list">${items.map(s=>`
-    <div class="od-timeline-row">
+  window._timelineDetailCache={};
+  return `<div class="od-timeline-list">${items.map((s,i)=>{
+    const cacheKey='t'+i;
+    window._timelineDetailCache[cacheKey]={...s,orderKey:key,fmtAt:fmt(s.at)};
+    return `
+    <div class="od-timeline-row od-timeline-row-clickable" onclick="openActivityDetail('${cacheKey}')">
       <div class="od-timeline-dot"><i class="ti ${s.icon}"></i></div>
       <div class="od-timeline-body"><strong>${esc(s.text)}</strong> — ${fmt(s.at)}${s.actor?` <span style="color:var(--text-3);">(بواسطة ${esc(s.actor)})</span>`:''}</div>
-    </div>`).join('')}</div>`;
+    </div>`;}).join('')}</div>`;
 }
 // ============================================================
 // FILE MANAGER — categorized, traceable attachment cards. Used to render
@@ -10832,13 +11310,14 @@ function buildOrderDetailsPage(){
     // the same box instead of a separate field) as multiple files at once.
     else if(o.currentDept==='workshop')uploadArea=`<div class="dept-upload-box"><div class="dept-upload-title" style="color:#9A3412"><i class="ti ti-tools"></i> الإنجاز النهائي</div>
       <input type="file" multiple id="f-done-input" accept="*/*" onchange="uploadFileDirect('${key}','finalWorkshopDoneFile','finalWorkshopDoneFileName','f-done-input')"/>
+      <textarea id="f-done-input-note" placeholder="ملاحظة اختيارية مع الملف المرفوع (مثال: تم التركيب بموقع العميل)..." style="min-height:44px;font-size:11.5px;margin-top:6px;"></textarea>
       ${renderApprovalFileList(o,key,'finalWorkshopDoneFile',canAct)}
     </div>`;
     else if(o.currentDept==='external'){
       const _extMode=o.externalMode||'both';
       uploadArea=`<div class="dept-upload-box"><div class="dept-upload-title" style="color:#713F12"><i class="ti ti-world"></i> تحديث التنفيذ الخارجي</div>
       ${_extMode!=='files'?`<div class="fg"><label>التعليمات/الملاحظات</label><textarea id="f-ext-note-input" style="min-height:55px;font-size:12px;">${esc(o.externalNote||'')}</textarea><button class="btn btn-out btn-xs" style="margin-top:6px;" onclick="saveExternalNote('${key}')"><i class="ti ti-device-floppy"></i> حفظ الملاحظة</button></div>`:''}
-      ${_extMode!=='text'?`<div class="fg"><label>ملف التوريد</label><input type="file" id="f-ext-input" accept="*/*" onchange="uploadFileDirect('${key}','externalFile','externalFileName','f-ext-input')"/></div>`:''}
+      ${_extMode!=='text'?`<div class="fg"><label>ملف التوريد</label><input type="file" id="f-ext-input" accept="*/*" onchange="uploadFileDirect('${key}','externalFile','externalFileName','f-ext-input')"/><textarea id="f-ext-input-note" placeholder="ملاحظة اختيارية مع ملف التوريد (مثال: تأكيد المورد، رقم الشحنة)..." style="min-height:44px;font-size:11.5px;margin-top:6px;"></textarea></div>`:''}
       </div>`;
     }
   }
@@ -10887,7 +11366,7 @@ function buildOrderDetailsPage(){
     <div style="background:#FFF8F8;border:1px solid #FECACA;border-radius:10px;padding:10px 14px;margin-bottom:12px;"><div style="font-size:12px;font-weight:800;color:#991B1B;"><i class="ti ti-user-off"></i> العميل لم يرغب بالاستمرار</div></div>`
     :''
   const _canRevert=(t==='admin'&&_prevDept);
-  const _canArchive=(cu.type==='admin'&&o.currentDept!=='done'&&!(o.isQuickTask&&o.approvedPrintFile));
+  const _canArchive=(cu.type==='admin'&&o.currentDept!=='done'&&!o.cancelled&&!(o.isQuickTask&&o.approvedPrintFile));
   // Production employees only need full controls for their own department —
   // every other active department is shown as a compact read-only status
   // chip instead of a full workspace card. Admin/receiver/follower/accountant
@@ -10935,15 +11414,15 @@ function buildOrderDetailsPage(){
     ${backBtnHtml()}
     <div class="od-header">
       <div class="od-header-main">
-        <div class="od-header-title"><i class="ti ti-file-text"></i> ${o.id||key} — ${esc(o.client)}${o.orderKind==='maintenance'?'<span class="urgent-tag" style="font-size:9px;background:linear-gradient(135deg,#991B1B,#DC2626);"><i class="ti ti-tool"></i>صيانة</span>':''}${o.isQuickTask?'<span class="urgent-tag" style="font-size:9px;"><i class="ti ti-bolt"></i>مهمة سريعة</span>':''}${o.staffReassigned?`<span class="urgent-tag" style="font-size:9px;background:linear-gradient(135deg,#7C3AED,#6D28D9);" title="${esc('آخر سبب: '+(o.lastReassignReason||'—'))}"><i class="ti ti-user-cog"></i>تمت إعادة تكليف الموظف</span>`:''}${o.onHold?`<span class="urgent-tag" style="font-size:9px;background:linear-gradient(135deg,#D97706,#B45309);" title="${esc(o.onHoldReason?('السبب: '+o.onHoldReason):'')}"><i class="ti ti-clock-pause"></i>متوقف / بانتظار العميل</span>`:''}${o.reverted?`<span class="urgent-tag" style="font-size:9px;background:linear-gradient(135deg,#7C3AED,#6D28D9);" title="${esc(o.revertedAt?('بتاريخ: '+fmtDateTime(o.revertedAt)):'')}"><i class="ti ti-arrow-back-up"></i>طلب مرجع</span>`:''}</div>
+        <div class="od-header-title"><i class="ti ti-file-text"></i> ${o.id||key} — ${esc(o.client)}${o.orderKind==='maintenance'?'<span class="urgent-tag" style="font-size:9px;background:linear-gradient(135deg,#991B1B,#DC2626);"><i class="ti ti-tool"></i>صيانة</span>':''}${o.isQuickTask?'<span class="urgent-tag" style="font-size:9px;"><i class="ti ti-bolt"></i>مهمة سريعة</span>':''}${o.staffReassigned?`<span class="urgent-tag" style="font-size:9px;background:linear-gradient(135deg,#7C3AED,#6D28D9);" title="${esc('آخر سبب: '+(o.lastReassignReason||'—'))}"><i class="ti ti-user-cog"></i>تمت إعادة تكليف الموظف</span>`:''}${o.onHold?`<span class="urgent-tag" style="font-size:9px;background:linear-gradient(135deg,#D97706,#B45309);" title="${esc(o.onHoldReason?('السبب: '+o.onHoldReason):'')}"><i class="ti ti-clock-pause"></i>متوقف / بانتظار العميل</span>`:''}${o.reverted?`<span class="urgent-tag" style="font-size:9px;background:linear-gradient(135deg,#7C3AED,#6D28D9);" title="${esc(o.revertedAt?('بتاريخ: '+fmtDateTime(o.revertedAt)):'')}"><i class="ti ti-arrow-back-up"></i>طلب مرجع</span>`:''}${o.cancelled?`<span class="urgent-tag" style="font-size:9px;background:linear-gradient(135deg,#991B1B,#DC2626);" title="${esc(o.cancelReason?('السبب: '+o.cancelReason):'')}"><i class="ti ti-ban"></i>طلب ملغى</span>`:''}</div>
         <div class="od-header-meta">
           <span>الخدمة: <strong>${esc(o.service)}</strong></span>
-          <span>الحالة: ${deptBadge(o.currentDept,o)}</span>
+          <span>الحالة: ${o.cancelled?cancelledBadge(o):deptBadge(o.currentDept,o)}</span>
           ${(()=>{const proof=proofStatusForOrder(o);return proof?`<span><i class="ti ${proof.icon}"></i> <strong class="proof-pill proof-${proof.key}">${proof.label}</strong></span>`:'';})()}
           <span>الأولوية: ${gpbadge(o.priority,o.currentDept)}</span>
           <span>المسؤول: <strong>${esc(currentPersonName(o))}</strong></span>
           <span>أنشئ بواسطة: <strong>${esc(o.createdBy||'—')}</strong></span>
-          <span>التسليم: <strong>${deadlineDateTime(o)}</strong> ${deadlineBadge(o.deadline,o.currentDept,o.onHold)}</span>
+          <span>التسليم: <strong>${deadlineDateTime(o)}</strong> ${deadlineBadge(o.deadline,o.currentDept,o.onHold,o.cancelled)}</span>
           ${o.lastItemUpdateAt?`<span>آخر تحديث: <strong>${(o.lastItemUpdateAt||'').split('T')[0]||'—'}</strong></span>`:''}
         </div>
         <div class="od-header-progress"><span style="font-size:10.5px;color:rgba(255,255,255,.85);">التقدم الإجمالي</span><div class="od-header-progress-track"><div class="od-header-progress-fill" style="width:${orderProgress(o)}%;"></div></div><strong style="font-size:11px;color:#fff;">${orderProgress(o)}%</strong></div>
@@ -10958,8 +11437,9 @@ function buildOrderDetailsPage(){
             ${canEditOrderComposition()?`<button onclick="closeAllRowMenus();openOrderEditModal('${key}')"><i class="ti ti-settings"></i> تعديل الطلب</button>`:''}
             <button onclick="closeAllRowMenus();openTimelineModal('${key}')"><i class="ti ti-clock"></i> مراحل الطلب بالتفصيل</button>
             ${(canEditOrderComposition()||isMine)?(o.onHold?`<button onclick="closeAllRowMenus();resumeOrderFromHold('${key}')" style="color:#059669;"><i class="ti ti-player-play"></i> استئناف العمل</button>`:`<button onclick="closeAllRowMenus();openHoldOrderModal('${key}')" style="color:#B45309;"><i class="ti ti-clock-pause"></i> إيقاف مؤقت / بانتظار العميل</button>`):''}
-            ${_canRevert?`<button onclick="closeAllRowMenus();revertOrderToPrevDept('${key}')"><i class="ti ti-arrow-back-up"></i> إرجاع للمرحلة السابقة</button>`:''}
+            ${_canRevert?`<button onclick="closeAllRowMenus();openReturnOrderModal('${key}')"><i class="ti ti-arrow-back-up"></i> إرجاع لمرحلة سابقة</button>`:''}
             ${_canArchive?`<button onclick="closeAllRowMenus();archiveOrder('${key}')" style="color:#DC2626;"><i class="ti ti-archive"></i> إنهاء الطلب وأرشفته</button>`:''}
+            ${canEditOrderComposition()?(o.cancelled?`<button onclick="closeAllRowMenus();reopenCancelledOrder('${key}')" style="color:#059669;"><i class="ti ti-rotate"></i> إعادة فتح الطلب الملغى</button>`:(o.currentDept!=='done'?`<button onclick="closeAllRowMenus();openCancelOrderModal('${key}')" style="color:#DC2626;"><i class="ti ti-ban"></i> إلغاء الطلب</button>`:'')):''}
           </div>
         </div>
       </div>
@@ -11192,6 +11672,13 @@ function uploadFileDirect(key,ff,fn2,inputId){
   // files on any order regardless of assignment.
   if(!guardWrite(cu.type==='admin'||cu.type==='receiver'||isMyOrder(o),'⚠️ لا تملك صلاحية رفع هذا الملف'))return;
   el.value='';
+  // Optional per-upload note (section 3): a sibling textarea some upload
+  // boxes render at id `${inputId}-note` — e.g. Workshop's "الإنجاز النهائي"
+  // and External's "ملف التوريد" boxes, the stages reached after design
+  // approval where staff most need to annotate what they just attached.
+  // Not every upload box has one, so this stays optional/no-op otherwise.
+  const noteEl=document.getElementById(inputId+'-note');
+  const noteVal=noteEl?noteEl.value.trim():'';
   const label=(files.length>1?`${files.length} ملفات — `:'')+(o.id||key);
   runQueuedUpload(label,async onProgress=>{
     const uploaded=[];
@@ -11219,8 +11706,9 @@ function uploadFileDirect(key,ff,fn2,inputId){
     if(_uo){
       const _isProof=ff==='approvedPrintFile'&&_uo.currentDept==='design';
       pushNotification({type:'upload',message:_isProof?`تم رفع بروفة تصميم على الطلب ${esc(_uo.id||key)}`:`تم رفع ملف على الطلب ${esc(_uo.id||key)} — ${esc(uploaded[0].name)}`,orderKey:key,orderId:_uo.id,client:_uo.client});
-      logOrderActivity(key,'ti-upload',`📤 تم رفع ${_isProof?'بروفة تصميم':'ملف'}: ${uploaded.map(u=>u.name).join('، ')}`);
+      logOrderActivity(key,'ti-upload',`📤 تم رفع ${_isProof?'بروفة تصميم':'ملف'}: ${uploaded.map(u=>u.name).join('، ')}${noteVal?' — ملاحظة: '+noteVal:''}`,noteVal?{'الملفات':uploaded.map(u=>u.name).join('، '),'الملاحظة':noteVal}:null);
     }
+    if(noteEl)noteEl.value='';
     _refreshOrderItemsViews(key);
   });
 }
@@ -11240,7 +11728,9 @@ async function deleteApprovalFile(key,ff,slot){
   const fn2=ff+'Name';
   const extra=Array.isArray(o[ff+'Extra'])?[...o[ff+'Extra']]:[];
   const upd={};
+  let deletedName=null;
   if(slot==='primary'){
+    deletedName=o[fn2]||null;
     if(extra.length){
       const promoted=extra.shift();
       upd[ff]=promoted.data;upd[fn2]=promoted.name;
@@ -11252,13 +11742,20 @@ async function deleteApprovalFile(key,ff,slot){
   }else{
     const idx=Number(slot);
     if(!(idx>=0&&idx<extra.length))return;
+    deletedName=extra[idx].name||null;
     extra.splice(idx,1);
     upd[ff+'Extra']=extra.length?extra:null;
   }
   showSaving('جاري الحذف...');
-  try{await fbPatch(`orders/${key}`,upd);await loadData();hideSaving();toast('✓ تم الحذف');openOrderPage(key);}
+  try{
+    await fbPatch(`orders/${key}`,upd);
+    const fieldLabel=FILE_FIELD_LABELS[ff]||ff;
+    logOrderActivity(key,'ti-trash',`🗑 ${cu.name} حذف مرفق من "${fieldLabel}"${deletedName?': '+deletedName:''}`,{'الحقل':fieldLabel,'اسم الملف':deletedName||'—'});
+    await loadData();hideSaving();toast('✓ تم الحذف');openOrderPage(key);
+  }
   catch(e){hideSaving();toast('❌ فشل الحذف');}
 }
+const FILE_FIELD_LABELS={clientApprovalImage:'الملف المعتمد للتصميم',approvedPrintFile:'بروفة التصميم',approvedWorkshopFile:'ملف الإنتاج للورشة',finalWorkshopDoneFile:'الإنجاز النهائي'};
 // Shared renderer for every "approval upload box" (design's approved-design/
 // design-proof/workshop-production-file, workshop's final-work) — one file
 // list combining the primary field + its `${ff}Extra` array, each row
@@ -11350,14 +11847,19 @@ async function sendToNextDept(key,next){
   // just check this flag instead of re-deriving "was this a manager
   // override" itself. Not flagged when admin/receiver happens to BE the
   // assigned employee for that stage — that's their own real work.
+  let isManagerOverride=false;
   if(curDept&&assigneeField[curDept]){
     const assignee=o[assigneeField[curDept]];
-    const isManagerOverride=(cu.type==='admin'||cu.type==='receiver')&&assignee&&assignee!=='none'&&assignee!==cu._uname;
+    isManagerOverride=(cu.type==='admin'||cu.type==='receiver')&&assignee&&assignee!=='none'&&assignee!==cu._uname;
     if(isManagerOverride)upd[curDept+'ManagerAdvanced']=true;
   }
   try{
     await fbPatch(`orders/${key}`,upd);
-    logOrderActivity(key,'ti-arrow-forward-up',`تم نقل الطلب إلى مرحلة: ${(WF_DEPT_META[next]||{label:next}).label}`);
+    const _fromLbl=(WF_DEPT_META[curDept]||{label:curDept}).label;
+    const _toLbl=(WF_DEPT_META[next]||{label:next}).label;
+    logOrderActivity(key,'ti-arrow-forward-up',
+      isManagerOverride?`👤 ${cu.name} نقل الطلب يدوياً (كمدير) من ${_fromLbl} إلى ${_toLbl}`:`تم نقل الطلب إلى مرحلة: ${_toLbl}`,
+      isManagerOverride?{'من':_fromLbl,'إلى':_toLbl,'بواسطة':cu.name+' (نقل يدوي من الإدارة)'}:null);
     await loadData();hideSaving();closeModal('order-modal');
     if(next==='done'){
       dispatchAutoWhatsapp(orders[key],'ready_for_delivery');
@@ -11522,6 +12024,56 @@ async function markAsIncomplete(key){
     resyncOrderToSheet(key);
     toast('✓ تم نقل الطلب لقائمة غير المكتملة');refreshCurrentPage();
   }catch(e){hideSaving();toast('❌ فشل التحديث، حاول مرة أخرى');}
+}
+// ============================================================
+// CANCEL ORDER — a soft, logged, reversible-in-spirit termination distinct
+// from archiveOrder()/finishOrder() (which mean "successfully delivered")
+// and from deleteOrderSingle() (a hard, permanent delete reserved for the
+// completed-orders archive). Cancelling leaves the order's record, items,
+// files and currentDept exactly as they were — so its stage badge/history
+// stay meaningful — and only sets o.cancelled, which every active-queue
+// computation (computeDeptWorkload, myAssignedItems, the Kanban board,
+// buildDash's running count, isOrderOverdue, notifRelevantToMe,
+// renderProductionQueueBody) already excludes. It still shows up, clearly
+// badged, in the full orders list and in its own folded Kanban column, kept
+// for the record rather than disappearing entirely.
+// ============================================================
+function openCancelOrderModal(key){
+  const o=orders[key];if(!o)return;
+  if(!canEditOrderComposition()){toast('⚠️ إلغاء الطلب متاح للمدير أو موظف الاستقبال فقط');return;}
+  if(o.cancelled){toast('هذا الطلب ملغى بالفعل');return;}
+  if(o.currentDept==='done'){toast('⚠️ لا يمكن إلغاء طلب مكتمل ومؤرشف بالفعل');return;}
+  document.getElementById('task-modal-body').innerHTML=`
+    <div class="modal-header"><span class="modal-title"><i class="ti ti-ban"></i> إلغاء الطلب</span><button class="btn-close" onclick="closeModal('task-modal')">×</button></div>
+    <div style="font-size:12px;color:#991B1B;background:#FEF2F2;border:1px solid #FECACA;border-radius:8px;padding:10px 12px;margin-bottom:10px;"><i class="ti ti-alert-triangle"></i> سيتم إخفاء الطلب "${esc(o.id||key)}" من جميع قوائم العمل النشطة لكل الأقسام. يبقى الطلب محفوظاً ويمكن لأي مدير مراجعته لاحقاً، لكن لا يمكن التراجع عن الإلغاء إلا بإعادة فتحه يدوياً.</div>
+    <div class="fg"><label>سبب الإلغاء *</label><textarea id="cancel-reason-input" placeholder="مثال: طلب العميل إلغاء الطلب، تكرار بالخطأ..." style="min-height:80px;"></textarea></div>
+    <button class="btn btn-red" style="width:100%;justify-content:center;" onclick="confirmCancelOrder('${key}')"><i class="ti ti-ban"></i> تأكيد إلغاء الطلب</button>`;
+  openModal('task-modal');
+}
+async function confirmCancelOrder(key){
+  const o=orders[key];if(!o)return;
+  if(!guardWrite(canEditOrderComposition(),'⚠️ إلغاء الطلب متاح للمدير أو موظف الاستقبال فقط'))return;
+  const reason=(document.getElementById('cancel-reason-input')?.value||'').trim();
+  if(!reason){toast('⚠️ يرجى كتابة سبب الإلغاء');return;}
+  showSaving('جاري الإلغاء...');
+  try{
+    await fbPatch(`orders/${key}`,{cancelled:true,cancelledAt:new Date().toISOString(),cancelledBy:cu.name,cancelReason:reason});
+    logOrderActivity(key,'ti-ban',`⛔ ${cu.name} ألغى الطلب — السبب: ${reason}`,{'الحالة عند الإلغاء':(WF_DEPT_META[o.currentDept]||{label:o.currentDept}).label||o.currentDept,'السبب':reason});
+    await loadData();hideSaving();closeModal('task-modal');closeModal('order-modal');
+    toast('✓ تم إلغاء الطلب');refreshCurrentPage();
+  }catch(e){hideSaving();toast('❌ فشل الإلغاء، حاول مرة أخرى');}
+}
+async function reopenCancelledOrder(key){
+  const o=orders[key];if(!o)return;
+  if(!guardWrite(canEditOrderComposition(),'⚠️ هذا الإجراء غير متاح لك'))return;
+  if(!confirm(`إعادة فتح الطلب "${o.id||key}" وإرجاعه لقائمة الأعمال النشطة؟`))return;
+  showSaving('جاري إعادة الفتح...');
+  try{
+    await fbPatch(`orders/${key}`,{cancelled:false,cancelledAt:null,cancelledBy:null,cancelReason:null});
+    logOrderActivity(key,'ti-rotate','↩️ '+cu.name+' ألغى حالة الإلغاء وأعاد فتح الطلب');
+    await loadData();hideSaving();closeModal('order-modal');
+    toast('✓ تم إعادة فتح الطلب');refreshCurrentPage();
+  }catch(e){hideSaving();toast('❌ فشل التحديث');}
 }
 // ============================================================
 // ADD ORDER FORM
