@@ -53,7 +53,7 @@
   --header-h:     64px;
 }
 *{box-sizing:border-box;margin:0;padding:0;}
-body{font-family:'Cairo','Segoe UI',Tahoma,Arial,sans-serif;background:var(--bg);min-height:100vh;color:var(--text-1);line-height:1.5;}
+body{font-family:'Cairo','Segoe UI',Tahoma,Arial,sans-serif;background:var(--bg);min-height:100vh;color:var(--text-1);line-height:1.5;overflow-x:hidden;}
 .site-watermark{position:fixed;inset:0;z-index:-1;display:flex;align-items:center;justify-content:center;pointer-events:none;user-select:none;overflow:hidden;}
 .site-watermark span{font-family:'Changa','Segoe UI',sans-serif;font-weight:800;font-size:min(55vw,620px);line-height:1;color:var(--maroon);opacity:.045;position:relative;display:block;}
 .site-watermark span::after{content:'';position:absolute;top:8%;left:16%;width:2.5%;height:70%;background:var(--gold);border-radius:4px;opacity:.6;}
@@ -794,6 +794,8 @@ input[type="password"]{direction:rtl;text-align:right;padding-left:40px;padding-
 .chat-attach-grid{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;}
 .chat-attach-thumb{width:84px;height:84px;border-radius:8px;overflow:hidden;cursor:zoom-in;border:1px solid rgba(255,255,255,.25);flex-shrink:0;}
 .chat-msg.other .chat-attach-thumb{border-color:var(--border);}
+.chat-attach-remove-btn{position:absolute;top:-6px;left:-6px;width:20px;height:20px;border-radius:50%;background:#DC2626;color:#fff;border:2px solid var(--surface);display:flex;align-items:center;justify-content:center;font-size:11px;cursor:pointer;padding:0;z-index:2;}
+.chat-attach-remove-btn:hover{background:#B91C1C;}
 .chat-attach-thumb img{width:100%;height:100%;object-fit:cover;display:block;}
 .chat-lightbox-overlay{position:fixed;inset:0;background:rgba(0,0,0,.85);display:none;align-items:center;justify-content:center;flex-direction:column;z-index:99999;padding:30px;}
 .chat-lightbox-overlay.open{display:flex;}
@@ -826,6 +828,7 @@ input[type="password"]{direction:rtl;text-align:right;padding-left:40px;padding-
 .dept-upload-box{background:var(--surface-2);border:2px dashed var(--border);border-radius:var(--radius-md);padding:16px;margin-top:10px;cursor:pointer;text-align:center;transition:.15s;}
 .dept-upload-box:hover{border-color:var(--gold);background:var(--gold-soft);}
 .dept-upload-title{font-size:12px;font-weight:700;color:var(--maroon);margin-bottom:10px;display:flex;align-items:center;gap:6px;}
+.dept-upload-note{width:100%;min-height:40px;font-size:11.5px;margin-top:6px;border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:7px 9px;font-family:inherit;background:var(--surface);cursor:text;text-align:right;}
 /* ============================================================ ITEM WORKSPACE — file kind cards */
 .ik-page-wrap{max-width:900px;margin:0 auto;}
 .ik-kind-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;}
@@ -924,11 +927,17 @@ input[type="password"]{direction:rtl;text-align:right;padding-left:40px;padding-
 .dept-load-track{height:6px;border-radius:5px;background:var(--surface-2);border:1px solid var(--border-soft);overflow:hidden;}
 .dept-load-fill{height:100%;border-radius:5px;transition:width .3s;}
 /* Section A — unified multi-department workload overview */
-.wl-dash-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;padding:12px 16px;}
-.wl-dash-card{background:var(--surface-2);border:1px solid var(--border-soft);border-radius:12px;padding:12px 14px;cursor:pointer;transition:.15s;}
+/* 5 fixed department columns (design/external/print/workshop/delivery) so
+   the row always aligns evenly instead of wrapping unevenly with
+   auto-fill's variable column count; collapses at narrower widths below. */
+.wl-dash-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;padding:12px 16px;}
+@media (max-width:1100px){.wl-dash-grid{grid-template-columns:repeat(3,1fr);}}
+@media (max-width:720px){.wl-dash-grid{grid-template-columns:repeat(2,1fr);}}
+@media (max-width:480px){.wl-dash-grid{grid-template-columns:1fr;}}
+.wl-dash-card{background:var(--surface-2);border:1px solid var(--border-soft);border-radius:12px;padding:12px 14px;cursor:pointer;transition:.15s;min-width:0;}
 .wl-dash-card:hover{box-shadow:0 4px 14px rgba(0,0,0,.08);border-color:var(--gold);}
 .wl-dash-card-head{display:flex;align-items:center;gap:9px;margin-bottom:10px;}
-.wl-dash-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;}
+.wl-dash-stats{display:grid;grid-template-columns:repeat(2,1fr);gap:4px;}
 .wl-dash-stat{text-align:center;background:var(--surface);border:1px solid var(--border-soft);border-radius:8px;padding:6px 2px;}
 .wl-dash-stat i{font-size:13px;}
 .wl-dash-stat-val{font-size:15px;font-weight:800;line-height:1.3;}
@@ -1167,7 +1176,14 @@ body.has-ticker .upload-queue-widget{bottom:48px;}
   .wf-card-top{padding:10px 10px 8px;}
   .wf-card-id{font-size:8.5px;margin-bottom:2px;}
 }
-@media(max-width:520px){
+/* Off-canvas sidebar drawer — previously only kicked in below 520px, so
+   every tablet and landscape-phone width from 521px to 900px got neither
+   this drawer NOR the desktop collapsible rail (.sb-collapse-toggle, which
+   only hides below 900px) — the sidebar just sat there full-width with no
+   way to reach or hide it, squeezing the page content into a narrow column.
+   Matching this breakpoint to that same 900px makes the handoff between
+   "desktop rail" and "mobile drawer" continuous with no dead zone. */
+@media(max-width:900px){
   .sidebar{position:fixed;right:-260px;top:var(--header-h);height:calc(100vh - var(--header-h));z-index:90;transition:right .25s;box-shadow:var(--shadow-lg);}
   .sidebar.open{right:0;}
   /* The full-width fixed global-ticker bar (z-index 190, above the sidebar's
@@ -1175,13 +1191,16 @@ body.has-ticker .upload-queue-widget{bottom:48px;}
      item while it's open — shorten the sidebar's own height to stop just
      above the ticker instead. */
   body.has-ticker .sidebar{height:calc(100vh - var(--header-h) - 36px);}
+  .menu-toggle{display:block;}
+}
+@media(max-width:520px){
   .main{padding:14px;}
   .header{padding:0 14px;}
+  .modal-box{padding:16px;width:92%;max-height:94vh;}
   .brand-text .brand-ar{font-size:13px;}
   th,td{padding:10px 8px;font-size:11px;}
   .wf-grid{grid-template-columns:1fr;}
   table{table-layout:auto;}
-  .menu-toggle{display:block;}
   .stats-row{grid-template-columns:1fr 1fr;}
   .partial-fields{grid-template-columns:1fr;}
   /* Chat input row (order chat / item feedback / team chat): text input +
@@ -2611,7 +2630,14 @@ async function enterApp(u){
   // an action themselves (advancing a stage, reverting, etc.) still sees it
   // instantly, since every mutation already calls refreshCurrentPage()
   // itself right after saving.
-  setInterval(async()=>{await loadData();renderStarTicker();},20000);
+  setInterval(async()=>{
+    await loadData();renderStarTicker();
+    // The notification panel's own list is otherwise static once opened —
+    // if it's still open when a new one arrives mid-poll, refresh just its
+    // body (not the page behind it) so it shows up without the user having
+    // to close and reopen the bell.
+    if(document.getElementById('notif-modal')?.classList.contains('open'))renderNotifPanelBody();
+  },20000);
 }
 function logout(){localStorage.removeItem(SESSION_KEY);sessionStorage.removeItem(SESSION_KEY);location.reload();}
 // ============================================================
@@ -2989,15 +3015,20 @@ function notifTimeAgo(iso){
 }
 function renderNotifPanelBody(){
   const filter=window._notifFilter||'all';
-  const derived=getNotifications().map(n=>({...n,isEvent:false}));
-  const events=myEventNotifs().map(n=>({type:n.type,msg:n.message,key:n.orderKey,color:(NOTIF_TYPE_META[n.type]||{}).color||'#475569',isEvent:true,createdAt:n.createdAt}));
+  // Captured before openNotifPanel()'s mark-all-read call fires, so unread
+  // events (a chat reply, an upload, a transfer, ...) still render visibly
+  // distinct from already-read ones for this one render — otherwise every
+  // row looked identical regardless of whether it was actually new.
+  const lastSeen=getNotifLastSeen();
+  const derived=getNotifications().map(n=>({...n,isEvent:false,isUnread:false}));
+  const events=myEventNotifs().map(n=>({type:n.type,msg:n.message,key:n.orderKey,color:(NOTIF_TYPE_META[n.type]||{}).color||'#475569',isEvent:true,createdAt:n.createdAt,isUnread:n.createdAt>lastSeen}));
   let all=[...derived,...events];
   if(filter!=='all')all=all.filter(n=>n.type===filter);
   const body=document.getElementById('notif-panel-body');
   if(all.length===0){body.innerHTML='<div style="text-align:center;color:var(--text-3);padding:30px;"><i class="ti ti-check" style="font-size:36px;color:#10B981;display:block;margin-bottom:10px;"></i>لا توجد تنبيهات</div>';return;}
-  body.innerHTML=all.map(n=>`<div style="display:flex;align-items:center;gap:10px;padding:13px 4px;border-bottom:1px solid var(--border-soft);cursor:pointer;" onclick="markEventNotifsRead();updateNotifBell();closeModal('notif-modal');${n.key?`openOrderPage('${n.key}')`:''}">
-    <div style="width:10px;height:10px;border-radius:50%;background:${n.color};flex-shrink:0;"></div>
-    <div style="flex:1;"><div style="font-size:13px;font-weight:600;color:var(--text-1)">${n.msg}</div>${n.isEvent?`<div style="font-size:10.5px;color:var(--text-3);margin-top:2px;">${notifTimeAgo(n.createdAt)}</div>`:''}</div>
+  body.innerHTML=all.map(n=>`<div style="display:flex;align-items:center;gap:10px;padding:13px 4px;border-bottom:1px solid var(--border-soft);cursor:pointer;${n.isUnread?'background:var(--gold-soft,#FDF4E3);':''}" onclick="markEventNotifsRead();updateNotifBell();closeModal('notif-modal');${n.key?`openOrderPage('${n.key}')`:''}">
+    <div style="width:10px;height:10px;border-radius:50%;background:${n.color};flex-shrink:0;${n.isUnread?'box-shadow:0 0 0 3px '+n.color+'33;':''}"></div>
+    <div style="flex:1;"><div style="font-size:13px;font-weight:${n.isUnread?'800':'600'};color:var(--text-1)">${n.msg}${n.isUnread?' <span class="badge b-urg" style="font-size:8.5px;vertical-align:middle;">جديد</span>':''}</div>${n.isEvent?`<div style="font-size:10.5px;color:var(--text-3);margin-top:2px;">${notifTimeAgo(n.createdAt)}</div>`:''}</div>
   </div>`).join('');
 }
 function setNotifFilter(f){window._notifFilter=f;renderNotifPanelBody();}
@@ -4726,6 +4757,9 @@ function saveItemKindFiles(key,idx,kind,inputId){
   if(cu.type!=='admin'&&!isMyItem(o,it)){toast('⚠️ هذا الإجراء غير متاح لك');return;}
   const files=Array.from(el.files);
   el.value=''; // clear now so re-selecting the same file(s) while this upload is still running fires onchange again
+  const noteEl=document.getElementById(inputId+'-note');
+  const noteVal=noteEl?noteEl.value.trim():'';
+  if(noteEl)noteEl.value='';
   const label=(files.length>1?`${files.length} ملفات — `:'')+(it.name||'بند');
   runQueuedUpload(label,async onProgress=>{
     const uploaded=[];
@@ -4738,7 +4772,7 @@ function saveItemKindFiles(key,idx,kind,inputId){
   },async uploaded=>{
     const o2=orders[key];if(!o2)return;
     if(!o2.orderItems||!o2.orderItems[idx])return;
-    const newVersion={id:'v'+Date.now(),label:ITEM_KIND_LABELS[kind]||kind,status:'قيد التنفيذ',stage:itemCurrentDept(o2.orderItems[idx],o2),kind,files:uploaded,notes:'',createdBy:cu.name,createdAt:new Date().toISOString()};
+    const newVersion={id:'v'+Date.now(),label:ITEM_KIND_LABELS[kind]||kind,status:'قيد التنفيذ',stage:itemCurrentDept(o2.orderItems[idx],o2),kind,files:uploaded,notes:noteVal,createdBy:cu.name,createdAt:new Date().toISOString()};
     const items=[...o2.orderItems];
     const priorVersions=priorVersionsForWrite(items[idx]);
     // A fresh design_proof/design_approved upload resolves whatever client
@@ -4770,7 +4804,7 @@ function saveItemKindFiles(key,idx,kind,inputId){
       }
     }
     await fbPatch(`orders/${key}`,upd);
-    logOrderActivity(key,'ti-upload',`📤 تم رفع ${ITEM_KIND_LABELS[kind]||kind}: ${uploaded.map(u=>u.name).join('، ')} — البند "${items[idx].name||'بند'}"`);
+    logOrderActivity(key,'ti-upload',`📤 تم رفع ${ITEM_KIND_LABELS[kind]||kind}: ${uploaded.map(u=>u.name).join('، ')} — البند "${items[idx].name||'بند'}"${noteVal?' — ملاحظة: '+noteVal:''}`,noteVal?{'البند':items[idx].name||'بند','الملاحظة':noteVal}:null);
     await loadData();
     toast(autoAdvanced?'✓ تم الاعتماد — تم نقل البند تلقائياً للمرحلة التالية':'✓ تم رفع الملف');
     // This upload box is used from three different surfaces (the standalone
@@ -5589,11 +5623,9 @@ function buildDeptWorkloadHtml(){
   const countMode=(workloadSettings&&workloadSettings.countMode)||'items';
   const canConfigure=cu.type==='admin';
   const cardsHtml=workloadDeptList().map(d=>{
-    const{current,upcoming,completed}=computeDeptWorkload(d.key);
-    const overdue=current.filter(e=>isOrderOverdue(e.o));
-    const waiting=current.filter(e=>deptWaitingReason(e,d.key));
+    const{current,upcoming}=computeDeptWorkload(d.key);
     const team=getDeptWorkers(d.key);
-    const curN=workloadCount(current,countMode),upN=workloadCount(upcoming,countMode),ovN=workloadCount(overdue,countMode),waN=workloadCount(waiting,countMode);
+    const curN=workloadCount(current,countMode),upN=workloadCount(upcoming,countMode);
     const threshold=workloadThreshold(d.key);
     const level=workloadLevel(curN,threshold);
     const stat=(icon,label,val,color)=>`<div class="wl-dash-stat"><i class="ti ${icon}" style="color:${color};"></i><div class="wl-dash-stat-val" style="color:${color};">${val}</div><div class="wl-dash-stat-lbl">${label}</div></div>`;
@@ -5607,10 +5639,8 @@ function buildDeptWorkloadHtml(){
         <span class="badge" style="background:${level.color}1A;color:${level.color};font-weight:800;" title="تقدير تقريبي بعدد الطلبات/البنود — ليس قياساً للطاقة الإنتاجية الفعلية">${level.label}</span>
       </div>
       <div class="wl-dash-stats">
-        ${stat('ti-player-play','الحالي',curN,d.color)}
-        ${stat('ti-clock-hour-4','قادم',upN,'#64748B')}
-        ${stat('ti-alert-triangle','متأخر',ovN,ovN>0?'#DC2626':'#94A3B8')}
-        ${stat('ti-hourglass','بانتظار إجراء',waN,waN>0?'#D97706':'#94A3B8')}
+        ${stat('ti-player-play','الأعمال الحالية',curN,d.color)}
+        ${stat('ti-clock-hour-4','الأعمال القادمة',upN,'#64748B')}
       </div>
     </div>`;
   }).join('');
@@ -7850,7 +7880,8 @@ function renderItemKindBox(it,key,idx,kind,dept,canAct,labelOverride){
     </div>
     <div id="${filesWrapId}">${filesHtml||'<div class="ik-empty">لا توجد ملفات بعد</div>'}</div>
     ${canAct?`<label class="ik-dropzone" for="${inputId}"><i class="ti ti-cloud-upload"></i> ${hasFiles?'استبدال / إضافة ملف':'اضغط لرفع الملف'}</label>
-    <input type="file" multiple id="${inputId}" style="display:none" accept="*/*" onchange="saveItemKindFiles('${key}',${idx},'${kind}','${inputId}')"/>`:''}
+    <input type="file" multiple id="${inputId}" style="display:none" accept="*/*" onchange="saveItemKindFiles('${key}',${idx},'${kind}','${inputId}')"/>
+    <textarea id="${inputId}-note" class="dept-upload-note" placeholder="ملاحظة اختيارية مع هذا الملف (اختياري)..."></textarea>`:''}
   </div>`;
 }
 function buildItemWorkspacePage(){
@@ -11275,6 +11306,7 @@ function buildOrderDetailsPage(){
       if(_isProofQt){
         uploadArea=`<div class="dept-upload-box"><div class="dept-upload-title" style="color:#6B21A8"><i class="ti ti-brush"></i> ملف البروفة النهائي المرسل للعميل</div>
         <input type="file" multiple id="f-print-input" accept="${_designFormats}" onchange="uploadFileDirect('${key}','approvedPrintFile','approvedPrintFileName','f-print-input')"/>
+        <textarea id="f-print-input-note" class="dept-upload-note" placeholder="ملاحظة اختيارية مع الملف (اختياري)..."></textarea>
         ${renderApprovalFileList(o,key,'approvedPrintFile',canAct)}
       </div>`;
       }else if(!_printActive&&_workshopActive){
@@ -11283,13 +11315,13 @@ function buildOrderDetailsPage(){
         // full "approved design + separate production file" combo the
         // printing-involved paths use.
         uploadArea=`<div class="dept-upload-box"><div class="dept-upload-title" style="color:#6B21A8"><i class="ti ti-brush"></i> ملف التصميم المطلوب</div>
-        <div class="fg"><label>بروفة تصميم معتمدة:</label><input type="file" multiple id="f-workshop-input" accept="${_designFormats}" onchange="uploadFileDirect('${key}','approvedWorkshopFile','approvedWorkshopFileName','f-workshop-input')"/>${renderApprovalFileList(o,key,'approvedWorkshopFile',canAct)}</div>
+        <div class="fg"><label>بروفة تصميم معتمدة:</label><input type="file" multiple id="f-workshop-input" accept="${_designFormats}" onchange="uploadFileDirect('${key}','approvedWorkshopFile','approvedWorkshopFileName','f-workshop-input')"/><textarea id="f-workshop-input-note" class="dept-upload-note" placeholder="ملاحظة اختيارية مع الملف (اختياري)..."></textarea>${renderApprovalFileList(o,key,'approvedWorkshopFile',canAct)}</div>
       </div>`;
       }else if(_printActive){
         uploadArea=`<div class="dept-upload-box"><div class="dept-upload-title" style="color:#6B21A8"><i class="ti ti-brush"></i> ملفات التصميم المطلوبة</div>
-        <div class="fg" style="margin-bottom:10px"><label>الملف المعتمد للتصميم:</label><input type="file" multiple id="f-designapproved-input" accept="${_designFormats}" onchange="uploadFileDirect('${key}','clientApprovalImage','clientApprovalImageName','f-designapproved-input')"/>${renderApprovalFileList(o,key,'clientApprovalImage',canAct)}</div>
-        <div class="fg" style="margin-bottom:10px"><label>بروفة التصميم:</label><input type="file" multiple id="f-print-input" accept="${_designFormats}" onchange="uploadFileDirect('${key}','approvedPrintFile','approvedPrintFileName','f-print-input')"/>${renderApprovalFileList(o,key,'approvedPrintFile',canAct)}</div>
-        ${_workshopActive?`<div class="fg"><label>ملف الإنتاج للورشة:</label><input type="file" multiple id="f-workshop-input" accept="${_designFormats}" onchange="uploadFileDirect('${key}','approvedWorkshopFile','approvedWorkshopFileName','f-workshop-input')"/>${renderApprovalFileList(o,key,'approvedWorkshopFile',canAct)}</div>`:''}
+        <div class="fg" style="margin-bottom:10px"><label>الملف المعتمد للتصميم:</label><input type="file" multiple id="f-designapproved-input" accept="${_designFormats}" onchange="uploadFileDirect('${key}','clientApprovalImage','clientApprovalImageName','f-designapproved-input')"/><textarea id="f-designapproved-input-note" class="dept-upload-note" placeholder="ملاحظة اختيارية مع الملف (اختياري)..."></textarea>${renderApprovalFileList(o,key,'clientApprovalImage',canAct)}</div>
+        <div class="fg" style="margin-bottom:10px"><label>بروفة التصميم:</label><input type="file" multiple id="f-print-input" accept="${_designFormats}" onchange="uploadFileDirect('${key}','approvedPrintFile','approvedPrintFileName','f-print-input')"/><textarea id="f-print-input-note" class="dept-upload-note" placeholder="ملاحظة اختيارية مع الملف (اختياري)..."></textarea>${renderApprovalFileList(o,key,'approvedPrintFile',canAct)}</div>
+        ${_workshopActive?`<div class="fg"><label>ملف الإنتاج للورشة:</label><input type="file" multiple id="f-workshop-input" accept="${_designFormats}" onchange="uploadFileDirect('${key}','approvedWorkshopFile','approvedWorkshopFileName','f-workshop-input')"/><textarea id="f-workshop-input-note" class="dept-upload-note" placeholder="ملاحظة اختيارية مع الملف (اختياري)..."></textarea>${renderApprovalFileList(o,key,'approvedWorkshopFile',canAct)}</div>`:''}
       </div>`;
       }
     }
@@ -11310,14 +11342,14 @@ function buildOrderDetailsPage(){
     // the same box instead of a separate field) as multiple files at once.
     else if(o.currentDept==='workshop')uploadArea=`<div class="dept-upload-box"><div class="dept-upload-title" style="color:#9A3412"><i class="ti ti-tools"></i> الإنجاز النهائي</div>
       <input type="file" multiple id="f-done-input" accept="*/*" onchange="uploadFileDirect('${key}','finalWorkshopDoneFile','finalWorkshopDoneFileName','f-done-input')"/>
-      <textarea id="f-done-input-note" placeholder="ملاحظة اختيارية مع الملف المرفوع (مثال: تم التركيب بموقع العميل)..." style="min-height:44px;font-size:11.5px;margin-top:6px;"></textarea>
+      <textarea id="f-done-input-note" class="dept-upload-note" placeholder="ملاحظة اختيارية مع الملف المرفوع (مثال: تم التركيب بموقع العميل)..."></textarea>
       ${renderApprovalFileList(o,key,'finalWorkshopDoneFile',canAct)}
     </div>`;
     else if(o.currentDept==='external'){
       const _extMode=o.externalMode||'both';
       uploadArea=`<div class="dept-upload-box"><div class="dept-upload-title" style="color:#713F12"><i class="ti ti-world"></i> تحديث التنفيذ الخارجي</div>
       ${_extMode!=='files'?`<div class="fg"><label>التعليمات/الملاحظات</label><textarea id="f-ext-note-input" style="min-height:55px;font-size:12px;">${esc(o.externalNote||'')}</textarea><button class="btn btn-out btn-xs" style="margin-top:6px;" onclick="saveExternalNote('${key}')"><i class="ti ti-device-floppy"></i> حفظ الملاحظة</button></div>`:''}
-      ${_extMode!=='text'?`<div class="fg"><label>ملف التوريد</label><input type="file" id="f-ext-input" accept="*/*" onchange="uploadFileDirect('${key}','externalFile','externalFileName','f-ext-input')"/><textarea id="f-ext-input-note" placeholder="ملاحظة اختيارية مع ملف التوريد (مثال: تأكيد المورد، رقم الشحنة)..." style="min-height:44px;font-size:11.5px;margin-top:6px;"></textarea></div>`:''}
+      ${_extMode!=='text'?`<div class="fg"><label>ملف التوريد</label><input type="file" id="f-ext-input" accept="*/*" onchange="uploadFileDirect('${key}','externalFile','externalFileName','f-ext-input')"/><textarea id="f-ext-input-note" class="dept-upload-note" placeholder="ملاحظة اختيارية مع ملف التوريد (مثال: تأكيد المورد، رقم الشحنة)..."></textarea></div>`:''}
       </div>`;
     }
   }
@@ -11502,7 +11534,7 @@ function openAddItemModal(key,editIdx){
         <div class="dept-upload-box" onclick="document.getElementById('new-item-file-input').click()"><i class="ti ti-upload" style="font-size:20px;color:var(--gold);"></i><br>اضغط لإرفاق ملف أو أكثر</div>
         <input type="file" id="new-item-file-input" style="display:none" accept="*/*" multiple onchange="handleNewItemFiles(this.files,'${key}')"/>
         <div id="new-item-file-note" style="font-size:11px;color:#10B981;margin-top:4px;font-weight:700;">${window._newItemFiles.length?'✓ '+window._newItemFiles.length+' ملف مرفق':''}</div>
-        <div id="new-item-files-preview">${chatAttachmentsHtml(window._newItemFiles)}</div>
+        <div id="new-item-files-preview">${newItemFilesPreviewHtml()}</div>
       </div>
       ${(isEdit&&itemVersions(existing).length)?`<div class="fg">
         <label>كل الملفات والإصدارات والبروفات السابقة على هذا البند</label>
@@ -11536,8 +11568,33 @@ function handleNewItemFiles(files,orderKey){
     const note=document.getElementById('new-item-file-note');
     if(note)note.textContent='✓ تم إرفاق '+window._newItemFiles.length+' ملف';
     const preview=document.getElementById('new-item-files-preview');
-    if(preview)preview.innerHTML=chatAttachmentsHtml(window._newItemFiles);
+    if(preview)preview.innerHTML=newItemFilesPreviewHtml();
   });
+}
+// Same thumbnail/link rendering as chatAttachmentsHtml(), but each item gets
+// a small remove (×) button — used only for the add/edit-item modal's own
+// pending-files preview (window._newItemFiles), where files are still
+// editable before the item is saved, unlike chatAttachmentsHtml()'s other,
+// read-only call sites (sent chat messages, past version history, etc.).
+function newItemFilesPreviewHtml(){
+  const files=window._newItemFiles||[];
+  if(!files.length)return'';
+  return `<div class="chat-attach-grid">${files.map((f,i)=>{
+    if(!f||!f.data)return'';
+    const inner=chatIsImageFile(f)?`<div class="chat-attach-thumb" onclick="openChatImageLightbox('${f.data}','${encodeURIComponent(f.name||'صورة')}')" title="${esc(f.name||'')}"><img src="${cloudinaryThumb(f.data,160)}" loading="lazy"/></div>`
+      :chatIsVideoFile(f)?`<div class="chat-attach-thumb" onclick="openFilePreviewLightbox('${f.data}','${encodeURIComponent(f.name||'فيديو')}',false)" title="${esc(f.name||'')}" style="display:flex;align-items:center;justify-content:center;background:#000;"><i class="ti ti-player-play" style="color:#fff;font-size:26px;"></i></div>`
+      :fileLinkHtml(f.name,f.data);
+    return `<div style="position:relative;">${inner}<button type="button" class="chat-attach-remove-btn" onclick="event.stopPropagation();removeNewItemFile(${i})" title="إزالة هذا المرفق"><i class="ti ti-x"></i></button></div>`;
+  }).join('')}</div>`;
+}
+function removeNewItemFile(idx){
+  if(!window._newItemFiles||!window._newItemFiles.length)return;
+  if(!confirm('إزالة هذا المرفق من البند؟'))return;
+  window._newItemFiles.splice(idx,1);
+  const note=document.getElementById('new-item-file-note');
+  if(note)note.textContent=window._newItemFiles.length?'✓ '+window._newItemFiles.length+' ملف مرفق':'';
+  const preview=document.getElementById('new-item-files-preview');
+  if(preview)preview.innerHTML=newItemFilesPreviewHtml();
 }
 async function submitNewOrderItem(key){
   const o=orders[key];if(!o)return;
@@ -11561,8 +11618,12 @@ async function submitNewOrderItem(key){
   showSaving(isEdit?'جاري حفظ التعديلات...':'جاري الإضافة...');
   try{
     const items=Array.isArray(o.orderItems)?[...o.orderItems]:[];
+    let _removedFileNames=[];
     if(isEdit){
       const prev=items[editIdx]||{};
+      const prevFileNames=(prev.files||[]).map(f=>f&&f.name).filter(Boolean);
+      const newFileNames=(window._newItemFiles||[]).map(f=>f&&f.name).filter(Boolean);
+      _removedFileNames=prevFileNames.filter(n=>!newFileNames.includes(n));
       // Dual pricing is for new/newly-touched data only — never backfilled
       // onto an old item just because it happened to get edited for an
       // unrelated reason (qty, notes, etc.). Only written here if the user
@@ -11594,6 +11655,7 @@ async function submitNewOrderItem(key){
     }
     await fbPatch(`orders/${key}`,upd);
     logOrderActivity(key,isEdit?'ti-edit':'ti-square-rounded-plus',isEdit?`تم تعديل البند: ${name}`:`تمت إضافة بند جديد: ${name}`);
+    if(_removedFileNames.length)logOrderActivity(key,'ti-trash',`🗑 ${cu.name} حذف ${_removedFileNames.length} مرفق من البند "${name}": ${_removedFileNames.join('، ')}`,{'البند':name,'المرفقات المحذوفة':_removedFileNames.join('، ')});
     await loadData();
     hideSaving();closeModal('add-item-modal');
     toast(isEdit?'✓ تم حفظ التعديلات — تم تحديث الطلب':'✓ تم إضافة البند الجديد — تم تحديث الطلب');
