@@ -4283,20 +4283,44 @@ function renderReturnTargetOptions(key){
   const scopeSel=document.getElementById('ret-scope-'+key);
   const scopeVal=scopeSel?scopeSel.value:'order';
   const seq=getActiveDepts(o);
-  let fullSeq,curIdx;
+  // 'delivery' sits past the end of getActiveDepts() by design (it's a
+  // universal order-level gate, not a per-order production stage — see
+  // itemDeptSeq()) — included here only to correctly LOCATE a current
+  // position that has reached it, never as an item-level return target.
+  const fullSeq=[...seq,'delivery'];
+  let effectiveDept;
   if(scopeVal==='order'){
-    // Items never sit at 'delivery' (it's order-level only), but the ORDER
-    // itself can — include it as a valid return target for an order that
-    // already reached delivery/done.
-    fullSeq=[...seq,'delivery'];
-    curIdx=o.currentDept==='done'?fullSeq.length:fullSeq.indexOf(o.currentDept);
+    effectiveDept=o.currentDept;
   }else{
     const it=(o.orderItems||[])[parseInt(scopeVal,10)];
-    fullSeq=seq;
-    curIdx=it?seq.indexOf(itemCurrentDept(it,o)):-1;
+    // itemCurrentDept() falls back to the ORDER's own currentDept whenever
+    // the item has no individual override — which, once the order reaches
+    // delivery/done, IS 'delivery'/'done', neither of which exists in `seq`.
+    // The previous version only ever searched within `seq`, so that lookup
+    // silently came back -1 and got clamped to "at the very start" (curIdx
+    // 0) — showing "no previous stage" for an item that, in reality, could
+    // still be returned to any of the production stages it had already
+    // passed through. Searching `fullSeq` instead resolves that position
+    // correctly for both an item with its own currentDept and one that's
+    // only ever followed the order's.
+    effectiveDept=it?itemCurrentDept(it,o):o.currentDept;
   }
+  const resolveIdx=dept=>dept==='done'?fullSeq.length:fullSeq.indexOf(dept);
+  let curIdx=resolveIdx(effectiveDept);
+  // A genuinely stale value (e.g. a dept dropped from the order's
+  // workflowOrder after this item last recorded a stage there) still
+  // resolves to -1 even against fullSeq — falling back to 0 in that case
+  // would wrongly claim "no previous stage" again. The order's own current
+  // position is a far more reasonable stand-in than assuming the very start.
+  if(curIdx===-1)curIdx=resolveIdx(o.currentDept);
   if(curIdx===-1)curIdx=0;
-  const options=fullSeq.slice(0,curIdx).map(dk=>`<option value="${dk}">${esc((WF_DEPT_META[dk]||{label:dk}).label)}</option>`);
+  // An item itself never actually sits AT 'delivery' (only the order does),
+  // so even when curIdx resolves past the end of `seq` (inherited from a
+  // done/delivery order), its own list of return targets is capped to the
+  // real production stages — delivery is only ever offered as a target for
+  // the whole-order scope above.
+  const sliceEnd=scopeVal==='order'?curIdx:Math.min(curIdx,seq.length);
+  const options=fullSeq.slice(0,sliceEnd).map(dk=>`<option value="${dk}">${esc((WF_DEPT_META[dk]||{label:dk}).label)}</option>`);
   wrap.innerHTML=options.length?`<select id="ret-target-${key}">${options.join('')}</select>`:'<div style="font-size:11.5px;color:var(--text-3);">لا توجد مرحلة سابقة يمكن الإرجاع إليها لهذا النطاق</div>';
 }
 async function confirmReturnOrder(key){
