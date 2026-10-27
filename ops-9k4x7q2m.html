@@ -1122,6 +1122,7 @@ input[type="password"]{direction:rtl;text-align:right;padding-left:40px;padding-
 .uq-bar-track{height:5px;border-radius:3px;background:var(--surface-2);overflow:hidden;}
 .uq-bar-fill{height:100%;background:linear-gradient(90deg,var(--maroon),var(--gold));border-radius:3px;transition:width .15s linear;}
 .uq-item-error-msg{font-size:10.5px;color:#DC2626;margin-top:5px;line-height:1.4;}
+.uq-item-meta{font-size:10px;color:var(--text-3);margin-top:4px;font-weight:700;}
 /* ============================================================ GLOBAL BOTTOM MARQUEE TICKER
    A true site-wide fixed bottom bar (edge-to-edge, height 36px) — lives in
    the persistent app shell alongside #toast/.upload-queue-widget, so it's
@@ -3313,11 +3314,46 @@ function clearUploadProgress(){
 // ============================================================
 // BACKGROUND UPLOAD QUEUE — floating widget, independent of showSaving()
 // ============================================================
-// Each entry: {id, fileName, progress, status:'uploading'|'done'|'error', errorMsg}.
-// runQueuedUpload() below is the actual entry point callers use — this array
-// and its render function are internal bookkeeping.
+// Each entry: {id, fileName, progress, status:'uploading'|'done'|'error', errorMsg,
+// totalBytes, startedAt, speedSamples}. runQueuedUpload() below is the
+// actual entry point callers use — this array and its render function are
+// internal bookkeeping.
 window._uploadQueue=[];
 let _uqIdSeq=1,_uqRenderRAF=null;
+// Human-readable transfer speed — "٢.٤ م.ب/ث" style granularity (KB/s below
+// 1MB/s, MB/s above), not raw bytes, since that's what's actually meaningful
+// to someone watching a multi-hundred-MB press file upload.
+function fmtBytesPerSec(bps){
+  if(!bps||bps<=0)return'';
+  if(bps<1024*1024)return(bps/1024).toFixed(0)+' ك.ب/ث';
+  return(bps/(1024*1024)).toFixed(1)+' م.ب/ث';
+}
+function fmtEtaSeconds(sec){
+  if(sec==null||!isFinite(sec)||sec<0)return'';
+  if(sec<5)return'ثوانٍ متبقية';
+  if(sec<60)return`متبقٍ ${Math.ceil(sec)} ثانية`;
+  const mins=Math.ceil(sec/60);
+  if(mins<60)return`متبقٍ ${mins} ${mins===1?'دقيقة':'دقائق'}`;
+  const hrs=(sec/3600).toFixed(1);
+  return`متبقٍ ${hrs} ساعة تقريباً`;
+}
+// Speed is smoothed over a short rolling window of recent progress ticks
+// (not just "bytes so far ÷ total elapsed") so one slow or stalled moment
+// early in a long upload doesn't permanently drag the displayed ETA down —
+// it reflects roughly how fast the transfer is going RIGHT NOW.
+function _uqComputeRate(u){
+  const now=Date.now();
+  const loadedBytes=u.totalBytes*(Math.max(0,Math.min(100,u.progress))/100);
+  u.speedSamples=(u.speedSamples||[]).filter(s=>now-s.t<8000);
+  u.speedSamples.push({t:now,bytes:loadedBytes});
+  if(u.speedSamples.length<2)return{speedBps:0,etaSec:null};
+  const first=u.speedSamples[0],last=u.speedSamples[u.speedSamples.length-1];
+  const dt=(last.t-first.t)/1000,db=last.bytes-first.bytes;
+  const speedBps=dt>0?db/dt:0;
+  const remaining=u.totalBytes-loadedBytes;
+  const etaSec=speedBps>0?remaining/speedBps:null;
+  return{speedBps,etaSec};
+}
 function _uqRender(){
   const wrap=document.getElementById('upload-queue-widget');if(!wrap)return;
   if(!window._uploadQueue.length){wrap.style.display='none';wrap.innerHTML='';return;}
@@ -3326,6 +3362,16 @@ function _uqRender(){
     const pct=Math.max(0,Math.min(100,Math.round(u.progress)));
     const statusLabel=u.status==='uploading'?`${pct}%`:u.status==='done'?'<i class="ti ti-circle-check"></i> تم الرفع':'<i class="ti ti-alert-circle"></i> فشل';
     const icon=u.status==='uploading'?'ti-loader-2':(u.status==='done'?'ti-circle-check':'ti-alert-circle');
+    // Speed/ETA are only meaningful once the file's total size is known
+    // (callers that upload several small files under one combined label
+    // don't always pass it) and once there's been enough progress to
+    // measure a rate from.
+    let metaLine='';
+    if(u.status==='uploading'&&u.totalBytes&&pct>0&&pct<100){
+      const{speedBps,etaSec}=_uqComputeRate(u);
+      const parts=[fmtBytesPerSec(speedBps),fmtEtaSeconds(etaSec)].filter(Boolean);
+      if(parts.length)metaLine=`<div class="uq-item-meta">${parts.join(' · ')}</div>`;
+    }
     return`<div class="uq-item${u.fadingOut?' fading':''}">
       <div class="uq-item-top">
         <span class="uq-item-name" title="${esc(u.fileName)}"><i class="ti ${icon}"></i> ${esc(u.fileName)}</span>
@@ -3335,6 +3381,7 @@ function _uqRender(){
         </span>
       </div>
       ${u.status==='uploading'?`<div class="uq-bar-track"><div class="uq-bar-fill" style="width:${pct}%;"></div></div>`:''}
+      ${metaLine}
       ${u.status==='error'?`<div class="uq-item-error-msg">${esc(u.errorMsg||'حدث خطأ')}</div>`:''}
     </div>`;
   }).join('');
@@ -3366,9 +3413,19 @@ function dismissUploadQueueItemAnimated(id){
 // must ALSO not assume anything about the current page (re-read `orders`
 // fresh, use _refreshOrderItemsViews()-style page-aware refresh dispatchers,
 // let already-defensive render functions no-op if their page isn't showing).
-function runQueuedUpload(label,uploadFn,onDone){
+// totalBytes is optional — when known (a single file's .size, or several
+// files summed), the queue widget shows live transfer speed and an ETA
+// alongside the percentage; omitted entirely, it just shows the percentage
+// as before. Most call sites set window._uqPendingTotalBytes=<bytes> on
+// the line right before calling this, rather than threading a 4th argument
+// through every one of them individually — simpler to review and harder to
+// get wrong than matching this call's own closing paren across callbacks
+// that span several lines.
+function runQueuedUpload(label,uploadFn,onDone,totalBytes){
   const id=_uqIdSeq++;
-  const entry={id,fileName:label,progress:0,status:'uploading'};
+  const resolvedTotal=totalBytes||window._uqPendingTotalBytes||null;
+  window._uqPendingTotalBytes=null;
+  const entry={id,fileName:label,progress:0,status:'uploading',totalBytes:resolvedTotal,speedSamples:[]};
   window._uploadQueue.push(entry);
   _uqRender();
   (async()=>{
@@ -3552,13 +3609,16 @@ const DRIVE_PROXY_URL='https://rawaee-drive-proxy.vercel.app/api/token';
 // instead of a silent multi-hour hang.
 const MAX_DRIVE_BYTES=2*1024*1024*1024;
 // Adaptive chunk size instead of one fixed value: each chunk's measured
-// throughput sizes the NEXT chunk, clamped to [2MB, 5MB] (all multiples of
+// throughput sizes the NEXT chunk, clamped to [2MB, 24MB] (all multiples of
 // 256KB, per Google's resumable-upload spec) — fast enough for real progress
 // events to keep landing every ~1s on typical connections, without paying a
 // too-small chunk's proportionally larger per-request overhead on a fast
-// line, or a too-large chunk's "stuck at X%" wait on a slow one.
+// line, or a too-large chunk's "stuck at X%" wait on a slow one. The upper
+// bound was 5MB — fine for a modest connection, but it hard-capped how fast
+// a genuinely fast one could ever go, since the adaptive sizer can't grow a
+// chunk past this ceiling no matter how quickly the previous one transferred.
 const DRIVE_CHUNK_MIN_BYTES=2*1024*1024;
-const DRIVE_CHUNK_MAX_BYTES=5*1024*1024;
+const DRIVE_CHUNK_MAX_BYTES=24*1024*1024;
 const DRIVE_CHUNK_TARGET_MS=1000;
 // Files at or under this size skip the resumable (initiate-session + chunk-
 // loop) flow entirely and go through a single multipart POST instead — see
@@ -3734,7 +3794,64 @@ function _driveUploadMultipart(file,parentId,accessToken,contentType,onProgress)
     xhr.send(body);
   });
 }
-const MAX_CHUNK_RETRIES=3;
+const MAX_CHUNK_RETRIES=4;
+// ============================================================
+// RESUMABLE-SESSION PERSISTENCE — survives a page reload, a closed tab, or a
+// long network outage, not just a single flaky chunk (which the per-chunk
+// retry loop below already covered). Keyed by a fingerprint of the file
+// itself (name+size+lastModified) rather than anything order-specific, so
+// re-selecting the exact same file — even from a fresh page load — resumes
+// the same Drive session instead of starting over from byte 0.
+// ============================================================
+function _driveResumeKey(file){
+  return 'gdriveResume_'+file.name+'_'+file.size+'_'+(file.lastModified||0);
+}
+function _driveSaveResumeState(key,sessionUri){
+  try{localStorage.setItem(key,JSON.stringify({sessionUri,savedAt:Date.now()}));}catch(e){}
+}
+function _driveLoadResumeState(key){
+  try{const raw=localStorage.getItem(key);return raw?JSON.parse(raw):null;}catch(e){return null;}
+}
+function _driveClearResumeState(key){
+  try{localStorage.removeItem(key);}catch(e){}
+}
+// Asks Google where a previously-started resumable session actually left
+// off, per the resumable-upload spec: a status-probe PUT with an empty body
+// and a Content-Range of "bytes */{total}" gets back either 200/201 (the
+// upload had actually already completed — e.g. the success response just
+// never reached the browser) or 308 with a Range header naming the last
+// byte it has ("bytes=0-N" — resume at N+1), or no Range header at all if
+// it has received nothing yet. Any other response means the session has
+// expired/is invalid (Google keeps these for about a week) — safest to
+// discard it and start a fresh one rather than trust a byte offset that
+// might not mean what it used to.
+async function _driveProbeResumableSession(sessionUri,totalBytes){
+  try{
+    const res=await fetchWithTimeout(sessionUri,{method:'PUT',headers:{'Content-Range':`bytes */${totalBytes}`}});
+    if(res.status===200||res.status===201){
+      const data=await res.json().catch(()=>null);
+      return{status:'complete',fileId:data&&data.id};
+    }
+    if(res.status===308){
+      const range=res.headers.get('Range');
+      const m=range&&/bytes=0-(\d+)/.exec(range);
+      return{status:'resume',offset:m?Number(m[1])+1:0};
+    }
+    return{status:'invalid'};
+  }catch(e){return{status:'invalid'};}
+}
+// A chunk attempt that fails because the browser is genuinely offline isn't
+// a real failure worth spending one of the limited MAX_CHUNK_RETRIES
+// attempts on — it waits here for the 'online' event instead (indefinitely;
+// the resumable session on Google's side is what makes that safe to do)
+// before the caller's normal retry/backoff logic even starts.
+function _waitForOnline(){
+  if(typeof navigator==='undefined'||navigator.onLine!==false)return Promise.resolve();
+  return new Promise(resolve=>{
+    const handler=()=>{window.removeEventListener('online',handler);resolve();};
+    window.addEventListener('online',handler);
+  });
+}
 // Files at/under DRIVE_MULTIPART_MAX_BYTES take the single-request path
 // (_driveUploadMultipart, with its own retry loop); larger files use the
 // original chunked + resumable flow — they still benefit from not needing
@@ -3760,46 +3877,78 @@ async function uploadToGoogleDrive(file,folderCtx,onProgress){
   if(file.size<=DRIVE_MULTIPART_MAX_BYTES){
     let attempt=0,lastErr=null;
     while(attempt<MAX_CHUNK_RETRIES){
+      await _waitForOnline();
       try{fileId=await _driveUploadMultipart(file,parentId,accessToken,contentType,onProgress);lastErr=null;break;}
       catch(e){lastErr=e;attempt++;if(attempt<MAX_CHUNK_RETRIES)await new Promise(r=>setTimeout(r,800*attempt));}
     }
     if(lastErr)throw new Error('⚠️ فشل رفع الملف إلى Google Drive بعد عدة محاولات، تحقق من الإنترنت وحاول مجدداً.');
   }else{
-    const metadata={name:file.name||('ملف_'+Date.now())};
-    if(parentId)metadata.parents=[parentId];
-    let initRes;
-    try{
-      initRes=await fetchWithTimeout('https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&fields=id',{
-        method:'POST',
-        headers:{Authorization:'Bearer '+accessToken,'Content-Type':'application/json; charset=UTF-8','X-Upload-Content-Type':contentType,'X-Upload-Content-Length':String(file.size)},
-        body:JSON.stringify(metadata)
-      });
-    }catch(netErr){throw new Error(netErr.name==='AbortError'?'⚠️ Google Drive لا يستجيب، حاول مجدداً.':'⚠️ تعذر الاتصال بـ Google Drive، تحقق من الإنترنت وحاول مجدداً.');}
-    if(!initRes.ok){throw new Error('⚠️ فشل بدء جلسة الرفع إلى Google Drive: HTTP '+initRes.status);}
-    const sessionUri=initRes.headers.get('Location');
-    if(!sessionUri)throw new Error('⚠️ تعذر إنشاء جلسة رفع قابلة للاستكمال على Google Drive.');
-    let start=0,chunkBytes=DRIVE_CHUNK_MIN_BYTES; // ramp up from a conservative first chunk
-    while(start<file.size){
-      const chunk=file.slice(start,Math.min(start+chunkBytes,file.size));
-      let attempt=0,lastErr=null,result=null;
-      while(attempt<MAX_CHUNK_RETRIES){
-        try{result=await _driveUploadChunk(sessionUri,chunk,start,file.size,contentType,start,onProgress);lastErr=null;break;}
-        catch(e){lastErr=e;attempt++;if(attempt<MAX_CHUNK_RETRIES)await new Promise(r=>setTimeout(r,800*attempt));}
-      }
-      if(lastErr)throw new Error('⚠️ فشل رفع الملف إلى Google Drive بعد عدة محاولات، تحقق من الإنترنت وحاول مجدداً.');
-      start+=chunk.size;
-      if(result.done){fileId=result.data&&result.data.id;break;}
-      // Size the NEXT chunk from this one's measured throughput, targeting
-      // ~DRIVE_CHUNK_TARGET_MS per request — steady progress-bar movement on
-      // whatever the connection actually turns out to be, rather than one
-      // fixed size guessed in advance.
-      if(result.elapsedMs>0){
-        const bytesPerMs=chunk.size/result.elapsedMs;
-        const target=Math.round(bytesPerMs*DRIVE_CHUNK_TARGET_MS/262144)*262144;
-        chunkBytes=Math.min(DRIVE_CHUNK_MAX_BYTES,Math.max(DRIVE_CHUNK_MIN_BYTES,target||DRIVE_CHUNK_MIN_BYTES));
-      }
+    const resumeKey=_driveResumeKey(file);
+    const saved=_driveLoadResumeState(resumeKey);
+    let sessionUri=null,start=0;
+    // A previous attempt on this exact file (same name/size/lastModified)
+    // may have left a session Google is still holding — ask it where that
+    // one actually left off instead of assuming either "nothing sent yet"
+    // or "safe to trust a locally-remembered byte count", since the two can
+    // drift (a chunk Google received but whose success response never made
+    // it back to the browser, for instance).
+    if(saved&&saved.sessionUri){
+      const probe=await _driveProbeResumableSession(saved.sessionUri,file.size);
+      if(probe.status==='complete'){fileId=probe.fileId;}
+      else if(probe.status==='resume'){sessionUri=saved.sessionUri;start=probe.offset;}
+      // 'invalid' (expired/unknown session) falls through to starting fresh below.
     }
-    if(!fileId)throw new Error('⚠️ فشل رفع الملف إلى Google Drive: لم يتم استلام تأكيد الاكتمال.');
+    if(!fileId&&!sessionUri){
+      const metadata={name:file.name||('ملف_'+Date.now())};
+      if(parentId)metadata.parents=[parentId];
+      let initRes;
+      try{
+        initRes=await fetchWithTimeout('https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&fields=id',{
+          method:'POST',
+          headers:{Authorization:'Bearer '+accessToken,'Content-Type':'application/json; charset=UTF-8','X-Upload-Content-Type':contentType,'X-Upload-Content-Length':String(file.size)},
+          body:JSON.stringify(metadata)
+        });
+      }catch(netErr){throw new Error(netErr.name==='AbortError'?'⚠️ Google Drive لا يستجيب، حاول مجدداً.':'⚠️ تعذر الاتصال بـ Google Drive، تحقق من الإنترنت وحاول مجدداً.');}
+      if(!initRes.ok){throw new Error('⚠️ فشل بدء جلسة الرفع إلى Google Drive: HTTP '+initRes.status);}
+      sessionUri=initRes.headers.get('Location');
+      if(!sessionUri)throw new Error('⚠️ تعذر إنشاء جلسة رفع قابلة للاستكمال على Google Drive.');
+      _driveSaveResumeState(resumeKey,sessionUri);
+    }
+    if(!fileId){
+      let chunkBytes=DRIVE_CHUNK_MIN_BYTES; // ramp up from a conservative first chunk
+      // Bytes already on Google's side (from a resumed session) count toward
+      // progress immediately, instead of the bar restarting at 0% for work
+      // that's already done.
+      if(start>0)(onProgress||setUploadProgress)((start/file.size)*100);
+      while(start<file.size){
+        const chunk=file.slice(start,Math.min(start+chunkBytes,file.size));
+        let attempt=0,lastErr=null,result=null;
+        while(attempt<MAX_CHUNK_RETRIES){
+          await _waitForOnline();
+          try{result=await _driveUploadChunk(sessionUri,chunk,start,file.size,contentType,start,onProgress);lastErr=null;break;}
+          catch(e){lastErr=e;attempt++;if(attempt<MAX_CHUNK_RETRIES)await new Promise(r=>setTimeout(r,800*attempt));}
+        }
+        if(lastErr){
+          // The session itself (and its progress on Google's side) is left
+          // intact in localStorage — re-uploading this exact file later
+          // picks up from here instead of restarting from byte 0.
+          throw new Error('⚠️ فشل رفع الملف إلى Google Drive بعد عدة محاولات — تحقق من الإنترنت، ثم أعد رفع نفس الملف لاستكمال الرفع من حيث توقف.');
+        }
+        start+=chunk.size;
+        if(result.done){fileId=result.data&&result.data.id;break;}
+        // Size the NEXT chunk from this one's measured throughput, targeting
+        // ~DRIVE_CHUNK_TARGET_MS per request — steady progress-bar movement on
+        // whatever the connection actually turns out to be, rather than one
+        // fixed size guessed in advance.
+        if(result.elapsedMs>0){
+          const bytesPerMs=chunk.size/result.elapsedMs;
+          const target=Math.round(bytesPerMs*DRIVE_CHUNK_TARGET_MS/262144)*262144;
+          chunkBytes=Math.min(DRIVE_CHUNK_MAX_BYTES,Math.max(DRIVE_CHUNK_MIN_BYTES,target||DRIVE_CHUNK_MIN_BYTES));
+        }
+      }
+      if(!fileId)throw new Error('⚠️ فشل رفع الملف إلى Google Drive: لم يتم استلام تأكيد الاكتمال.');
+    }
+    _driveClearResumeState(resumeKey);
   }
   try{
     await fetchWithTimeout('https://www.googleapis.com/drive/v3/files/'+fileId+'/permissions',{method:'POST',headers:{Authorization:'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({role:'reader',type:'anyone'})});
@@ -4735,6 +4884,7 @@ function handleNewVersionFiles(idx,files){
   window._newVerFiles[idx]=window._newVerFiles[idx]||[];
   const fileList=Array.from(files);
   const label=fileList.length>1?`${fileList.length} ملفات — نسخة جديدة`:fileList[0].name;
+  window._uqPendingTotalBytes=fileList.reduce((s,f)=>s+f.size,0);
   runQueuedUpload(label,async onProgress=>{
     const results=[];
     for(let i=0;i<fileList.length;i++){
@@ -4798,6 +4948,7 @@ function saveItemKindFiles(key,idx,kind,inputId){
   const noteVal=noteEl?noteEl.value.trim():'';
   if(noteEl)noteEl.value='';
   const label=(files.length>1?`${files.length} ملفات — `:'')+(it.name||'بند');
+  window._uqPendingTotalBytes=files.reduce((s,f)=>s+f.size,0);
   runQueuedUpload(label,async onProgress=>{
     const uploaded=[];
     for(let i=0;i<files.length;i++){
@@ -5076,6 +5227,7 @@ function handleClientFeedbackFile(files){
   if(!files||!files.length)return;
   const fileList=Array.from(files);
   const label=fileList.length>1?`${fileList.length} ملفات — ملاحظات العميل`:fileList[0].name;
+  window._uqPendingTotalBytes=fileList.reduce((s,f)=>s+f.size,0);
   runQueuedUpload(label,async onProgress=>{
     const results=[];
     for(let i=0;i<fileList.length;i++){
@@ -5563,6 +5715,7 @@ function handleQtFile(files){
   if(!files||!files.length)return;
   const fileList=Array.from(files);
   const label=fileList.length>1?`${fileList.length} ملفات — مهمة فورية`:fileList[0].name;
+  window._uqPendingTotalBytes=fileList.reduce((s,f)=>s+f.size,0);
   runQueuedUpload(label,async onProgress=>{
     const results=[];
     for(let i=0;i<fileList.length;i++){
@@ -5798,6 +5951,7 @@ async function submitWorkshopFeedback(key){
 function handleWfSitePhoto(files){
   if(!files||!files.length)return;
   const file=files[0];
+  window._uqPendingTotalBytes=file.size;
   runQueuedUpload(file.name,onProgress=>convertFileToBase64(file,undefined,onProgress),async b64=>{
     window._wfSitePhotoB64=b64;
     window._wfSitePhotoName=file.name;
@@ -8265,6 +8419,7 @@ function onMaintOrderPick(prefix,label){
 function handleMaintFile(prefix,files){
   if(!files||!files.length)return;
   const file=files[0];
+  window._uqPendingTotalBytes=file.size;
   runQueuedUpload(file.name,onProgress=>convertFileToBase64(file,undefined,onProgress),async b64=>{
     window['_mnt'+prefix+'FileB64']=b64;
     window['_mnt'+prefix+'FileName']=file.name;
@@ -9092,6 +9247,7 @@ async function convertQuoteImageToBase64(file){
 function attachLineImage(id,files){
   if(!files||!files.length)return;
   const file=files[0];
+  window._uqPendingTotalBytes=file.size;
   runQueuedUpload(file.name,()=>convertQuoteImageToBase64(file),async b64=>{
     // Re-find the line fresh instead of trusting a closed-over reference —
     // the user is free to navigate away and back (or the calc mode/line set
@@ -9104,6 +9260,7 @@ function attachLineImage(id,files){
 function handleQuoteAttachment(files){
   if(!files||!files.length)return;
   const file=files[0];
+  window._uqPendingTotalBytes=file.size;
   runQueuedUpload(file.name,()=>convertQuoteImageToBase64(file),async b64=>{
     window._quoteAttachmentB64=b64;
     window._quoteAttachmentName=file.name;
@@ -9774,6 +9931,7 @@ async function sendChatVoiceMessage(ctx,blob,durationSec){
   const mime=blob.type||'audio/webm';
   const ext=mime.includes('mp4')?'m4a':mime.includes('ogg')?'ogg':'webm';
   const file=new File([blob],'voice-note-'+Date.now()+'.'+ext,{type:mime});
+  window._uqPendingTotalBytes=file.size;
   runQueuedUpload('تسجيل صوتي ('+fmtRecDuration(durationSec)+')',onProgress=>convertFileToBase64(file,undefined,onProgress),async audioUrl=>{
     if(ctx.kind==='order')await pushOrderChatMessage(ctx.orderKey,{audioUrl,audioDuration:durationSec});
     else if(ctx.kind==='item')await pushItemFeedbackExtra(ctx.orderKey,ctx.idx,{audioUrl,audioDuration:durationSec});
@@ -9792,6 +9950,7 @@ function handleChatAttachmentSelected(files){
   const ctx=window._chatAttachCtx;if(!ctx)return;
   const fileList=Array.from(files);
   const label=fileList.length>1?`${fileList.length} مرفقات`:fileList[0].name;
+  window._uqPendingTotalBytes=fileList.reduce((s,f)=>s+f.size,0);
   runQueuedUpload(label,async onProgress=>{
     const results=[];
     for(let i=0;i<fileList.length;i++){
@@ -11268,6 +11427,7 @@ function openAddPaymentModal(key){
 function handleApmFile(files){
   if(!files||!files.length)return;
   const file=files[0];
+  window._uqPendingTotalBytes=file.size;
   runQueuedUpload(file.name,onProgress=>convertFileToBase64(file,{},onProgress),async b64=>{
     window._apmFileB64=b64;
     window._apmFileName=file.name;
@@ -11767,6 +11927,7 @@ function handleNewItemFiles(files,orderKey){
   if(!files||!files.length)return;
   const fileList=Array.from(files);
   const label=fileList.length>1?`${fileList.length} ملفات — بند جديد`:fileList[0].name;
+  window._uqPendingTotalBytes=fileList.reduce((s,f)=>s+f.size,0);
   runQueuedUpload(label,async onProgress=>{
     const results=[];
     for(let i=0;i<fileList.length;i++){
@@ -11903,10 +12064,23 @@ function openTimelineModal(key){
 // below as a resilience fallback if that primary upload throws — it must not
 // run on the happy path, since convertFileToBase64() returns a hosted URL
 // here, not a base64 data URI.
+// Storing a file directly in Firebase as base64 only ever makes sense for
+// something genuinely small — past that it's not actually a usable
+// fallback (Firebase has no realistic room for it), and reading a large
+// file into memory as one big base64 string (FileReader.readAsDataURL,
+// then JSON-stringifying it into a PATCH body) is itself slow enough on a
+// multi-hundred-MB/GB file to visibly stall the tab — the opposite of what
+// a "last resort" step should ever risk doing. Large files that fail the
+// primary (Drive/Cloudinary) path get a clear error instead of silently
+// attempting this.
+const FIREBASE_FALLBACK_MAX_BYTES=15*1024*1024;
 async function _uploadOneFileData(file,key,onProgress){
   try{
     return{data:await convertFileToBase64(file,{order:key},onProgress),storage:'cloud'};
   }catch(primaryErr){
+    if(file.size>FIREBASE_FALLBACK_MAX_BYTES){
+      throw new Error((primaryErr&&primaryErr.message)||'⚠️ فشل رفع الملف. هذا الملف كبير جداً لحفظه كخطة احتياطية داخل قاعدة البيانات — تحقق من الإنترنت وحاول مجدداً.');
+    }
     console.warn('الرفع الأساسي فشل، تجربة المسار الاحتياطي',primaryErr);
     const localB64=await _readFileAsDataUrl(file);
     if(isGDriveConfigured()){
@@ -11955,6 +12129,7 @@ function uploadFileDirect(key,ff,fn2,inputId){
   const noteEl=document.getElementById(inputId+'-note');
   const noteVal=noteEl?noteEl.value.trim():'';
   const label=(files.length>1?`${files.length} ملفات — `:'')+(o.id||key);
+  window._uqPendingTotalBytes=files.reduce((s,f)=>s+f.size,0);
   runQueuedUpload(label,async onProgress=>{
     const uploaded=[];
     for(let i=0;i<files.length;i++){
@@ -12175,6 +12350,7 @@ function handleMvPhoto(files){
   if(!files||!files[0])return;
   const file=files[0];
   const mvKey=window.__mvKey;
+  window._uqPendingTotalBytes=file.size;
   runQueuedUpload(file.name,onProgress=>convertFileToBase64(file,{order:mvKey},onProgress),async url=>{
     window.__mvPhotoUrl=url;
     const lbl=document.getElementById('mv-photo-label');if(lbl)lbl.textContent=file.name;
@@ -13058,6 +13234,7 @@ function renderPrimaryLineItems(){
 function handleProdLineWorkshopFile(id,files){
   if(!files||!files.length)return;
   const file=files[0];
+  window._uqPendingTotalBytes=file.size;
   runQueuedUpload(file.name,onProgress=>convertFileToBase64(file,undefined,onProgress),async b64=>{
     // Re-find fresh — window._prodLines can be rebuilt (draft restore, page
     // reopen) while this runs in the background queue.
@@ -13071,6 +13248,7 @@ function handleProdLineWorkshopFile(id,files){
 function handleWorkshopDeptFile(files){
   if(!files||!files.length)return;
   const file=files[0];
+  window._uqPendingTotalBytes=file.size;
   runQueuedUpload(file.name,onProgress=>convertFileToBase64(file,undefined,onProgress),async b64=>{
     window._workshopDeptFileB64=b64;
     window._workshopDeptFileName=file.name;
@@ -13081,6 +13259,7 @@ function handleWorkshopDeptFile(files){
 }
 function handleMainFiles(files){
   Array.from(files||[]).forEach(f=>{
+    window._uqPendingTotalBytes=f.size;
     runQueuedUpload(f.name,onProgress=>convertFileToBase64(f,undefined,onProgress),async b64=>{
       window.globalAttachedFiles.push({name:f.name,data:b64});
       const prev=document.getElementById('file-preview');if(!prev)return;
@@ -13359,6 +13538,7 @@ function attachOrderLineFile(id,files){
   if(!files||!files.length)return;
   const fileList=Array.from(files);
   const label=(fileList.length>1?`${fileList.length} ملفات — `:'')+'مرفقات البند';
+  window._uqPendingTotalBytes=fileList.reduce((s,f)=>s+f.size,0);
   runQueuedUpload(label,async onProgress=>{
     const results=[];
     for(let i=0;i<fileList.length;i++){
@@ -13805,6 +13985,7 @@ function openEditUser(unameEncoded){
 function handleEuPhoto(input){
   if(!input.files||!input.files.length)return;
   const file=input.files[0];
+  window._uqPendingTotalBytes=file.size;
   runQueuedUpload(file.name,onProgress=>convertFileToBase64(file,undefined,onProgress),async b64=>{
     _euPhotoB64=b64;
     const prev=document.getElementById('eu-avatar-preview');if(!prev)return;
@@ -13841,6 +14022,7 @@ function openAddUser(){
 function handleNuPhoto(input){
   if(!input.files||!input.files.length)return;
   const file=input.files[0];
+  window._uqPendingTotalBytes=file.size;
   runQueuedUpload(file.name,onProgress=>convertFileToBase64(file,undefined,onProgress),async b64=>{
     _nuPhotoB64=b64;
     const prev=document.getElementById('nu-avatar-preview');if(!prev)return;
@@ -14025,6 +14207,7 @@ function onReqPayChannelInput(el){
 function handleReqFile(files){
   if(!files||!files.length)return;
   const file=files[0];
+  window._uqPendingTotalBytes=file.size;
   runQueuedUpload(file.name,onProgress=>convertFileToBase64(file,undefined,onProgress),async b64=>{
     window.reqFileB64=b64;window.reqFileName=file.name;
     const note=document.getElementById('req-file-note');if(note)note.textContent='✓ تم: '+file.name;
