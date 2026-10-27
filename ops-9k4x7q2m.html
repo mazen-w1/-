@@ -3511,14 +3511,14 @@ function uploadToCloudinary(file,onProgress){
     xhr.send(fd);
   });
 }
-async function convertFileToBase64(file,folderCtx,onProgress){const MAX_IMAGE_SOURCE_BYTES=25*1024*1024;const MAX_OTHER_BYTES=10*1024*1024;const isImage=file.type&&file.type.startsWith('image/');
+async function convertFileToBase64(file,folderCtx,onProgress){const MAX_IMAGE_SOURCE_BYTES=50*1024*1024;const MAX_OTHER_BYTES=10*1024*1024;const isImage=file.type&&file.type.startsWith('image/');
   // Cloudinary blocks delivery of PDF/ZIP by default (a security restriction on the
   // account, separate from the unsigned-upload preset) — even accounts with that
   // restriction lifted have shown stale-CDN failures, so PDFs/ZIPs always go to
   // Drive instead of Cloudinary. Every other file type is unaffected.
   const isPdfOrZip=/application\/(pdf|zip|x-zip-compressed)/.test(file.type||'')||/\.(pdf|zip)$/i.test(file.name||'');
   if(isImage){
-    if(file.size>MAX_IMAGE_SOURCE_BYTES)throw new Error('⚠️ حجم الصورة كبير جداً (الحد الأقصى 25 ميجابايت). يرجى اختيار صورة أصغر.');
+    if(file.size>MAX_IMAGE_SOURCE_BYTES)throw new Error('⚠️ حجم الصورة كبير جداً (الحد الأقصى 50 ميجابايت). يرجى اختيار صورة أصغر.');
     let uploadPayload=file;
     if(file.size>800*1024){
       try{uploadPayload=await compressImageFile(file,1600,0.72);}catch(e){uploadPayload=file;}
@@ -3542,7 +3542,15 @@ async function convertFileToBase64(file,folderCtx,onProgress){const MAX_IMAGE_SO
   }
 }
 const DRIVE_PROXY_URL='https://rawaee-drive-proxy.vercel.app/api/token';
-const MAX_DRIVE_BYTES=500*1024*1024;
+// Raised from the original 500MB — Drive only ever stores the uploaded
+// file itself and hands back a short share-link URL (see
+// uploadToGoogleDrive()'s return value), so this ceiling never touches
+// Firebase/Realtime-Database storage size at all; it only has to stay
+// under Google Drive's own per-file limit (5TB) and what's realistic to
+// push through a browser tab. 2GB comfortably covers large press-ready
+// PDFs/TIFFs while still refusing anything absurd with a clear message
+// instead of a silent multi-hour hang.
+const MAX_DRIVE_BYTES=2*1024*1024*1024;
 // Adaptive chunk size instead of one fixed value: each chunk's measured
 // throughput sizes the NEXT chunk, clamped to [2MB, 5MB] (all multiples of
 // 256KB, per Google's resumable-upload spec) — fast enough for real progress
@@ -3733,7 +3741,7 @@ const MAX_CHUNK_RETRIES=3;
 // to fit in one request, from each chunk retrying independently instead of
 // restarting the whole file, and from accurate live per-chunk progress.
 async function uploadToGoogleDrive(file,folderCtx,onProgress){
-  if(file.size>MAX_DRIVE_BYTES)throw new Error('⚠️ حجم الملف كبير جداً حتى لـ Google Drive (الحد الأقصى 500 ميجابايت). يرجى ضغط الملف أو تصغيره.');
+  if(file.size>MAX_DRIVE_BYTES)throw new Error('⚠️ حجم الملف كبير جداً حتى لـ Google Drive (الحد الأقصى 2 جيجابايت). يرجى ضغط الملف أو تصغيره.');
   const accessToken=await getGoogleAccessToken();
   let parentId=null;
   try{
