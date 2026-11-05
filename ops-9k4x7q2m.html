@@ -2400,28 +2400,41 @@ function showForgotPassword(){
   toast('🔒 لإعادة تعيين كلمة المرور، يرجى التواصل مع مدير النظام');
 }
 async function doLogin(){
-  await syncUsers();
-  const u=document.getElementById('lu').value.trim().toLowerCase();
-  const p=document.getElementById('lp').value;
   const e=document.getElementById('lerr');
-  const rec=USERS[u];
-  const hash=rec?await makeSessionToken(u,p):null;
-  // rec.pass may still be a legacy plaintext value for accounts that haven't logged in
-  // since password hashing was introduced — verify against it directly this one time,
-  // then transparently upgrade it to a hash so plaintext never gets re-persisted.
-  const legacyMatch=rec&&!isHashedPass(rec.pass)&&rec.pass===p;
-  if(rec&&(rec.pass===hash||legacyMatch)){
-    if(legacyMatch){try{await fbPatch(`users/${u}`,{pass:hash});rec.pass=hash;}catch(err){}}
-    showSaving('جاري الدخول...');
-    await loadData();hideSaving();
-    // Session-only persistence by design: sessionStorage clears automatically
-    // when the tab/browser closes, so every browser restart requires signing
-    // in again — no "remember me" / cross-restart auto-login path exists.
-    const sessionPayload=JSON.stringify({uname:u,tok:hash});
-    sessionStorage.setItem(SESSION_KEY,sessionPayload);
-    localStorage.removeItem(SESSION_KEY);
-    enterApp(u);e.style.display='none';
-  }else{e.textContent='بيانات الدخول غير صحيحة';e.style.display='block';}
+  try{
+    await syncUsers();
+    const u=document.getElementById('lu').value.trim().toLowerCase();
+    const p=document.getElementById('lp').value;
+    const rec=USERS[u];
+    const hash=rec?await makeSessionToken(u,p):null;
+    // rec.pass may still be a legacy plaintext value for accounts that haven't logged in
+    // since password hashing was introduced — verify against it directly this one time,
+    // then transparently upgrade it to a hash so plaintext never gets re-persisted.
+    const legacyMatch=rec&&!isHashedPass(rec.pass)&&rec.pass===p;
+    if(rec&&(rec.pass===hash||legacyMatch)){
+      if(legacyMatch){try{await fbPatch(`users/${u}`,{pass:hash});rec.pass=hash;}catch(err){}}
+      showSaving('جاري الدخول...');
+      await loadData();hideSaving();
+      // Session-only persistence by design: sessionStorage clears automatically
+      // when the tab/browser closes, so every browser restart requires signing
+      // in again — no "remember me" / cross-restart auto-login path exists.
+      const sessionPayload=JSON.stringify({uname:u,tok:hash});
+      sessionStorage.setItem(SESSION_KEY,sessionPayload);
+      localStorage.removeItem(SESSION_KEY);
+      enterApp(u);e.style.display='none';
+    }else{e.textContent='بيانات الدخول غير صحيحة';e.style.display='block';}
+  }catch(err){
+    // fbReq() already retries a 401 transparently once by itself — reaching
+    // here means that genuinely failed (project unreachable, etc.), not a
+    // routine expired token. Without this catch, an exception anywhere in
+    // the block above (loadData()/syncUsers()/the legacy-password fbPatch)
+    // left the full-screen "جاري الدخول..." overlay showing forever with no
+    // error and no way to retry — exactly the stuck/blank-looking state this
+    // is meant to prevent.
+    hideSaving();
+    e.textContent=(err&&err.message)||'⚠️ تعذر تسجيل الدخول، تحقق من الإنترنت وحاول مجدداً';
+    e.style.display='block';
+  }
 }
 document.addEventListener('keydown',e=>{if(e.key==='Enter'&&document.getElementById('ls').style.display!=='none')doLogin();});
 // ── There are no <form> elements anywhere in this app — every input is a
@@ -2640,6 +2653,26 @@ async function enterApp(u){
     // to close and reopen the bell.
     if(document.getElementById('notif-modal')?.classList.contains('open'))renderNotifPanelBody();
   },20000);
+  // The 20s poll above only fires on its own schedule — a backgrounded tab
+  // (switched app, locked phone, laptop sleep) gets throttled or fully
+  // suspended by the browser/OS, so data can sit stale far longer than 20s
+  // and the user comes back to an out-of-date screen. Catch up immediately
+  // the moment the tab is foregrounded again or connectivity returns,
+  // instead of waiting for the next tick. refreshCurrentPage() already
+  // no-ops while a modal/menu is open or an input is focused, so this can
+  // never yank the page out from under an in-progress action.
+  if(!window._visRefreshBound){
+    window._visRefreshBound=true;
+    const _onBackFromAway=async()=>{
+      if(!cu)return;
+      try{
+        await loadData();renderStarTicker();refreshCurrentPage();
+        if(document.getElementById('notif-modal')?.classList.contains('open'))renderNotifPanelBody();
+      }catch(e){}
+    };
+    document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')_onBackFromAway();});
+    window.addEventListener('online',_onBackFromAway);
+  }
 }
 function logout(){localStorage.removeItem(SESSION_KEY);sessionStorage.removeItem(SESSION_KEY);location.reload();}
 // ============================================================
@@ -2669,11 +2702,76 @@ function logout(){localStorage.removeItem(SESSION_KEY);sessionStorage.removeItem
 // this file's reach from here — flagged for the project owner to action in
 // the Firebase console / a backend, not something a static HTML file can
 // self-enforce.
-async function fbReq(path,method='GET',data=null){
+// ============================================================
+// 401 RECOVERY — a Firebase anonymous ID token expires after exactly one
+// hour. The SDK normally refreshes it on its own on a timer, but a
+// backgrounded/suspended tab (mobile OS reclaiming it, laptop sleep, a long
+// idle period) can miss that timer entirely, and the anonymous session
+// itself can occasionally be rejected outright (revoked, or sign-in never
+// actually completed at boot — see the _fbAuthReady safety-net above).
+// Either way, every fbGet/fbSet/fbPush/fbPatch/fbDelete call in the app
+// goes through fbReq() below, which is why recovering here, in ONE place,
+// covers all of them at once instead of needing every one of the hundreds
+// of call sites scattered through this file to handle it individually —
+// which is also exactly why a caller's own modal state/unsaved input is
+// never at risk: the retry happens transparently inside this one function,
+// before the calling code's own try/catch (if it even has one) ever sees
+// anything go wrong.
+let _fbRecoveryInFlight=null;
+async function _fbRecoverAuthSession(){
+  // Several requests can hit a 401 around the same moment (e.g. the 60s
+  // background poll's several parallel fbGet calls all firing while the
+  // token happened to just expire) — share one recovery attempt instead of
+  // every one of them independently racing to refresh/re-authenticate.
+  if(_fbRecoveryInFlight)return _fbRecoveryInFlight;
+  _fbRecoveryInFlight=(async()=>{
+    try{
+      const user=firebase.auth().currentUser;
+      if(user){
+        // Force a real refresh (not the cached token get() would otherwise
+        // return) — this is the common case: the token simply expired.
+        try{await user.getIdToken(true);return true;}catch(e){/* refresh token itself is no longer valid — fall through */}
+      }
+      // No current user, or even a forced refresh failed outright — the
+      // only way back is a brand new anonymous session.
+      try{await firebase.auth().signOut();}catch(e){}
+      await firebase.auth().signInAnonymously();
+      return true;
+    }catch(e){
+      return false;
+    }
+  })();
+  try{return await _fbRecoveryInFlight;}
+  finally{_fbRecoveryInFlight=null;}
+}
+// Surfaced only when recovery genuinely fails (project/network truly down),
+// and throttled so a run of back-to-back failed requests shows one clear
+// notice instead of a toast storm.
+let _fbAuthFailureNoticeAt=0;
+function _notifyAuthFailure(){
+  if(Date.now()-_fbAuthFailureNoticeAt<30000)return;
+  _fbAuthFailureNoticeAt=Date.now();
+  toast('⚠️ تعذر الاتصال بقاعدة البيانات — تحقق من الإنترنت، سيُعاد المحاولة تلقائياً');
+}
+async function fbReq(path,method='GET',data=null,_isRetry=false){
   if(window._fbAuthReady) await window._fbAuthReady;
   let authQS='';
   try{ if(firebase.auth().currentUser){ const tok=await firebase.auth().currentUser.getIdToken(); authQS='?auth='+tok; } }catch(e){}
   const r=await fetch(`${fbUrl}/${path}.json${authQS}`,{method,headers:{'Content-Type':'application/json'},body:data?JSON.stringify(data):undefined});
+  if(r.status===401){
+    // One silent recovery attempt (fresh token or a brand-new anonymous
+    // session), then the EXACT same request again — same path/method/body
+    // — rather than surfacing the 401 to whatever called fbGet/fbPatch/etc.
+    // A second 401 right after a genuine recovery means something beyond
+    // just an expired token (the project itself unreachable, rules
+    // rejecting anonymous access entirely); only then is this surfaced.
+    if(!_isRetry){
+      const recovered=await _fbRecoverAuthSession();
+      if(recovered)return fbReq(path,method,data,true);
+    }
+    _notifyAuthFailure();
+    throw new Error('⚠️ انتهت صلاحية الجلسة وتعذر تجديدها — يرجى المحاولة مرة أخرى بعد قليل.');
+  }
   if(!r.ok)throw new Error('HTTP '+r.status);
   return r.json();
 }
@@ -2884,34 +2982,44 @@ function checkNewEventNotifs(){
 // ============================================================
 window.addEventListener('load',async()=>{
   showSaving('جاري التحميل...');
-  await syncUsers();
-  // Session-only auth: a leftover localStorage token from before this change
-  // (or from a device that never closed its browser) must never auto-login —
-  // only sessionStorage (cleared on browser/tab close) is a valid source now.
-  localStorage.removeItem(SESSION_KEY);
-  const sess=sessionStorage.getItem(SESSION_KEY);
-  if(sess){
-    try{
-      const s=JSON.parse(sess);
-      const rec=USERS[s.uname];
-      // rec.pass is a hash post-migration, so the stored token can be compared to it
-      // directly; a not-yet-migrated legacy account still needs one re-derivation.
-      const stillValid=rec&&s.tok&&(isHashedPass(rec.pass)?s.tok===rec.pass:s.tok===await makeSessionToken(s.uname,rec.pass));
-      if(s.uname&&stillValid){
-        // Instant paint on cold load: if a same-tab-session cache exists,
-        // render immediately from it instead of blocking on a full network
-        // round-trip, then quietly refresh with live data in the background.
-        // First-ever load in this tab (no cache yet) falls back to the
-        // original blocking fetch — nothing to show early in that case anyway.
-        if(_restoreDataCache()){
-          hideSaving();enterApp(s.uname);
-          loadData().then(()=>refreshCurrentPage()).catch(()=>{});
-          return;
+  try{
+    await syncUsers();
+    // Session-only auth: a leftover localStorage token from before this change
+    // (or from a device that never closed its browser) must never auto-login —
+    // only sessionStorage (cleared on browser/tab close) is a valid source now.
+    localStorage.removeItem(SESSION_KEY);
+    const sess=sessionStorage.getItem(SESSION_KEY);
+    if(sess){
+      try{
+        const s=JSON.parse(sess);
+        const rec=USERS[s.uname];
+        // rec.pass is a hash post-migration, so the stored token can be compared to it
+        // directly; a not-yet-migrated legacy account still needs one re-derivation.
+        const stillValid=rec&&s.tok&&(isHashedPass(rec.pass)?s.tok===rec.pass:s.tok===await makeSessionToken(s.uname,rec.pass));
+        if(s.uname&&stillValid){
+          // Instant paint on cold load: if a same-tab-session cache exists,
+          // render immediately from it instead of blocking on a full network
+          // round-trip, then quietly refresh with live data in the background.
+          // First-ever load in this tab (no cache yet) falls back to the
+          // original blocking fetch — nothing to show early in that case anyway.
+          if(_restoreDataCache()){
+            hideSaving();enterApp(s.uname);
+            loadData().then(()=>refreshCurrentPage()).catch(()=>{});
+            return;
+          }
+          await loadData();hideSaving();enterApp(s.uname);return;
         }
-        await loadData();hideSaving();enterApp(s.uname);return;
-      }
-    }catch(e){}
-    localStorage.removeItem(SESSION_KEY);sessionStorage.removeItem(SESSION_KEY);
+      }catch(e){}
+      localStorage.removeItem(SESSION_KEY);sessionStorage.removeItem(SESSION_KEY);
+    }
+  }catch(e){
+    // fbReq() already retries an expired/invalid session token once by
+    // itself (silent re-auth + retry) before ever throwing — reaching here
+    // means that genuinely failed. Falling through to the normal login
+    // screen below, instead of leaving "جاري التحميل..." on screen forever
+    // with nothing to click, is what actually matters: the user can just
+    // try signing in again rather than being stuck on a dead loading state.
+    console.warn('startup load failed, falling back to login screen',e);
   }
   hideSaving();
   document.getElementById('ls').style.display='block';
@@ -3354,37 +3462,78 @@ function _uqComputeRate(u){
   const etaSec=speedBps>0?remaining/speedBps:null;
   return{speedBps,etaSec};
 }
+// Rebuilding the widget's entire innerHTML on every single progress tick
+// (the previous approach) tore down and recreated every item's DOM nodes —
+// including the spinner icon, whose CSS animation restarts from scratch
+// every time its element is recreated — dozens of times a second during an
+// active upload. That's what actually produced the reported flicker (not
+// just a cosmetic nuisance: constantly destroying/rebuilding DOM nodes and
+// recalculating styles is real, avoidable main-thread work competing with
+// the upload itself for CPU time during exactly the moments that matter
+// most). Each item's DOM node is now created once and kept — only the
+// specific bits that actually change (bar width, percentage text, speed/
+// ETA line) are updated in place from here on.
+function _uqBuildItemEl(u){
+  const el=document.createElement('div');
+  el.className='uq-item';
+  el.id='uq-item-'+u.id;
+  el.innerHTML=`
+    <div class="uq-item-top">
+      <span class="uq-item-name"><i class="ti"></i> <span class="uq-item-name-text"></span></span>
+      <span class="uq-item-right">
+        <span class="uq-item-status"></span>
+        <span class="uq-item-close" onclick="dismissUploadQueueItemAnimated(${u.id})" title="إخفاء"><i class="ti ti-x"></i></span>
+      </span>
+    </div>
+    <div class="uq-bar-track"><div class="uq-bar-fill" style="width:0%;"></div></div>
+    <div class="uq-item-meta"></div>
+    <div class="uq-item-error-msg"></div>`;
+  el.querySelector('.uq-item-name-text').textContent=u.fileName;
+  el.querySelector('.uq-item-name').title=u.fileName;
+  return el;
+}
+function _uqUpdateItemEl(el,u){
+  const pct=Math.max(0,Math.min(100,Math.round(u.progress)));
+  el.classList.toggle('fading',!!u.fadingOut);
+  const iconEl=el.querySelector('.uq-item-name i');
+  iconEl.className='ti '+(u.status==='uploading'?'ti-loader-2':(u.status==='done'?'ti-circle-check':'ti-alert-circle'));
+  const statusEl=el.querySelector('.uq-item-status');
+  statusEl.className='uq-item-status '+u.status;
+  statusEl.textContent=u.status==='uploading'?`${pct}%`:u.status==='done'?'تم الرفع':'فشل';
+  const trackEl=el.querySelector('.uq-bar-track');
+  if(u.status==='uploading'){
+    trackEl.style.display='';
+    el.querySelector('.uq-bar-fill').style.width=pct+'%';
+  }else trackEl.style.display='none';
+  const metaEl=el.querySelector('.uq-item-meta');
+  let metaText='';
+  // Speed/ETA are only meaningful once the file's total size is known
+  // (callers that upload several small files under one combined label
+  // don't always pass it) and once there's been enough progress to
+  // measure a rate from.
+  if(u.status==='uploading'&&u.totalBytes&&pct>0&&pct<100){
+    const{speedBps,etaSec}=_uqComputeRate(u);
+    metaText=[fmtBytesPerSec(speedBps),fmtEtaSeconds(etaSec)].filter(Boolean).join(' · ');
+  }
+  metaEl.textContent=metaText;
+  metaEl.style.display=metaText?'':'none';
+  const errEl=el.querySelector('.uq-item-error-msg');
+  if(u.status==='error'){errEl.style.display='';errEl.textContent=u.errorMsg||'حدث خطأ';}
+  else errEl.style.display='none';
+}
 function _uqRender(){
   const wrap=document.getElementById('upload-queue-widget');if(!wrap)return;
   if(!window._uploadQueue.length){wrap.style.display='none';wrap.innerHTML='';return;}
   wrap.style.display='flex';
-  wrap.innerHTML=window._uploadQueue.map(u=>{
-    const pct=Math.max(0,Math.min(100,Math.round(u.progress)));
-    const statusLabel=u.status==='uploading'?`${pct}%`:u.status==='done'?'<i class="ti ti-circle-check"></i> تم الرفع':'<i class="ti ti-alert-circle"></i> فشل';
-    const icon=u.status==='uploading'?'ti-loader-2':(u.status==='done'?'ti-circle-check':'ti-alert-circle');
-    // Speed/ETA are only meaningful once the file's total size is known
-    // (callers that upload several small files under one combined label
-    // don't always pass it) and once there's been enough progress to
-    // measure a rate from.
-    let metaLine='';
-    if(u.status==='uploading'&&u.totalBytes&&pct>0&&pct<100){
-      const{speedBps,etaSec}=_uqComputeRate(u);
-      const parts=[fmtBytesPerSec(speedBps),fmtEtaSeconds(etaSec)].filter(Boolean);
-      if(parts.length)metaLine=`<div class="uq-item-meta">${parts.join(' · ')}</div>`;
-    }
-    return`<div class="uq-item${u.fadingOut?' fading':''}">
-      <div class="uq-item-top">
-        <span class="uq-item-name" title="${esc(u.fileName)}"><i class="ti ${icon}"></i> ${esc(u.fileName)}</span>
-        <span class="uq-item-right">
-          <span class="uq-item-status ${u.status}">${statusLabel}</span>
-          <span class="uq-item-close" onclick="dismissUploadQueueItemAnimated(${u.id})" title="إخفاء"><i class="ti ti-x"></i></span>
-        </span>
-      </div>
-      ${u.status==='uploading'?`<div class="uq-bar-track"><div class="uq-bar-fill" style="width:${pct}%;"></div></div>`:''}
-      ${metaLine}
-      ${u.status==='error'?`<div class="uq-item-error-msg">${esc(u.errorMsg||'حدث خطأ')}</div>`:''}
-    </div>`;
-  }).join('');
+  const seenIds=new Set();
+  window._uploadQueue.forEach(u=>{
+    const domId='uq-item-'+u.id;
+    seenIds.add(domId);
+    let el=document.getElementById(domId);
+    if(!el){el=_uqBuildItemEl(u);wrap.appendChild(el);}
+    _uqUpdateItemEl(el,u);
+  });
+  Array.from(wrap.children).forEach(child=>{if(!seenIds.has(child.id))child.remove();});
 }
 // Same rAF-batching rationale as setUploadProgress() — xhr.upload.onprogress
 // can fire far more often than the eye needs a repaint for.
@@ -3413,6 +3562,53 @@ function dismissUploadQueueItemAnimated(id){
 // must ALSO not assume anything about the current page (re-read `orders`
 // fresh, use _refreshOrderItemsViews()-style page-aware refresh dispatchers,
 // let already-defensive render functions no-op if their page isn't showing).
+// How many files a single multi-file selection (a few attachments, item
+// files, chat uploads, ...) uploads at once instead of strictly one after
+// another. Each file is still its own independent Drive/Cloudinary
+// request/session — Google's resumable-upload protocol requires a single
+// file's own chunks to arrive in strict byte order on one session, so that
+// part stays sequential by necessity — but nothing requires DIFFERENT
+// files to wait on each other, and running several real HTTP transfers at
+// once is where concurrency actually buys speed on a connection that isn't
+// already fully saturated by one request.
+const UPLOAD_CONCURRENCY=3;
+// Runs `worker(item, onItemProgress)` over `items` with up to `limit` of
+// them in flight at once, returning results in the SAME order as `items`
+// regardless of which one actually finished first. `onProgress(pct)` is
+// reported as the combined progress across every in-flight + finished item,
+// weighted by `weights[i]` (typically each file's byte size) rather than
+// splitting 1/N per file — one 900MB file and three 2MB ones aren't an
+// equal four-way split of the transfer. A failure lets every other
+// already-in-flight file finish first (nothing already succeeding gets
+// abandoned) before throwing the first error encountered, same as the
+// batch's overall outcome under the old strictly-sequential loop, but
+// without wasting the work the other files had already completed.
+async function runConcurrent(items,limit,worker,onProgress,weights){
+  const n=items.length;
+  const results=new Array(n);
+  const itemPct=new Array(n).fill(0);
+  const w=weights||items.map(()=>1);
+  const totalWeight=w.reduce((s,x)=>s+x,0)||1;
+  const reportCombined=()=>{
+    if(!onProgress)return;
+    let sum=0;
+    for(let i=0;i<n;i++)sum+=(itemPct[i]/100)*w[i];
+    onProgress((sum/totalWeight)*100);
+  };
+  let nextIdx=0,firstError=null;
+  async function runSlot(){
+    while(true){
+      const idx=nextIdx++;
+      if(idx>=n)return;
+      try{results[idx]=await worker(items[idx],idx,pct=>{itemPct[idx]=pct;reportCombined();});}
+      catch(e){if(!firstError)firstError=e;}
+      itemPct[idx]=100;reportCombined();
+    }
+  }
+  await Promise.all(Array.from({length:Math.min(limit,n)},runSlot));
+  if(firstError)throw firstError;
+  return results;
+}
 // totalBytes is optional — when known (a single file's .size, or several
 // files summed), the queue widget shows live transfer speed and an ETA
 // alongside the percentage; omitted entirely, it just shows the percentage
@@ -3681,7 +3877,7 @@ async function getGoogleAccessToken(){
     catch(e){
       lastErr=e;
       if(!e.retryable)break;
-      if(attempt<TOKEN_FETCH_MAX_RETRIES-1)await new Promise(r=>setTimeout(r,800*(attempt+1)));
+      if(attempt<TOKEN_FETCH_MAX_RETRIES-1)await new Promise(r=>setTimeout(r,_backoffDelayMs(attempt+1)));
     }
   }
   throw lastErr;
@@ -3693,22 +3889,31 @@ function _updateGoogleDriveStatusUI(){}
 // which is the "repeatedly querying before starting" delay the folder
 // structure adds on top of the network stall issue above.
 const _driveFolderCache={};
+// Caches the in-flight PROMISE, not just the eventually-resolved folder id
+// — concurrent uploads (several files of the same batch now genuinely
+// upload at once, see UPLOAD_CONCURRENCY) that need the same not-yet-cached
+// folder would otherwise each see "nothing cached yet" at the same time and
+// every one of them would independently list-then-create it, since Drive
+// doesn't enforce unique folder names and happily creates several. Every
+// caller for the same cacheKey now awaits the exact same lookup/creation
+// call instead of racing to start their own.
 async function _driveFindOrCreateFolder(name,parentId,accessToken){
   const cacheKey=(parentId||'root')+'/'+name;
   if(_driveFolderCache[cacheKey])return _driveFolderCache[cacheKey];
-  const safeName=String(name).replace(/'/g,"\\'");
-  const q="name='"+safeName+"' and '"+(parentId||'root')+"' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false";
-  const listRes=await fetchWithTimeout('https://www.googleapis.com/drive/v3/files?q='+encodeURIComponent(q)+'&fields=files(id,name)',{headers:{Authorization:'Bearer '+accessToken}});
-  const listData=await listRes.json().catch(()=>null);
-  if(listData&&listData.files&&listData.files.length){
-    _driveFolderCache[cacheKey]=listData.files[0].id;
-    return _driveFolderCache[cacheKey];
-  }
-  const createRes=await fetchWithTimeout('https://www.googleapis.com/drive/v3/files',{method:'POST',headers:{Authorization:'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({name:String(name),mimeType:'application/vnd.google-apps.folder',parents:parentId?[parentId]:undefined})});
-  const createData=await createRes.json().catch(()=>null);
-  if(!createData||!createData.id)throw new Error('folder_create_failed');
-  _driveFolderCache[cacheKey]=createData.id;
-  return createData.id;
+  const promise=(async()=>{
+    const safeName=String(name).replace(/'/g,"\\'");
+    const q="name='"+safeName+"' and '"+(parentId||'root')+"' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false";
+    const listRes=await fetchWithTimeout('https://www.googleapis.com/drive/v3/files?q='+encodeURIComponent(q)+'&fields=files(id,name)',{headers:{Authorization:'Bearer '+accessToken}});
+    const listData=await listRes.json().catch(()=>null);
+    if(listData&&listData.files&&listData.files.length)return listData.files[0].id;
+    const createRes=await fetchWithTimeout('https://www.googleapis.com/drive/v3/files',{method:'POST',headers:{Authorization:'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({name:String(name),mimeType:'application/vnd.google-apps.folder',parents:parentId?[parentId]:undefined})});
+    const createData=await createRes.json().catch(()=>null);
+    if(!createData||!createData.id)throw new Error('folder_create_failed');
+    return createData.id;
+  })();
+  _driveFolderCache[cacheKey]=promise;
+  try{return await promise;}
+  catch(e){delete _driveFolderCache[cacheKey];throw e;} // don't poison the cache with a failed lookup
 }
 // Uploads one chunk via XHR (not fetch) so xhr.upload.onprogress can report
 // real bytes-sent-so-far — offsetBytes lets progress stay cumulative across
@@ -3794,7 +3999,17 @@ function _driveUploadMultipart(file,parentId,accessToken,contentType,onProgress)
     xhr.send(body);
   });
 }
-const MAX_CHUNK_RETRIES=4;
+const MAX_CHUNK_RETRIES=5;
+// True exponential backoff (1s, 2s, 4s, 8s, 16s, capped at 20s) with a
+// little random jitter, instead of the flat 800ms*attempt linear ramp —
+// gives a flaky connection meaningfully longer to recover between attempts
+// as failures repeat, and the jitter keeps several uploads that happen to
+// fail at the same moment (e.g. a brief Wi-Fi drop affecting every
+// in-flight chunk/file at once) from all retrying in lockstep.
+function _backoffDelayMs(attempt){
+  const base=Math.min(20000,1000*Math.pow(2,attempt));
+  return base+Math.random()*300;
+}
 // ============================================================
 // RESUMABLE-SESSION PERSISTENCE — survives a page reload, a closed tab, or a
 // long network outage, not just a single flaky chunk (which the per-chunk
@@ -3857,9 +4072,20 @@ function _waitForOnline(){
 // original chunked + resumable flow — they still benefit from not needing
 // to fit in one request, from each chunk retrying independently instead of
 // restarting the whole file, and from accurate live per-chunk progress.
+// True for the handful of Drive API error shapes used in this file that
+// specifically mean "the bearer token itself was rejected" (both the
+// upload-chunk/multipart rejections below, which embed the HTTP status in
+// their message, and a plain fetch Response) — as opposed to any other
+// failure (network drop, 5xx, quota), which the existing retry/backoff
+// already covers without needing a token refresh.
+function _isDriveAuthError(x){
+  if(x&&typeof x.status==='number')return x.status===401;
+  const msg=(x&&x.message)||'';
+  return /-401$|HTTP 401/.test(msg);
+}
 async function uploadToGoogleDrive(file,folderCtx,onProgress){
   if(file.size>MAX_DRIVE_BYTES)throw new Error('⚠️ حجم الملف كبير جداً حتى لـ Google Drive (الحد الأقصى 2 جيجابايت). يرجى ضغط الملف أو تصغيره.');
-  const accessToken=await getGoogleAccessToken();
+  let accessToken=await getGoogleAccessToken();
   let parentId=null;
   try{
     const orderRef=folderCtx&&folderCtx.order;
@@ -3879,7 +4105,15 @@ async function uploadToGoogleDrive(file,folderCtx,onProgress){
     while(attempt<MAX_CHUNK_RETRIES){
       await _waitForOnline();
       try{fileId=await _driveUploadMultipart(file,parentId,accessToken,contentType,onProgress);lastErr=null;break;}
-      catch(e){lastErr=e;attempt++;if(attempt<MAX_CHUNK_RETRIES)await new Promise(r=>setTimeout(r,800*attempt));}
+      catch(e){
+        lastErr=e;attempt++;
+        // The access token itself was rejected (expired mid-upload, or the
+        // cached one was already stale) — get a fresh one before the next
+        // attempt instead of retrying with the exact same token that just
+        // failed, which would just 401 again every time.
+        if(_isDriveAuthError(e)){_driveAccessToken=null;try{accessToken=await getGoogleAccessToken();}catch(tokErr){}}
+        if(attempt<MAX_CHUNK_RETRIES)await new Promise(r=>setTimeout(r,_backoffDelayMs(attempt)));
+      }
     }
     if(lastErr)throw new Error('⚠️ فشل رفع الملف إلى Google Drive بعد عدة محاولات، تحقق من الإنترنت وحاول مجدداً.');
   }else{
@@ -3901,15 +4135,25 @@ async function uploadToGoogleDrive(file,folderCtx,onProgress){
     if(!fileId&&!sessionUri){
       const metadata={name:file.name||('ملف_'+Date.now())};
       if(parentId)metadata.parents=[parentId];
-      let initRes;
-      try{
-        initRes=await fetchWithTimeout('https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&fields=id',{
-          method:'POST',
-          headers:{Authorization:'Bearer '+accessToken,'Content-Type':'application/json; charset=UTF-8','X-Upload-Content-Type':contentType,'X-Upload-Content-Length':String(file.size)},
-          body:JSON.stringify(metadata)
-        });
-      }catch(netErr){throw new Error(netErr.name==='AbortError'?'⚠️ Google Drive لا يستجيب، حاول مجدداً.':'⚠️ تعذر الاتصال بـ Google Drive، تحقق من الإنترنت وحاول مجدداً.');}
-      if(!initRes.ok){throw new Error('⚠️ فشل بدء جلسة الرفع إلى Google Drive: HTTP '+initRes.status);}
+      let initRes,initAttempt=0;
+      while(true){
+        try{
+          initRes=await fetchWithTimeout('https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&fields=id',{
+            method:'POST',
+            headers:{Authorization:'Bearer '+accessToken,'Content-Type':'application/json; charset=UTF-8','X-Upload-Content-Type':contentType,'X-Upload-Content-Length':String(file.size)},
+            body:JSON.stringify(metadata)
+          });
+        }catch(netErr){throw new Error(netErr.name==='AbortError'?'⚠️ Google Drive لا يستجيب، حاول مجدداً.':'⚠️ تعذر الاتصال بـ Google Drive، تحقق من الإنترنت وحاول مجدداً.');}
+        if(initRes.ok)break;
+        // A rejected token here (expired since getGoogleAccessToken() was
+        // first called, or already stale going in) is worth one fresh-token
+        // retry before giving up — every other status just fails as before.
+        if(initRes.status===401&&initAttempt<1){
+          initAttempt++;_driveAccessToken=null;
+          try{accessToken=await getGoogleAccessToken();continue;}catch(tokErr){}
+        }
+        throw new Error('⚠️ فشل بدء جلسة الرفع إلى Google Drive: HTTP '+initRes.status);
+      }
       sessionUri=initRes.headers.get('Location');
       if(!sessionUri)throw new Error('⚠️ تعذر إنشاء جلسة رفع قابلة للاستكمال على Google Drive.');
       _driveSaveResumeState(resumeKey,sessionUri);
@@ -3921,12 +4165,22 @@ async function uploadToGoogleDrive(file,folderCtx,onProgress){
       // that's already done.
       if(start>0)(onProgress||setUploadProgress)((start/file.size)*100);
       while(start<file.size){
-        const chunk=file.slice(start,Math.min(start+chunkBytes,file.size));
-        let attempt=0,lastErr=null,result=null;
+        let attempt=0,lastErr=null,result=null,curChunkBytes=chunkBytes,sentSize=0;
         while(attempt<MAX_CHUNK_RETRIES){
           await _waitForOnline();
+          const chunk=file.slice(start,Math.min(start+curChunkBytes,file.size));
+          sentSize=chunk.size;
           try{result=await _driveUploadChunk(sessionUri,chunk,start,file.size,contentType,start,onProgress);lastErr=null;break;}
-          catch(e){lastErr=e;attempt++;if(attempt<MAX_CHUNK_RETRIES)await new Promise(r=>setTimeout(r,800*attempt));}
+          catch(e){
+            lastErr=e;attempt++;
+            // A chunk that just failed is retried smaller (down to the 2MB
+            // floor) rather than blindly resent at the same size — more
+            // resilient on a connection that's unstable rather than simply
+            // slow, without permanently shrinking the baseline size used for
+            // every OTHER chunk in this upload.
+            curChunkBytes=Math.max(DRIVE_CHUNK_MIN_BYTES,Math.floor(curChunkBytes/2));
+            if(attempt<MAX_CHUNK_RETRIES)await new Promise(r=>setTimeout(r,_backoffDelayMs(attempt)));
+          }
         }
         if(lastErr){
           // The session itself (and its progress on Google's side) is left
@@ -3934,14 +4188,14 @@ async function uploadToGoogleDrive(file,folderCtx,onProgress){
           // picks up from here instead of restarting from byte 0.
           throw new Error('⚠️ فشل رفع الملف إلى Google Drive بعد عدة محاولات — تحقق من الإنترنت، ثم أعد رفع نفس الملف لاستكمال الرفع من حيث توقف.');
         }
-        start+=chunk.size;
+        start+=sentSize;
         if(result.done){fileId=result.data&&result.data.id;break;}
         // Size the NEXT chunk from this one's measured throughput, targeting
         // ~DRIVE_CHUNK_TARGET_MS per request — steady progress-bar movement on
         // whatever the connection actually turns out to be, rather than one
         // fixed size guessed in advance.
         if(result.elapsedMs>0){
-          const bytesPerMs=chunk.size/result.elapsedMs;
+          const bytesPerMs=sentSize/result.elapsedMs;
           const target=Math.round(bytesPerMs*DRIVE_CHUNK_TARGET_MS/262144)*262144;
           chunkBytes=Math.min(DRIVE_CHUNK_MAX_BYTES,Math.max(DRIVE_CHUNK_MIN_BYTES,target||DRIVE_CHUNK_MIN_BYTES));
         }
@@ -4886,13 +5140,10 @@ function handleNewVersionFiles(idx,files){
   const label=fileList.length>1?`${fileList.length} ملفات — نسخة جديدة`:fileList[0].name;
   window._uqPendingTotalBytes=fileList.reduce((s,f)=>s+f.size,0);
   runQueuedUpload(label,async onProgress=>{
-    const results=[];
-    for(let i=0;i<fileList.length;i++){
-      const f=fileList[i];
-      const b64=await convertFileToBase64(f,undefined,pct=>onProgress(((i+pct/100)/fileList.length)*100));
-      results.push({data:b64,name:f.name});
-    }
-    return results;
+    return await runConcurrent(fileList,UPLOAD_CONCURRENCY,async(f,i,onItemProgress)=>{
+      const b64=await convertFileToBase64(f,undefined,onItemProgress);
+      return{data:b64,name:f.name};
+    },onProgress,fileList.map(f=>f.size));
   },results=>{
     window._newVerFiles[idx]=window._newVerFiles[idx]||[];
     window._newVerFiles[idx].push(...results);
@@ -4950,13 +5201,10 @@ function saveItemKindFiles(key,idx,kind,inputId){
   const label=(files.length>1?`${files.length} ملفات — `:'')+(it.name||'بند');
   window._uqPendingTotalBytes=files.reduce((s,f)=>s+f.size,0);
   runQueuedUpload(label,async onProgress=>{
-    const uploaded=[];
-    for(let i=0;i<files.length;i++){
-      const f=files[i];
-      const{data}=await _uploadOneFileData(f,key,pct=>onProgress(((i+pct/100)/files.length)*100));
-      uploaded.push({data,name:f.name});
-    }
-    return uploaded;
+    return await runConcurrent(files,UPLOAD_CONCURRENCY,async(f,i,onItemProgress)=>{
+      const{data}=await _uploadOneFileData(f,key,onItemProgress);
+      return{data,name:f.name};
+    },onProgress,files.map(f=>f.size));
   },async uploaded=>{
     const o2=orders[key];if(!o2)return;
     if(!o2.orderItems||!o2.orderItems[idx])return;
@@ -5229,13 +5477,10 @@ function handleClientFeedbackFile(files){
   const label=fileList.length>1?`${fileList.length} ملفات — ملاحظات العميل`:fileList[0].name;
   window._uqPendingTotalBytes=fileList.reduce((s,f)=>s+f.size,0);
   runQueuedUpload(label,async onProgress=>{
-    const results=[];
-    for(let i=0;i<fileList.length;i++){
-      const f=fileList[i];
-      const b64=await convertFileToBase64(f,undefined,pct=>onProgress(((i+pct/100)/fileList.length)*100));
-      results.push({data:b64,name:f.name});
-    }
-    return results;
+    return await runConcurrent(fileList,UPLOAD_CONCURRENCY,async(f,i,onItemProgress)=>{
+      const b64=await convertFileToBase64(f,undefined,onItemProgress);
+      return{data:b64,name:f.name};
+    },onProgress,fileList.map(f=>f.size));
   },async results=>{
     window._cfbFiles.push(...results);
     const note=document.getElementById('cfb-file-note');
@@ -5686,11 +5931,17 @@ function openQuickTask(type){
         <div class="fg"><label>اسم العميل / الجهة *</label><input id="qt-client" placeholder="اسم العميل"/></div>
         <div class="fg"><label>رقم الجوال *</label><input id="qt-phone" inputmode="tel" placeholder="05XXXXXXXX"/></div>
         ${qtPipelineSelectorHtml()}
-        <div class="fg" id="qt-location-wrap" style="display:none;"><label>الموقع الميداني *</label><input id="qt-location" placeholder="اسم المنطقة والموقع..."/></div>
+        <div class="fg" id="qt-location-wrap" style="display:none;"><label>الموقع الميداني *</label>
+          <div style="display:flex;gap:6px;">
+            <input id="qt-location" placeholder="اسم المنطقة والموقع..." style="flex:1;"/>
+            <button type="button" class="btn btn-out btn-sm" onclick="captureQtGeoLocation()" title="تحديد موقعي الحالي بدقة GPS"><i class="ti ti-current-location"></i></button>
+          </div>
+          <div id="qt-geo-status" style="font-size:11px;color:var(--text-3);margin-top:4px;"></div>
+        </div>
       </div>
       <button class="btn btn-brand" id="qt-submit-btn" style="width:100%;justify-content:center;" onclick="submitQuickTaskOrInstant('${type}')"><i class="ti ti-device-floppy"></i> حفظ كمهمة فورية مستقلة</button>
     </div>`;
-  window._qtFiles=[];window._qtLinkedOrderKey='';
+  window._qtFiles=[];window._qtLinkedOrderKey='';window._qtGeo=null;
   applyQtPipelinePreset(qtPipelinePresetForType(type));
   openModal('quick-task-modal');
   setTimeout(fillQtOrderSelect,40);
@@ -5711,19 +5962,41 @@ function submitQuickTaskOrInstant(type){
   const checked=document.getElementById('qt-convert-toggle')?.checked;
   return checked?submitQuickTask(type):submitInstantTaskStandalone(type);
 }
+// The "الموقع الميداني" field was plain free text with no way to verify it —
+// a typo'd or vague area name is useless to whoever has to actually drive
+// there. This captures the device's real GPS fix (high-accuracy mode) and
+// reports its precision in meters, so "location accuracy" is an honest
+// number instead of whatever the typist remembered.
+function captureQtGeoLocation(){
+  const statusEl=document.getElementById('qt-geo-status');
+  if(!navigator.geolocation){if(statusEl)statusEl.textContent='⚠️ المتصفح لا يدعم تحديد الموقع';return;}
+  if(statusEl)statusEl.innerHTML='<i class="ti ti-loader-2"></i> جارِ تحديد الموقع بدقة...';
+  navigator.geolocation.getCurrentPosition(
+    pos=>{
+      const{latitude:lat,longitude:lng,accuracy}=pos.coords;
+      window._qtGeo={lat,lng,accuracy:Math.round(accuracy)};
+      const locInput=document.getElementById('qt-location');
+      if(locInput&&!locInput.value.trim())locInput.value=`${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+      if(statusEl)statusEl.innerHTML=`<i class="ti ti-map-pin-check" style="color:#10B981;"></i> تم تحديد الموقع بدقة ±${Math.round(accuracy)} متر`;
+    },
+    err=>{
+      window._qtGeo=null;
+      const msg=err.code===1?'الإذن بالوصول للموقع مرفوض':err.code===2?'تعذر تحديد الموقع حالياً':'انتهت مهلة تحديد الموقع';
+      if(statusEl)statusEl.innerHTML=`<i class="ti ti-alert-triangle" style="color:#DC2626;"></i> ${msg}`;
+    },
+    {enableHighAccuracy:true,timeout:15000,maximumAge:0}
+  );
+}
 function handleQtFile(files){
   if(!files||!files.length)return;
   const fileList=Array.from(files);
   const label=fileList.length>1?`${fileList.length} ملفات — مهمة فورية`:fileList[0].name;
   window._uqPendingTotalBytes=fileList.reduce((s,f)=>s+f.size,0);
   runQueuedUpload(label,async onProgress=>{
-    const results=[];
-    for(let i=0;i<fileList.length;i++){
-      const f=fileList[i];
-      const b64=await convertFileToBase64(f,undefined,pct=>onProgress(((i+pct/100)/fileList.length)*100));
-      results.push({data:b64,name:f.name});
-    }
-    return results;
+    return await runConcurrent(fileList,UPLOAD_CONCURRENCY,async(f,i,onItemProgress)=>{
+      const b64=await convertFileToBase64(f,undefined,onItemProgress);
+      return{data:b64,name:f.name};
+    },onProgress,fileList.map(f=>f.size));
   },async results=>{
     if(!window._qtFiles)window._qtFiles=[];
     window._qtFiles.push(...results);
@@ -5788,7 +6061,9 @@ async function submitQuickTask(type){
     quickTaskType:type,quickTaskPipeline:pipeline,
     quickTaskFile:(window._qtFiles&&window._qtFiles[0])?window._qtFiles[0].data:'',quickTaskFileName:(window._qtFiles&&window._qtFiles[0])?window._qtFiles[0].name:'',
     quickTaskFilesExtra:(window._qtFiles||[]).slice(1),
-    quickTaskLocation:location,status:'قيد التنفيذ',isQuickTask:true,
+    quickTaskLocation:location,
+    quickTaskGeoLat:window._qtGeo?.lat??null,quickTaskGeoLng:window._qtGeo?.lng??null,quickTaskGeoAccuracy:window._qtGeo?.accuracy??null,
+    status:'قيد التنفيذ',isQuickTask:true,
     relatedOrderKey:document.getElementById('qt-link-order-sel')?.value||window._qtLinkedOrderKey||'',
     workshopFeedback:'',workshopFeedbackDate:''
   };
@@ -8075,7 +8350,7 @@ function buildMyWork(){
       <div style="font-size:10.5px;color:var(--text-3);"><i class="ti ti-calendar-time"></i> التسليم: ${deadlineDateTime(o)}</div>
       ${_canSeeCardTotal&&o.totalAmount?`<div style="font-size:11px;font-weight:800;color:var(--maroon);margin-top:3px;"><i class="ti ti-cash"></i> إجمالي المبلغ: ${fmtMoney(Number(o.totalAmount))} ر.س</div>`:''}
       ${deadlineBadge(o.deadline,o.currentDept,o.onHold,o.cancelled)}
-      ${o.quickTaskLocation?`<div style="font-size:11px;color:#9A3412;margin-top:6px;"><i class="ti ti-map-pin"></i> ${esc(o.quickTaskLocation)}</div>`:''}
+      ${o.quickTaskLocation?`<div style="font-size:11px;color:#9A3412;margin-top:6px;"><i class="ti ti-map-pin"></i> ${esc(o.quickTaskLocation)}${(o.quickTaskGeoLat!=null&&o.quickTaskGeoLng!=null)?` <a href="https://maps.google.com/?q=${encodeURIComponent(o.quickTaskGeoLat+','+o.quickTaskGeoLng)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="color:var(--maroon);font-weight:800;">(فتح في الخريطة${o.quickTaskGeoAccuracy!=null?' — دقة ±'+esc(String(o.quickTaskGeoAccuracy))+'م':''})</a>`:''}</div>`:''}
       ${isWorkshop&&o.isQuickTask&&!o.workshopFeedbackDone?`<div style="margin-top:8px;"><button class="btn btn-orange btn-sm" onclick="event.stopPropagation();openWorkshopFeedback('${o._key}')"><i class="ti ti-clipboard-check"></i> إدخال القياسات</button></div>`:''}
       ${o.workshopFeedbackDone?`<div style="margin-top:6px;background:#F0FDF4;border:1px solid #BBF7D0;border-radius:6px;padding:6px 10px;font-size:11px;"><i class="ti ti-check" style="color:#10B981"></i> تم رفع التقرير — بانتظار الإجراء</div>`:''}
       ${(canSeeWhatsappBtn()&&o.phone&&o.phone!=='—')?`<div style="margin-top:8px"><button class="btn btn-whatsapp btn-sm" onclick="event.stopPropagation();openWhatsapp('${encodeURIComponent(o.phone)}')"><i class="ti ti-brand-whatsapp"></i> واتساب</button></div>`:''}
@@ -9952,13 +10227,10 @@ function handleChatAttachmentSelected(files){
   const label=fileList.length>1?`${fileList.length} مرفقات`:fileList[0].name;
   window._uqPendingTotalBytes=fileList.reduce((s,f)=>s+f.size,0);
   runQueuedUpload(label,async onProgress=>{
-    const results=[];
-    for(let i=0;i<fileList.length;i++){
-      const f=fileList[i];
-      const data=await convertFileToBase64(f,undefined,pct=>onProgress(((i+pct/100)/fileList.length)*100));
-      results.push({data,name:f.name});
-    }
-    return results;
+    return await runConcurrent(fileList,UPLOAD_CONCURRENCY,async(f,i,onItemProgress)=>{
+      const data=await convertFileToBase64(f,undefined,onItemProgress);
+      return{data,name:f.name};
+    },onProgress,fileList.map(f=>f.size));
   },async attachments=>{
     if(ctx.kind==='order')await pushOrderChatMessage(ctx.orderKey,{attachments});
     else if(ctx.kind==='item')await pushItemFeedbackExtra(ctx.orderKey,ctx.idx,{attachments});
@@ -10562,7 +10834,7 @@ function orderEditLinePanelHtml(key,lineLabel){
     <div style="min-width:0;flex:1;"><strong style="font-size:12px;color:var(--maroon);">بند #${i+1} — ${esc(it.name||'—')}</strong>${it.qty?`<span style="font-size:11px;color:var(--text-3);"> ×${esc(String(it.qty))}</span>`:''}${it.details?`<div style="font-size:11px;color:var(--text-2);margin-top:2px;">${esc(it.details)}</div>`:''}${it.notes?`<div style="font-size:11px;color:var(--text-2);margin-top:2px;"><i class="ti ti-note"></i> ${esc(it.notes)}</div>`:''}${chatAttachmentsHtml(itemVersions(it).flatMap(v=>v.files||[]))}</div>
     <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0;">
       <button class="btn btn-out btn-xs" onclick="closeModal('order-edit-modal');openAddItemModal('${key}',${i})"><i class="ti ti-pencil"></i> تعديل</button>
-      ${items.length>1?`<button class="btn btn-out btn-xs" onclick="closeModal('order-edit-modal');openReturnOrderModal('${key}',${i})"><i class="ti ti-arrow-back-up"></i> إرجاع</button>`:''}
+      <button class="btn btn-out btn-xs" onclick="closeModal('order-edit-modal');openReturnOrderModal('${key}'${items.length>1?`,${i}`:''})"><i class="ti ti-arrow-back-up"></i> إرجاع</button>
       <button class="btn btn-out btn-xs" style="color:#DC2626;" onclick="confirmDeleteOrderItem('${key}',${i})"><i class="ti ti-trash"></i> حذف</button>
     </div>
   </div>`).join(''):'<div style="font-size:11.5px;color:var(--text-3);">لا توجد بنود بعد</div>';
@@ -11929,13 +12201,10 @@ function handleNewItemFiles(files,orderKey){
   const label=fileList.length>1?`${fileList.length} ملفات — بند جديد`:fileList[0].name;
   window._uqPendingTotalBytes=fileList.reduce((s,f)=>s+f.size,0);
   runQueuedUpload(label,async onProgress=>{
-    const results=[];
-    for(let i=0;i<fileList.length;i++){
-      const f=fileList[i];
-      const b64=await convertFileToBase64(f,{order:orderKey},pct=>onProgress(((i+pct/100)/fileList.length)*100));
-      results.push({data:b64,name:f.name});
-    }
-    return results;
+    return await runConcurrent(fileList,UPLOAD_CONCURRENCY,async(f,i,onItemProgress)=>{
+      const b64=await convertFileToBase64(f,{order:orderKey},onItemProgress);
+      return{data:b64,name:f.name};
+    },onProgress,fileList.map(f=>f.size));
   },async results=>{
     if(!window._newItemFiles)window._newItemFiles=[];
     window._newItemFiles.push(...results);
@@ -12131,13 +12400,10 @@ function uploadFileDirect(key,ff,fn2,inputId){
   const label=(files.length>1?`${files.length} ملفات — `:'')+(o.id||key);
   window._uqPendingTotalBytes=files.reduce((s,f)=>s+f.size,0);
   runQueuedUpload(label,async onProgress=>{
-    const uploaded=[];
-    for(let i=0;i<files.length;i++){
-      const file=files[i];
-      const{data,storage}=await _uploadOneFileData(file,key,pct=>onProgress(((i+pct/100)/files.length)*100));
-      uploaded.push({data,storage,name:file.name,uploadedBy:cu.name||cu._uname||'—',uploadedAt:new Date().toISOString()});
-    }
-    return uploaded;
+    return await runConcurrent(files,UPLOAD_CONCURRENCY,async(file,i,onItemProgress)=>{
+      const{data,storage}=await _uploadOneFileData(file,key,onItemProgress);
+      return{data,storage,name:file.name,uploadedBy:cu.name||cu._uname||'—',uploadedAt:new Date().toISOString()};
+    },onProgress,files.map(f=>f.size));
   },async uploaded=>{
     const o2=orders[key];if(!o2)return;
     const existingExtra=Array.isArray(o2[ff+'Extra'])?o2[ff+'Extra']:[];
@@ -13540,13 +13806,10 @@ function attachOrderLineFile(id,files){
   const label=(fileList.length>1?`${fileList.length} ملفات — `:'')+'مرفقات البند';
   window._uqPendingTotalBytes=fileList.reduce((s,f)=>s+f.size,0);
   runQueuedUpload(label,async onProgress=>{
-    const results=[];
-    for(let i=0;i<fileList.length;i++){
-      const file=fileList[i];
-      const b64=await convertFileToBase64(file,undefined,pct=>onProgress(((i+pct/100)/fileList.length)*100));
-      results.push({data:b64,name:file.name});
-    }
-    return results;
+    return await runConcurrent(fileList,UPLOAD_CONCURRENCY,async(file,i,onItemProgress)=>{
+      const b64=await convertFileToBase64(file,undefined,onItemProgress);
+      return{data:b64,name:file.name};
+    },onProgress,fileList.map(f=>f.size));
   },async results=>{
     // Re-find the line fresh instead of trusting a closed-over reference —
     // the user is free to navigate away and back while this runs in the
