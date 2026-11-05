@@ -4722,23 +4722,35 @@ function getPrevDept(o){const seq=getActiveDepts(o);if(o.currentDept==='done')re
 // before/after detail. getPrevDept(o) stays in use elsewhere (badges,
 // nextBtn gating) purely to decide WHETHER a return is possible at all.
 // ============================================================
-function openReturnOrderModal(key,itemIdx){
+// _retDirection ('back'|'forward') is set once by openReturnOrderModal and
+// read by renderReturnTargetOptions()/confirmReturnOrder() afterward —
+// "تقديم لمرحلة تالية" and "إرجاع لمرحلة سابقة" are the same underlying
+// move-to-any-stage mechanic, just offering the OTHER half of the sequence
+// and worded/logged accordingly, so one pair of functions covers both
+// instead of duplicating the whole scope-picker/target-picker/confirm flow.
+let _retDirection='back';
+function openReturnOrderModal(key,itemIdx,direction='back'){
   const o=orders[key];if(!o)return;
   if(cu.type!=='admin'){toast('⚠️ هذا الإجراء متاح للمدير فقط');return;}
+  _retDirection=direction;
+  const isFwd=direction==='forward';
   const items=o.orderItems||[];
   const initialScope=(itemIdx!==undefined&&itemIdx!==null)?String(itemIdx):'order';
-  const scopeOptionsHtml=items.length>1?`<div class="fg"><label>نطاق الإرجاع</label>
+  const scopeOptionsHtml=items.length>1?`<div class="fg"><label>النطاق</label>
     <select id="ret-scope-${key}" onchange="renderReturnTargetOptions('${key}')">
       <option value="order" ${initialScope==='order'?'selected':''}>الطلب بالكامل</option>
       ${items.map((it,i)=>`<option value="${i}" ${initialScope===String(i)?'selected':''}>بند: ${esc(it.name||('#'+(i+1)))}</option>`).join('')}
     </select>
   </div>`:'';
+  const icon=isFwd?'ti-send-2':'ti-arrow-back-up';
+  const title=isFwd?'تقديم لمرحلة تالية':'إرجاع لمرحلة سابقة';
+  const actionWord=isFwd?'التقديم':'الإرجاع';
   document.getElementById('task-modal-body').innerHTML=`
-    <div class="modal-header"><span class="modal-title"><i class="ti ti-arrow-back-up"></i> إرجاع لمرحلة سابقة</span><button class="btn-close" onclick="closeModal('task-modal')">×</button></div>
+    <div class="modal-header"><span class="modal-title"><i class="ti ${icon}"></i> ${title}</span><button class="btn-close" onclick="closeModal('task-modal')">×</button></div>
     ${scopeOptionsHtml}
     <div class="fg"><label>المرحلة المستهدفة</label><div id="ret-target-wrap-${key}"></div></div>
-    <div class="fg"><label>سبب الإرجاع (اختياري)</label><textarea id="ret-reason-${key}" placeholder="مثال: يحتاج تعديل من التصميم..." style="min-height:70px;"></textarea></div>
-    <button class="btn btn-brand" style="width:100%;justify-content:center;" onclick="confirmReturnOrder('${key}')"><i class="ti ti-arrow-back-up"></i> تأكيد الإرجاع</button>`;
+    <div class="fg"><label>سبب ${actionWord} (اختياري)</label><textarea id="ret-reason-${key}" placeholder="${isFwd?'مثال: تم إنجاز هذه المرحلة مبكراً...':'مثال: يحتاج تعديل من التصميم...'}" style="min-height:70px;"></textarea></div>
+    <button class="btn btn-brand" style="width:100%;justify-content:center;" onclick="confirmReturnOrder('${key}')"><i class="ti ${icon}"></i> تأكيد ${actionWord}</button>`;
   renderReturnTargetOptions(key);
   openModal('task-modal');
 }
@@ -4747,6 +4759,7 @@ function renderReturnTargetOptions(key){
   const wrap=document.getElementById('ret-target-wrap-'+key);if(!wrap)return;
   const scopeSel=document.getElementById('ret-scope-'+key);
   const scopeVal=scopeSel?scopeSel.value:'order';
+  const isFwd=_retDirection==='forward';
   const seq=getActiveDepts(o);
   // 'delivery' sits past the end of getActiveDepts() by design (it's a
   // universal order-level gate, not a per-order production stage — see
@@ -4779,47 +4792,74 @@ function renderReturnTargetOptions(key){
   // position is a far more reasonable stand-in than assuming the very start.
   if(curIdx===-1)curIdx=resolveIdx(o.currentDept);
   if(curIdx===-1)curIdx=0;
-  // An item itself never actually sits AT 'delivery' (only the order does),
-  // so even when curIdx resolves past the end of `seq` (inherited from a
-  // done/delivery order), its own list of return targets is capped to the
-  // real production stages — delivery is only ever offered as a target for
-  // the whole-order scope above.
-  const sliceEnd=scopeVal==='order'?curIdx:Math.min(curIdx,seq.length);
-  const options=fullSeq.slice(0,sliceEnd).map(dk=>`<option value="${dk}">${esc((WF_DEPT_META[dk]||{label:dk}).label)}</option>`);
-  wrap.innerHTML=options.length?`<select id="ret-target-${key}">${options.join('')}</select>`:'<div style="font-size:11.5px;color:var(--text-3);">لا توجد مرحلة سابقة يمكن الإرجاع إليها لهذا النطاق</div>';
+  let options;
+  if(isFwd){
+    // Forward targets: everything AFTER the current position, capped at
+    // 'delivery' for the whole order — jumping straight into 'done' is a
+    // deliberate, separate action (archiveOrder(), reachable from the same
+    // row menu) with its own archival side effects, not a plain stage
+    // move. A single item is capped to the remaining real production
+    // stages only — an item's own currentDept never actually holds
+    // 'delivery'/'done' (only the order does; see itemCurrentDept()), so
+    // offering either as an item-scope target would write a value nothing
+    // else in the app expects to find there.
+    if(scopeVal==='order'){
+      options=fullSeq.slice(curIdx+1);
+    }else{
+      options=seq.slice(Math.min(curIdx+1,seq.length));
+    }
+  }else{
+    // Backward targets: everything BEFORE the current position. An item
+    // itself never actually sits AT 'delivery' (only the order does), so
+    // even when curIdx resolves past the end of `seq` (inherited from a
+    // done/delivery order), its own list of return targets is capped to
+    // the real production stages — delivery is only ever offered as a
+    // target for the whole-order scope above.
+    const sliceEnd=scopeVal==='order'?curIdx:Math.min(curIdx,seq.length);
+    options=fullSeq.slice(0,sliceEnd);
+  }
+  const optionsHtml=options.map(dk=>`<option value="${dk}">${esc((WF_DEPT_META[dk]||{label:dk}).label)}</option>`);
+  wrap.innerHTML=optionsHtml.length?`<select id="ret-target-${key}">${optionsHtml.join('')}</select>`:`<div style="font-size:11.5px;color:var(--text-3);">لا توجد مرحلة ${isFwd?'تالية':'سابقة'} يمكن ${isFwd?'التقديم':'الإرجاع'} إليها لهذا النطاق</div>`;
 }
 async function confirmReturnOrder(key){
   const o=orders[key];if(!o)return;
   if(!guardWrite(cu.type==='admin','⚠️ هذا الإجراء متاح للمدير فقط'))return;
+  const isFwd=_retDirection==='forward';
+  const actionWord=isFwd?'التقديم':'الإرجاع';
+  const verb=isFwd?'قدّم':'أرجع';
+  const icon=isFwd?'ti-send-2':'ti-arrow-back-up';
   const scopeSel=document.getElementById('ret-scope-'+key);
   const scopeVal=scopeSel?scopeSel.value:'order';
   const targetSel=document.getElementById('ret-target-'+key);
-  if(!targetSel||!targetSel.value){toast('⚠️ لا توجد مرحلة سابقة متاحة لهذا النطاق');return;}
+  if(!targetSel||!targetSel.value){toast(`⚠️ لا توجد مرحلة متاحة لهذا النطاق`);return;}
   const targetDept=targetSel.value;
   const reason=(document.getElementById('ret-reason-'+key)?.value||'').trim();
   const deptLbl=(WF_DEPT_META[targetDept]||{label:targetDept}).label;
-  showSaving('جاري الإرجاع...');
+  showSaving(`جاري ${actionWord}...`);
   try{
     if(scopeVal==='order'){
       const fromLbl=(WF_DEPT_META[o.currentDept]||{label:o.currentDept}).label;
+      const upd={currentDept:targetDept,stageStartDate:new Date().toISOString(),status:'قيد المتابعة'};
       // reverted/revertedAt/revertedBy/revertedFrom/revertedTo are permanent —
       // never cleared, even once the order later finishes — so the "طلب مرجع"
       // badge (orderRowBadges/od-header-title) keeps flagging that this order
       // was sent backward at some point, for as long as the order exists.
-      const upd={currentDept:targetDept,stageStartDate:new Date().toISOString(),status:'قيد المتابعة',reverted:true,revertedAt:new Date().toISOString(),revertedBy:cu.name,revertedFrom:o.currentDept,revertedTo:targetDept};
+      // Only a genuine backward move earns that flag — a forward skip isn't
+      // a correction being flagged for visibility, it's normal progress.
+      if(!isFwd)Object.assign(upd,{reverted:true,revertedAt:new Date().toISOString(),revertedBy:cu.name,revertedFrom:o.currentDept,revertedTo:targetDept});
       if(o.currentDept==='done'){upd.archivedAt=null;upd.workshopFeedbackDone=null;}
       // Per-item independent workflow: itemCurrentDept() prefers an item's own
       // currentDept over the order's, so an item already individually advanced
       // past this point would otherwise keep sitting at its own later stage —
       // invisible on the target department's per-item board — even though the
-      // order itself just moved back. Bring every item down to the same stage
-      // the whole order is being reverted to, so the target department's queue
-      // actually shows it immediately.
+      // order itself just moved. Bring every item to the same stage the whole
+      // order is being moved to, so the target department's queue actually
+      // shows it immediately.
       if(o.orderItems&&o.orderItems.length)upd.orderItems=o.orderItems.map(it=>({...it,currentDept:targetDept}));
       await fbPatch(`orders/${key}`,upd);
-      logOrderActivity(key,'ti-arrow-back-up',`↩️ ${cu.name} أرجع الطلب بالكامل إلى مرحلة: ${deptLbl}${reason?' — السبب: '+reason:''}`,{'النطاق':'الطلب بالكامل','من':fromLbl,'إلى':deptLbl,'السبب':reason||'—'});
+      logOrderActivity(key,icon,`${isFwd?'⏩':'↩️'} ${cu.name} ${verb} الطلب بالكامل إلى مرحلة: ${deptLbl}${reason?' — السبب: '+reason:''}`,{'النطاق':'الطلب بالكامل','من':fromLbl,'إلى':deptLbl,'السبب':reason||'—'});
       const targetAssignee=targetDept!=='delivery'?o[targetDept+'To']:null;
-      pushNotification({type:'workflow_update',message:`تم إرجاع الطلب ${esc(o.id||key)} إليك — ${esc(deptLbl)}`,orderKey:key,orderId:o.id,client:o.client,targetUname:(targetAssignee&&targetAssignee!=='none')?targetAssignee:'all-admin'});
+      pushNotification({type:'workflow_update',message:`تم ${actionWord} الطلب ${esc(o.id||key)} إليك — ${esc(deptLbl)}`,orderKey:key,orderId:o.id,client:o.client,targetUname:(targetAssignee&&targetAssignee!=='none')?targetAssignee:'all-admin'});
     }else{
       const idx=parseInt(scopeVal,10);
       const items=[...(o.orderItems||[])];
@@ -4831,13 +4871,13 @@ async function confirmReturnOrder(key){
       const newOrderDept=computeOrderDeptFromItems(o,items);
       if(newOrderDept&&newOrderDept!==o.currentDept){upd.currentDept=newOrderDept;upd.stageStartDate=new Date().toISOString();}
       await fbPatch(`orders/${key}`,upd);
-      logOrderActivity(key,'ti-arrow-back-up',`↩️ ${cu.name} أرجع البند "${esc(it.name||('#'+(idx+1)))}" إلى مرحلة: ${deptLbl}${reason?' — السبب: '+reason:''}`,{'النطاق':'بند: '+(it.name||('#'+(idx+1))),'من':fromLbl,'إلى':deptLbl,'السبب':reason||'—'});
+      logOrderActivity(key,icon,`${isFwd?'⏩':'↩️'} ${cu.name} ${verb} البند "${esc(it.name||('#'+(idx+1)))}" إلى مرحلة: ${deptLbl}${reason?' — السبب: '+reason:''}`,{'النطاق':'بند: '+(it.name||('#'+(idx+1))),'من':fromLbl,'إلى':deptLbl,'السبب':reason||'—'});
       const targetAssignee=o[targetDept+'To'];
-      pushNotification({type:'workflow_update',message:`تم إرجاع بند من الطلب ${esc(o.id||key)} إليك — ${esc(deptLbl)}`,orderKey:key,orderId:o.id,client:o.client,targetUname:(targetAssignee&&targetAssignee!=='none')?targetAssignee:'all-admin'});
+      pushNotification({type:'workflow_update',message:`تم ${actionWord} بند من الطلب ${esc(o.id||key)} إليك — ${esc(deptLbl)}`,orderKey:key,orderId:o.id,client:o.client,targetUname:(targetAssignee&&targetAssignee!=='none')?targetAssignee:'all-admin'});
     }
     await loadData();hideSaving();closeModal('task-modal');closeModal('order-modal');
-    toast('✓ تم الإرجاع');refreshCurrentPage();
-  }catch(e){hideSaving();toast('❌ فشل الإرجاع، حاول مرة أخرى');}
+    toast(`✓ تم ${actionWord}`);refreshCurrentPage();
+  }catch(e){hideSaving();toast(`❌ فشل ${actionWord}، حاول مرة أخرى`);}
 }
 function getDeptWorkers(deptKey){const dept=DEPTS.find(d=>d.key===deptKey);if(!dept||!dept.roles.length)return[];return Object.entries(USERS).filter(([,v])=>dept.roles.includes(v.type)).map(([uname,v])=>({uname,name:v.name}));}
 function isMyOrder(o){
@@ -5445,20 +5485,27 @@ function renderOrderItemsCards(o,key,canAct){
           return `<label class="btn btn-brand btn-sm" for="${inputId}" onclick="event.stopPropagation();"><i class="ti ti-upload"></i> رفع بروفة</label>
           <input type="file" multiple id="${inputId}" style="display:none" accept="*/*" onclick="event.stopPropagation();" onchange="event.stopPropagation();saveItemKindFiles('${key}',${i},'design_proof','${inputId}')"/>`;
         })():'';
-        // تعديل/حذف/نقل-إرجاع were previously reachable only through the
+        // تعديل/حذف/تقديم/إرجاع were previously reachable only through the
         // separate admin "تعديل الطلب" modal (orderEditLinePanelHtml) — not
-        // from the item card staff actually work from day to day. Surfacing
-        // them right here (same canEditOrderComposition() gate the edit
-        // modal itself uses — admin/receiver only) means managing an item
-        // no longer requires leaving this card to find a buried settings
-        // modal for something as basic as fixing a typo or moving a misfiled
-        // item.
+        // from the item card staff actually work from day to day. A first
+        // version surfaced them as four more standalone buttons right on
+        // the card, which just crowded it further — collapsed into the same
+        // "⋮" row-menu already used everywhere else in the app (order rows,
+        // quotes, the designer board card) instead, same
+        // canEditOrderComposition() gate (admin/receiver only) as the edit
+        // modal itself.
         const canManageItem=canEditOrderComposition();
-        const itemMgmtBtnHtml=canManageItem?`
-          <button class="btn btn-out btn-sm" onclick="event.stopPropagation();openAddItemModal('${key}',${i})"><i class="ti ti-pencil"></i> تعديل</button>
-          <button class="btn btn-out btn-sm" onclick="event.stopPropagation();openReturnOrderModal('${key}'${items.length>1?`,${i}`:''})"><i class="ti ti-arrow-back-up"></i> نقل / إرجاع</button>
-          <button class="btn btn-out btn-sm" style="color:#DC2626;" onclick="event.stopPropagation();confirmDeleteOrderItem('${key}',${i})"><i class="ti ti-trash"></i> حذف</button>`:'';
-        const actionsRowHtml=`<div style="display:flex;gap:6px;flex-wrap:wrap;">
+        const mgmtMenuId=`oi-mgmt-${key}-${i}`;
+        const itemMgmtBtnHtml=canManageItem?`<div class="row-menu-wrap" onclick="event.stopPropagation();">
+          <button class="btn btn-out btn-sm" onclick="toggleRowMenu('${mgmtMenuId}')"><i class="ti ti-dots-vertical"></i> خيارات</button>
+          <div class="row-menu" id="${mgmtMenuId}" style="display:none;">
+            <button onclick="closeAllRowMenus();openAddItemModal('${key}',${i})"><i class="ti ti-pencil"></i> تعديل البند</button>
+            <button onclick="closeAllRowMenus();openReturnOrderModal('${key}',${i},'forward')"><i class="ti ti-send-2"></i> تقديم لمرحلة تالية</button>
+            <button onclick="closeAllRowMenus();openReturnOrderModal('${key}',${i},'back')"><i class="ti ti-arrow-back-up"></i> إرجاع لمرحلة سابقة</button>
+            <button style="color:#DC2626;" onclick="closeAllRowMenus();confirmDeleteOrderItem('${key}',${i})"><i class="ti ti-trash"></i> حذف البند</button>
+          </div>
+        </div>`:'';
+        const actionsRowHtml=`<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
           ${proofUploadBtnHtml}
           ${(canSeeWhatsappBtn()&&o.phone&&o.phone!=='—')?`<button class="btn btn-whatsapp btn-sm" onclick="event.stopPropagation();openWhatsapp('${encodeURIComponent(o.phone)}')" title="واتساب"><i class="ti ti-brand-whatsapp"></i></button>`:''}
           ${canSeeClientFeedback()?`<button class="btn btn-out btn-sm" onclick="event.stopPropagation();openClientFeedbackPanel('${key}',${i})"><i class="ti ti-message-2"></i> تعديل مطلوب</button>`:''}
