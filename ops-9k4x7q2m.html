@@ -2357,7 +2357,6 @@ let orderSeenMap={};
 // state — see markChatSeen()/hasUnreadChat() below.
 let chatSeenMap={};
 let _lastAssignSnapshot=null,_lastNotifSnapshot=null,_audioCtx=null,_audioUnlocked=false;
-let _navHistory=[];
 let _nuPhotoB64='',_euPhotoB64='',_euSelectedColor='',_nuSelectedColor='';
 let _curPage=null,_navBusy=false;
 let _currentWfTab='active';
@@ -2583,7 +2582,6 @@ function closeStarTicker(){
   document.body.classList.remove('has-ticker');
 }
 async function enterApp(u){
-  _navHistory=[];
   // A frozen SHALLOW COPY, not the live USERS[u] reference: every permission
   // check in the app reads cu.type/cu._uname directly, so leaving cu mutable
   // meant a single `cu.type='admin'` in the browser console instantly passed
@@ -2981,32 +2979,48 @@ function checkNewEventNotifs(){
 // STARTUP
 // ============================================================
 window.addEventListener('load',async()=>{
+  // Session-only auth: a leftover localStorage token from before this change
+  // (or from a device that never closed its browser) must never auto-login —
+  // only sessionStorage (cleared on browser/tab close) is a valid source now.
+  localStorage.removeItem(SESSION_KEY);
+  const sess=sessionStorage.getItem(SESSION_KEY);
+  let s=null;
+  if(sess){try{s=JSON.parse(sess);}catch(e){s=null;}}
+  // True instant paint, no loading overlay at all: a sessionStorage token
+  // only ever exists in this tab after a real login already succeeded here,
+  // and a same-tab data cache means this isn't the first load since then —
+  // so there is nothing left to prove before painting. The previous version
+  // still called showSaving('جاري التحميل...') and awaited syncUsers()'s own
+  // network round-trip BEFORE ever reaching the cache-restore branch, so
+  // every single refresh paid for a real network stall behind a full-screen
+  // overlay — visually indistinguishable from being logged out and signing
+  // back in, even though the session itself was still perfectly valid.
+  // Re-validate for real in the background instead, and only disrupt the
+  // now-rendered app (reload to the login screen) if that genuinely fails —
+  // e.g. the account was disabled or its password changed elsewhere.
+  if(s&&s.uname&&_restoreDataCache()){
+    enterApp(s.uname);
+    (async()=>{
+      try{
+        await syncUsers();
+        const rec=USERS[s.uname];
+        const stillValid=rec&&s.tok&&(isHashedPass(rec.pass)?s.tok===rec.pass:s.tok===await makeSessionToken(s.uname,rec.pass));
+        if(!stillValid){localStorage.removeItem(SESSION_KEY);sessionStorage.removeItem(SESSION_KEY);location.reload();return;}
+        await loadData();refreshCurrentPage();
+      }catch(e){}
+    })();
+    return;
+  }
   showSaving('جاري التحميل...');
   try{
     await syncUsers();
-    // Session-only auth: a leftover localStorage token from before this change
-    // (or from a device that never closed its browser) must never auto-login —
-    // only sessionStorage (cleared on browser/tab close) is a valid source now.
-    localStorage.removeItem(SESSION_KEY);
-    const sess=sessionStorage.getItem(SESSION_KEY);
-    if(sess){
+    if(s&&s.uname){
       try{
-        const s=JSON.parse(sess);
         const rec=USERS[s.uname];
         // rec.pass is a hash post-migration, so the stored token can be compared to it
         // directly; a not-yet-migrated legacy account still needs one re-derivation.
         const stillValid=rec&&s.tok&&(isHashedPass(rec.pass)?s.tok===rec.pass:s.tok===await makeSessionToken(s.uname,rec.pass));
-        if(s.uname&&stillValid){
-          // Instant paint on cold load: if a same-tab-session cache exists,
-          // render immediately from it instead of blocking on a full network
-          // round-trip, then quietly refresh with live data in the background.
-          // First-ever load in this tab (no cache yet) falls back to the
-          // original blocking fetch — nothing to show early in that case anyway.
-          if(_restoreDataCache()){
-            hideSaving();enterApp(s.uname);
-            loadData().then(()=>refreshCurrentPage()).catch(()=>{});
-            return;
-          }
+        if(stillValid){
           await loadData();hideSaving();enterApp(s.uname);return;
         }
       }catch(e){}
@@ -4448,9 +4462,36 @@ async function nav(p,skipHistory=false){
     if(_restoreScrollTo==null)return;
     requestAnimationFrame(()=>requestAnimationFrame(()=>window.scrollTo({top:_restoreScrollTo,behavior:'instant'})));
   };
-  if(!skipHistory&&_curPage&&_curPage!==p)_navHistory.push(_curPage);
+  const _isFirstNav=(_curPage===null);
   _curPage=p;
   if(cu&&cu._uname){try{localStorage.setItem('rawaee_last_page_'+cu._uname,p);}catch(e){}}
+  // Real browser back/forward support: every "forward" navigation (the
+  // default — a sidebar click, opening an order, etc.) pushes a new history
+  // entry, same as any ordinary website, so the physical back/forward
+  // buttons actually work instead of being completely disconnected from the
+  // app (there was no history.pushState anywhere before this). A skipHistory
+  // nav (navBack() itself, or a deliberate detour like itemworkBack() that
+  // must not leave an extra entry behind — see its own comment) replaces the
+  // CURRENT entry in place instead of stacking a new one. window._navFromPop
+  // is set only while the popstate handler below is driving this same nav()
+  // call — history itself already moved in that case, so touching it again
+  // here would fight the browser instead of following it.
+  if(!window._navFromPop){
+    try{
+      const url='#'+p;
+      // 'orderdetails'/'itemwork' are single pages whose actual content
+      // depends on an auxiliary key variable set by whatever opened them
+      // (see openOrderPage()/openItemWorkspace()) — storing that key in the
+      // history entry too means going back/forward between two DIFFERENT
+      // opened orders/items lands on the right one, not whichever was
+      // opened most recently.
+      const st={page:p};
+      if(p==='orderdetails')st.orderKey=window._orderDetailsKey;
+      else if(p==='itemwork'){st.itemworkKey=window._itemworkKey;st.itemworkIdx=window._itemworkIdx;}
+      if(_isFirstNav||skipHistory)history.replaceState(st,'',url);
+      else history.pushState(st,'',url);
+    }catch(e){}
+  }
   // Instant page swap — no artificial transition delay before it (the CSS
   // .page.active entrance animation is still purely visual/non-blocking;
   // only the awaited JS exit-animation timeout that used to gate this swap
@@ -4481,7 +4522,20 @@ async function nav(p,skipHistory=false){
   // filter out before the user ever saw the settled page.
   window._wfKpiFilterOnce=null;
 }
-function navBack(){if(_navHistory.length===0)return;const prev=_navHistory.pop();nav(prev,true);}
+// Routed through the real browser history (history.back()) instead of a
+// separate hand-rolled stack, so this in-app "رجوع" button and the
+// physical browser back button always agree on where "back" leads — the
+// popstate listener below is what actually re-renders once history moves.
+function navBack(){history.back();}
+window.addEventListener('popstate',e=>{
+  if(!cu)return;
+  const pg=e.state&&e.state.page;
+  if(!pg||!document.getElementById('page-'+pg))return;
+  if(pg==='orderdetails'&&e.state.orderKey)window._orderDetailsKey=e.state.orderKey;
+  else if(pg==='itemwork'&&e.state.itemworkKey){window._itemworkKey=e.state.itemworkKey;window._itemworkIdx=e.state.itemworkIdx;}
+  window._navFromPop=true;
+  try{nav(pg,true);}finally{window._navFromPop=false;}
+});
 function backBtnHtml(){return`<div style="margin-bottom:16px;"><button class="btn btn-out btn-sm" onclick="navBack()"><i class="ti ti-arrow-right"></i> رجوع</button></div>`;}
 // Item Workspace's own back button — see itemworkBack(): must return to the
 // parent order's modal, not the generic page-history stack navBack() uses.
@@ -5391,12 +5445,26 @@ function renderOrderItemsCards(o,key,canAct){
           return `<label class="btn btn-brand btn-sm" for="${inputId}" onclick="event.stopPropagation();"><i class="ti ti-upload"></i> رفع بروفة</label>
           <input type="file" multiple id="${inputId}" style="display:none" accept="*/*" onclick="event.stopPropagation();" onchange="event.stopPropagation();saveItemKindFiles('${key}',${i},'design_proof','${inputId}')"/>`;
         })():'';
+        // تعديل/حذف/نقل-إرجاع were previously reachable only through the
+        // separate admin "تعديل الطلب" modal (orderEditLinePanelHtml) — not
+        // from the item card staff actually work from day to day. Surfacing
+        // them right here (same canEditOrderComposition() gate the edit
+        // modal itself uses — admin/receiver only) means managing an item
+        // no longer requires leaving this card to find a buried settings
+        // modal for something as basic as fixing a typo or moving a misfiled
+        // item.
+        const canManageItem=canEditOrderComposition();
+        const itemMgmtBtnHtml=canManageItem?`
+          <button class="btn btn-out btn-sm" onclick="event.stopPropagation();openAddItemModal('${key}',${i})"><i class="ti ti-pencil"></i> تعديل</button>
+          <button class="btn btn-out btn-sm" onclick="event.stopPropagation();openReturnOrderModal('${key}'${items.length>1?`,${i}`:''})"><i class="ti ti-arrow-back-up"></i> نقل / إرجاع</button>
+          <button class="btn btn-out btn-sm" style="color:#DC2626;" onclick="event.stopPropagation();confirmDeleteOrderItem('${key}',${i})"><i class="ti ti-trash"></i> حذف</button>`:'';
         const actionsRowHtml=`<div style="display:flex;gap:6px;flex-wrap:wrap;">
           ${proofUploadBtnHtml}
           ${(canSeeWhatsappBtn()&&o.phone&&o.phone!=='—')?`<button class="btn btn-whatsapp btn-sm" onclick="event.stopPropagation();openWhatsapp('${encodeURIComponent(o.phone)}')" title="واتساب"><i class="ti ti-brand-whatsapp"></i></button>`:''}
           ${canSeeClientFeedback()?`<button class="btn btn-out btn-sm" onclick="event.stopPropagation();openClientFeedbackPanel('${key}',${i})"><i class="ti ti-message-2"></i> تعديل مطلوب</button>`:''}
           ${(canApproveClientProof()&&dcol==='waiting')?`<button class="btn btn-green btn-sm" onclick="event.stopPropagation();approveItemProof('${key}',${i})"><i class="ti ti-circle-check"></i> تعميد التصميم</button>`:''}
           ${(canApproveClientProof()&&dcol==='revision')?`<button class="btn btn-green btn-sm" onclick="event.stopPropagation();approveItemProof('${key}',${i})"><i class="ti ti-circle-check"></i> تعميد التصميم مباشرة</button>`:''}
+          ${itemMgmtBtnHtml}
         </div>`;
         return `<div class="oi-card-actions">
         ${isDone?(canToggleEdit?`<button class="btn btn-out btn-xs" style="width:100%;justify-content:center;" onclick="event.stopPropagation();toggleDoneItemEditMode('${actionsId}',this)"><i class="ti ti-lock-open"></i> تعديل الطلب</button>`:'')+`<div id="${actionsId}" style="display:none;margin-top:6px;">${actionsRowHtml}</div>`:actionsRowHtml}
