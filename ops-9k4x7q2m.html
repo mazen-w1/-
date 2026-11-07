@@ -11888,7 +11888,7 @@ function sendWhatsappPaymentClaim(key){
   const n=String(o.phone).replace(/[^0-9]/g,'');
   const full=n.startsWith('0')?'966'+n.substring(1):n;
   const msg=`تذكير بخصوص طلبكم ${o.id||key} لدى روائع الأفكار الإعلانية — المبلغ المتبقي على الطلب هو ${fmtMoney(remaining)} ر.س. نأمل تسديده في أقرب وقت ممكن. شكراً لتعاملكم معنا.`;
-  window.open(`https://web.whatsapp.com/send?phone=${full}&text=${encodeURIComponent(msg)}`,'rawaee_whatsapp');
+  window.open(`https://wa.me/${full}?text=${encodeURIComponent(msg)}`,'rawaee_whatsapp');
 }
 // Sidebar "اعتماد بروفة" / "اعتماد ورشة" quick controls: rather than fabricate
 // a new direct-mutation shortcut whose exact effect on order-level approval
@@ -13719,12 +13719,17 @@ function onClientInput(val){
     if(phoneEl&&ex.phone&&!phoneEl.value)phoneEl.value=ex.phone;
   }
 }
-// Named target (not '_blank') so every WhatsApp click across the app reuses
-// the SAME browser tab/window instead of spawning a fresh one each time —
-// clicking the button on three different orders used to leave three
-// separate WhatsApp tabs open; now the existing one is just navigated/
-// refocused to the new chat.
-function openWhatsapp(phoneEncoded){const phone=safeDecodeURIComponent(phoneEncoded);if(!phone){toast('⚠️ يرجى إدخال رقم جوال');return;}const n=phone.replace(/[^0-9]/g,'');const full=n.startsWith('0')?'966'+n.substring(1):n;window.open(`https://web.whatsapp.com/send?phone=${full}`,'rawaee_whatsapp');}
+// wa.me (not web.whatsapp.com) — web.whatsapp.com is a plain https URL, so
+// the browser always treats it as a website and opens it in a new browser
+// tab no matter what, even with a named window target. wa.me is the actual
+// universal "click to chat" link WhatsApp documents for this: on a machine
+// with the WhatsApp Desktop app installed, the OS hands it off to THAT
+// already-running app instead (the literal "same WhatsApp that's already
+// open" the chat is meant to land in), falling back to opening
+// web.whatsapp.com in the browser only when no app is registered to handle
+// it. The named target still applies for that browser fallback, so repeat
+// clicks reuse one tab instead of piling up a new one each time.
+function openWhatsapp(phoneEncoded){const phone=safeDecodeURIComponent(phoneEncoded);if(!phone){toast('⚠️ يرجى إدخال رقم جوال');return;}const n=phone.replace(/[^0-9]/g,'');const full=n.startsWith('0')?'966'+n.substring(1):n;window.open(`https://wa.me/${full}`,'rawaee_whatsapp');}
 // Manual WhatsApp contact buttons are restricted to the roles who actually
 // talk to clients — designers (design approval back-and-forth) and
 // receiver/admin (reception). Printer/workshop/external never contact
