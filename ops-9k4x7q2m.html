@@ -8690,6 +8690,31 @@ function buildItemWorkspacePage(){
         </div>
       </div>
     </div>
+    ${(cu.type==='admin'||cu.type==='receiver')?(()=>{
+      // The per-stage file boxes below are deliberately gated to the item's
+      // CURRENT stage only (design's boxes disappear once it moves to print,
+      // print's once it moves to workshop, etc.) — correct for staff who
+      // should only see what's relevant to their own stage, but it meant a
+      // manager/reception opening an item that had already moved on could no
+      // longer see what was uploaded earlier (e.g. the original design files,
+      // once the item reached workshop). Admin/reception get the full history
+      // across every stage here instead, always visible, never hidden behind
+      // whichever stage the item happens to be at right now.
+      const allWithFiles=itemVersions(it).filter(v=>!v._legacy&&v.files&&v.files.length).slice().reverse();
+      if(!allWithFiles.length)return'';
+      return`<div class="card" style="margin-bottom:14px;">
+        <div class="card-header"><span class="card-title"><i class="ti ti-folders"></i> جميع ملفات البند عبر كل المراحل</span></div>
+        <div style="padding:16px 20px;display:flex;flex-direction:column;gap:8px;">
+          ${allWithFiles.map(v=>`<div class="ik-file-row">
+            <div class="ik-file-row-main">
+              <div style="font-size:10px;color:var(--text-3);font-weight:700;margin-bottom:3px;">${esc(fileKindTagLabel(v))}${v.stage?' · '+esc((WF_DEPT_META[v.stage]||{label:v.stage}).label):''}</div>
+              <div class="ik-file-links">${(v.files||[]).map(f=>fileLinkHtml(f.name,f.data)).join('')}</div>
+              <div class="ik-file-meta"><i class="ti ti-user"></i> ${esc(v.createdBy||'—')} ${v.createdAt?'· '+fmtDateTime(v.createdAt):''}</div>
+            </div>
+          </div>`).join('')}
+        </div>
+      </div>`;
+    })():''}
     ${(()=>{
       // Dynamic per-workflow file sections — same rules as the admin order
       // view: Design shows exactly the boxes its active downstream
@@ -12025,6 +12050,12 @@ function buildOrderDetailsPage(){
         }else if(o.printTo==='none'&&o.workshopTo!=='none'){
           if(!o.approvedWorkshopFile)_missingFiles.push('بروفة تصميم معتمدة');
         }else if(o.printTo!=='none'){
+          // Same "external sits between design and print" check as the
+          // upload box itself (see _externalBeforePrint below) — the file
+          // is only required when that dedicated box is actually shown.
+          const _extSeq=getActiveDepts(o);
+          const _extBeforePrintGate=o.externalTo&&o.externalTo!=='none'&&_extSeq.indexOf('external')!==-1&&_extSeq.indexOf('print')!==-1&&_extSeq.indexOf('external')<_extSeq.indexOf('print');
+          if(_extBeforePrintGate&&!o.designExternalFile)_missingFiles.push('ملف التنفيذ الخارجي');
           if(!o.clientApprovalImage)_missingFiles.push('الملف المعتمد للتصميم');
           if(!o.approvedPrintFile)_missingFiles.push('بروفة التصميم');
           if(o.workshopTo!=='none'&&!o.approvedWorkshopFile)_missingFiles.push('ملف الإنتاج للورشة');
@@ -12051,6 +12082,16 @@ function buildOrderDetailsPage(){
       const _isProofQt=o.isQuickTask&&o.printTo==='none'&&o.workshopTo==='none';
       const _printActive=o.printTo!=='none';
       const _workshopActive=o.workshopTo!=='none';
+      // Design's boxes below were always labeled for whichever department
+      // consumes them directly (print/workshop) — but when External
+      // Execution sits BETWEEN design and print in this order's actual
+      // sequence (the default order whenever both are active — see
+      // getActiveDepts()), the very next stop for these files is really the
+      // external contractor, not print, and there was no way to hand them a
+      // file of their own distinct from what print eventually receives.
+      const _seqForExt=getActiveDepts(o);
+      const _externalActive=o.externalTo&&o.externalTo!=='none';
+      const _externalBeforePrint=_printActive&&_externalActive&&_seqForExt.indexOf('external')!==-1&&_seqForExt.indexOf('print')!==-1&&_seqForExt.indexOf('external')<_seqForExt.indexOf('print');
       // Broadened to accept every file format (audio/video/design/docs/archives),
       // not just image/design-related MIME types — see the "universal file
       // support" pass across all upload inputs in this file.
@@ -12079,6 +12120,7 @@ function buildOrderDetailsPage(){
       </div>`;
       }else if(_printActive){
         uploadArea=`<div class="dept-upload-box"><div class="dept-upload-title" style="color:#6B21A8"><i class="ti ti-brush"></i> ملفات التصميم المطلوبة</div>
+        ${_externalBeforePrint?`<div class="fg" style="margin-bottom:10px"><label>ملف التنفيذ الخارجي:</label><input type="file" multiple id="f-designext-input" accept="${_designFormats}" onchange="uploadFileDirect('${key}','designExternalFile','designExternalFileName','f-designext-input')"/><textarea id="f-designext-input-note" class="dept-upload-note" placeholder="ملاحظة اختيارية مع الملف (اختياري)..."></textarea>${renderApprovalFileList(o,key,'designExternalFile',canAct)}</div>`:''}
         <div class="fg" style="margin-bottom:10px"><label>الملف المعتمد للتصميم:</label><input type="file" multiple id="f-designapproved-input" accept="${_designFormats}" onchange="uploadFileDirect('${key}','clientApprovalImage','clientApprovalImageName','f-designapproved-input')"/><textarea id="f-designapproved-input-note" class="dept-upload-note" placeholder="ملاحظة اختيارية مع الملف (اختياري)..."></textarea>${renderApprovalFileList(o,key,'clientApprovalImage',canAct)}</div>
         <div class="fg" style="margin-bottom:10px"><label>بروفة التصميم:</label><input type="file" multiple id="f-print-input" accept="${_designFormats}" onchange="uploadFileDirect('${key}','approvedPrintFile','approvedPrintFileName','f-print-input')"/><textarea id="f-print-input-note" class="dept-upload-note" placeholder="ملاحظة اختيارية مع الملف (اختياري)..."></textarea>${renderApprovalFileList(o,key,'approvedPrintFile',canAct)}</div>
         ${_workshopActive?`<div class="fg"><label>ملف الإنتاج للورشة:</label><input type="file" multiple id="f-workshop-input" accept="${_designFormats}" onchange="uploadFileDirect('${key}','approvedWorkshopFile','approvedWorkshopFileName','f-workshop-input')"/><textarea id="f-workshop-input-note" class="dept-upload-note" placeholder="ملاحظة اختيارية مع الملف (اختياري)..."></textarea>${renderApprovalFileList(o,key,'approvedWorkshopFile',canAct)}</div>`:''}
@@ -12107,7 +12149,9 @@ function buildOrderDetailsPage(){
     </div>`;
     else if(o.currentDept==='external'){
       const _extMode=o.externalMode||'both';
+      const _designExtFiles=o.designExternalFile?renderApprovalFileList(o,key,'designExternalFile',false):'';
       uploadArea=`<div class="dept-upload-box"><div class="dept-upload-title" style="color:#713F12"><i class="ti ti-world"></i> تحديث التنفيذ الخارجي</div>
+      ${_designExtFiles?`<div class="fg"><label>الملف المستلم من التصميم</label>${_designExtFiles}</div>`:''}
       ${_extMode!=='files'?`<div class="fg"><label>التعليمات/الملاحظات</label><textarea id="f-ext-note-input" style="min-height:55px;font-size:12px;">${esc(o.externalNote||'')}</textarea><button class="btn btn-out btn-xs" style="margin-top:6px;" onclick="saveExternalNote('${key}')"><i class="ti ti-device-floppy"></i> حفظ الملاحظة</button></div>`:''}
       ${_extMode!=='text'?`<div class="fg"><label>ملف التوريد</label><input type="file" id="f-ext-input" accept="*/*" onchange="uploadFileDirect('${key}','externalFile','externalFileName','f-ext-input')"/><textarea id="f-ext-input-note" class="dept-upload-note" placeholder="ملاحظة اختيارية مع ملف التوريد (مثال: تأكيد المورد، رقم الشحنة)..."></textarea></div>`:''}
       </div>`;
@@ -12586,7 +12630,7 @@ async function deleteApprovalFile(key,ff,slot){
   }
   catch(e){hideSaving();toast('❌ فشل الحذف');}
 }
-const FILE_FIELD_LABELS={clientApprovalImage:'الملف المعتمد للتصميم',approvedPrintFile:'بروفة التصميم',approvedWorkshopFile:'ملف الإنتاج للورشة',finalWorkshopDoneFile:'الإنجاز النهائي'};
+const FILE_FIELD_LABELS={clientApprovalImage:'الملف المعتمد للتصميم',approvedPrintFile:'بروفة التصميم',approvedWorkshopFile:'ملف الإنتاج للورشة',finalWorkshopDoneFile:'الإنجاز النهائي',designExternalFile:'ملف التنفيذ الخارجي'};
 // Shared renderer for every "approval upload box" (design's approved-design/
 // design-proof/workshop-production-file, workshop's final-work) — one file
 // list combining the primary field + its `${ff}Extra` array, each row
