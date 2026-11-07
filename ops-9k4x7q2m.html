@@ -5133,6 +5133,11 @@ function itemStageRequirementMet(it,o){
     if(!printActive&&!workshopActive&&!externalActive)return true; // truly nothing downstream — no production files required
     if(!printActive&&workshopActive)return hasKind('workshop_production'); // workshop-only: just one approved proof, no separate "approved design" file
     if(!printActive&&!workshopActive&&externalActive)return hasKind('design_proof'); // external-only: a proof is required, the fully-approved design file stays optional
+    // External sitting BETWEEN design and print (the default order whenever
+    // both are active — see getActiveDepts()) needs its own dedicated file,
+    // same reasoning as the order-level gate (_externalBeforePrint) this
+    // mirrors at the item level.
+    if(printActive&&externalActive&&seq.indexOf('external')<seq.indexOf('print')&&!hasKind('design_external'))return false;
     if(!hasKind('design_approved'))return false;
     if(!hasKind('design_proof'))return false;
     if(workshopActive&&!hasKind('workshop_production'))return false;
@@ -5266,7 +5271,7 @@ async function saveNewItemVersion(key,idx){
     _refreshOrderItemsViews(key);
   }catch(e){hideSaving();toast('❌ فشل حفظ النسخة');}
 }
-const ITEM_KIND_LABELS={design_approved:'التصميم المعتمد',design_proof:'بروفة التصميم',workshop_production:'ملف الإنتاج للورشة',final_work:'الإنجاز النهائي'};
+const ITEM_KIND_LABELS={design_approved:'التصميم المعتمد',design_proof:'بروفة التصميم',workshop_production:'ملف الإنتاج للورشة',final_work:'الإنجاز النهائي',design_external:'ملف التنفيذ الخارجي'};
 // Powers the dynamic per-workflow upload boxes on the Item Workspace page
 // (buildItemWorkspacePage) — each box uploads straight into a new version
 // tagged with its own `kind`, which itemStageRequirementMet() checks for
@@ -8722,6 +8727,11 @@ function buildItemWorkspacePage(){
       const seq=itemDeptSeq(o);
       if(dept==='design'){
         const printActive=seq.includes('print'),workshopActive=seq.includes('workshop');
+        const externalActive=seq.includes('external');
+        // Same "external sits between design and print" check as the admin
+        // order view's _externalBeforePrint — the item-level boxes need
+        // their own matching kind box, not just the order-level file field.
+        const externalBeforePrint=printActive&&externalActive&&seq.indexOf('external')<seq.indexOf('print');
         if(!printActive&&!workshopActive){
           return`<div class="card" style="margin-bottom:14px;"><div style="padding:16px 20px;font-size:11.5px;color:var(--text-3);text-align:center;">لا توجد ملفات إنتاج مطلوبة لهذا المسار</div></div>`;
         }
@@ -8731,7 +8741,7 @@ function buildItemWorkspacePage(){
         const canEditDesign=canEditDesignFiles(o,it);
         const boxes=!printActive&&workshopActive
           ?[renderItemKindBox(it,key,idx,'workshop_production',dept,canEditDesign,'بروفة تصميم معتمدة')]
-          :[renderItemKindBox(it,key,idx,'design_approved',dept,canEditDesign),renderItemKindBox(it,key,idx,'design_proof',dept,canEditDesign),...(workshopActive?[renderItemKindBox(it,key,idx,'workshop_production',dept,canEditDesign)]:[])];
+          :[...(externalBeforePrint?[renderItemKindBox(it,key,idx,'design_external',dept,canEditDesign)]:[]),renderItemKindBox(it,key,idx,'design_approved',dept,canEditDesign),renderItemKindBox(it,key,idx,'design_proof',dept,canEditDesign),...(workshopActive?[renderItemKindBox(it,key,idx,'workshop_production',dept,canEditDesign)]:[])];
         return`<div class="card" style="margin-bottom:14px;">
           <div class="card-header"><span class="card-title"><i class="ti ti-upload"></i> ملفات التصميم المطلوبة</span></div>
           <div style="padding:16px 20px;" class="ik-kind-grid">${boxes.join('')}</div>
@@ -8757,7 +8767,13 @@ function buildItemWorkspacePage(){
       }
       // Any other stage (external, etc.) keeps the original generic
       // upload/versions flow — unaffected by this dynamic-workflow change.
+      // External specifically also gets a read-only look at whatever design
+      // tagged as 'design_external' for it, same as print's own "received
+      // from design" box above — otherwise the file design uploaded for
+      // exactly this handoff was invisible on the one page that needs it.
+      const receivedFromDesignHtml=(dept==='external'&&seq.includes('print')&&seq.indexOf('external')<seq.indexOf('print'))?renderItemKindBox(it,key,idx,'design_external','design',false,'الملف المستلم من التصميم'):'';
       return`<div class="card" style="margin-bottom:14px;">
+        ${receivedFromDesignHtml?`<div style="padding:16px 20px 0;" class="ik-kind-grid">${receivedFromDesignHtml}</div>`:''}
         <div class="card-header" style="display:flex;align-items:center;justify-content:space-between;gap:8px;"><span class="card-title"><i class="ti ti-upload"></i> الملفات المرفوعة لهذه المرحلة</span>${stageVersions.length?`<button class="btn btn-out btn-xs" onclick="downloadAllFilesFromContainer('itemwork-stage-files','ملفات المرحلة')"><i class="ti ti-download"></i> تنزيل الكل</button>`:''}</div>
         <div id="itemwork-stage-files" style="padding:16px 20px;display:flex;flex-direction:column;gap:8px;">
           ${stageVersions.length?stageVersions.map(v=>`<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:8px;padding:8px 10px;">
@@ -11872,7 +11888,7 @@ function sendWhatsappPaymentClaim(key){
   const n=String(o.phone).replace(/[^0-9]/g,'');
   const full=n.startsWith('0')?'966'+n.substring(1):n;
   const msg=`تذكير بخصوص طلبكم ${o.id||key} لدى روائع الأفكار الإعلانية — المبلغ المتبقي على الطلب هو ${fmtMoney(remaining)} ر.س. نأمل تسديده في أقرب وقت ممكن. شكراً لتعاملكم معنا.`;
-  window.open(`https://web.whatsapp.com/send?phone=${full}&text=${encodeURIComponent(msg)}`,'_blank');
+  window.open(`https://web.whatsapp.com/send?phone=${full}&text=${encodeURIComponent(msg)}`,'rawaee_whatsapp');
 }
 // Sidebar "اعتماد بروفة" / "اعتماد ورشة" quick controls: rather than fabricate
 // a new direct-mutation shortcut whose exact effect on order-level approval
@@ -13703,7 +13719,12 @@ function onClientInput(val){
     if(phoneEl&&ex.phone&&!phoneEl.value)phoneEl.value=ex.phone;
   }
 }
-function openWhatsapp(phoneEncoded){const phone=safeDecodeURIComponent(phoneEncoded);if(!phone){toast('⚠️ يرجى إدخال رقم جوال');return;}const n=phone.replace(/[^0-9]/g,'');const full=n.startsWith('0')?'966'+n.substring(1):n;window.open(`https://web.whatsapp.com/send?phone=${full}`,'_blank');}
+// Named target (not '_blank') so every WhatsApp click across the app reuses
+// the SAME browser tab/window instead of spawning a fresh one each time —
+// clicking the button on three different orders used to leave three
+// separate WhatsApp tabs open; now the existing one is just navigated/
+// refocused to the new chat.
+function openWhatsapp(phoneEncoded){const phone=safeDecodeURIComponent(phoneEncoded);if(!phone){toast('⚠️ يرجى إدخال رقم جوال');return;}const n=phone.replace(/[^0-9]/g,'');const full=n.startsWith('0')?'966'+n.substring(1):n;window.open(`https://web.whatsapp.com/send?phone=${full}`,'rawaee_whatsapp');}
 // Manual WhatsApp contact buttons are restricted to the roles who actually
 // talk to clients — designers (design approval back-and-forth) and
 // receiver/admin (reception). Printer/workshop/external never contact
