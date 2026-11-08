@@ -7521,24 +7521,28 @@ function renderWfListView(){
   </div>`:'';
   // Same status sections as the designer board's own "لوحة العمل"
   // (buildDesignerBoard), generalized to the full mixed-department list
-  // this page shows — proofStatusForOrder(o) already looks across an
-  // order's design-stage items regardless of which department it's
-  // CURRENTLY at, so an order that's already moved on to print/workshop/
-  // external (its design review having passed) naturally lands in
-  // "تعميد" rather than being miscounted as new/pending. Delivery gets
-  // its own final section pulled out of "تعميد" specifically because the
-  // person asking for this wanted it last, after تعميد — 'done' keeps
-  // its own separate, pre-existing collapsed section below untouched.
+  // this page shows. proofStatusForOrder(o) only ever reads design-stage
+  // item columns, so an order already at print/external/workshop whose
+  // items don't happen to form one of its three clean patterns (revision/
+  // waiting/all-approved) fell through to its null case — bucketed as
+  // "طلب جديد" even though it had clearly already left design and was
+  // actively being worked on elsewhere. currentDept is checked FIRST now:
+  // print/external/workshop always means "قيد التنفيذ" regardless of
+  // whatever its design-stage columns happen to say, before even asking
+  // proofStatusForOrder. Only an order still actually AT design (or with
+  // no items at all) falls through to that design-specific classification.
   const WF_SECTIONS=[
     {key:'todo',label:'🆕 طلب جديد'},
     {key:'waiting',label:'📤 تم إرسال البروفة'},
     {key:'revision',label:'🔄 يتطلب تعديل'},
     {key:'approved',label:'✅ تعميد'},
+    {key:'inprogress',label:'⚙️ قيد التنفيذ'},
     {key:'delivery',label:'🚚 التسليم'},
   ];
-  const wfBuckets={todo:[],waiting:[],revision:[],approved:[],delivery:[]};
+  const wfBuckets={todo:[],waiting:[],revision:[],approved:[],inprogress:[],delivery:[]};
   activeArr.forEach(o=>{
     if(o.currentDept==='delivery'){wfBuckets.delivery.push(o);return;}
+    if(['print','external','workshop'].includes(o.currentDept)){wfBuckets.inprogress.push(o);return;}
     const proof=proofStatusForOrder(o);
     wfBuckets[proof?proof.key:'todo'].push(o);
   });
