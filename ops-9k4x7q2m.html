@@ -5170,6 +5170,13 @@ async function advanceItemDept(key,idx){
     if(newOrderDept&&newOrderDept!==o.currentDept){upd.currentDept=newOrderDept;upd.stageStartDate=new Date().toISOString();}
     await fbPatch(`orders/${key}`,upd);
     logOrderActivity(key,'ti-arrow-forward-up',`تم نقل البند "${it.name||'بند'}" إلى مرحلة: ${(WF_DEPT_META[nd]||{label:nd}).label}`);
+    // sendToNextDept() (whole-order advance) already notified the next
+    // department's assignee — this per-item advance (the more common path,
+    // since items move one at a time far more often than the whole order
+    // does) never did, so whoever was waiting on this item had no way to
+    // know it had actually arrived short of refreshing their own board.
+    const nextAssignee=o[nd+'To'];
+    pushNotification({type:'transfer',message:`تم تحويل البند "${esc(it.name||'بند')}" من الطلب ${esc(o.id||key)} إليك — ${esc((WF_DEPT_META[nd]||{label:nd}).label)}`,orderKey:key,orderId:o.id,client:o.client,targetUname:(nextAssignee&&nextAssignee!=='none')?nextAssignee:'all-admin'});
     await loadData();hideSaving();toast('✓ تم تحديث تقدّم البند');
     _refreshOrderItemsViews(key);
   }catch(e){hideSaving();toast('❌ فشل تحديث البند');}
@@ -7087,9 +7094,9 @@ function buildDesignerBoard(){
   });
   const SECTIONS=[
     {key:'todo',label:'🆕 طلب جديد'},
-    {key:'revision',label:'🔄 يتطلب تعديل'},
-    {key:'approved',label:'✅ معتمدة'},
     {key:'waiting',label:'📤 تم إرسال البروفة'},
+    {key:'revision',label:'🔄 يتطلب تعديل'},
+    {key:'approved',label:'✅ تعميد'},
   ];
   const buckets={todo:[],revision:[],approved:[],waiting:[]};
   Object.values(groups).forEach(g=>{
@@ -7098,7 +7105,7 @@ function buildDesignerBoard(){
   });
   // Simple (non-itemized) orders have no per-item design column to bucket
   // by — always listed under "طلب جديد" rather than guessing a status.
-  ordersArr().filter(o=>isMyOrder(o)&&(!o.orderItems||!o.orderItems.length)).forEach(o=>{
+  ordersArr().filter(o=>isMyOrder(o)&&!o.onHold&&(!o.orderItems||!o.orderItems.length)).forEach(o=>{
     buckets.todo.push(designerSimpleOrderCardHtml(o));
   });
   const hasAny=Object.values(buckets).some(b=>b.length);
@@ -8465,7 +8472,10 @@ function myAssignedItems(){
   const allowAll=deptKey==='design'||deptKey==='workshop';
   const out=[];
   ordersArr().forEach(o=>{
-    if(o.currentDept==='done'||o.cancelled)return;
+    // An on-hold order is explicitly paused (openHoldOrderModal/resumeOrderFromHold)
+    // — no production role should see it in their active work list while
+    // it's frozen; it reappears here on its own the moment it's resumed.
+    if(o.currentDept==='done'||o.cancelled||o.onHold)return;
     if(!o.orderItems||!o.orderItems.length)return;
     const assignee=o[deptKey+'To'];
     if(!assignee||assignee==='none')return;
@@ -11730,13 +11740,20 @@ function orderFieldFileEntries(o,field,tag){
 // Every per-item version file across every item, tagged with its stage
 // (design/print/workshop/external) for department grouping, its kind for
 // the purpose tag, and which item it belongs to (only meaningfully shown
-// when the order has more than one item).
-function itemFileEntriesByStage(o,stage){
+// when the order has more than one item). Optional kindFilter narrows
+// further — needed because design_external/workshop_production files are
+// tagged stage='design' (uploaded WHILE design is active) but are actually
+// meant for External/Workshop, not design itself; without this they used
+// to all pile into one "ملفات التصميم" bucket together with the
+// design_approved/design_proof files someone opening the order to print
+// actually needs, burying the 1-2 relevant files among a dozen+ others
+// meant for entirely different departments.
+function itemFileEntriesByStage(o,stage,kindFilter){
   const items=o.orderItems||[];
   const multi=items.length>1;
   const out=[];
   items.forEach((it,i)=>{
-    itemVersionsForStage(it,stage).forEach(v=>{
+    itemVersionsForStage(it,stage).filter(v=>!kindFilter||kindFilter(v.kind)).forEach(v=>{
       (v.files||[]).forEach(f=>{
         if(!f||!f.data)return;
         out.push({name:f.name,url:f.data,uploaderName:v.createdBy||'—',timestamp:v.createdAt||'',tag:fileKindTagLabel(v),itemLabel:multi?(it.name||('بند '+(i+1))):''});
@@ -11749,18 +11766,20 @@ function buildOrderFileManager(o,key){
   const cats=[
     {title:'ملفات العميل الأصلية',icon:'ti-user',key:'client',
       entries:(o.files||[]).filter(f=>f&&f.data&&f.name).map(f=>({name:f.name,url:f.data,uploaderName:o.createdBy||'—',timestamp:o.createdAt||o.date,tag:'مرفق عند تسجيل الطلب'}))},
-    {title:'ملفات التصميم',icon:'ti-brush',key:'design',entries:itemFileEntriesByStage(o,'design')},
+    {title:'ملفات التصميم',icon:'ti-brush',key:'design',entries:itemFileEntriesByStage(o,'design',k=>!k||(k!=='workshop_production'&&k!=='design_external'))},
     {title:'ملفات الاعتماد',icon:'ti-user-check',key:'approval',entries:[
       ...orderFieldFileEntries(o,'clientApprovalImage','صورة الاعتماد'),
       ...orderFieldFileEntries(o,'clientApprovalPdf','PDF الاعتماد'),
     ]},
     {title:'ملفات الطباعة',icon:'ti-printer',key:'print',entries:itemFileEntriesByStage(o,'print')},
     {title:'ملفات الورشة',icon:'ti-tools',key:'workshop',entries:[
+      ...itemFileEntriesByStage(o,'design',k=>k==='workshop_production'),
       ...itemFileEntriesByStage(o,'workshop'),
       ...orderFieldFileEntries(o,'workshopDeptFile','ملف الورشة'),
       ...orderFieldFileEntries(o,'workshopProofImage','بروفة الورشة'),
     ]},
     {title:'ملفات التنفيذ الخارجي',icon:'ti-world',key:'external',entries:[
+      ...itemFileEntriesByStage(o,'design',k=>k==='design_external'),
       ...itemFileEntriesByStage(o,'external'),
       ...orderFieldFileEntries(o,'externalFile','ملف التوريد الخارجي'),
     ]},
@@ -12755,15 +12774,22 @@ async function sendToNextDept(key,next){
   // calling this function directly from any surface.
   if(curDept==='design'){
     const isProofQt=o.isQuickTask&&o.printTo==='none'&&o.workshopTo==='none';
-    const workshopOnly=o.printTo==='none'&&o.workshopTo!=='none';
-    const externalOnly=!isProofQt&&!workshopOnly&&o.printTo==='none'&&o.externalTo&&o.externalTo!=='none';
-    const blocked=isProofQt
-      ? !o.approvedPrintFile
-      : workshopOnly
-        ? !o.approvedWorkshopFile
-        : externalOnly
-          ? !o.approvedPrintFile
-          : (o.printTo!=='none'&&(!o.clientApprovalImage||!o.approvedPrintFile||(o.workshopTo!=='none'&&!o.approvedWorkshopFile)));
+    // Mirrors the order-details page's own missing-files gate exactly
+    // (each active downstream department's requirement is independent of
+    // the others) — this is the real enforcement point (called directly,
+    // not just through that UI), so it has to apply the same rule or a
+    // file the page required could still be skipped by calling this
+    // function straight.
+    let blocked;
+    if(isProofQt){
+      blocked=!o.approvedPrintFile;
+    }else{
+      const printActiveGate=o.printTo!=='none',workshopActiveGate=o.workshopTo!=='none';
+      const externalActiveGate=o.externalTo&&o.externalTo!=='none';
+      blocked=(externalActiveGate&&!o.designExternalFile)
+        ||(printActiveGate&&(!o.clientApprovalImage||!o.approvedPrintFile))
+        ||(workshopActiveGate&&!o.approvedWorkshopFile);
+    }
     // Same admin/receiver bypass as advanceItemDept() — files stay a soft
     // requirement for regular staff, never a hard block for a manager
     // overriding it.
