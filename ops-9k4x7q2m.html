@@ -2426,6 +2426,7 @@ async function doLogin(){
       const sessionPayload=JSON.stringify({uname:u,tok:hash});
       sessionStorage.setItem(SESSION_KEY,sessionPayload);
       localStorage.removeItem(SESSION_KEY);
+      _saveMyUserCache(u);
       enterApp(u);e.style.display='none';
     }else{e.textContent='بيانات الدخول غير صحيحة';e.style.display='block';}
   }catch(err){
@@ -2818,13 +2819,33 @@ async function syncUsers(){
     USERS={};
   }
 }
+// A single cached copy of the SIGNED-IN user's own USERS[uname] record —
+// not the whole table (still never cached; see the comment below) — just
+// enough for enterApp() to build cu from synchronously on the instant-paint
+// boot path, before syncUsers()'s own network round-trip has resolved.
+// Without this, enterApp(u) ran against USERS[u]===undefined (USERS starts
+// empty every fresh page load) on every single instant-paint refresh,
+// silently producing a cu with every field undefined — cu.name.charAt(0)
+// a few lines into enterApp() then threw, surfacing as the generic
+// "حدث خطأ غير متوقع" toast over a blank page, which looked exactly like
+// being logged out and back in since the real UI never painted at all.
+// No new exposure: it's the signed-in user's OWN record (including their
+// own password hash, already implied by their own valid session token),
+// never any other account's.
+function _saveMyUserCache(uname){
+  try{if(USERS[uname])sessionStorage.setItem('rawaee_my_user_'+uname,JSON.stringify(USERS[uname]));}catch(e){}
+}
+function _restoreMyUserCache(uname){
+  try{const raw=sessionStorage.getItem('rawaee_my_user_'+uname);return raw?JSON.parse(raw):null;}catch(e){return null;}
+}
 // Cold-load instant paint: the very first render after a page refresh/new
 // tab used to block on a full fetch of every dataset before showing
 // anything but a spinner. Session-scoped (cleared when the tab closes, so
 // nothing lingers long-term) — good enough to skip that wait by painting
 // last-known data immediately while loadData() refreshes in the background.
-// USERS is deliberately excluded (holds password hashes) and is re-fetched
-// via syncUsers() on every load anyway.
+// The FULL USERS table is deliberately never cached this way (every other
+// account's password hash) — only re-fetched via syncUsers() — only the
+// signed-in user's own single record is, via _saveMyUserCache() above.
 const _DATA_CACHE_KEY='rawaee_data_cache_v1';
 function _saveDataCache(){
   try{
@@ -3004,18 +3025,36 @@ window.addEventListener('load',async()=>{
   // Re-validate for real in the background instead, and only disrupt the
   // now-rendered app (reload to the login screen) if that genuinely fails —
   // e.g. the account was disabled or its password changed elsewhere.
-  if(s&&s.uname&&_restoreDataCache()){
-    enterApp(s.uname);
-    (async()=>{
-      try{
-        await syncUsers();
-        const rec=USERS[s.uname];
-        const stillValid=rec&&s.tok&&(isHashedPass(rec.pass)?s.tok===rec.pass:s.tok===await makeSessionToken(s.uname,rec.pass));
-        if(!stillValid){localStorage.removeItem(SESSION_KEY);sessionStorage.removeItem(SESSION_KEY);location.reload();return;}
-        await loadData();refreshCurrentPage();
-      }catch(e){}
-    })();
-    return;
+  // The fast path additionally requires a cached copy of THIS user's own
+  // USERS record (see _saveMyUserCache) — without one, enterApp(s.uname)
+  // would run against USERS[s.uname]===undefined and throw; falling
+  // through to the normal, syncUsers()-first path below is always safe,
+  // just not instant, so that's exactly what happens the one time this
+  // cache doesn't exist yet (first login ever in this tab). _restoreDataCache()
+  // is called unconditionally (never short-circuited away) since it has
+  // its own needed side effect of populating orders/clients/etc.
+  if(s&&s.uname){
+    const hasDataCache=_restoreDataCache();
+    if(hasDataCache){
+      if(!USERS[s.uname]){
+        const cachedMe=_restoreMyUserCache(s.uname);
+        if(cachedMe)USERS[s.uname]=cachedMe;
+      }
+      if(USERS[s.uname]){
+        enterApp(s.uname);
+        (async()=>{
+          try{
+            await syncUsers();
+            const rec=USERS[s.uname];
+            const stillValid=rec&&s.tok&&(isHashedPass(rec.pass)?s.tok===rec.pass:s.tok===await makeSessionToken(s.uname,rec.pass));
+            if(!stillValid){localStorage.removeItem(SESSION_KEY);sessionStorage.removeItem(SESSION_KEY);location.reload();return;}
+            _saveMyUserCache(s.uname);
+            await loadData();refreshCurrentPage();
+          }catch(e){}
+        })();
+        return;
+      }
+    }
   }
   showSaving('جاري التحميل...');
   try{
@@ -3027,6 +3066,7 @@ window.addEventListener('load',async()=>{
         // directly; a not-yet-migrated legacy account still needs one re-derivation.
         const stillValid=rec&&s.tok&&(isHashedPass(rec.pass)?s.tok===rec.pass:s.tok===await makeSessionToken(s.uname,rec.pass));
         if(stillValid){
+          _saveMyUserCache(s.uname);
           await loadData();hideSaving();enterApp(s.uname);return;
         }
       }catch(e){}
@@ -5533,6 +5573,7 @@ function renderOrderItemsCards(o,key,canAct){
           <button class="btn btn-out btn-sm" onclick="toggleRowMenu('${mgmtMenuId}')"><i class="ti ti-dots-vertical"></i> خيارات</button>
           <div class="row-menu" id="${mgmtMenuId}" style="display:none;">
             <button onclick="closeAllRowMenus();openAddItemModal('${key}',${i})"><i class="ti ti-pencil"></i> تعديل البند</button>
+            <button onclick="closeAllRowMenus();openItemEmployeeChange('${key}',${i})"><i class="ti ti-user-cog"></i> تغيير الموظف</button>
             <button onclick="closeAllRowMenus();openReturnOrderModal('${key}',${i},'forward')"><i class="ti ti-send-2"></i> تقديم لمرحلة تالية</button>
             <button onclick="closeAllRowMenus();openReturnOrderModal('${key}',${i},'back')"><i class="ti ti-arrow-back-up"></i> إرجاع لمرحلة سابقة</button>
             <button style="color:#DC2626;" onclick="closeAllRowMenus();confirmDeleteOrderItem('${key}',${i})"><i class="ti ti-trash"></i> حذف البند</button>
@@ -11070,6 +11111,29 @@ function openOrderEditModal(key){
   bodyEl.style.maxWidth=hasParallelLines?'820px':'640px';
   bodyEl.innerHTML=orderEditModalHtml(key);
   openModal('order-edit-modal');
+}
+// Item-card "تغيير الموظف" quick action — staff assignment stays an
+// ORDER-level field per department (see getDeptWorkers()/the comment
+// above canEditOrderComposition()), not something an individual item
+// carries its own copy of, so this reuses the exact same reassignment
+// row/select/save flow already built into the order-edit modal
+// (onOeReassignChange/saveOrderEditReassign) instead of duplicating it —
+// just opens straight to it and scrolls/highlights the one row that
+// matches this item's own current department, instead of leaving the
+// person to find it themselves among every department's row.
+function openItemEmployeeChange(key,idx){
+  const o=orders[key];if(!o)return;
+  const it=(o.orderItems||[])[idx];if(!it)return;
+  const dept=itemCurrentDept(it,o);
+  openOrderEditModal(key);
+  setTimeout(()=>{
+    const sel=document.getElementById(`oe-reassign-${dept}-${key}`);
+    if(!sel)return;
+    sel.scrollIntoView({behavior:'smooth',block:'center'});
+    sel.focus();
+    sel.style.outline='2px solid var(--gold)';
+    setTimeout(()=>{sel.style.outline='';},2500);
+  },80);
 }
 function orderEditModalHtml(key){
   const o=orders[key];if(!o)return'';
