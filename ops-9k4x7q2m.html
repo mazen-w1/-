@@ -382,6 +382,9 @@ tbody tr:hover td{background:var(--surface-2);}
 .designer-col-label{font-size:12.5px;font-weight:900;color:var(--text-1);flex:1;}
 .designer-col-count{background:var(--surface-2);border:1px solid var(--border);border-radius:20px;padding:2px 10px;font-size:11px;font-weight:800;color:var(--text-2);}
 .designer-col-body{padding:12px;display:flex;flex-direction:column;gap:12px;overflow-y:auto;}
+.designer-board-section{margin-bottom:22px;}
+.designer-board-section-title{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:900;color:var(--maroon);padding-bottom:8px;margin-bottom:12px;border-bottom:2px solid var(--border-soft);}
+.designer-board-section-count{background:var(--surface-2);border:1px solid var(--border);border-radius:20px;padding:1px 9px;font-size:11px;font-weight:800;color:var(--text-2);}
 .designer-order-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);overflow:hidden;box-shadow:var(--shadow-sm);}
 .designer-order-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:10px 14px;background:var(--gold-soft);cursor:pointer;font-size:12.5px;border-bottom:1px solid var(--border-soft);}
 .designer-order-head:hover{background:rgba(212,175,55,.2);}
@@ -5131,15 +5134,16 @@ function itemStageRequirementMet(it,o){
     const seq=itemDeptSeq(o);
     const printActive=seq.includes('print'),workshopActive=seq.includes('workshop'),externalActive=seq.includes('external');
     if(!printActive&&!workshopActive&&!externalActive)return true; // truly nothing downstream — no production files required
-    if(!printActive&&workshopActive)return hasKind('workshop_production'); // workshop-only: just one approved proof, no separate "approved design" file
-    if(!printActive&&!workshopActive&&externalActive)return hasKind('design_proof'); // external-only: a proof is required, the fully-approved design file stays optional
-    // External sitting BETWEEN design and print (the default order whenever
-    // both are active — see getActiveDepts()) needs its own dedicated file,
-    // same reasoning as the order-level gate (_externalBeforePrint) this
-    // mirrors at the item level.
-    if(printActive&&externalActive&&seq.indexOf('external')<seq.indexOf('print')&&!hasKind('design_external'))return false;
-    if(!hasKind('design_approved'))return false;
-    if(!hasKind('design_proof'))return false;
+    // Each active downstream department's requirement is independent of
+    // the others — External is required whenever it's active at all
+    // (previously it was only checked when Print was ALSO active, so an
+    // External+Workshop-only item, or an External-only one, never actually
+    // gated on it), Print only gates its own two files, Workshop its one.
+    if(externalActive&&!hasKind('design_external'))return false;
+    if(printActive){
+      if(!hasKind('design_approved'))return false;
+      if(!hasKind('design_proof'))return false;
+    }
     if(workshopActive&&!hasKind('workshop_production'))return false;
     return true;
   }
@@ -5428,13 +5432,27 @@ function renderOrderItemsCards(o,key,canAct){
   if(!items.length){
     return `<div style="text-align:center;color:var(--text-3);padding:20px;">لا توجد بنود في هذا الطلب${deptRestricted?'':`<div style="margin-top:8px;"><button class="btn btn-out btn-xs" onclick="openAddItemModal('${key}')"><i class="ti ti-square-rounded-plus"></i> إضافة بند جديد</button></div>`}</div>`;
   }
+  // A production role (designer/printer/workshop/external) only ever acts
+  // on items currently AT their own department — the per-department board
+  // (buildPrinterBoard etc.) already scopes to "my items only," but opening
+  // the order itself used to always list EVERY item regardless, including
+  // ones still sitting in design or workshop that printing (for instance)
+  // has no business seeing or acting on. 'follower' is a read-only observer
+  // role and deliberately excluded here — it still sees everything.
+  const myDeptKey={designer:'design',printer:'print',workshop:'workshop',external:'external'}[cu.type];
+  const itemEntriesAll=items.map((it,i)=>({it,i}));
+  const itemEntries=myDeptKey?itemEntriesAll.filter(({it})=>itemCurrentDept(it,o)===myDeptKey):itemEntriesAll;
+  const hiddenCount=itemEntriesAll.length-itemEntries.length;
+  if(myDeptKey&&!itemEntries.length){
+    return `<div style="text-align:center;color:var(--text-3);padding:20px;">لا توجد بنود في مرحلتك الحالية من هذا الطلب (${itemEntriesAll.length} بند في مراحل أخرى)</div>`;
+  }
   // Newly added items (submitNewOrderItem's addedLater:true path) float to
   // the top so whoever opens the order sees the latest addition first;
   // original items keep their existing relative order beneath them. `i` is
   // always each item's real index in o.orderItems (never its position in
   // this display order), since every action on a card — openItemWorkspace,
   // approveItemProof, etc. — addresses items by that real array index.
-  const displayOrder=items.map((it,i)=>({it,i})).sort((a,b)=>{
+  const displayOrder=itemEntries.slice().sort((a,b)=>{
     const aNew=!!a.it.addedLater,bNew=!!b.it.addedLater;
     if(aNew!==bNew)return aNew?-1:1;
     if(aNew&&bNew)return new Date(b.it.addedAt||0)-new Date(a.it.addedAt||0);
@@ -5527,10 +5545,11 @@ function renderOrderItemsCards(o,key,canAct){
   }
   // With many items the grid gets long and hard to scan — a quick name
   // search keeps large orders just as manageable as small ones.
-  const oiToolsHtml=items.length>3?`<div style="margin-bottom:10px;">
-    <input placeholder="بحث في بنود الطلب (${items.length})..." oninput="filterOrderItemCards(this)" style="width:100%;font-size:12px;padding:6px 10px;"/>
+  const oiToolsHtml=itemEntries.length>3?`<div style="margin-bottom:10px;">
+    <input placeholder="بحث في بنود الطلب (${itemEntries.length})..." oninput="filterOrderItemCards(this)" style="width:100%;font-size:12px;padding:6px 10px;"/>
   </div>`:'';
-  return `<div class="oi-items-wrap">${oiToolsHtml}<div class="order-items-grid">${cardsHtml}</div>
+  const hiddenNoteHtml=hiddenCount>0?`<div style="font-size:11px;color:var(--text-3);margin-bottom:10px;"><i class="ti ti-eye-off"></i> ${hiddenCount} بند إضافي في مراحل أخرى من الطلب (غير معروض هنا)</div>`:'';
+  return `<div class="oi-items-wrap">${hiddenNoteHtml}${oiToolsHtml}<div class="order-items-grid">${cardsHtml}</div>
     <div class="oi-items-empty" style="display:none;text-align:center;color:var(--text-3);padding:16px;font-size:12px;">لا توجد بنود مطابقة للبحث</div></div>
     ${deptRestricted?'':`<button class="btn btn-out btn-xs" style="margin-top:10px;" onclick="openAddItemModal('${key}')"><i class="ti ti-square-rounded-plus"></i> إضافة بند جديد للطلب</button>`}`;
 }
@@ -7054,19 +7073,42 @@ const ITEM_DESIGN_STATUS={
   approved:{label:'✅ تم الاعتماد من العميل',icon:'ti-circle-check',cls:'b-done'},
   revision:{label:'🔄 يتطلب تعديل — رد من العميل',icon:'ti-refresh',cls:'b-urg'},
 };
+// Orders are bucketed into sections by proofStatusForOrder(o) — the SAME
+// aggregate status already used for the proof-status badge on each card
+// (revision beats waiting beats all-items-approved, defaulting to "new"
+// for anything else) — so there's no separate manual "move" step: the
+// same order card just renders under a different section header the next
+// time this page builds, the moment its status actually changes.
 function buildDesignerBoard(){
   const groups={};
   myAssignedItems().forEach(({o,idx,it})=>{
     groups[o._key]=groups[o._key]||{o,items:[]};
     groups[o._key].items.push({it,idx});
   });
-  const orderCardsHtml=Object.values(groups).map(g=>designerOrderCardHtml(g.o,g.items)).join('');
-  const simpleOrders=ordersArr().filter(o=>isMyOrder(o)&&(!o.orderItems||!o.orderItems.length));
-  const simpleCardsHtml=simpleOrders.map(o=>designerSimpleOrderCardHtml(o)).join('');
-  const cardsHtml=orderCardsHtml+simpleCardsHtml;
+  const SECTIONS=[
+    {key:'todo',label:'🆕 طلب جديد'},
+    {key:'revision',label:'🔄 يتطلب تعديل'},
+    {key:'approved',label:'✅ معتمدة'},
+    {key:'waiting',label:'📤 تم إرسال البروفة'},
+  ];
+  const buckets={todo:[],revision:[],approved:[],waiting:[]};
+  Object.values(groups).forEach(g=>{
+    const proof=proofStatusForOrder(g.o);
+    (buckets[proof?proof.key:'todo']||buckets.todo).push(designerOrderCardHtml(g.o,g.items));
+  });
+  // Simple (non-itemized) orders have no per-item design column to bucket
+  // by — always listed under "طلب جديد" rather than guessing a status.
+  ordersArr().filter(o=>isMyOrder(o)&&(!o.orderItems||!o.orderItems.length)).forEach(o=>{
+    buckets.todo.push(designerSimpleOrderCardHtml(o));
+  });
+  const hasAny=Object.values(buckets).some(b=>b.length);
+  const sectionsHtml=SECTIONS.map(s=>buckets[s.key].length?`<div class="designer-board-section">
+      <div class="designer-board-section-title">${s.label} <span class="designer-board-section-count">${buckets[s.key].length}</span></div>
+      <div class="wf-grid">${buckets[s.key].join('')}</div>
+    </div>`:'').join('');
   document.getElementById('page-designer').innerHTML=`
     <div class="page-header"><div><div class="ptitle"><i class="ti ti-layout-kanban"></i> لوحة العمل</div><div class="breadcrumb">${esc(cu.name)} — كل أعمال التصميم الحالية في مكان واحد</div></div></div>
-    ${cardsHtml?`<div class="wf-grid">${cardsHtml}</div>`:'<div style="color:var(--text-3);padding:30px;text-align:center;"><i class="ti ti-check-circle" style="font-size:36px;display:block;margin-bottom:10px;color:#10B981;"></i>لا توجد أعمال موكلة إليك حالياً</div>'}`;
+    ${hasAny?sectionsHtml:'<div style="color:var(--text-3);padding:30px;text-align:center;"><i class="ti ti-check-circle" style="font-size:36px;display:block;margin-bottom:10px;color:#10B981;"></i>لا توجد أعمال موكلة إليك حالياً</div>'}`;
 }
 function toggleDesignerOrderCard(key){
   const body=document.getElementById('dsb-body-'+key);
@@ -7120,6 +7162,21 @@ function designerItemRowHtml(o,it,idx){
       <input type="file" multiple id="${inputId}" style="display:none" accept="*/*" onclick="event.stopPropagation();" onchange="event.stopPropagation();saveItemKindFiles('${o._key}',${idx},'design_approved','${inputId}')"/>`;
   }else if(colKey==='approved'){
     actionsHtml=`<button class="designer-action-btn designer-action-primary" onclick="event.stopPropagation();advanceItemDept('${o._key}',${idx})"><i class="ti ti-send-2"></i> اعتماد وإرسال للطباعة</button>`;
+  }
+  // External Execution's file is a separate requirement from the proof/
+  // approval pipeline above (itemDesignColumn only tracks design_proof/
+  // design_approved) — appended as its own quick action whenever this
+  // item's route sends it through External Execution at all (independent
+  // of whether Print also follows it — see itemStageRequirementMet) and
+  // it hasn't been uploaded yet, instead of only being reachable by
+  // opening the full Item Workspace page. Previously this board only ever
+  // offered the proof/approved actions, with no way to see or fill the
+  // external-execution requirement at all from here.
+  const _externalActiveDb=itemDeptSeq(o).includes('external');
+  if(_externalActiveDb&&!itemVersionsForStage(it,'design').some(v=>v.kind==='design_external'&&v.files&&v.files.length)){
+    const extInputId=uidBase+'-ext';
+    actionsHtml+=`<label class="designer-action-btn" for="${extInputId}" onclick="event.stopPropagation();"><i class="ti ti-world"></i> رفع ملف التنفيذ الخارجي</label>
+      <input type="file" multiple id="${extInputId}" style="display:none" accept="*/*" onclick="event.stopPropagation();" onchange="event.stopPropagation();saveItemKindFiles('${o._key}',${idx},'design_external','${extInputId}')"/>`;
   }
   // Google-Drive-backed file preview: falls back to the same base64 storage
   // as everywhere else in the app when Drive isn't configured (see
@@ -8728,20 +8785,27 @@ function buildItemWorkspacePage(){
       if(dept==='design'){
         const printActive=seq.includes('print'),workshopActive=seq.includes('workshop');
         const externalActive=seq.includes('external');
-        // Same "external sits between design and print" check as the admin
-        // order view's _externalBeforePrint — the item-level boxes need
-        // their own matching kind box, not just the order-level file field.
-        const externalBeforePrint=printActive&&externalActive&&seq.indexOf('external')<seq.indexOf('print');
-        if(!printActive&&!workshopActive){
+        if(!printActive&&!workshopActive&&!externalActive){
           return`<div class="card" style="margin-bottom:14px;"><div style="padding:16px 20px;font-size:11.5px;color:var(--text-3);text-align:center;">لا توجد ملفات إنتاج مطلوبة لهذا المسار</div></div>`;
         }
-        // Workshop-only (no printing): just one approved design proof — not
-        // the full "approved design + separate box per dept" combo used
-        // whenever printing is involved.
+        // Fully dynamic, one dedicated box per active downstream department
+        // — mirrors the admin order view's own boxes array one-for-one (see
+        // its comment). External/Print/Workshop are each independent of one
+        // another: an External+Workshop-only route (no Print) used to fall
+        // straight into the "workshop-only" single generic box below with
+        // no external box at all, and an External-only route got no box
+        // whatsoever.
         const canEditDesign=canEditDesignFiles(o,it);
-        const boxes=!printActive&&workshopActive
-          ?[renderItemKindBox(it,key,idx,'workshop_production',dept,canEditDesign,'بروفة تصميم معتمدة')]
-          :[...(externalBeforePrint?[renderItemKindBox(it,key,idx,'design_external',dept,canEditDesign)]:[]),renderItemKindBox(it,key,idx,'design_approved',dept,canEditDesign),renderItemKindBox(it,key,idx,'design_proof',dept,canEditDesign),...(workshopActive?[renderItemKindBox(it,key,idx,'workshop_production',dept,canEditDesign)]:[])];
+        const boxes=[];
+        if(externalActive)boxes.push(renderItemKindBox(it,key,idx,'design_external',dept,canEditDesign));
+        if(printActive){
+          boxes.push(renderItemKindBox(it,key,idx,'design_approved',dept,canEditDesign));
+          boxes.push(renderItemKindBox(it,key,idx,'design_proof',dept,canEditDesign));
+        }
+        if(workshopActive){
+          const _wsLabel=(printActive||externalActive)?undefined:'بروفة تصميم معتمدة';
+          boxes.push(renderItemKindBox(it,key,idx,'workshop_production',dept,canEditDesign,_wsLabel));
+        }
         return`<div class="card" style="margin-bottom:14px;">
           <div class="card-header"><span class="card-title"><i class="ti ti-upload"></i> ملفات التصميم المطلوبة</span></div>
           <div style="padding:16px 20px;" class="ik-kind-grid">${boxes.join('')}</div>
@@ -12054,27 +12118,22 @@ function buildOrderDetailsPage(){
       const _missingFiles=[];
       if(o.currentDept==='design'){
         const _isProofQt=o.isQuickTask&&o.printTo==='none'&&o.workshopTo==='none';
-        // Routing straight to external execution (no print/workshop in the
-        // sequence at all): a design proof is still required, but the fully
-        // client-approved design file stays optional here — external
-        // dispatch shouldn't be blocked by an approval step it may not need.
-        const _externalOnly=!_isProofQt&&o.printTo==='none'&&o.workshopTo==='none'&&o.externalTo&&o.externalTo!=='none';
         if(_isProofQt){
           if(!o.approvedPrintFile)_missingFiles.push('ملف البروفة');
-        }else if(_externalOnly){
-          if(!o.approvedPrintFile)_missingFiles.push('بروفة التصميم');
-        }else if(o.printTo==='none'&&o.workshopTo!=='none'){
-          if(!o.approvedWorkshopFile)_missingFiles.push('بروفة تصميم معتمدة');
-        }else if(o.printTo!=='none'){
-          // Same "external sits between design and print" check as the
-          // upload box itself (see _externalBeforePrint below) — the file
-          // is only required when that dedicated box is actually shown.
-          const _extSeq=getActiveDepts(o);
-          const _extBeforePrintGate=o.externalTo&&o.externalTo!=='none'&&_extSeq.indexOf('external')!==-1&&_extSeq.indexOf('print')!==-1&&_extSeq.indexOf('external')<_extSeq.indexOf('print');
-          if(_extBeforePrintGate&&!o.designExternalFile)_missingFiles.push('ملف التنفيذ الخارجي');
-          if(!o.clientApprovalImage)_missingFiles.push('الملف المعتمد للتصميم');
-          if(!o.approvedPrintFile)_missingFiles.push('بروفة التصميم');
-          if(o.workshopTo!=='none'&&!o.approvedWorkshopFile)_missingFiles.push('ملف الإنتاج للورشة');
+        }else{
+          // Mirrors the upload box logic above one-for-one: each active
+          // downstream department's requirement is independent of the
+          // others, not conditioned on which of them also happen to be
+          // active — External is required whenever it's active at all, not
+          // only when Print also follows it.
+          const _printActiveGate=o.printTo!=='none',_workshopActiveGate=o.workshopTo!=='none';
+          const _externalActiveGate=o.externalTo&&o.externalTo!=='none';
+          if(_externalActiveGate&&!o.designExternalFile)_missingFiles.push('ملف التنفيذ الخارجي');
+          if(_printActiveGate){
+            if(!o.clientApprovalImage)_missingFiles.push('الملف المعتمد للتصميم');
+            if(!o.approvedPrintFile)_missingFiles.push('بروفة التصميم');
+          }
+          if(_workshopActiveGate&&!o.approvedWorkshopFile)_missingFiles.push((_printActiveGate||_externalActiveGate)?'ملف الإنتاج للورشة':'بروفة تصميم معتمدة');
         }
       }else if(o.currentDept==='external'&&(o.externalMode||'both')!=='text'){
         // Mandatory attachment gate for External Execution — same enforcement
@@ -12098,16 +12157,12 @@ function buildOrderDetailsPage(){
       const _isProofQt=o.isQuickTask&&o.printTo==='none'&&o.workshopTo==='none';
       const _printActive=o.printTo!=='none';
       const _workshopActive=o.workshopTo!=='none';
-      // Design's boxes below were always labeled for whichever department
-      // consumes them directly (print/workshop) — but when External
-      // Execution sits BETWEEN design and print in this order's actual
-      // sequence (the default order whenever both are active — see
-      // getActiveDepts()), the very next stop for these files is really the
-      // external contractor, not print, and there was no way to hand them a
-      // file of their own distinct from what print eventually receives.
-      const _seqForExt=getActiveDepts(o);
+      // External Execution gets its own dedicated box whenever it's active
+      // at all — independent of whether Print or Workshop also follow it —
+      // not only when Print specifically comes after it, which used to
+      // leave an External+Workshop (no Print) route with no external box
+      // at all, and an External-only route with no upload box whatsoever.
       const _externalActive=o.externalTo&&o.externalTo!=='none';
-      const _externalBeforePrint=_printActive&&_externalActive&&_seqForExt.indexOf('external')!==-1&&_seqForExt.indexOf('print')!==-1&&_seqForExt.indexOf('external')<_seqForExt.indexOf('print');
       // Broadened to accept every file format (audio/video/design/docs/archives),
       // not just image/design-related MIME types — see the "universal file
       // support" pass across all upload inputs in this file.
@@ -12126,21 +12181,33 @@ function buildOrderDetailsPage(){
         <textarea id="f-print-input-note" class="dept-upload-note" placeholder="ملاحظة اختيارية مع الملف (اختياري)..."></textarea>
         ${renderApprovalFileList(o,key,'approvedPrintFile',canAct)}
       </div>`;
-      }else if(!_printActive&&_workshopActive){
-        // Workshop-only (no printing at all) needs just ONE file — an
-        // approved design proof for the workshop to work from — not the
-        // full "approved design + separate production file" combo the
-        // printing-involved paths use.
-        uploadArea=`<div class="dept-upload-box"><div class="dept-upload-title" style="color:#6B21A8"><i class="ti ti-brush"></i> ملف التصميم المطلوب</div>
-        <div class="fg"><label>بروفة تصميم معتمدة:</label><input type="file" multiple id="f-workshop-input" accept="${_designFormats}" onchange="uploadFileDirect('${key}','approvedWorkshopFile','approvedWorkshopFileName','f-workshop-input')"/><textarea id="f-workshop-input-note" class="dept-upload-note" placeholder="ملاحظة اختيارية مع الملف (اختياري)..."></textarea>${renderApprovalFileList(o,key,'approvedWorkshopFile',canAct)}</div>
-      </div>`;
-      }else if(_printActive){
-        uploadArea=`<div class="dept-upload-box"><div class="dept-upload-title" style="color:#6B21A8"><i class="ti ti-brush"></i> ملفات التصميم المطلوبة</div>
-        ${_externalBeforePrint?`<div class="fg" style="margin-bottom:10px"><label>ملف التنفيذ الخارجي:</label><input type="file" multiple id="f-designext-input" accept="${_designFormats}" onchange="uploadFileDirect('${key}','designExternalFile','designExternalFileName','f-designext-input')"/><textarea id="f-designext-input-note" class="dept-upload-note" placeholder="ملاحظة اختيارية مع الملف (اختياري)..."></textarea>${renderApprovalFileList(o,key,'designExternalFile',canAct)}</div>`:''}
-        <div class="fg" style="margin-bottom:10px"><label>الملف المعتمد للتصميم:</label><input type="file" multiple id="f-designapproved-input" accept="${_designFormats}" onchange="uploadFileDirect('${key}','clientApprovalImage','clientApprovalImageName','f-designapproved-input')"/><textarea id="f-designapproved-input-note" class="dept-upload-note" placeholder="ملاحظة اختيارية مع الملف (اختياري)..."></textarea>${renderApprovalFileList(o,key,'clientApprovalImage',canAct)}</div>
-        <div class="fg" style="margin-bottom:10px"><label>بروفة التصميم:</label><input type="file" multiple id="f-print-input" accept="${_designFormats}" onchange="uploadFileDirect('${key}','approvedPrintFile','approvedPrintFileName','f-print-input')"/><textarea id="f-print-input-note" class="dept-upload-note" placeholder="ملاحظة اختيارية مع الملف (اختياري)..."></textarea>${renderApprovalFileList(o,key,'approvedPrintFile',canAct)}</div>
-        ${_workshopActive?`<div class="fg"><label>ملف الإنتاج للورشة:</label><input type="file" multiple id="f-workshop-input" accept="${_designFormats}" onchange="uploadFileDirect('${key}','approvedWorkshopFile','approvedWorkshopFileName','f-workshop-input')"/><textarea id="f-workshop-input-note" class="dept-upload-note" placeholder="ملاحظة اختيارية مع الملف (اختياري)..."></textarea>${renderApprovalFileList(o,key,'approvedWorkshopFile',canAct)}</div>`:''}
-      </div>`;
+      }else{
+        // Fully dynamic, one dedicated box per active downstream department —
+        // External/Print/Workshop are each independent of one another, not
+        // conditioned on which of the others happens to also be active. A
+        // previous version only ever gave External its own box when Print
+        // was ALSO active, so an External+Workshop-only route (no Print at
+        // all — exactly the case that surfaced this) fell into the
+        // Workshop-only single-box branch below with no external box at
+        // all; External-only (no Print, no Workshop either) got no upload
+        // box whatsoever. Every combination now gets exactly the boxes its
+        // own active departments need, no more and no less.
+        const _boxesArr=[];
+        if(_externalActive)_boxesArr.push(`<div class="fg" style="margin-bottom:10px"><label>ملف التنفيذ الخارجي:</label><input type="file" multiple id="f-designext-input" accept="${_designFormats}" onchange="uploadFileDirect('${key}','designExternalFile','designExternalFileName','f-designext-input')"/><textarea id="f-designext-input-note" class="dept-upload-note" placeholder="ملاحظة اختيارية مع الملف (اختياري)..."></textarea>${renderApprovalFileList(o,key,'designExternalFile',canAct)}</div>`);
+        if(_printActive){
+          _boxesArr.push(`<div class="fg" style="margin-bottom:10px"><label>الملف المعتمد للتصميم:</label><input type="file" multiple id="f-designapproved-input" accept="${_designFormats}" onchange="uploadFileDirect('${key}','clientApprovalImage','clientApprovalImageName','f-designapproved-input')"/><textarea id="f-designapproved-input-note" class="dept-upload-note" placeholder="ملاحظة اختيارية مع الملف (اختياري)..."></textarea>${renderApprovalFileList(o,key,'clientApprovalImage',canAct)}</div>`);
+          _boxesArr.push(`<div class="fg" style="margin-bottom:10px"><label>بروفة التصميم:</label><input type="file" multiple id="f-print-input" accept="${_designFormats}" onchange="uploadFileDirect('${key}','approvedPrintFile','approvedPrintFileName','f-print-input')"/><textarea id="f-print-input-note" class="dept-upload-note" placeholder="ملاحظة اختيارية مع الملف (اختياري)..."></textarea>${renderApprovalFileList(o,key,'approvedPrintFile',canAct)}</div>`);
+        }
+        if(_workshopActive){
+          // "بروفة تصميم معتمدة" (simple wording) only when workshop is the
+          // SOLE downstream department; otherwise it's explicitly the
+          // production file handed off alongside whatever else was sent.
+          const _wsLabel=(_printActive||_externalActive)?'ملف الإنتاج للورشة':'بروفة تصميم معتمدة';
+          _boxesArr.push(`<div class="fg"><label>${_wsLabel}:</label><input type="file" multiple id="f-workshop-input" accept="${_designFormats}" onchange="uploadFileDirect('${key}','approvedWorkshopFile','approvedWorkshopFileName','f-workshop-input')"/><textarea id="f-workshop-input-note" class="dept-upload-note" placeholder="ملاحظة اختيارية مع الملف (اختياري)..."></textarea>${renderApprovalFileList(o,key,'approvedWorkshopFile',canAct)}</div>`);
+        }
+        if(_boxesArr.length){
+          uploadArea=`<div class="dept-upload-box"><div class="dept-upload-title" style="color:#6B21A8"><i class="ti ti-brush"></i> ${_boxesArr.length>1?'ملفات التصميم المطلوبة':'ملف التصميم المطلوب'}</div>${_boxesArr.join('')}</div>`;
+        }
       }
     }
     // Printing is receive-only: printers never attach their own files here —
