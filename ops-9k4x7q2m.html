@@ -4982,7 +4982,18 @@ function orderProgress(o){const seq=getActiveDepts(o);const total=seq.length;con
 // actions. This is purely an additional, finer-grained tracking layer.
 // ============================================================
 function itemDeptSeq(o){return[...getActiveDepts(o),'done'];}
-function itemCurrentDept(it,o){return it.currentDept||o.currentDept||itemDeptSeq(o)[0]||'design';}
+// o.currentDept==='done' wins outright over any stale it.currentDept —
+// finishOrder()/archiveOrder() both already sync every item's currentDept
+// to 'done' at the moment they run, but older records finished before
+// that sync existed (or by some other, forgotten path) can still carry a
+// leftover per-item value from whatever stage they were last individually
+// at — permanently showing a long-finished order in that department's
+// active queue forever, with no normal action left to ever clear it. A
+// genuinely-intended revert of one item on an order that was 'done'
+// (openReturnOrderModal) already recomputes o.currentDept away from
+// 'done' itself (computeOrderDeptFromItems), so this never fights that —
+// it only ever matters once the order is truly, currently done.
+function itemCurrentDept(it,o){if(o.currentDept==='done')return'done';return it.currentDept||o.currentDept||itemDeptSeq(o)[0]||'design';}
 function itemNextDept(it,o){const seq=itemDeptSeq(o);const idx=seq.indexOf(itemCurrentDept(it,o));if(idx===-1||idx===seq.length-1)return null;return seq[idx+1];}
 // Staff assignment (o[dept+'To']) is an ORDER-level field shared by every
 // item currently at that department — reassigning it from one item's own
