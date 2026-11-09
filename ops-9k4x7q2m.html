@@ -851,6 +851,11 @@ input[type="password"]{direction:rtl;text-align:right;padding-left:40px;padding-
 .ik-file-meta{font-size:10px;color:var(--text-3);margin-top:4px;}
 .ik-file-del{width:26px;height:26px;border-radius:7px;border:1px solid #F3D9D9;background:#FEF2F2;color:#DC2626;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:11px;flex-shrink:0;transition:.12s;}
 .ik-file-del:hover{background:#FEE2E2;}
+/* One file among several in the same upload/version, each individually
+   removable — not just an all-or-nothing delete for the whole version. */
+.ik-file-chip{display:inline-flex;align-items:center;gap:3px;}
+.ik-file-chip-del{width:18px;height:18px;border-radius:5px;border:1px solid #F3D9D9;background:#FEF2F2;color:#DC2626;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:10px;flex-shrink:0;transition:.12s;}
+.ik-file-chip-del:hover{background:#FEE2E2;}
 .ik-empty{font-size:11px;color:var(--text-3);padding:6px 0;}
 .ik-dropzone{display:flex;align-items:center;justify-content:center;gap:6px;cursor:pointer;border:1.5px dashed var(--border);border-radius:8px;padding:10px;font-size:11.5px;font-weight:700;color:var(--text-2);transition:.15s;}
 .ik-dropzone:hover{border-color:var(--gold);color:var(--maroon);background:var(--surface-2);}
@@ -7138,9 +7143,9 @@ function buildDesignerBoard(){
   });
   const SECTIONS=[
     {key:'todo',label:'🆕 طلب جديد'},
-    {key:'waiting',label:'📤 تم إرسال البروفة'},
     {key:'revision',label:'🔄 يتطلب تعديل'},
     {key:'approved',label:'✅ تعميد'},
+    {key:'waiting',label:'📤 تم إرسال البروفة'},
   ];
   const buckets={todo:[],revision:[],approved:[],waiting:[]};
   Object.values(groups).forEach(g=>{
@@ -7574,9 +7579,9 @@ function renderWfListView(){
   // no items at all) falls through to that design-specific classification.
   const WF_SECTIONS=[
     {key:'todo',label:'🆕 طلب جديد'},
-    {key:'waiting',label:'📤 تم إرسال البروفة'},
     {key:'revision',label:'🔄 يتطلب تعديل'},
     {key:'approved',label:'✅ تعميد'},
+    {key:'waiting',label:'📤 تم إرسال البروفة'},
     {key:'inprogress',label:'⚙️ قيد التنفيذ'},
     {key:'delivery',label:'🚚 التسليم'},
   ];
@@ -8551,7 +8556,18 @@ function myAssignedItems(){
     // An on-hold order is explicitly paused (openHoldOrderModal/resumeOrderFromHold)
     // — no production role should see it in their active work list while
     // it's frozen; it reappears here on its own the moment it's resumed.
-    if(o.currentDept==='done'||o.cancelled||o.onHold)return;
+    // o.currentDept==='done' is deliberately NOT checked here anymore — it's
+    // the order's own AGGREGATE stage, which can legitimately sit at 'done'
+    // (or be stale from an admin override) while one specific item still
+    // carries its own, different itemCurrentDept (e.g. a single item
+    // reverted back after the order itself had already been archived) — an
+    // order-level-only check like that bailed out of the loop before the
+    // per-item check below ever ran, making the WHOLE order vanish from
+    // this list even though that one item was genuinely still active. The
+    // per-item check already excludes a truly-done item correctly on its
+    // own (itemCurrentDept resolving to 'done' never matches a real
+    // deptKey), so nothing is lost by dropping the redundant shortcut.
+    if(o.cancelled||o.onHold)return;
     if(!o.orderItems||!o.orderItems.length)return;
     const assignee=o[deptKey+'To'];
     if(!assignee||assignee==='none')return;
@@ -8725,7 +8741,35 @@ async function deleteItemVersion(key,idx,versionId){
   if(!confirm('حذف هذا الملف؟'))return;
   showSaving('جاري الحذف...');
   try{
-    const versions=itemVersions(it).filter(v=>!v._legacy&&v.id!==versionId);
+    // priorVersionsForWrite(it), not itemVersions(it).filter(v=>!v._legacy...)
+    // — see its own comment: that old pattern silently discarded a legacy
+    // item's still-only-source files (it.files/it.fileData) the moment
+    // ANY version got deleted, instead of promoting them into a real,
+    // separately-persisted entry first.
+    const versions=priorVersionsForWrite(it).filter(v=>v.id!==versionId);
+    const items=[...o.orderItems];items[idx]={...items[idx],versions};
+    await fbPatch(`orders/${key}`,{orderItems:items});
+    await loadData();hideSaving();toast('✓ تم الحذف');
+    buildItemWorkspacePage();
+  }catch(e){hideSaving();toast('❌ فشل الحذف');}
+}
+// A single upload action can attach several files at once (versions[].files
+// is an array) — deleteItemVersion() above only ever deleted the WHOLE
+// version, all its files together, with no way to remove just one of
+// several files someone accidentally multi-selected into the same upload.
+// This removes just that one file, keeping the rest of the version (its
+// uploader/date/notes) intact — only dropping the version entirely once
+// its last file is gone, so a version is never left with an empty files[].
+async function deleteItemVersionFile(key,idx,versionId,fileIdx){
+  const o=orders[key];if(!o)return;
+  const it=o.orderItems[idx];if(!it)return;
+  if(!guardWrite(cu.type==='admin'||isMyItem(o,it)||canEditDesignFiles(o,it),'⚠️ لا تملك صلاحية حذف هذا الملف'))return;
+  if(!confirm('حذف هذا الملف فقط؟'))return;
+  showSaving('جاري الحذف...');
+  try{
+    const versions=priorVersionsForWrite(it)
+      .map(v=>v.id===versionId?{...v,files:(v.files||[]).filter((f,i)=>i!==fileIdx)}:v)
+      .filter(v=>v.id!==versionId||(v.files&&v.files.length));
     const items=[...o.orderItems];items[idx]={...items[idx],versions};
     await fbPatch(`orders/${key}`,{orderItems:items});
     await loadData();hideSaving();toast('✓ تم الحذف');
@@ -8767,12 +8811,16 @@ function renderItemKindBox(it,key,idx,kind,dept,canAct,labelOverride){
   const versions=itemVersions(it).filter(v=>!v._legacy&&(v.stage||'design')===dept&&(v.kind===kind||(kind==='final_work'&&!v.kind)));
   const hasFiles=versions.length>0;
   const filesWrapId=`ik-files-${key}-${idx}-${kind}`;
+  // A single upload action can attach several files at once (v.files is an
+  // array) — each gets its own small delete chip (deleteItemVersionFile)
+  // instead of one trash button for the whole version that used to delete
+  // every file in it together, with no way to remove just one of several
+  // files someone multi-selected into the same upload by mistake.
   const filesHtml=versions.map(v=>`<div class="ik-file-row">
     <div class="ik-file-row-main">
-      <div class="ik-file-links">${(v.files||[]).map(f=>fileLinkHtml(f.name,f.data)).join('')}</div>
+      <div class="ik-file-links">${(v.files||[]).map((f,fi)=>`<span class="ik-file-chip">${fileLinkHtml(f.name,f.data)}${canAct?`<button class="ik-file-chip-del" onclick="event.stopPropagation();deleteItemVersionFile('${key}',${idx},'${v.id}',${fi})" title="حذف هذا الملف فقط"><i class="ti ti-x"></i></button>`:''}</span>`).join('')}</div>
       <div class="ik-file-meta"><i class="ti ti-user"></i> ${esc(v.createdBy||'—')} ${v.createdAt?'· '+fmtDateTime(v.createdAt):''}</div>
     </div>
-    ${canAct?`<button class="ik-file-del" onclick="deleteItemVersion('${key}',${idx},'${v.id}')" title="حذف"><i class="ti ti-trash"></i></button>`:''}
   </div>`).join('');
   const inputId=`itemwork-${kind}-input`;
   return `<div class="ik-kind-card">
@@ -11125,6 +11173,15 @@ function openItemEmployeeChange(key,idx){
   const o=orders[key];if(!o)return;
   const it=(o.orderItems||[])[idx];if(!it)return;
   const dept=itemCurrentDept(it,o);
+  // Reassigning here changes o[dept+'To'] for the WHOLE order, not just
+  // this one item — every other item currently at the same department
+  // moves with it, since staff assignment has no per-item field of its
+  // own (see the comment above). Warn with the exact count up front
+  // instead of letting it look like an imprecise/buggy per-item move.
+  const siblingCount=(o.orderItems||[]).filter((other,i)=>i!==idx&&itemCurrentDept(other,o)===dept).length;
+  if(siblingCount>0){
+    toast(`⚠️ تنبيه: يوجد ${siblingCount} بند آخر في نفس المرحلة (${(WF_DEPT_META[dept]||{label:dept}).label}) بهذا الطلب — تغيير الموظف هنا سيغيّره لهم جميعاً، لأن تكليف الموظف مرتبط بالمرحلة وليس بالبند نفسه`);
+  }
   openOrderEditModal(key);
   setTimeout(()=>{
     const sel=document.getElementById(`oe-reassign-${dept}-${key}`);
