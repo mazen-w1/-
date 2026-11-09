@@ -4996,6 +4996,17 @@ function orderProgress(o){const seq=getActiveDepts(o);const total=seq.length;con
 // advancing exactly as before via the existing sendToNextDept()/finishOrder()
 // actions. This is purely an additional, finer-grained tracking layer.
 // ============================================================
+// A parallel-production-line PARENT order (one or more other orders point
+// their own parentOrderKey at it) legitimately has an EMPTY orderItems of
+// its own by design — every real item lives on its child lines instead
+// (see renderParallelLineSections/orderEditLinePanelHtml). That made it
+// silently match the "simple (non-itemized) order" fallback used for
+// genuinely item-less orders on the designer/printer boards, rendering a
+// stray, out-of-place order card for the parent alongside its own
+// children's already-correctly-shown item rows — a visible floating card
+// belonging to no real stage and not found by opening the order itself,
+// since its own record carries none of the actual work.
+function isParallelLineParent(o){return Object.values(orders).some(v=>v.parentOrderKey===o._key);}
 function itemDeptSeq(o){return[...getActiveDepts(o),'done'];}
 // o.currentDept==='done' wins outright over any stale it.currentDept —
 // finishOrder()/archiveOrder() both already sync every item's currentDept
@@ -7228,7 +7239,7 @@ function buildDesignerBoard(){
   });
   // Simple (non-itemized) orders have no per-item design column to bucket
   // by — always listed under "طلب جديد" rather than guessing a status.
-  ordersArr().filter(o=>isMyOrder(o)&&!o.onHold&&(!o.orderItems||!o.orderItems.length)).forEach(o=>{
+  ordersArr().filter(o=>isMyOrder(o)&&!o.onHold&&(!o.orderItems||!o.orderItems.length)&&!isParallelLineParent(o)).forEach(o=>{
     buckets.todo.push(designerSimpleOrderCardHtml(o));
   });
   const hasAny=Object.values(buckets).some(b=>b.length);
@@ -7345,7 +7356,7 @@ function buildPrinterBoard(){
     groups[o._key].items.push({it,idx});
   });
   const orderCardsHtml=Object.values(groups).map(g=>printerOrderCardHtml(g.o,g.items)).join('');
-  const simpleOrders=ordersArr().filter(o=>isMyOrder(o)&&(!o.orderItems||!o.orderItems.length));
+  const simpleOrders=ordersArr().filter(o=>isMyOrder(o)&&(!o.orderItems||!o.orderItems.length)&&!isParallelLineParent(o));
   const simpleCardsHtml=simpleOrders.map(o=>designerSimpleOrderCardHtml(o)).join('');
   const cardsHtml=orderCardsHtml+simpleCardsHtml;
   const el=document.getElementById('production-body');if(!el)return;
@@ -8680,7 +8691,7 @@ function buildMyWork(){
   // Simple (non-itemized) tasks — quick tasks, maintenance requests, and any
   // legacy order without a per-item breakdown — don't fit the item-workspace
   // model above, so they keep the original whole-order card treatment.
-  const simpleOrders=allMyOrders.filter(o=>!o.orderItems||!o.orderItems.length);
+  const simpleOrders=allMyOrders.filter(o=>(!o.orderItems||!o.orderItems.length)&&!isParallelLineParent(o));
   const itemCards=buildMyWorkItemCards();
   const wfFilter=isWorkshop?(window._myWorkFilter||'all'):'all';
   const myOrders=wfFilter==='all'?simpleOrders:wfFilter==='maintenance'?simpleOrders.filter(o=>o.orderKind==='maintenance'):simpleOrders.filter(o=>o.orderKind!=='maintenance');
