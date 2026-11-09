@@ -8929,7 +8929,7 @@ function buildItemWorkspacePage(){
       ${(canApproveClientProof()&&dcol==='revision')?`<button class="btn btn-green btn-sm" onclick="approveItemProof('${key}',${idx})"><i class="ti ti-circle-check"></i> تعميد التصميم مباشرة</button>`:''}
     </div>`:''}
     ${it.needsRevision&&allClientFeedbackNotes(it).length?`<div style="margin-bottom:14px;">${clientFeedbackHistoryBoxHtml(it,key,idx)}</div>`:''}
-    <div class="card" style="margin-bottom:14px;padding:16px 20px 8px;">${buildOrderProgressTimeline(o,key)}</div>
+    <div class="card" style="margin-bottom:14px;padding:16px 20px 8px;">${buildOrderProgressTimeline(o,key,dept)}</div>
     <div class="card" style="margin-bottom:14px;">
       <div style="padding:18px 20px;display:flex;flex-direction:column;gap:12px;">
         <div style="display:flex;gap:14px;flex-wrap:wrap;font-size:11.5px;color:var(--text-3);">
@@ -11788,14 +11788,25 @@ function renderParallelLineSections(o,key,canAct){
   }).join('');
   return `<div class="od-prodlines-wrap">${mainCard}${childCards}</div>`;
 }
-function buildOrderProgressTimeline(o,key){
+// curDeptOverride lets a caller showing one SPECIFIC item (the Item
+// Workspace page) point this at that item's own itemCurrentDept() instead
+// of the order's aggregate o.currentDept — without it, an item that had
+// individually moved ahead of its order's bottleneck stage (per-item
+// independent workflow; see the comment above itemDeptSeq()) showed a
+// badge for its own real position right next to a timeline still stuck
+// on the order's overall position, visibly disagreeing with each other on
+// the very same page. The order-details page's own call is unaffected
+// (no third argument — still o.currentDept, correct for showing the WHOLE
+// order's progress there).
+function buildOrderProgressTimeline(o,key,curDeptOverride){
   const seq=getActiveDepts(o);
   const nodes=[{key:'received',label:'استلام الطلب'},{key:'reviewed',label:'مراجعة الطلب'},
     ...seq.map(dk=>({key:dk,label:WF_DEPT_META[dk]?.label||dk})),{key:'delivery',label:'التسليم'},{key:'done',label:'مكتمل'}];
-  const curIdx=o.currentDept==='done'?nodes.length-1:nodes.findIndex(n=>n.key===o.currentDept);
+  const curDept=curDeptOverride||o.currentDept;
+  const curIdx=curDept==='done'?nodes.length-1:nodes.findIndex(n=>n.key===curDept);
   const effectiveIdx=curIdx<0?1:curIdx;
   const html=nodes.map((n,i)=>{
-    const st=(o.currentDept==='done'&&n.key==='done')?'done':(i<effectiveIdx?'done':(i===effectiveIdx?'current':''));
+    const st=(curDept==='done'&&n.key==='done')?'done':(i<effectiveIdx?'done':(i===effectiveIdx?'current':''));
     const jump=(n.key!=='received'&&n.key!=='reviewed'&&n.key!=='done'&&n.key!=='delivery')?`scrollToDeptCard('${n.key}')`:'';
     return `<div class="od-progress-node ${st}" ${jump?`onclick="${jump}"`:''}>
         <div class="od-progress-dot"><i class="ti ${st==='done'?'ti-check':'ti-circle'}"></i></div>
