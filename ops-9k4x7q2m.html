@@ -446,7 +446,17 @@ input[type="password"]{direction:rtl;text-align:right;padding-left:40px;padding-
 .pay-channels-compact .fg label{font-size:10px;}
 .pay-channels-compact .fg input{font-size:11px;padding:5px 8px;height:30px;}
 .row-menu-wrap{position:relative;display:inline-block;}
-.row-menu{position:absolute;top:100%;left:0;background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,.14);z-index:400;min-width:160px;padding:4px;}
+/* right:0 (not left:0) — RTL-natural: the menu hangs below its trigger and
+   grows LEFTWARD from the trigger's own right edge, same direction the
+   text itself reads, instead of growing rightward off whichever edge of
+   the screen the trigger happens to be near. A trigger sitting anywhere
+   but the viewport's far left (the common case — "⋮" buttons usually sit
+   mid-row or at the row's end) could otherwise push the menu's far edge
+   straight off a narrow/mobile screen, clipping its own button text. A
+   max-width safety net on top means no .row-menu anywhere in the app —
+   including ones that override this direction for their own trigger's
+   position — can ever exceed the viewport either way. */
+.row-menu{position:absolute;top:100%;right:0;max-width:calc(100vw - 32px);background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,.14);z-index:400;min-width:160px;padding:4px;}
 .row-menu button{display:flex;align-items:center;gap:6px;width:100%;text-align:right;padding:7px 9px;font-size:11px;font-weight:700;color:var(--text-1);background:none;border:none;cursor:pointer;border-radius:6px;font-family:inherit;}
 .row-menu button:hover{background:var(--surface-2);color:var(--maroon);}
 /* ============================================================ CREATE ORDER FORM — compact sizing */
@@ -1260,7 +1270,12 @@ body.has-ticker .upload-queue-widget{bottom:48px;}
 .wf-check{display:none;position:absolute;top:10px;left:10px;width:18px;height:18px;cursor:pointer;accent-color:var(--maroon);z-index:5;}
 .wf-multi-mode .wf-check{display:block!important;}
 .wf-card-menu{position:absolute;top:6px;right:6px;z-index:6;}
-.wf-card-menu .row-menu{left:0;right:auto;}
+/* No left:0 override here anymore — this trigger already sits at the
+   card's own top-right corner, so the shared .row-menu right:0 default
+   grows the menu LEFTWARD, staying inside the card's own bounds instead
+   of extending rightward past the card (and, for a card flush against
+   the screen edge, off it) — the exact overlap this was meant to avoid,
+   just pointed the wrong way for a right-anchored trigger specifically. */
 .wf-multi-mode .wf-card{position:relative;cursor:pointer;}
 .wf-card-selected{outline:2.5px solid var(--maroon)!important;background:rgba(78,16,16,.06)!important;}
 #bulk-bar{display:none;position:fixed;bottom:70px;left:50%;transform:translateX(-50%);background:var(--maroon);color:#fff;border-radius:16px;padding:12px 22px;box-shadow:0 4px 20px rgba(0,0,0,.3);z-index:900;align-items:center;gap:14px;font-size:13px;font-weight:700;white-space:nowrap;}
