@@ -5040,14 +5040,30 @@ function itemNextDept(it,o){const seq=itemDeptSeq(o);const idx=seq.indexOf(itemC
 // it falls back to the order-level field exactly as before, so nothing
 // about existing data or behavior changes until someone explicitly uses
 // "تغيير الموظف" -> "لهذا البند فقط" (see openItemEmployeeChange).
-function itemAssignee(it,o){const dept=itemCurrentDept(it,o);return it.assignedTo||o[dept+'To'];}
+// it.assignedToDept records WHICH department assignedTo was set for
+// (stamped by confirmItemEmployeeChange). It's only honored here while the
+// item is still actually at that same department — once the item moves on
+// (advanceItemDept/bulkAdvanceItems/confirmReturnOrder/sendToNextDept/the
+// design auto-advance, none of which touch assignedTo), a name that
+// belonged to the OLD department would otherwise keep overriding the new
+// department's own o[dept+'To'] forever, which doesn't just misattribute
+// the item — it actively hides it from every department board/"My Work"
+// list that filters by itemAssignee(), since that stale uname essentially
+// never matches anyone in the new department. Falling back to the
+// order-level assignee here is what makes the item reappear immediately.
+// it.assignedTo/assignedToName themselves are deliberately left untouched
+// by every department move — canEditDesignFiles() still reads it.assignedTo
+// directly (not through this dept check) so a designer keeps edit rights on
+// their own uploaded files even after the item leaves the design stage.
+function itemAssignee(it,o){const dept=itemCurrentDept(it,o);const hasOverride=it.assignedTo&&it.assignedToDept===dept;return hasOverride?it.assignedTo:o[dept+'To'];}
 function itemAssigneeName(it,o){
-  if(it.assignedTo){
+  const dept=itemCurrentDept(it,o);
+  if(it.assignedTo&&it.assignedToDept===dept){
     if(it.assignedTo==='none')return'❌ معفى';
     if(it.assignedTo==='all')return'فريق مشترك (الكل)';
     return it.assignedToName||USERS[it.assignedTo]?.name||it.assignedTo;
   }
-  return null; // no per-item override — caller falls back to the order-level name (currentPersonName(o))
+  return null; // no per-item override for the CURRENT department — caller falls back to the order-level name (currentPersonName(o))
 }
 // ============================================================
 // WORKLOAD MANAGEMENT — department + employee level, built entirely on
@@ -11325,7 +11341,7 @@ async function confirmItemEmployeeChange(key,idx){
   showSaving('جاري تحديث المسؤول...');
   try{
     const items=[...o.orderItems];
-    items[idx]={...items[idx],assignedTo:uname,assignedToName:name};
+    items[idx]={...items[idx],assignedTo:uname,assignedToName:name,assignedToDept:itemCurrentDept(it,o)};
     await fbPatch(`orders/${key}`,{orderItems:items,lastItemUpdateAt:new Date().toISOString(),lastItemUpdateBy:cu.name});
     await loadData();hideSaving();toast('✓ تم تغيير الموظف المسؤول لهذا البند فقط');
     if(isActualChange){
