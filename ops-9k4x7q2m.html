@@ -8814,7 +8814,18 @@ function canEditDesignFiles(o,it){
   if(cu.type==='admin')return true;
   if(cu.type!=='designer')return false;
   if(itemCurrentDept(it,o)==='done'||o.currentDept==='done')return false;
-  return o.designTo===cu._uname||o.designTo==='all';
+  // it.assignedTo (the per-item override — see itemAssignee()) first, not
+  // itemAssignee(it,o) itself: that resolves against the item's CURRENT
+  // department, which breaks the whole point of this wider window once
+  // the item has already moved past design (see the comment above) —
+  // this specifically needs the DESIGN assignee regardless of current
+  // stage, falling back to the order-level o.designTo exactly as before
+  // for any item without its own override. Without this, a designer
+  // assigned to one specific item via "تغيير الموظف" -> "لهذا البند فقط"
+  // (decoupled from o.designTo) could upload/see their own design files
+  // but never got offered a delete/replace button on them.
+  const assignee=it.assignedTo||o.designTo;
+  return assignee===cu._uname||assignee==='all';
 }
 function removeQueuedItemworkFile(idx,fi){
   const q=window._newVerFiles&&window._newVerFiles[idx];if(!q)return;
