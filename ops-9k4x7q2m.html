@@ -2629,7 +2629,23 @@ async function enterApp(u){
   let _restorePage=_defaultPage;
   try{
     const _saved=localStorage.getItem('rawaee_last_page_'+u);
-    if(_saved&&document.getElementById('n-'+_saved))_restorePage=_saved;
+    if(_saved&&document.getElementById('n-'+_saved)){
+      _restorePage=_saved;
+    }else if(_saved==='orderdetails'){
+      // No sidebar button to look up (see the comment in nav() that wrote
+      // this) — restorable here only because the order it points to still
+      // exists; a deleted/archived-since order falls back to the normal
+      // dashboard instead of showing "تعذر العثور على هذا الطلب" cold.
+      const savedKey=localStorage.getItem('rawaee_last_orderkey_'+u);
+      if(savedKey&&orders[savedKey]){window._orderDetailsKey=savedKey;_restorePage='orderdetails';}
+    }else if(_saved==='itemwork'){
+      try{
+        const savedIw=JSON.parse(localStorage.getItem('rawaee_last_itemwork_'+u)||'null');
+        if(savedIw&&savedIw.key&&orders[savedIw.key]&&orders[savedIw.key].orderItems&&orders[savedIw.key].orderItems[savedIw.idx]){
+          window._itemworkKey=savedIw.key;window._itemworkIdx=savedIw.idx;_restorePage='itemwork';
+        }
+      }catch(e){}
+    }
   }catch(e){}
   // loadData() already ran once before enterApp() was called (doLogin awaits
   // it first) but with cu still null at that point, so it couldn't fetch
@@ -4515,7 +4531,20 @@ async function nav(p,skipHistory=false){
   };
   const _isFirstNav=(_curPage===null);
   _curPage=p;
-  if(cu&&cu._uname){try{localStorage.setItem('rawaee_last_page_'+cu._uname,p);}catch(e){}}
+  if(cu&&cu._uname){
+    try{
+      localStorage.setItem('rawaee_last_page_'+cu._uname,p);
+      // 'orderdetails'/'itemwork' have no sidebar button of their own (see
+      // the n-<page> lookup in enterApp()) — they're reached by opening a
+      // specific record from elsewhere, so restoring "the last page" after
+      // a refresh needs the record's own key too, not just the page name,
+      // or there's nothing for buildOrderDetailsPage()/buildItemWorkspacePage()
+      // to actually render and the restore silently fell back to the
+      // dashboard instead of the order the person was just looking at.
+      if(p==='orderdetails')localStorage.setItem('rawaee_last_orderkey_'+cu._uname,window._orderDetailsKey||'');
+      else if(p==='itemwork')localStorage.setItem('rawaee_last_itemwork_'+cu._uname,JSON.stringify({key:window._itemworkKey||'',idx:window._itemworkIdx}));
+    }catch(e){}
+  }
   // Real browser back/forward support: every "forward" navigation (the
   // default — a sidebar click, opening an order, etc.) pushes a new history
   // entry, same as any ordinary website, so the physical back/forward
@@ -4955,6 +4984,25 @@ function orderProgress(o){const seq=getActiveDepts(o);const total=seq.length;con
 function itemDeptSeq(o){return[...getActiveDepts(o),'done'];}
 function itemCurrentDept(it,o){return it.currentDept||o.currentDept||itemDeptSeq(o)[0]||'design';}
 function itemNextDept(it,o){const seq=itemDeptSeq(o);const idx=seq.indexOf(itemCurrentDept(it,o));if(idx===-1||idx===seq.length-1)return null;return seq[idx+1];}
+// Staff assignment (o[dept+'To']) is an ORDER-level field shared by every
+// item currently at that department — reassigning it from one item's own
+// menu moved every sibling item with it, reported as "imprecise". it.
+// assignedTo is the additive per-item override, mirroring exactly how
+// it.currentDept already overrides o.currentDept — set it and this ONE
+// item is "decoupled" from whichever order-wide employee its siblings
+// still share; leave it unset (the default for every existing item) and
+// it falls back to the order-level field exactly as before, so nothing
+// about existing data or behavior changes until someone explicitly uses
+// "تغيير الموظف" -> "لهذا البند فقط" (see openItemEmployeeChange).
+function itemAssignee(it,o){const dept=itemCurrentDept(it,o);return it.assignedTo||o[dept+'To'];}
+function itemAssigneeName(it,o){
+  if(it.assignedTo){
+    if(it.assignedTo==='none')return'❌ معفى';
+    if(it.assignedTo==='all')return'فريق مشترك (الكل)';
+    return it.assignedToName||USERS[it.assignedTo]?.name||it.assignedTo;
+  }
+  return null; // no per-item override — caller falls back to the order-level name (currentPersonName(o))
+}
 // ============================================================
 // WORKLOAD MANAGEMENT — department + employee level, built entirely on
 // existing fields (o.currentDept, o[dept+'To'], it.currentDept,
@@ -8569,11 +8617,17 @@ function myAssignedItems(){
     // deptKey), so nothing is lost by dropping the redundant shortcut.
     if(o.cancelled||o.onHold)return;
     if(!o.orderItems||!o.orderItems.length)return;
-    const assignee=o[deptKey+'To'];
-    if(!assignee||assignee==='none')return;
-    if(assignee!==cu._uname&&!(allowAll&&assignee==='all'))return;
+    // Checked per item (itemAssignee), not once for the whole order — an
+    // item with its own assignedTo override (see itemAssignee()) can now
+    // genuinely belong to a different employee than its siblings at the
+    // same department, instead of the order-level o[deptKey+'To'] deciding
+    // for every item at once.
     o.orderItems.forEach((it,i)=>{
-      if(itemCurrentDept(it,o)===deptKey)out.push({o,idx:i,it});
+      if(itemCurrentDept(it,o)!==deptKey)return;
+      const assignee=itemAssignee(it,o);
+      if(!assignee||assignee==='none')return;
+      if(assignee!==cu._uname&&!(allowAll&&assignee==='all'))return;
+      out.push({o,idx:i,it});
     });
   });
   return out;
@@ -8707,7 +8761,7 @@ function isMyItem(o,it){
   if(!deptKey)return false;
   if(itemCurrentDept(it,o)!==deptKey)return false;
   const allowAll=deptKey==='design'||deptKey==='workshop';
-  const assignee=o[deptKey+'To'];
+  const assignee=itemAssignee(it,o);
   if(!assignee||assignee==='none')return false;
   return assignee===cu._uname||(allowAll&&assignee==='all');
 }
@@ -8898,16 +8952,26 @@ function buildItemWorkspacePage(){
       // whichever stage the item happens to be at right now.
       const allWithFiles=itemVersions(it).filter(v=>!v._legacy&&v.files&&v.files.length).slice().reverse();
       if(!allWithFiles.length)return'';
+      const allFilesWrapId=`ik-allstages-${key}-${idx}`;
       return`<div class="card" style="margin-bottom:14px;">
-        <div class="card-header"><span class="card-title"><i class="ti ti-folders"></i> جميع ملفات البند عبر كل المراحل</span></div>
-        <div style="padding:16px 20px;display:flex;flex-direction:column;gap:8px;">
-          ${allWithFiles.map(v=>`<div class="ik-file-row">
+        <div class="card-header" style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+          <span class="card-title"><i class="ti ti-folders"></i> جميع ملفات البند عبر كل المراحل</span>
+          <button class="btn btn-out btn-xs" onclick="downloadAllFilesFromContainer('${allFilesWrapId}','ملفات البند')"><i class="ti ti-download"></i> تنزيل الكل</button>
+        </div>
+        <div id="${allFilesWrapId}" style="padding:16px 20px;display:flex;flex-direction:column;gap:8px;">
+          ${allWithFiles.map((v,vi)=>{
+            const rowWrapId=`${allFilesWrapId}-${vi}`;
+            const groupLabel=`${fileKindTagLabel(v)}${v.stage?' - '+(WF_DEPT_META[v.stage]||{label:v.stage}).label:''}`;
+            return`<div class="ik-file-row">
             <div class="ik-file-row-main">
-              <div style="font-size:10px;color:var(--text-3);font-weight:700;margin-bottom:3px;">${esc(fileKindTagLabel(v))}${v.stage?' · '+esc((WF_DEPT_META[v.stage]||{label:v.stage}).label):''}</div>
-              <div class="ik-file-links">${(v.files||[]).map(f=>fileLinkHtml(f.name,f.data)).join('')}</div>
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:3px;">
+                <span style="font-size:10px;color:var(--text-3);font-weight:700;">${esc(fileKindTagLabel(v))}${v.stage?' · '+esc((WF_DEPT_META[v.stage]||{label:v.stage}).label):''}</span>
+                ${(v.files||[]).length>1?`<button class="btn btn-out btn-xs" onclick="downloadAllFilesFromContainer('${rowWrapId}','${esc(groupLabel)}')"><i class="ti ti-download"></i> تنزيل الكل</button>`:''}
+              </div>
+              <div class="ik-file-links" id="${rowWrapId}">${(v.files||[]).map(f=>fileLinkHtml(f.name,f.data)).join('')}</div>
               <div class="ik-file-meta"><i class="ti ti-user"></i> ${esc(v.createdBy||'—')} ${v.createdAt?'· '+fmtDateTime(v.createdAt):''}</div>
             </div>
-          </div>`).join('')}
+          </div>`;}).join('')}
         </div>
       </div>`;
     })():''}
@@ -11160,28 +11224,65 @@ function openOrderEditModal(key){
   bodyEl.innerHTML=orderEditModalHtml(key);
   openModal('order-edit-modal');
 }
-// Item-card "تغيير الموظف" quick action — staff assignment stays an
-// ORDER-level field per department (see getDeptWorkers()/the comment
-// above canEditOrderComposition()), not something an individual item
-// carries its own copy of, so this reuses the exact same reassignment
-// row/select/save flow already built into the order-edit modal
-// (onOeReassignChange/saveOrderEditReassign) instead of duplicating it —
-// just opens straight to it and scrolls/highlights the one row that
-// matches this item's own current department, instead of leaving the
-// person to find it themselves among every department's row.
+// Item-card "تغيير الموظف" quick action. Previously this just jumped to
+// the order-edit modal's own reassignment row, which changes
+// o[dept+'To'] for the WHOLE order — every sibling item at the same
+// department moved with it, reported as "imprecise" and as "move ONE
+// item, not all of them, even if they're linked — decouple them." Now
+// offers a real choice: write it.assignedTo (a per-item override — see
+// itemAssignee()) to move ONLY this item, or fall through to the
+// existing order-wide row when every item at this stage should actually
+// move together on purpose.
 function openItemEmployeeChange(key,idx){
   const o=orders[key];if(!o)return;
   const it=(o.orderItems||[])[idx];if(!it)return;
   const dept=itemCurrentDept(it,o);
-  // Reassigning here changes o[dept+'To'] for the WHOLE order, not just
-  // this one item — every other item currently at the same department
-  // moves with it, since staff assignment has no per-item field of its
-  // own (see the comment above). Warn with the exact count up front
-  // instead of letting it look like an imprecise/buggy per-item move.
+  const workers=getDeptWorkers(dept);
+  const curAssignee=itemAssignee(it,o)||'none';
+  const options=`<option value="none">❌ بدون تكليف</option>`+workers.map(w=>`<option value="${esc(w.uname)}" ${w.uname===curAssignee?'selected':''}>${esc(w.name)}</option>`).join('');
   const siblingCount=(o.orderItems||[]).filter((other,i)=>i!==idx&&itemCurrentDept(other,o)===dept).length;
-  if(siblingCount>0){
-    toast(`⚠️ تنبيه: يوجد ${siblingCount} بند آخر في نفس المرحلة (${(WF_DEPT_META[dept]||{label:dept}).label}) بهذا الطلب — تغيير الموظف هنا سيغيّره لهم جميعاً، لأن تكليف الموظف مرتبط بالمرحلة وليس بالبند نفسه`);
+  document.getElementById('task-modal-body').innerHTML=`
+    <div class="modal-header"><span class="modal-title"><i class="ti ti-user-cog"></i> تغيير الموظف — ${esc(it.name||'بند')}</span><button class="btn-close" onclick="closeModal('task-modal')">×</button></div>
+    <div class="fg"><label>الموظف المسؤول (${esc((WF_DEPT_META[dept]||{label:dept}).label)})</label><select id="iec-sel">${options}</select></div>
+    <div class="fg"><label>سبب التغيير (إلزامي عند التغيير)</label><textarea id="iec-reason" placeholder="مثال: إعادة توزيع الحمل بين الموظفين..." style="min-height:60px;"></textarea></div>
+    <button class="btn btn-brand" style="width:100%;justify-content:center;" onclick="confirmItemEmployeeChange('${key}',${idx})"><i class="ti ti-device-floppy"></i> حفظ لهذا البند فقط</button>
+    ${siblingCount>0?`<button class="btn btn-out btn-sm" style="width:100%;justify-content:center;margin-top:8px;" onclick="closeModal('task-modal');openOrderEditModalScrollToReassign('${key}','${dept}')"><i class="ti ti-users"></i> بدلاً من ذلك، غيّره لكل البنود (${siblingCount+1}) في هذه المرحلة</button>`:''}
+  `;
+  openModal('task-modal');
+}
+async function confirmItemEmployeeChange(key,idx){
+  const o=orders[key];if(!o)return;
+  const it=(o.orderItems||[])[idx];if(!it)return;
+  if(!canEditOrderComposition()){toast('⚠️ هذا الإجراء غير متاح لك');return;}
+  const sel=document.getElementById('iec-sel');if(!sel)return;
+  const uname=sel.value;
+  const name=uname==='none'?'❌ معفى':(USERS[uname]?.name||uname);
+  const oldUname=itemAssignee(it,o)||'none';
+  const oldName=itemAssigneeName(it,o)||currentPersonName(o);
+  const isActualChange=uname!==oldUname;
+  let reason='';
+  if(isActualChange){
+    reason=(document.getElementById('iec-reason')?.value||'').trim();
+    if(!reason){toast('⚠️ يرجى كتابة سبب تغيير الموظف المسؤول');return;}
   }
+  showSaving('جاري تحديث المسؤول...');
+  try{
+    const items=[...o.orderItems];
+    items[idx]={...items[idx],assignedTo:uname,assignedToName:name};
+    await fbPatch(`orders/${key}`,{orderItems:items,lastItemUpdateAt:new Date().toISOString(),lastItemUpdateBy:cu.name});
+    await loadData();hideSaving();toast('✓ تم تغيير الموظف المسؤول لهذا البند فقط');
+    if(isActualChange){
+      const dept=itemCurrentDept(it,o);
+      logOrderActivity(key,'ti-user-cog',`👤 ${cu.name} قام بتغيير مسؤول البند "${esc(it.name||'بند')}" (${(WF_DEPT_META[dept]||{label:dept}).label}) من ${oldName} إلى ${name} — السبب: ${reason}`);
+      if(uname!=='none')pushNotification({type:'employee_changed',message:`تم تكليفك ببند "${esc(it.name||'بند')}" من الطلب ${esc(o.id||key)} — ${esc((WF_DEPT_META[dept]||{label:dept}).label)}`,orderKey:key,orderId:o.id,client:o.client,targetUname:uname});
+    }
+    closeModal('task-modal');
+    _refreshOrderItemsViews(key);
+  }catch(e){hideSaving();toast('❌ فشل تحديث المسؤول');}
+}
+// "بدلاً من ذلك، غيّره لكل البنود" fallback — the original whole-stage
+// behavior, kept reachable for when that's genuinely what's wanted.
+function openOrderEditModalScrollToReassign(key,dept){
   openOrderEditModal(key);
   setTimeout(()=>{
     const sel=document.getElementById(`oe-reassign-${dept}-${key}`);
@@ -12127,7 +12228,7 @@ function sendWhatsappPaymentClaim(key){
   const n=String(o.phone).replace(/[^0-9]/g,'');
   const full=n.startsWith('0')?'966'+n.substring(1):n;
   const msg=`تذكير بخصوص طلبكم ${o.id||key} لدى روائع الأفكار الإعلانية — المبلغ المتبقي على الطلب هو ${fmtMoney(remaining)} ر.س. نأمل تسديده في أقرب وقت ممكن. شكراً لتعاملكم معنا.`;
-  window.open(`https://wa.me/${full}?text=${encodeURIComponent(msg)}`,'rawaee_whatsapp');
+  window.open(`https://web.whatsapp.com/send?phone=${full}&text=${encodeURIComponent(msg)}`,'rawaee_whatsapp');
 }
 // Sidebar "اعتماد بروفة" / "اعتماد ورشة" quick controls: rather than fabricate
 // a new direct-mutation shortcut whose exact effect on order-level approval
@@ -13968,17 +14069,20 @@ function onClientInput(val){
     if(phoneEl&&ex.phone&&!phoneEl.value)phoneEl.value=ex.phone;
   }
 }
-// wa.me (not web.whatsapp.com) — web.whatsapp.com is a plain https URL, so
-// the browser always treats it as a website and opens it in a new browser
-// tab no matter what, even with a named window target. wa.me is the actual
-// universal "click to chat" link WhatsApp documents for this: on a machine
-// with the WhatsApp Desktop app installed, the OS hands it off to THAT
-// already-running app instead (the literal "same WhatsApp that's already
-// open" the chat is meant to land in), falling back to opening
-// web.whatsapp.com in the browser only when no app is registered to handle
-// it. The named target still applies for that browser fallback, so repeat
-// clicks reuse one tab instead of piling up a new one each time.
-function openWhatsapp(phoneEncoded){const phone=safeDecodeURIComponent(phoneEncoded);if(!phone){toast('⚠️ يرجى إدخال رقم جوال');return;}const n=phone.replace(/[^0-9]/g,'');const full=n.startsWith('0')?'966'+n.substring(1):n;window.open(`https://wa.me/${full}`,'rawaee_whatsapp');}
+// Reverted from wa.me back to web.whatsapp.com directly — confirmed by
+// screen recording that wa.me redirects through api.whatsapp.com's own
+// interstitial page ("هل ترغب في فتح WhatsApp؟ فتح التطبيق / المتابعة إلى
+// واتساب ويب") EVERY time, on a genuinely blank new tab, and just sits
+// there until that extra page is clicked through by hand — worse than
+// the plain link, not better, and the app-handoff case it was meant to
+// enable apparently isn't actually happening on this setup anyway.
+// web.whatsapp.com/send skips that interstitial entirely and opens
+// straight into the chat. The named target still means repeat clicks
+// reuse one tab rather than piling up a new one, whenever the browser
+// itself cooperates with that (see the standing caveat: a cross-origin
+// page can reset its own window.name, which no amount of code on this
+// side can prevent).
+function openWhatsapp(phoneEncoded){const phone=safeDecodeURIComponent(phoneEncoded);if(!phone){toast('⚠️ يرجى إدخال رقم جوال');return;}const n=phone.replace(/[^0-9]/g,'');const full=n.startsWith('0')?'966'+n.substring(1):n;window.open(`https://web.whatsapp.com/send?phone=${full}`,'rawaee_whatsapp');}
 // Manual WhatsApp contact buttons are restricted to the roles who actually
 // talk to clients — designers (design approval back-and-forth) and
 // receiver/admin (reception). Printer/workshop/external never contact
