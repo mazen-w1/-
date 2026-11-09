@@ -2673,27 +2673,36 @@ async function enterApp(u){
   renderStarTicker();
   requestPushNotificationPermission();
   // Background poll: refreshes in-memory data (orders/clients/badges/
-  // notifications) every 20s WITHOUT touching the visible page's DOM.
-  // A prior version of this also called refreshCurrentPage() here, which
-  // meant the entire current page (a full innerHTML rebuild of whatever
-  // list/board/table was open) silently re-rendered out from under the
-  // user every single cycle — a visible flicker/reset even while they were
-  // just reading, scrolling, or mid-search, exactly the instability this is
-  // meant to avoid. Data freshness for OTHER users' changes now comes from:
-  // this poll keeping memory current, plus nav()'s own freshness-aware
-  // re-render the next time the user actually navigates or reopens the page
-  // — never a silent rebuild while they're sitting still. Whoever performs
-  // an action themselves (advancing a stage, reverting, etc.) still sees it
-  // instantly, since every mutation already calls refreshCurrentPage()
-  // itself right after saving.
+  // notifications) every 8s. A prior version of this called
+  // refreshCurrentPage() unconditionally on every tick, which meant the
+  // entire current page (a full innerHTML rebuild of whatever list/board/
+  // table was open) silently re-rendered out from under the user even when
+  // nothing had actually changed — a visible flicker/reset while they were
+  // just reading or scrolling. That's fixed now by only rebuilding when the
+  // orders data genuinely changed since the last tick (see
+  // window._lastOrdersSnap below) — so every department's board/list picks
+  // up another department's advance/return/upload within one poll cycle
+  // (≤8s) instead of only on the next manual navigation, while a tick with
+  // no real change stays fully silent. refreshCurrentPage() itself still
+  // skips the rebuild while a modal/menu is open, text is being typed, a
+  // voice note is playing, etc. — see its own guards. Whoever performs an
+  // action themselves (advancing a stage, reverting, etc.) still sees it
+  // instantly regardless, since every mutation already calls
+  // refreshCurrentPage() itself right after saving.
+  window._lastOrdersSnap=JSON.stringify(orders);
   setInterval(async()=>{
     await loadData();renderStarTicker();
+    const _newSnap=JSON.stringify(orders);
+    if(_newSnap!==window._lastOrdersSnap){
+      window._lastOrdersSnap=_newSnap;
+      refreshCurrentPage();
+    }
     // The notification panel's own list is otherwise static once opened —
     // if it's still open when a new one arrives mid-poll, refresh just its
     // body (not the page behind it) so it shows up without the user having
     // to close and reopen the bell.
     if(document.getElementById('notif-modal')?.classList.contains('open'))renderNotifPanelBody();
-  },20000);
+  },8000);
   // The 20s poll above only fires on its own schedule — a backgrounded tab
   // (switched app, locked phone, laptop sleep) gets throttled or fully
   // suspended by the browser/OS, so data can sit stale far longer than 20s
