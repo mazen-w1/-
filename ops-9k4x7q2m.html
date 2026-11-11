@@ -3215,11 +3215,30 @@ const NOTIF_TYPE_META={
   client_rejected:{label:'رفض العميل',icon:'ti-thumb-down',color:'#DC2626'},
   client_feedback:{label:'طلب تعديل من العميل',icon:'ti-refresh',color:'#EA580C'},
   message:{label:'رسالة جديدة',icon:'ti-message',color:'#7C3AED'},
+  urgent_activity:{label:'نشاط على طلب عاجل',icon:'ti-bolt',color:'#DC2626'},
 };
 async function pushNotification(n){
   try{
     await fbPush('eventNotifs',{type:n.type,message:n.message,orderKey:n.orderKey||'',orderId:n.orderId||'',client:n.client||'',targetUname:n.targetUname||'all-admin',createdAt:new Date().toISOString()});
   }catch(e){console.warn('notification push failed (non-fatal)',e);}
+  // Urgent-order visibility: every "someone sent/advanced/uploaded
+  // something" notification in the app already funnels through this one
+  // function — whoever it was PRIMARILY addressed to (a specific employee)
+  // is often not admin, so admin had no way of knowing an urgent order just
+  // had activity on it short of opening that order directly. Piggybacks an
+  // extra admin-targeted copy, flagged distinctly (urgent_activity, its own
+  // red bolt icon), on top of the original notification — never REPLACING
+  // it — whenever the referenced order is priority==='عاجلة' and the
+  // original wasn't already admin-targeted (no point duplicating one that
+  // already reaches admin).
+  try{
+    if(n.orderKey&&n.targetUname&&n.targetUname!=='all-admin'){
+      const o=typeof orders!=='undefined'?orders[n.orderKey]:null;
+      if(o&&o.priority==='عاجلة'){
+        await fbPush('eventNotifs',{type:'urgent_activity',message:`⚡ طلب عاجل — نشاط جديد: ${n.message}`,orderKey:n.orderKey,orderId:n.orderId||'',client:n.client||'',targetUname:'all-admin',createdAt:new Date().toISOString()});
+      }
+    }
+  }catch(e){console.warn('urgent-order notification failed (non-fatal)',e);}
 }
 // ============================================================
 // ACTIVITY LOG — fine-grained, per-order audit trail. Stored as a
@@ -3253,10 +3272,25 @@ function myEventNotifs(){
 function notifSeenKey(){return'notifSeen_'+(cu&&cu._uname?cu._uname:'anon');}
 function getNotifLastSeen(){try{return localStorage.getItem(notifSeenKey())||'1970-01-01T00:00:00.000Z';}catch(e){return'1970-01-01T00:00:00.000Z';}}
 function markEventNotifsRead(){try{localStorage.setItem(notifSeenKey(),new Date().toISOString());}catch(e){}}
+// A bell notification about a specific order used to stay "unread" until
+// the bell panel itself was opened (markEventNotifsRead()'s single GLOBAL
+// timestamp) — even after actually opening and dealing with that exact
+// order through the sidebar/search/a card, same as every OTHER still-
+// pending notification. Like WhatsApp clearing a chat's own unread count
+// the moment you open that chat (not only when you open the chat LIST),
+// a notification whose orderKey was already opened since it fired is
+// treated as read here too — reusing orderSeenMap, which
+// markOrderUpdateSeen() already stamps on every order-details/Item
+// Workspace visit, so this needs no new data of its own.
+function isNotifUnread(n,lastSeen){
+  if(!n||n.createdAt<=lastSeen)return false;
+  if(n.orderKey&&orderSeenMap&&orderSeenMap[n.orderKey]&&orderSeenMap[n.orderKey]>=n.createdAt)return false;
+  return true;
+}
 function updateNotifBell(){
   const dot=document.getElementById('notif-count');if(!dot)return;
   const lastSeen=getNotifLastSeen();
-  const unreadEvents=myEventNotifs().filter(n=>n.createdAt>lastSeen).length;
+  const unreadEvents=myEventNotifs().filter(n=>isNotifUnread(n,lastSeen)).length;
   const total=getNotifications().length+unreadEvents;
   if(total>0){dot.style.display='flex';dot.textContent=total;}else{dot.style.display='none';}
 }
@@ -3277,7 +3311,7 @@ function renderNotifPanelBody(){
   // row looked identical regardless of whether it was actually new.
   const lastSeen=getNotifLastSeen();
   const derived=getNotifications().map(n=>({...n,isEvent:false,isUnread:false}));
-  const events=myEventNotifs().map(n=>({type:n.type,msg:n.message,key:n.orderKey,color:(NOTIF_TYPE_META[n.type]||{}).color||'#475569',isEvent:true,createdAt:n.createdAt,isUnread:n.createdAt>lastSeen}));
+  const events=myEventNotifs().map(n=>({type:n.type,msg:n.message,key:n.orderKey,color:(NOTIF_TYPE_META[n.type]||{}).color||'#475569',isEvent:true,createdAt:n.createdAt,isUnread:isNotifUnread(n,lastSeen)}));
   let all=[...derived,...events];
   if(filter!=='all')all=all.filter(n=>n.type===filter);
   const body=document.getElementById('notif-panel-body');
@@ -4297,7 +4331,18 @@ async function uploadToGoogleDrive(file,folderCtx,onProgress){
           initAttempt++;_driveAccessToken=null;
           try{accessToken=await getGoogleAccessToken();continue;}catch(tokErr){}
         }
-        throw new Error('⚠️ فشل بدء جلسة الرفع إلى Google Drive: HTTP '+initRes.status);
+        // A bare "HTTP 403" told nothing about WHY Google rejected the
+        // request — storageQuotaExceeded (the Drive account is full),
+        // accessNotConfigured (the Drive API isn't enabled on the project
+        // behind the OAuth token), insufficientPermissions (wrong/missing
+        // scope), and a plain rate limit all return this same status code,
+        // and each needs a completely different fix on the Google Cloud/
+        // Drive account side (outside this file's reach). Surfacing
+        // Google's own error reason/message here is the only way to tell
+        // those apart without separate access to that account.
+        let _driveErrDetail='';
+        try{const _ej=await initRes.json();_driveErrDetail=(_ej&&_ej.error&&(_ej.error.errors&&_ej.error.errors[0]&&_ej.error.errors[0].reason||_ej.error.message))||'';}catch(e){}
+        throw new Error('⚠️ فشل بدء جلسة الرفع إلى Google Drive: HTTP '+initRes.status+(_driveErrDetail?(' — '+_driveErrDetail):''));
       }
       sessionUri=initRes.headers.get('Location');
       if(!sessionUri)throw new Error('⚠️ تعذر إنشاء جلسة رفع قابلة للاستكمال على Google Drive.');
@@ -4904,7 +4949,16 @@ function renderReturnTargetOptions(key){
   const scopeSel=document.getElementById('ret-scope-'+key);
   const scopeVal=scopeSel?scopeSel.value:'order';
   const isFwd=_retDirection==='forward';
-  const seq=getActiveDepts(o);
+  const itemScope=scopeVal!=='order';
+  const scopedIt=itemScope?(o.orderItems||[])[parseInt(scopeVal,10)]:null;
+  // A single item's own return/advance targets are scoped to ITS OWN route
+  // (itemDeptSeq(o,it) — narrowed by it.routeOverride if set), not every
+  // department the order as a whole passes through — otherwise it could be
+  // offered a department its own "مسار خاص بهذا البند" setting deliberately
+  // skips. A whole-order move still uses the full order-level sequence,
+  // since it forces every item (including any with their own narrower
+  // route) to the same target dept regardless (see confirmReturnOrder()).
+  const seq=itemScope?itemDeptSeq(o,scopedIt).slice(0,-1):getActiveDepts(o);
   // 'delivery' sits past the end of getActiveDepts() by design (it's a
   // universal order-level gate, not a per-order production stage — see
   // itemDeptSeq()) — included here only to correctly LOCATE a current
@@ -4914,7 +4968,7 @@ function renderReturnTargetOptions(key){
   if(scopeVal==='order'){
     effectiveDept=o.currentDept;
   }else{
-    const it=(o.orderItems||[])[parseInt(scopeVal,10)];
+    const it=scopedIt;
     // itemCurrentDept() falls back to the ORDER's own currentDept whenever
     // the item has no individual override — which, once the order reaches
     // delivery/done, IS 'delivery'/'done', neither of which exists in `seq`.
@@ -5056,7 +5110,29 @@ function orderProgress(o){const seq=getActiveDepts(o);const total=seq.length;con
 // belonging to no real stage and not found by opening the order itself,
 // since its own record carries none of the actual work.
 function isParallelLineParent(o){return Object.values(orders).some(v=>v.parentOrderKey===o._key);}
-function itemDeptSeq(o){return[...getActiveDepts(o),'done'];}
+// `it` is optional — every call site that has no specific item in hand
+// (computing the ORDER's own aggregate sequence) omits it and gets exactly
+// the previous order-wide behavior. When passed, and that item carries its
+// own it.routeOverride (an array of dept keys — a SUBSET of the order's own
+// getActiveDepts(o), set via the "تعديل البند" modal's "مسار خاص بهذا
+// البند" section), this item skips whichever of the order's departments
+// isn't in that subset — e.g. an order routed design→print→workshop where
+// one specific item only ever needs print, not workshop. Assignees still
+// come from the order-level o[dept+'To'] (or a per-item assignedTo
+// override) exactly as before for whichever departments DO remain — a
+// route override only removes stops, it never adds a department the order
+// itself never configured an assignee for. Falls back to the full order
+// sequence if the override is missing, not an array, or empty (an item
+// with zero active departments makes no sense, and the "مسار خاص" UI
+// itself never lets every checkbox go unchecked).
+function itemDeptSeq(o,it){
+  const base=getActiveDepts(o);
+  if(it&&Array.isArray(it.routeOverride)&&it.routeOverride.length){
+    const scoped=base.filter(k=>it.routeOverride.includes(k));
+    if(scoped.length)return[...scoped,'done'];
+  }
+  return[...base,'done'];
+}
 // o.currentDept==='done' wins outright over any stale it.currentDept —
 // finishOrder()/archiveOrder() both already sync every item's currentDept
 // to 'done' at the moment they run, but older records finished before
@@ -5068,8 +5144,8 @@ function itemDeptSeq(o){return[...getActiveDepts(o),'done'];}
 // (openReturnOrderModal) already recomputes o.currentDept away from
 // 'done' itself (computeOrderDeptFromItems), so this never fights that —
 // it only ever matters once the order is truly, currently done.
-function itemCurrentDept(it,o){if(o.currentDept==='done')return'done';return it.currentDept||o.currentDept||itemDeptSeq(o)[0]||'design';}
-function itemNextDept(it,o){const seq=itemDeptSeq(o);const idx=seq.indexOf(itemCurrentDept(it,o));if(idx===-1||idx===seq.length-1)return null;return seq[idx+1];}
+function itemCurrentDept(it,o){if(o.currentDept==='done')return'done';return it.currentDept||o.currentDept||itemDeptSeq(o,it)[0]||'design';}
+function itemNextDept(it,o){const seq=itemDeptSeq(o,it);const idx=seq.indexOf(itemCurrentDept(it,o));if(idx===-1||idx===seq.length-1)return null;return seq[idx+1];}
 // Staff assignment (o[dept+'To']) is an ORDER-level field shared by every
 // item currently at that department — reassigning it from one item's own
 // menu moved every sibling item with it, reported as "imprecise". it.
@@ -5147,13 +5223,18 @@ function computeDeptWorkload(deptKey){
       else if(getNextDept(o)==='delivery')upcoming.push(entry);
       return;
     }
-    const seq=itemDeptSeq(o);
-    const deptIdx=seq.indexOf(deptKey);
-    if(deptIdx===-1)return; // this order's route never includes deptKey (e.g. External Execution left unassigned)
+    const orderSeq=itemDeptSeq(o);
+    if(orderSeq.indexOf(deptKey)===-1)return; // this order's route never includes deptKey at all (e.g. External Execution left unassigned) — true regardless of any item's own route override, since an override can only narrow the order's set, never add to it
     const assigneeRaw=o[deptKey+'To'];
     const assignee=(assigneeRaw&&assigneeRaw!=='none')?assigneeRaw:null;
     const items=(o.orderItems&&o.orderItems.length)?o.orderItems.map((it,idx)=>({it,idx})):[{it:null,idx:null}];
     items.forEach(({it,idx})=>{
+      // Per item, not per order — a per-item route override (it.routeOverride)
+      // can skip deptKey for THIS item even though the order overall includes
+      // it for its siblings.
+      const seq=itemDeptSeq(o,it);
+      const deptIdx=seq.indexOf(deptKey);
+      if(deptIdx===-1)return; // this specific item's own route skips deptKey entirely — not current/upcoming/completed here, it simply never passes through
       const cur=it?itemCurrentDept(it,o):o.currentDept;
       const curIdx=seq.indexOf(cur);
       const entry={o,idx,it,assignee};
@@ -5329,7 +5410,7 @@ function itemStageRequirementMet(it,o){
   const vers=itemVersionsForStage(it,dept);
   const hasKind=k=>vers.some(v=>v.kind===k&&v.files&&v.files.length>0);
   if(dept==='design'){
-    const seq=itemDeptSeq(o);
+    const seq=itemDeptSeq(o,it);
     const printActive=seq.includes('print'),workshopActive=seq.includes('workshop'),externalActive=seq.includes('external');
     if(!printActive&&!workshopActive&&!externalActive)return true; // truly nothing downstream — no production files required
     // Each active downstream department's requirement is independent of
@@ -5685,6 +5766,7 @@ function renderOrderItemsCards(o,key,canAct){
         <div style="display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end;">
           ${dcol==='revision'?`<span class="revision-badge"><i class="ti ti-refresh"></i> يتطلب تعديل</span>`
             :(dcol==='waiting'||dcol==='approved')?`<span class="badge ${statusMeta.cls}${(dept==='print'||dept==='workshop')?' compact':''}"><i class="ti ${statusMeta.icon}"></i> ${statusMeta.label}</span>`:''}
+          ${Array.isArray(it.routeOverride)?`<span class="badge" style="background:#E0E7FF;color:#3730A3;" title="هذا البند يتبع مساراً مختلفاً عن باقي بنود الطلب"><i class="ti ti-route"></i> مسار خاص</span>`:''}
           <span class="badge ${dept==='done'?'b-done':'b-new'}">${WF_DEPT_META[dept]?.label||dept}</span>
         </div>
       </div>
@@ -7378,7 +7460,7 @@ function designerItemRowHtml(o,it,idx){
   // opening the full Item Workspace page. Previously this board only ever
   // offered the proof/approved actions, with no way to see or fill the
   // external-execution requirement at all from here.
-  const _externalActiveDb=itemDeptSeq(o).includes('external');
+  const _externalActiveDb=itemDeptSeq(o,it).includes('external');
   if(_externalActiveDb&&!itemVersionsForStage(it,'design').some(v=>v.kind==='design_external'&&v.files&&v.files.length)){
     const extInputId=uidBase+'-ext';
     actionsHtml+=`<label class="designer-action-btn" for="${extInputId}" onclick="event.stopPropagation();"><i class="ti ti-world"></i> رفع ملف التنفيذ الخارجي</label>
@@ -7742,16 +7824,28 @@ function renderWfListView(){
   // whatever its design-stage columns happen to say, before even asking
   // proofStatusForOrder. Only an order still actually AT design (or with
   // no items at all) falls through to that design-specific classification.
+  // Section order per explicit request: جديد → بروفة → تنفيذ → تعميد (not
+  // named in that request — placed here, right before "يتطلب تعديل", as the
+  // only slot that keeps the OTHER five sections in exactly the order
+  // given, since both are design-stage-only sub-states) → تعديل → متوقفة
+  // (always LAST before التسليم, regardless of whatever stage/dept it's
+  // nominally at — see the onHold check below) → تسليم.
   const WF_SECTIONS=[
     {key:'todo',label:'🆕 طلب جديد'},
-    {key:'revision',label:'🔄 يتطلب تعديل'},
-    {key:'approved',label:'✅ تعميد'},
     {key:'waiting',label:'📤 تم إرسال البروفة'},
     {key:'inprogress',label:'⚙️ قيد التنفيذ'},
+    {key:'approved',label:'✅ تعميد'},
+    {key:'revision',label:'🔄 يتطلب تعديل'},
+    {key:'onhold',label:'⏸️ متوقفة'},
     {key:'delivery',label:'🚚 التسليم'},
   ];
-  const wfBuckets={todo:[],waiting:[],revision:[],approved:[],inprogress:[],delivery:[]};
+  const wfBuckets={todo:[],waiting:[],revision:[],approved:[],inprogress:[],onhold:[],delivery:[]};
   activeArr.forEach(o=>{
+    // Checked BEFORE dept/proof status — an on-hold order sitting at ANY
+    // stage (design, print, even delivery) is pulled out of its nominal
+    // section entirely into its own, so it never mixes in with active work
+    // and never inflates whatever count that section's badge shows.
+    if(o.onHold){wfBuckets.onhold.push(o);return;}
     if(o.currentDept==='delivery'){wfBuckets.delivery.push(o);return;}
     if(['print','external','workshop'].includes(o.currentDept)){wfBuckets.inprogress.push(o);return;}
     const proof=proofStatusForOrder(o);
@@ -9107,7 +9201,7 @@ function buildItemWorkspacePage(){
       // Dynamic per-workflow file sections — same rules as the admin order
       // view: Design shows exactly the boxes its active downstream
       // departments need, Printing is receive-only, Workshop has one box.
-      const seq=itemDeptSeq(o);
+      const seq=itemDeptSeq(o,it);
       if(dept==='design'){
         const printActive=seq.includes('print'),workshopActive=seq.includes('workshop');
         const externalActive=seq.includes('external');
@@ -9387,7 +9481,10 @@ function updateWfBadgeSidebar(){
   const wfBadge=document.getElementById('wf-badge');
   if(wfBadge){
     let n=0;
-    try{n=ordersArr().filter(hasOrderUpdate).length;}catch(e){}
+    // An on-hold order isn't active work waiting on anyone right now — it
+    // doesn't belong in a count meant to flag "there's new work", even if
+    // it happens to also carry an unseen update.
+    try{n=ordersArr().filter(o=>!o.onHold&&hasOrderUpdate(o)).length;}catch(e){}
     if(n>0){wfBadge.style.display='inline-block';wfBadge.textContent=n;}
     else{wfBadge.style.display='none';}
   }
@@ -12769,6 +12866,7 @@ function buildOrderDetailsPage(){
           <button class="od-qa-btn" title="أكثر" onclick="toggleRowMenu('od-more-${key}')"><i class="ti ti-dots"></i></button>
           <div class="row-menu" id="od-more-${key}" style="display:none;">
             ${canEditOrderComposition()?`<button onclick="closeAllRowMenus();openOrderEditModal('${key}')"><i class="ti ti-settings"></i> تعديل الطلب</button>`:''}
+            ${canEditOrderComposition()?`<button onclick="closeAllRowMenus();duplicateOrder('${key}')"><i class="ti ti-copy"></i> تكرار الطلب</button>`:''}
             <button onclick="closeAllRowMenus();openTimelineModal('${key}')"><i class="ti ti-clock"></i> مراحل الطلب بالتفصيل</button>
             ${(canEditOrderComposition()||isMine)?(o.onHold?`<button onclick="closeAllRowMenus();resumeOrderFromHold('${key}')" style="color:#059669;"><i class="ti ti-player-play"></i> استئناف العمل</button>`:`<button onclick="closeAllRowMenus();openHoldOrderModal('${key}')" style="color:#B45309;"><i class="ti ti-clock-pause"></i> إيقاف مؤقت / بانتظار العميل</button>`):''}
             ${_canRevert?`<button onclick="closeAllRowMenus();openReturnOrderModal('${key}')"><i class="ti ti-arrow-back-up"></i> إرجاع لمرحلة سابقة</button>`:''}
@@ -12832,6 +12930,19 @@ function openAddItemModal(key,editIdx){
       </div>
       <div class="fg"><label>التفاصيل والمواصفات (المقاسات/الأبعاد)</label><textarea id="new-item-details" placeholder="المقاسات، المواد..." style="min-height:60px;">${esc(detailsVal)}</textarea></div>
       <div class="fg"><label>ملاحظات إضافية على البند</label><textarea id="edit-item-notes" placeholder="أدخل أي ملاحظات خاصة بالبند...">${esc(notesVal)}</textarea></div>
+      ${(isEdit&&getActiveDepts(o).length>1)?`<div class="fg">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+          <input type="checkbox" id="item-route-custom-toggle" ${existing.routeOverride?'checked':''} onchange="toggleItemRouteOverrideUi()"/>
+          مسار خاص بهذا البند (بدلاً من مسار الطلب الكامل)
+        </label>
+        <div id="item-route-override-wrap" style="display:${existing.routeOverride?'flex':'none'};flex-direction:column;gap:5px;margin-top:8px;padding:10px 12px;background:var(--surface-2);border-radius:8px;">
+          <div style="font-size:11px;color:var(--text-3);margin-bottom:2px;">حدد المراحل التي يمر بها هذا البند فقط — أي مرحلة غير محددة هنا يتخطاها هذا البند تحديداً، حتى لو بقيت ضمن مسار الطلب لباقي البنود.</div>
+          ${getActiveDepts(o).map(dk=>`<label style="display:flex;align-items:center;gap:6px;font-size:12.5px;">
+            <input type="checkbox" class="item-route-dept-chk" value="${dk}" ${(existing.routeOverride?existing.routeOverride.includes(dk):true)?'checked':''}/>
+            ${esc((WF_DEPT_META[dk]||{label:dk}).label)}
+          </label>`).join('')}
+        </div>
+      </div>`:''}
       <div class="fg"><label>إرفاق ملف (اختياري)</label>
         <div class="dept-upload-box" onclick="document.getElementById('new-item-file-input').click()"><i class="ti ti-upload" style="font-size:20px;color:var(--gold);"></i><br>اضغط لإرفاق ملف أو أكثر</div>
         <input type="file" id="new-item-file-input" style="display:none" accept="*/*" multiple onchange="handleNewItemFiles(this.files,'${key}')"/>
@@ -12851,6 +12962,11 @@ function openAddItemModal(key,editIdx){
       <button class="btn btn-brand" style="width:100%;justify-content:center;" onclick="submitNewOrderItem('${key}')"><i class="ti ti-${isEdit?'device-floppy':'plus'}"></i> ${isEdit?'حفظ التعديلات':'إضافة البند للطلب'}</button>
     </div>`;
   openModal('add-item-modal');
+}
+function toggleItemRouteOverrideUi(){
+  const toggle=document.getElementById('item-route-custom-toggle');
+  const wrap=document.getElementById('item-route-override-wrap');
+  if(wrap)wrap.style.display=(toggle&&toggle.checked)?'flex':'none';
 }
 function handleNewItemFiles(files,orderKey){
   if(!files||!files.length)return;
@@ -12931,7 +13047,19 @@ async function submitNewOrderItem(key){
       // otherwise whatever the item already had (nothing, for anything
       // created before this feature existed) is carried over untouched.
       const priceExclVat=priceExclVatRaw?parseFloat(priceExclVatRaw):prev.priceExclVat;
-      items[editIdx]={...prev,name,qty,details,notes,price,...(priceExclVat!==undefined?{priceExclVat}:{}),files:window._newItemFiles||[],edited:true,editedAt:new Date().toISOString(),editedBy:cu.name};
+      // "مسار خاص بهذا البند" — only present in the modal when the order has
+      // more than one active department (see openAddItemModal). The toggle
+      // being off (or the control simply not existing for a single-dept
+      // order) means "use the order's own route" — routeOverride cleared
+      // back to null exactly like it never existed, same as the per-item
+      // assignee override's own "no override" default.
+      const routeToggle=document.getElementById('item-route-custom-toggle');
+      let routeOverride=null;
+      if(routeToggle&&routeToggle.checked){
+        const checked=Array.from(document.querySelectorAll('.item-route-dept-chk:checked')).map(c=>c.value);
+        if(checked.length)routeOverride=checked;
+      }
+      items[editIdx]={...prev,name,qty,details,notes,price,...(priceExclVat!==undefined?{priceExclVat}:{}),files:window._newItemFiles||[],routeOverride,edited:true,editedAt:new Date().toISOString(),editedBy:cu.name};
     }else{
       // A brand-new item always gets both figures — defaulting the excl-VAT
       // one from the entered price when the user didn't separately type it.
@@ -13355,6 +13483,75 @@ async function archiveOrder(key){
     resyncOrderToSheet(key);
     toast('✓ تم إنهاء الطلب وأرشفته');refreshCurrentPage();
   }catch(e){hideSaving();toast('❌ فشل إنهاء الطلب، حاول مرة أخرى');}
+}
+// ============================================================
+// DUPLICATE ORDER — a repeat job for the same client (same items/specs/
+// files/workflow route/assignees) without re-entering everything through
+// the add-order wizard. Deliberately NOT a thin wrapper around that wizard:
+// every field this order already has is known, so it's built directly and
+// pushed straight to Firebase, then opened on the edit modal so whatever
+// genuinely needs to change for the new job (deadline, payment) can be
+// adjusted immediately.
+// ============================================================
+async function duplicateOrder(key){
+  const o=orders[key];if(!o)return;
+  if(!guardWrite(canEditOrderComposition(),'⚠️ هذا الإجراء متاح للمدير أو موظف الاستقبال فقط'))return;
+  if(!confirm(`تكرار الطلب "${o.id||key}" كطلب جديد بنفس البيانات والملفات؟`))return;
+  showSaving('جاري تكرار الطلب...');
+  try{
+    const today=new Date().toISOString().split('T')[0];
+    const newOrd={...o};
+    delete newOrd._key;delete newOrd.id;delete newOrd.parentOrderKey;delete newOrd.fromQuoteKey;delete newOrd.activityLog;
+    // Per-item: keep everything that describes the WORK ITSELF (name/qty/
+    // price/specs/template/notes, and — per "نفس البيانات والملفات" —
+    // every uploaded version/file, proof/approval state included, since a
+    // repeat job is explicitly meant to reuse the same design rather than
+    // redo it from scratch. Drop only what ties an item to the ORIGINAL
+    // order's own run: its per-item department override (currentDept),
+    // per-item reassignment (assignedTo/assignedToName/assignedToDept —
+    // that staff decoupling was specific to that one prior run), and the
+    // add/edit provenance timestamps — the new item is freshly "added" to
+    // THIS order, not edited within the old one.
+    if(Array.isArray(newOrd.orderItems)){
+      newOrd.orderItems=newOrd.orderItems.map(it=>{
+        const{currentDept,assignedTo,assignedToName,assignedToDept,edited,editedAt,editedBy,addedLater,addedAt,addedBy,...rest}=it;
+        return{...rest};
+      });
+    }
+    // Lifecycle/progress fields reset to a brand-new order's defaults —
+    // none of the original run's timestamps, pauses, cancellation, revert
+    // history or archival state make sense carried onto a new job.
+    Object.assign(newOrd,{
+      date:today,createdAt:new Date().toISOString(),stageStartDate:new Date().toISOString(),
+      createdBy:cu.name,createdByUname:cu._uname,
+      currentDept:getActiveDepts(newOrd)[0]||'design',status:'قيد المتابعة',
+      deadline:'—', // the old deadline is almost certainly already past — force a fresh one via the edit modal that opens right after
+      onHold:false,onHoldReason:null,onHoldAt:null,
+      cancelled:false,cancelReason:null,
+      reverted:null,revertedAt:null,revertedBy:null,revertedFrom:null,revertedTo:null,
+      archivedAt:null,workshopFeedbackDone:null,
+      designStartAt:null,externalStartAt:null,printStartAt:null,workshopStartAt:null,
+      designDoneAt:null,externalDoneAt:null,printDoneAt:null,workshopDoneAt:null,
+      lastItemUpdateAt:null,lastItemUpdateBy:null,lastItemUpdateType:null,
+      // A fresh financial cycle — the original's paid/remaining amounts
+      // belonged to that run's invoice, not this new one.
+      paymentStatus:'عند التسليم',paidAmount:0,remainingAmount:o.totalAmount||0,
+      paidNetwork:0,paidCash:0,paidTransfer:0,paymentMethod:'',
+    });
+    const res=await fbPush('orders',newOrd);
+    await loadData();
+    const newId='ORD-'+String(ordersArr().length).padStart(3,'0');
+    await fbPatch(`orders/${res.name}`,{id:newId});
+    await loadData();
+    logOrderActivity(res.name,'ti-copy',`تم إنشاء هذا الطلب كتكرار للطلب ${esc(o.id||key)}`);
+    logOrderActivity(key,'ti-copy',`تم تكرار هذا الطلب كطلب جديد: ${esc(newId)}`);
+    const _startAssignee=newOrd[newOrd.currentDept+'To'];
+    pushNotification({type:'new_order',message:`طلب جديد (تكرار) ${esc(newId)} — ${esc(o.client)}`,orderKey:res.name,orderId:newId,client:o.client,targetUname:(_startAssignee&&_startAssignee!=='none')?_startAssignee:'all-admin'});
+    pushNotification({type:'new_order',message:`طلب جديد (تكرار) ${esc(newId)} — ${esc(o.client)}`,orderKey:res.name,orderId:newId,client:o.client,targetUname:'all-admin'});
+    hideSaving();toast('✓ تم تكرار الطلب — يرجى تحديد موعد تسليم جديد');
+    openOrderPage(res.name);
+    openOrderEditModal(res.name);
+  }catch(e){hideSaving();toast('❌ فشل تكرار الطلب، حاول مرة أخرى');}
 }
 // ============================================================
 // "متوقف مؤقتاً / بانتظار العميل" — pauses every deadline-based overdue
