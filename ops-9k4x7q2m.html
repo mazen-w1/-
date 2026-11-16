@@ -3919,6 +3919,19 @@ function cloudinaryThumb(url,width=200){
 // onProgress is optional — defaults to the global setUploadProgress (the
 // showSaving-overlay bar) so every pre-existing caller keeps working
 // unchanged; runQueuedUpload() passes its own per-item callback instead.
+// No timeout was ever set on this XHR (xhr.timeout defaults to 0 =
+// unlimited) — xhr.onerror only fires for an outright network failure
+// (DNS/connection refused/CORS), never for a connection that opens fine
+// but then just stalls mid-transfer with no further bytes either way. That
+// left the upload queue widget stuck at whatever % it last reported,
+// forever: no error, no completion, nothing for the user to act on short
+// of reloading the whole page — reported as attachments "staying at 0%
+// as-is". CLOUDINARY_TIMEOUT_MS is deliberately generous (3 minutes, not
+// DRIVE_TIMEOUT_MS's 15s) since this sends the WHOLE file in one request
+// with no chunking, unlike the Drive path — a large file on a genuinely
+// slow connection can legitimately take a while and must not be mistaken
+// for a hang.
+const CLOUDINARY_TIMEOUT_MS=180000;
 function uploadToCloudinary(file,onProgress){
   const report=onProgress||setUploadProgress;
   return new Promise((resolve,reject)=>{
@@ -3927,8 +3940,10 @@ function uploadToCloudinary(file,onProgress){
     fd.append('upload_preset',CLOUDINARY_UPLOAD_PRESET);
     const xhr=new XMLHttpRequest();
     xhr.open('POST',`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/auto/upload`);
+    xhr.timeout=CLOUDINARY_TIMEOUT_MS;
     xhr.upload.onprogress=e=>{if(e.lengthComputable)report((e.loaded/e.total)*100);};
     xhr.onerror=()=>reject(new Error('⚠️ تعذر الاتصال بخدمة رفع الملفات، تحقق من الإنترنت وحاول مجدداً.'));
+    xhr.ontimeout=()=>reject(new Error('⚠️ خدمة رفع الملفات لا تستجيب (انتهت المهلة) — تحقق من الإنترنت وحاول رفع الملف مرة أخرى.'));
     xhr.onload=()=>{
       let data=null;
       try{data=JSON.parse(xhr.responseText);}catch(e){}
@@ -7143,15 +7158,31 @@ function wfMatchesFilters(o,f){
 // revision wins (most urgent); otherwise any item still awaiting a client
 // response shows "sent"; only once EVERY item has been explicitly approved
 // (it.clientApproved, via approveItemProof()) does the order show approved.
-function proofStatusForOrder(o){
-  if(o.currentDept==='done')return null;
-  const items=o.orderItems||[];
-  if(!items.length)return null;
+// Factored out of proofStatusForOrder() below so the designer board
+// (buildDesignerBoard/designerOrderCardHtml) can classify a card by the
+// SAME items it actually displays on it (this designer's own assigned
+// items — g.items) instead of by proofStatusForOrder(o)'s full
+// o.orderItems. An order with more than one item, where only SOME of them
+// are assigned to/currently at design for this particular designer, used
+// to have its card's bucket/pill driven by EVERY item on the order —
+// including ones this designer's card never even shows — so a card
+// displaying a single already-approved item still landed under "📤 تم
+// إرسال البروفة" (and never in "✅ تعميد") purely because some OTHER,
+// invisible-on-this-card item elsewhere on the same order hadn't been
+// approved yet. proofStatusForOrder(o) itself is UNCHANGED (still every
+// item on the order) — admin's "سير العمل" list genuinely needs the whole
+// order's aggregate state, not one designer's slice of it.
+function proofStatusForItems(items){
+  if(!items||!items.length)return null;
   const cols=items.map(itemDesignColumn);
   if(cols.includes('revision'))return{key:'revision',label:'🔄 يتطلب تعديل — رد من العميل',icon:'ti-refresh'};
   if(cols.includes('waiting'))return{key:'waiting',label:'📤 تم إرسال البروفة',icon:'ti-send'};
   if(cols.every(c=>c==='approved'))return{key:'approved',label:'✅ تم الاعتماد من العميل',icon:'ti-circle-check'};
   return null;
+}
+function proofStatusForOrder(o){
+  if(o.currentDept==='done')return null;
+  return proofStatusForItems(o.orderItems||[]);
 }
 // ── Delivery countdown text (module 3, column 5) ──
 function deliveryCountdownText(o){
@@ -7381,7 +7412,9 @@ function buildDesignerBoard(){
   ];
   const buckets={todo:[],revision:[],approved:[],waiting:[]};
   Object.values(groups).forEach(g=>{
-    const proof=proofStatusForOrder(g.o);
+    // Scoped to g.items (this designer's own assigned items on the order),
+    // not every item the order has — see proofStatusForItems()'s comment.
+    const proof=proofStatusForItems(g.items.map(e=>e.it));
     (buckets[proof?proof.key:'todo']||buckets.todo).push(designerOrderCardHtml(g.o,g.items));
   });
   // Simple (non-itemized) orders have no per-item design column to bucket
@@ -7412,8 +7445,11 @@ function designerOrderCardHtml(o,itemEntries){
   // Same order-wide signal shown in the order header strip and the workflow
   // list table — surfaced here too so the collapsed card (before expanding
   // any item row) already tells a designer/manager whether this order needs
-  // attention (a revision request) without opening it.
-  const proof=proofStatusForOrder(o);
+  // attention (a revision request) without opening it. Scoped to
+  // itemEntries (what this card actually displays), not the whole order —
+  // see proofStatusForItems()'s comment; this pill must agree with the
+  // bucket buildDesignerBoard() just filed this exact card under.
+  const proof=proofStatusForItems(itemEntries.map(e=>e.it));
   // Once the order has moved past the design stage this pill's "client
   // approved/proof sent" status is old news at a glance and belongs inside
   // the order/item details view instead (buildOrderDetailsPage's header
