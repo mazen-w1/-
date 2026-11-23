@@ -4741,6 +4741,24 @@ window.addEventListener('popstate',e=>{
   try{nav(pg,true);}finally{window._navFromPop=false;}
 });
 function backBtnHtml(){return`<div style="margin-bottom:16px;"><button class="btn btn-out btn-sm" onclick="navBack()"><i class="ti ti-arrow-right"></i> رجوع</button></div>`;}
+// Order-details' own back button: when this order was opened from a
+// client's profile modal (openOrderPage(key,clientName) — see
+// openCustomerProfile()'s own order rows), "رجوع" must reopen that same
+// client's modal, not whatever page preceded it in plain browser history —
+// the modal itself never pushes a history entry (openModal() doesn't touch
+// history at all), so navBack() landed on whatever page was open BEFORE
+// the client profile was even opened, several steps earlier, instead of
+// back to the client's own order list the way the user actually got here.
+function orderDetailsBackBtnHtml(){
+  const client=window._orderDetailsBackClient;
+  return`<div style="margin-bottom:16px;"><button class="btn btn-out btn-sm" onclick="${client?'backFromOrderDetailsToClient()':'navBack()'}"><i class="ti ti-arrow-right"></i> رجوع</button></div>`;
+}
+function backFromOrderDetailsToClient(){
+  const name=window._orderDetailsBackClient;
+  window._orderDetailsBackClient=null;
+  if(name)openCustomerProfile(encodeURIComponent(name));
+  else navBack();
+}
 // Item Workspace's own back button — see itemworkBack(): must return to the
 // parent order's modal, not the generic page-history stack navBack() uses.
 function itemworkBackBtnHtml(){return`<div style="margin-bottom:16px;"><button class="btn btn-out btn-sm" onclick="itemworkBack()"><i class="ti ti-arrow-right"></i> رجوع</button></div>`;}
@@ -12622,8 +12640,18 @@ function printDailyExecutiveReport(){
 // modal — window._orderDetailsKey is read by buildOrderDetailsPage() below,
 // the same store-then-nav()-then-page-builder-reads-it pattern already used
 // by openItemWorkspace()/buildItemWorkspacePage()/_itemworkState().
-function openOrderPage(key){
+// fromClient (optional, URI-encoded) — passed only by openCustomerProfile()'s
+// own order rows — records that this order was opened from that client's
+// profile modal, so the order-details page's "رجوع" button can reopen that
+// same modal instead of falling back to plain browser history (see
+// orderDetailsBackBtnHtml()/backFromOrderDetailsToClient()). Any OTHER call
+// to this function (every other "view this order" entry point in the app —
+// there are dozens) omits it, which is exactly what clears a stale value
+// left over from a previous visit — this order wasn't opened from a client
+// profile this time, so its own back button must behave normally.
+function openOrderPage(key,fromClient){
   window._orderDetailsKey=key;
+  window._orderDetailsBackClient=fromClient?safeDecodeURIComponent(fromClient):null;
   nav('orderdetails');
 }
 function buildOrderDetailsPage(){
@@ -12878,7 +12906,7 @@ function buildOrderDetailsPage(){
     ${renderChatSection(key,o.currentDept==='done')}
   </div>`;
   el.innerHTML=`
-    ${backBtnHtml()}
+    ${orderDetailsBackBtnHtml()}
     <div class="od-header">
       <div class="od-header-main">
         <div class="od-header-title"><i class="ti ti-file-text"></i> ${o.id||key} — ${esc(o.client)}${o.orderKind==='maintenance'?'<span class="urgent-tag" style="font-size:9px;background:linear-gradient(135deg,#991B1B,#DC2626);"><i class="ti ti-tool"></i>صيانة</span>':''}${o.isQuickTask?'<span class="urgent-tag" style="font-size:9px;"><i class="ti ti-bolt"></i>مهمة سريعة</span>':''}${o.staffReassigned?`<span class="urgent-tag" style="font-size:9px;background:linear-gradient(135deg,#7C3AED,#6D28D9);" title="${esc('آخر سبب: '+(o.lastReassignReason||'—'))}"><i class="ti ti-user-cog"></i>تمت إعادة تكليف الموظف</span>`:''}${o.onHold?`<span class="urgent-tag" style="font-size:9px;background:linear-gradient(135deg,#D97706,#B45309);" title="${esc(o.onHoldReason?('السبب: '+o.onHoldReason):'')}"><i class="ti ti-clock-pause"></i>متوقف / بانتظار العميل</span>`:''}${o.reverted?`<span class="urgent-tag" style="font-size:9px;background:linear-gradient(135deg,#7C3AED,#6D28D9);" title="${esc(o.revertedAt?('بتاريخ: '+fmtDateTime(o.revertedAt)):'')}"><i class="ti ti-arrow-back-up"></i>طلب مرجع</span>`:''}${o.cancelled?`<span class="urgent-tag" style="font-size:9px;background:linear-gradient(135deg,#991B1B,#DC2626);" title="${esc(o.cancelReason?('السبب: '+o.cancelReason):'')}"><i class="ti ti-ban"></i>طلب ملغى</span>`:''}</div>
@@ -14999,7 +15027,7 @@ function openCustomerProfile(nameEncoded){
   const phone=(ords.find(o=>o.phone)||{}).phone||(clientRec||{}).phone||'—';
   const rows=ords.map(o=>{
     const itemsText=esc([o.service||'',...((o.orderItems||[]).map(it=>it.name||''))].join(' | '));
-    return`<tr data-items="${itemsText.toLowerCase()}" onclick="closeModal('order-modal');setTimeout(()=>openOrderPage('${o._key}'),50)" style="cursor:pointer;">
+    return`<tr data-items="${itemsText.toLowerCase()}" onclick="closeModal('order-modal');setTimeout(()=>openOrderPage('${o._key}','${encodeURIComponent(name)}'),50)" style="cursor:pointer;">
     <td style="text-align:right;direction:rtl;"><strong style="color:var(--maroon)">${o.id||o._key}</strong></td>
     <td style="font-size:12px;">${esc(o.service||'—')}</td>
     <td style="font-size:11px;">${o.date||'—'}</td>
