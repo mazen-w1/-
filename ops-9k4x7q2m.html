@@ -12728,7 +12728,20 @@ function buildOrderDetailsPage(){
     }
   }
   let uploadArea='';
-  if(isMine||t==='admin'){
+  // These order-level upload boxes (writing to o.clientApprovalImage/
+  // approvedPrintFile/approvedWorkshopFile/designExternalFile) predate the
+  // per-item workflow — on an itemized order they're a completely separate,
+  // disconnected pathway from it.versions (what renderItemKindBox/the item
+  // grid actually read). Uploading "the approved file" HERE instead of on
+  // the item's own box saved it where only the order's aggregate file
+  // manager (buildOrderFileManager, which does include these legacy fields)
+  // would ever show it — invisible on the item itself, and never counted by
+  // itemStageRequirementMet()'s per-item gate either — reported as an
+  // uploaded approved file only showing up in the general file list, not
+  // inside the order/item where it was meant to apply. An itemized order's
+  // own item cards already offer this exact box per item, so this legacy
+  // one is skipped entirely once the order actually has items.
+  if((isMine||t==='admin')&&!(o.orderItems&&o.orderItems.length)){
     if(o.currentDept==='design'){
       const _isProofQt=o.isQuickTask&&o.printTo==='none'&&o.workshopTo==='none';
       const _printActive=o.printTo!=='none';
